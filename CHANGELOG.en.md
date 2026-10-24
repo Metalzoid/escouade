@@ -11,9 +11,11 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Escouade has a light theme: Settings › Application › Display › “Theme” offers System, Light or Dark, applied at once, title bar included. By default, it follows the one of Windows, macOS or Linux.
 - Projects move to a rail on the left, like Slack’s workspaces: a tile per project, with its agents waiting and at work, dragged or moved by Alt+↑ and Alt+↓. The title bar keeps the name of the project on screen and the search; the status bar shows the quotas of each harness at work.
 - The list of agents is redrawn: the agent waiting goes first with its question, which you answer in a click or with 1, 2… without leaving the conversation open (several questions and permissions too; Ctrl+J puts the focus on its card), and each card says what the agent is doing (“Editing src/auth.ts”), whatever its harness, what it changed, or what still runs once its turn is over. The arrow of “New agent”, or Ctrl+Shift+N, opens the menu of the harnesses, numbered.
+- The conversation is redrawn: a header with the status in a pill and the agent’s figures, its actions under “…”, the tool calls of a turn in a single thread, and a floating message field where dictation and dropped files happen. A message refused for want of an account says so in the conversation, with “Add an account…” a click away.
 
 ### Fixes
 
+- A message sent right after the one before, before that one is taken, is no longer lost: it leaves the field and goes right after it.
 - The “New project” assistant now sets everything a project has at its creation: default harness, “Private project” with the accounts to reserve to it, and the whole Kanban. .escouade.yml also shares “Private project” and the model, effort and mode of the ticket agents; what belongs to each person (accounts, remote control, tickets in parallel, autopilot) stays on their machine.
 
 ## [1.8.12] — 2026-10-23

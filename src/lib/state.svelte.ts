@@ -315,6 +315,8 @@ class AppState {
   cardFocus = $state<{ id: string; n: number }>({ id: '', n: 0 });
   /** Ctrl+Shift+N: the menu « Harness » of « Nouvel agent » opens (the sidebar watches it). */
   newAgentMenu = $state(0);
+  /** « … » in an agent's header: the sidebar opens the agent's menu (its card's right click) at this place. */
+  agentMenuAsk = $state<{ id: string; x: number; y: number; seq: number } | null>(null);
   /** Counts the projects and agents chosen, the one on screen again included: its project's tab comes back into view. */
   chosen = $state(0);
   /**
@@ -808,6 +810,12 @@ class AppState {
   toggleOverview() {
     if (this.ui.view === 'overview') this.closeOverview();
     else this.openOverview();
+  }
+
+  /** Opens the menu of the agent `id` under `el` (« … » of its header): the sidebar, which draws it, watches this. */
+  askAgentMenu(id: string, el: HTMLElement) {
+    const r = el.getBoundingClientRect();
+    this.agentMenuAsk = { id, x: r.left, y: r.bottom + 4, seq: (this.agentMenuAsk?.seq ?? 0) + 1 };
   }
 
   toggleLayout() {

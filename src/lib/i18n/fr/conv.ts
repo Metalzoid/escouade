@@ -9,9 +9,6 @@ export default {
   header: {
     renameTitle: "Renommer l'agent",
     renameHint: 'Double-clic pour renommer',
-    editorHint: 'Parcourir et éditer les fichiers de cet agent',
-    terminal: 'Terminal',
-    terminalHint: 'Ouvrir un terminal dans le worktree de l’agent',
     test: 'Tester',
     testIsolaHint: 'Lance les services isola de ce worktree et ouvre la fonctionnalité dans le navigateur',
     testHint: 'Lance le worktree de cet agent et ouvre la fonctionnalité dans le navigateur',
@@ -30,6 +27,20 @@ export default {
     toTerminalHint: 'Faire tourner l’agent dans l’interface de {engine} elle-même, dans un terminal',
     toRich: 'Vue Escouade',
     toRichHint: 'Revenir à la conversation d’Escouade (la session continue)',
+    /** The two views of the agent, in segments: the one shown named, the other one an icon. */
+    view: 'Vue de l’agent',
+    rich: 'Escouade',
+    /** « … »: the agent's menu, the one of its card. */
+    more: 'Actions de l’agent',
+    /** The sandbox of a harness (Codex), beside the agent's path; `{meaning}`: what its mode lets it do. */
+    sandbox: 'Bac à sable',
+    sandboxLabel: 'Bac à sable. {meaning}',
+    sandboxDefault: 'Ses commandes tournent dans un bac à sable.',
+  },
+
+  /** A message refused for want of an account of the agent's harness (choice 19): `{harness}`, its name. */
+  noAccount: {
+    body: 'Cet agent ne démarre pas tant qu’aucun compte {harness} n’est ajouté : celui déjà connecté sur cette machine, ou un nouveau. Ton message reste dans le champ.',
   },
 
   /** « Vue Claude Code »: the agent in Claude Code's own interface. */
@@ -111,7 +122,7 @@ export default {
     queuedHint: '{engine} en tient compte dès sa prochaine étape',
     remote: 'depuis claude.ai',
     remoteHint: 'Envoyé depuis claude.ai ou l’app Claude (remote control)',
-    saidAloud: 'dit à voix haute',
+    saidAloud: 'Dit à voix haute',
   },
 
   /** What Claude Code passed on to Claude by itself (a background task, a subagent, another session). */

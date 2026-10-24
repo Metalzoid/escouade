@@ -8,13 +8,15 @@ Sous macOS, `Ctrl` devient `⌘` pour les raccourcis.
 
 ## L’en-tête
 
-L’en-tête de la conversation reprend le nom de l’agent (un double-clic le renomme), son statut, puis `projet / branche` en dessous. À droite :
+L’en-tête de la conversation reprend le nom de l’agent (un double-clic le renomme) et son statut dans une pastille, puis, en dessous, son harness (quand plusieurs sont installés), `projet / branche`, le numéro de ses pull requests et, pour un agent Codex, « Bac à sable » (l’infobulle dit ce que son mode lui permet). Puis :
 
-- « Éditeur » ouvre l’[éditeur](editor) sur les fichiers de l’agent ;
-- « Tester » ou « Préparer le lancement », selon l’agent, lance son worktree ou demande à l’agent comment le lancer (voir [les tests](testing)) ;
-- « Vue Claude Code » fait tourner l’agent dans l’interface de Claude Code elle-même (voir [la vue Claude Code](claude-code-view)). Le bouton n’existe pas pour un agent de ticket ni pour un agent archivé ;
-- le modèle, puis les chiffres de l’agent : « Contexte » (par exemple « 76,2 k / 200 k » : la part de la fenêtre du modèle déjà remplie, dont le pourcentage est dans l’infobulle ; la valeur prend une couleur d’alerte à partir de 80 %), « Tokens », « Coût » (précédé de « ≈ » pendant un tour : c’est une estimation), « Fichiers » (en disposition classique, un clic affiche les fichiers non commités, voir [git](git)) et « Durée » ;
+- les chiffres de l’agent, l’étiquette au-dessus de la valeur : « Contexte » (par exemple « 76,2 k / 200 k », avec une jauge fine dessous : la part de la fenêtre du modèle déjà remplie, dont le pourcentage est dans l’infobulle ; la valeur prend une couleur d’alerte à partir de 80 %), « Tokens », « Coût » (précédé de « ≈ » pendant un tour : c’est une estimation), « Fichiers » (en disposition classique, un clic affiche les fichiers non commités, voir [git](git)) et « Durée » ;
+- un seul bouton d’action : « Ouvrir une PR » tant que la branche de l’agent a des commits sans pull request (voir [les pull requests](git)), sinon « Tester » ou « Préparer le lancement », selon l’agent, qui lance son worktree ou demande à l’agent comment le lancer (voir [les tests](testing)) ;
+- les deux vues, « Escouade » et « Claude Code », en segments : la seconde fait tourner l’agent dans l’interface de Claude Code elle-même (voir [la vue Claude Code](claude-code-view)). Elles n’existent pas pour un agent de ticket ni pour un agent archivé ;
+- « … », le menu de l’agent, le même que le clic droit sur sa carte : renommer, dupliquer, ouvrir l’[éditeur](editor) ou un [terminal](terminals) dans son worktree, lancer, ouvrir une PR, archiver, supprimer… ;
 - deux boutons de disposition : classique, ou la conversation et les fichiers côte à côte (`Ctrl+Maj+L`, voir [l’interface](interface)).
+
+Quand la conversation se rétrécit (disposition côte à côte, petite fenêtre), l’en-tête retire d’abord « Tokens » et « Fichiers », puis « Durée » et le texte de ses boutons, puis ses chiffres.
 
 ## Écrire un message
 
@@ -114,7 +116,7 @@ Le bouton **Conversation**, à gauche du micro dans le champ de message de la vu
 
 1. tu parles ; quand tu te tais, ce que tu as dit **part seul** à l’agent après un court silence (« Délai avant l’envoi », 1,2 s par défaut) ;
 2. l’agent travaille et répond comme d’habitude, dans la conversation ;
-3. il finit sa réponse par **un court passage écrit pour être lu**, moins verbeux et moins technique : Escouade le montre à part sous la réponse (« 🔊 Lu à voix haute ») et le **lit à voix haute**. Sans ce passage, Escouade dit « C’est fait. La réponse est dans la conversation. » ;
+3. il finit sa réponse par **un court passage écrit pour être lu**, moins verbeux et moins technique : Escouade le montre à part sous la réponse (« Lu à voix haute ») et le **lit à voix haute**. Sans ce passage, Escouade dit « C’est fait. La réponse est dans la conversation. » ;
 4. puis l’écoute reprend.
 
 Pendant la conversation, **elle occupe toute la fenêtre d’Escouade** : au centre, une orbe lumineuse qui suit le son, la voix de l’agent quand il parle (son bord respire et son halo grandit avec le niveau du son lu) et ton micro quand il t’écoute, avec un arc qui tourne pendant la transcription et pendant que l’agent travaille ; en dessous, l’état (« À l’écoute », « Transcription sur ta machine… », « Alice travaille… », « Alice te répond »). En bas, **des sous-titres** comme au cinéma : ce que tu as dit, dès que c’est transcrit, puis ce que dit l’agent, phrase par phrase, au rythme de la lecture. L’historique complet reste dans la conversation. `Échap` ou « Arrêter » quitte le mode et ferme le micro.
@@ -161,18 +163,18 @@ Les blocs de code ont un en-tête avec leur langage (« texte » quand il n’
 
 ### La réflexion
 
-Quand Claude réfléchit, une ligne « Réflexion » (▸) apparaît, avec « … » tant qu’elle se fait. Un clic la déplie.
+Quand Claude réfléchit, une ligne « Réflexion », précédée d’un chevron, apparaît, avec « … » tant qu’elle se fait. Un clic la déplie.
 
 ### Les appels d’outils
 
-Chaque outil que Claude utilise tient sur une ligne : le nom de l’outil (`Read`, `Edit`, `Bash`, `Grep`…), ce sur quoi il agit (la commande, le chemin du fichier relatif au dossier de l’agent, le motif cherché, l’adresse), et à droite le résultat en bref : pour une commande, la dernière ligne de sa sortie (ou une coche s’il n’y en a pas) ; pour une lecture, le nombre de lignes ; « 14 résultats » ou « aucun résultat » pour une recherche ; « +24 −3 » pour une modification ; « interrompu » ou « erreur ». Un cercle tourne tant que l’outil s’exécute. Survole la ligne pour lire son texte en entier.
+Les outils d’un même tour forment un fil, reliés par un trait, sans boîte autour de chacun. Chaque outil que Claude utilise tient sur une ligne : une icône de ce qu’il fait (lire, modifier, chercher, une commande, un sous-agent, Escouade), le nom de l’outil (`Read`, `Edit`, `Bash`, `Grep`…), ce sur quoi il agit (la commande, le chemin du fichier relatif au dossier de l’agent, le motif cherché, l’adresse), et à droite le résultat en bref : pour une commande, la dernière ligne de sa sortie (ou une coche s’il n’y en a pas) ; pour une lecture, le nombre de lignes ; « 14 résultats » ou « aucun résultat » pour une recherche ; « +24 −3 » pour une modification ; « interrompu » ou « erreur ». Un cercle tourne tant que l’outil s’exécute. Survole la ligne pour lire son texte en entier.
 
 Un clic sur la ligne (ou `Entrée` quand elle a le focus) la déplie :
 
 - **Modification de fichier** (`Edit`, `Write`, `MultiEdit`) : le diff, avec les lignes numérotées, en vert et en rouge. Il est unifié ou côte à côte selon le choix que tu as fait dans la visionneuse de diff (« Unifié » ou « Côte à côte », voir [git](git)). Au-delà de 400 lignes, il s’arrête à « … N lignes de plus ». Le chemin du fichier est un lien : il ouvre le fichier dans l’éditeur, à la première ligne modifiée.
 - **Commande** (`Bash`, `PowerShell`) : la commande après `$`, puis sa sortie.
-- **Liste de tâches** (`TodoWrite`) : les tâches avec ☐, ◐ (en cours) et ☑.
-- **Sous-agent** (`Agent`) : ce qu’on lui a demandé, ses propres appels d’outils (des lignes imbriquées, que tu peux déplier aussi) et son dernier texte. La ligne dit combien d’outils il a utilisés, et son bouton ↗ ouvre la conversation du sous-agent en grand, à la place de celle de l’agent (voir [la conversation d’un sous-agent](plan#la-conversation-d-un-sous-agent)).
+- **Liste de tâches** (`TodoWrite`) : les tâches, chacune avec un cercle, coché quand elle est faite.
+- **Sous-agent** (`Agent`) : ce qu’on lui a demandé, ses propres appels d’outils (des lignes imbriquées, que tu peux déplier aussi) et son dernier texte. La ligne dit combien d’outils il a utilisés, et son bouton au bout de la ligne ouvre la conversation du sous-agent en grand, à la place de celle de l’agent (voir [la conversation d’un sous-agent](plan#la-conversation-d-un-sous-agent)).
 - **Les autres outils** : leur résultat, sinon les paramètres de l’appel.
 
 Les outils qui ne font que relire la liste des tâches (`TaskList`, `TaskGet`) sont affichés en teintes plus douces. Les outils du serveur MCP d’Escouade portent un badge « Escouade · … » (voir [le serveur MCP](mcp)).
@@ -206,10 +208,10 @@ Quand la demande vient d’un sous-agent, la carte est précédée de « Demand
 La carte « Claude attend ta réponse » montre la question et un bouton par option. Survole une option pour lire sa description ; elle est aussi écrite sous les boutons.
 
 - Une question à choix unique est répondue d’un clic.
-- Quand il y a plusieurs questions, ou une question à choix multiple (des cases ☐ à cocher), la réponse se valide avec le bouton « Valider », actif quand chaque question a une réponse.
+- Quand il y a plusieurs questions, ou une question à choix multiple (des cercles à cocher), la réponse se valide avec le bouton « Valider », actif quand chaque question a une réponse.
 - Tu peux aussi répondre librement : ce que tu écris dans le champ (« ou réponds librement dans le champ ci-dessous ») est la réponse à chaque question de la carte.
 
-Une fois répondue, la carte se réduit à la question et à la réponse (« → Oui »).
+Une fois répondue, la carte dit « Claude t’a posé une question », la question et ses choix, celui retenu marqué à la couleur du projet (une réponse libre est montrée seule), puis « Répondu ».
 
 ### Les autorisations
 
@@ -225,7 +227,7 @@ Quand Claude Code refuserait la demande par défaut, le bouton « Refuser » e
 
 En mode Plan, la demande est « Claude propose un plan » : le plan s’affiche en Markdown, et les boutons sont « Approuver le plan », « Approuver et accepter les édits » (le plan est approuvé et les modifications de fichiers qui suivent sont acceptées) et « Continuer à planifier ». Ce dernier dit à Claude de continuer à planifier ; si tu préfères préciser ce qui ne va pas, écris-le dans le champ.
 
-Une demande traitée devient une ligne : « ✓ Autorisé · Bash npm test », « ✕ Refusé », « ✓ Toujours autorisé ».
+Une demande traitée devient une carte plus discrète : l’outil et sa cible (« Bash npm test »), puis « Autorisé », « Refusé », « Autorisé pour cette session » ou « Toujours autorisé », avec une coche verte ou une croix rouge. Quand c’est un autre agent qui a répondu, par le [serveur MCP](mcp), la carte le dit : « par chef-escouade » et la pastille « via Escouade ».
 
 ### Au clavier
 
@@ -242,7 +244,7 @@ Tu peux aussi autoriser ou refuser sans ouvrir l’agent, depuis [la vue d’ens
 
 ## Les longues conversations
 
-Une conversation longue n’affiche d’abord que ses 80 derniers éléments (messages, appels d’outils, cartes). Un bouton « Afficher les 80 précédents » en haut ajoute les 80 suivants ; la vue reste sur ce que tu lisais. La conversation suit le bas tant que tu n’as pas remonté ; une fois remontée, un bouton « ↓ Nouveaux messages » te ramène en bas quand il y a du nouveau. Chaque agent se rouvre là où tu l’avais laissé.
+Une conversation longue n’affiche d’abord que ses 80 derniers éléments (messages, appels d’outils, cartes). Un bouton « Afficher les 80 précédents » en haut ajoute les 80 suivants ; la vue reste sur ce que tu lisais. La conversation suit le bas tant que tu n’as pas remonté ; une fois remontée, un bouton « Nouveaux messages » te ramène en bas quand il y a du nouveau. Chaque agent se rouvre là où tu l’avais laissé.
 
 Un résultat de [la recherche dans les conversations](overview#rechercher-dans-les-conversations) ouvre l’agent sur le message trouvé, même s’il est ancien, et le met en évidence un instant.
 

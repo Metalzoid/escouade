@@ -144,21 +144,19 @@ L’en-tête de la conversation d’un agent montre, de gauche à droite :
 
 | Élément | Ce qu’il montre ou fait |
 |---|---|
-| Nom et statut | Le nom de l’agent (double-clic pour le renommer) et son statut. |
-| `projet / branche` | Le projet, et la branche de l’agent s’il a un worktree, sinon celle du dossier du projet. |
-| « Éditeur » | Ouvre l’éditeur sur les fichiers de l’agent. |
-| « Terminal » | Pour un agent dans un worktree (pas archivé) : ouvre un [terminal](terminals) dans ce worktree. |
-| « ▶ Tester » ou « Préparer le lancement » | Pour un agent dans un worktree : lancer son travail pour l’essayer, ou demander à l’agent comment le lancer. Voir [tester et valider](testing). |
-| « Vue Claude Code » ou « Vue Escouade » | Fait tourner l’agent dans l’interface de Claude Code elle-même, ou le ramène dans la conversation d’Escouade. Absent pour un agent de ticket. Voir [la vue Claude Code](claude-code-view). |
-| Le modèle | Le modèle de l’agent, avec sa version. |
-| « Contexte » | Les tokens du contexte sur la taille de la fenêtre du modèle (« 76,2 k / 200 k »). Le chiffre devient ambre à partir de 80 %, quand le contexte est presque plein. |
+| Nom et statut | Le nom de l’agent (double-clic pour le renommer) et son statut, dans une pastille. |
+| Harness, `projet / branche` | Le harness de l’agent (quand plusieurs sont installés), le projet, et la branche de l’agent s’il a un worktree, sinon celle du dossier du projet ; puis le numéro de ses pull requests, et « Bac à sable » pour un agent Codex. |
+| « Contexte » | Les tokens du contexte sur la taille de la fenêtre du modèle (« 76,2 k / 200 k »), avec une jauge fine dessous. Le chiffre devient ambre à partir de 80 %, quand le contexte est presque plein. |
 | « Tokens », « Coût », « Durée » | Ce que l’agent a consommé et le temps qu’il a travaillé. |
 | « Fichiers » | Le nombre de fichiers non commités de l’agent. |
+| « Ouvrir une PR », « Tester » ou « Préparer le lancement » | Une seule place : ouvrir la pull request de sa branche tant qu’elle a des commits sans PR ; sinon, pour un agent dans un worktree, lancer son travail pour l’essayer, ou demander à l’agent comment le lancer. Voir [tester et valider](testing). |
+| « Escouade » et « Claude Code » | Les deux vues de l’agent, en segments : la conversation d’Escouade, ou l’interface de Claude Code elle-même. Absentes pour un agent de ticket. Voir [la vue Claude Code](claude-code-view). |
+| « … » | Le menu de l’agent, le même que le clic droit sur sa carte : l’éditeur, un [terminal](terminals) dans son worktree, renommer, archiver… |
 | Deux boutons | Le choix de la disposition (voir plus bas). |
 
-Sous l’en-tête, la conversation montre tes messages, les réponses de Claude en markdown, ses réflexions repliables, ses appels d’outils en lignes compactes dépliables, les cartes de questions et d’autorisations, et une ligne ou une carte à la fin de chaque tour. Quand l’agent suit un plan, un bandeau « Plan » s’intercale entre l’en-tête et les messages : voir [l’avancée d’un plan](plan). Une longue conversation n’affiche que ses 80 derniers éléments : « Afficher les N précédents » en ajoute. Si de nouveaux messages arrivent pendant que tu lis plus haut, le bouton « ↓ Nouveaux messages » te ramène en bas. `Ctrl+K` cherche dans les conversations.
+Sous l’en-tête, la conversation montre tes messages, les réponses de Claude en markdown, ses réflexions repliables, ses appels d’outils en lignes compactes dépliables, les cartes de questions et d’autorisations, et une ligne ou une carte à la fin de chaque tour. Quand l’agent suit un plan, un bandeau « Plan » s’intercale entre l’en-tête et les messages : voir [l’avancée d’un plan](plan). Une longue conversation n’affiche que ses 80 derniers éléments : « Afficher les N précédents » en ajoute. Si de nouveaux messages arrivent pendant que tu lis plus haut, le bouton « Nouveaux messages » te ramène en bas. `Ctrl+K` cherche dans les conversations.
 
-Le champ de message est en bas : ses menus « Modèle », « Effort » et « Mode », le trombone, « Envoyer », et « ■ Stop » pendant un tour. Un agent archivé affiche à la place « Agent archivé. » avec un bouton « Restaurer ». Un agent en erreur le dit (« L’agent s’est arrêté. ») : un nouveau message relance Claude sur la même session. Voir [la conversation](chat) et [les agents](managing-agents).
+Le champ de message flotte en bas, de la largeur de la conversation : ses puces « Modèle », « Effort » et « Mode », puis joindre un fichier, dicter et converser à voix haute, « Stop » pendant un tour et « Envoyer ». Un agent archivé affiche à la place « Agent archivé. » avec un bouton « Restaurer ». Un agent en erreur le dit (« L’agent s’est arrêté. ») : un nouveau message relance Claude sur la même session. Voir [la conversation](chat) et [les agents](managing-agents).
 
 ## Le panneau latéral
 
@@ -182,13 +180,13 @@ Le choix se fait avec les deux boutons à droite de l’en-tête, « Dispositio
 
 | Élément | Classique | Côte à côte |
 |---|---|---|
-| Panneau latéral | Optionnel, large de 330 px : « Fichiers ▸ » dans l’en-tête ou `Ctrl+Maj+B` l’ouvre, le × le ferme. | Toujours affiché, sur la moitié droite de la zone principale. `Ctrl+Maj+B` ne fait rien. |
+| Panneau latéral | Optionnel, large de 330 px : « Fichiers » dans l’en-tête ou `Ctrl+Maj+B` l’ouvre, le × le ferme. | Toujours affiché, sur la moitié droite de la zone principale. `Ctrl+Maj+B` ne fait rien. |
 | Clic sur un fichier | Le diff s’ouvre dans une grande fenêtre. | Le diff s’affiche sous la liste, dans le panneau. |
 | « Fichiers » dans l’en-tête | Un bouton qui ouvre le panneau. | Un simple chiffre. |
 
 ![La disposition côte à côte : la conversation à gauche, les fichiers non commités et le diff du fichier choisi à droite](/images/git.jpg)
 
-Quand la conversation est étroite, ce qui arrive en disposition côte à côte, l’en-tête retire d’abord « Tokens » et « Durée » ainsi que le texte de ses boutons, puis « Coût » et « Fichiers ». Les cartes de la barre latérale montrent les mêmes chiffres.
+Quand la conversation est étroite, ce qui arrive en disposition côte à côte, l’en-tête retire d’abord « Tokens » et « Fichiers », puis « Durée » et le texte de ses boutons, puis ses chiffres. Les cartes de la barre latérale montrent les mêmes chiffres.
 
 ## La barre d’état
 

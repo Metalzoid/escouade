@@ -2,6 +2,7 @@
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { fDur, fInt, fTok } from '../lib/format';
+  import Icon from './Icon.svelte';
   import {
     bgDuration,
     bgRow,
@@ -192,22 +193,63 @@
 <svelte:window onkeydowncapture={onWindowKey} />
 
 <main class="taskview" data-task-view data-task={task} data-kind={row?.kind} data-status={row?.status}>
-  <header class="head">
+  <header class="head sv-head">
     <nav class="crumbs" aria-label={t('bgtasks.crumbs')}>
       <button class="crumb" use:tip={t('bgtasks.back', { name: agent.name })} onclick={() => app.closeTask(agent.id)}>{agent.name}</button>
-      <span class="sep" aria-hidden="true">›</span>
+      <span class="sep" aria-hidden="true"><Icon name="right" size={12} /></span>
       <span class="crumb here" aria-current="page" tabindex="-1" use:focusHere use:tip={{ text: title, cut: true }}>{title}</span>
     </nav>
+    <div class="row">
+      {#if row}
+        <span class="st {row.status}" data-task-state><i aria-hidden="true"></i>{statusLabel(row.status)}</span>
+      {/if}
+      {#if stoppable}
+        <button class="btn stop" data-task-stop disabled={stopping} use:tip={t('bgtasks.stopHint')} onclick={stop}
+          ><Icon name="stop" size={14} />{t('bgtasks.stop')}</button
+        >
+      {:else if running && inTerminal}
+        <span class="where">{t('bgtasks.stopInTerminal')}</span>
+      {/if}
+    </div>
     {#if row}
-      <span class="st {row.status}" data-task-state><span class="dot" aria-hidden="true"></span>{statusLabel(row.status)}</span>
-    {/if}
-    <div style="flex:1"></div>
-    {#if stoppable}
-      <button class="btn stop" data-task-stop disabled={stopping} use:tip={t('bgtasks.stopHint')} onclick={stop}
-        ><span class="glyph" aria-hidden="true">■</span>{t('bgtasks.stop')}</button
-      >
-    {:else if running && inTerminal}
-      <span class="where">{t('bgtasks.stopInTerminal')}</span>
+      <dl class="facts facts-row" role="group" aria-label={title}>
+        <div>
+          <dt>{t('bgtasks.facts.kind')}</dt>
+          <dd>{kindLabel(row.kind)}</dd>
+        </div>
+        <div>
+          <dt>{t('bgtasks.facts.duration')}</dt>
+          <dd data-task-duration>{duration !== null ? fDur(duration) : '—'}</dd>
+        </div>
+        {#if code !== null}
+          <div>
+            <dt>{t('bgtasks.facts.exit')}</dt>
+            <dd data-task-exit>{code}</dd>
+          </div>
+        {/if}
+        {#if owner}
+          <div>
+            <dt>{t('bgtasks.facts.by')}</dt>
+            <dd>{owner.title}</dd>
+          </div>
+        {/if}
+        {#if row.kind === 'workflow'}
+          {#if row.now}
+            <div>
+              <dt>{t('bgtasks.facts.phase')}</dt>
+              <dd>{row.now}</dd>
+            </div>
+          {/if}
+          <div>
+            <dt>{t('bgtasks.facts.tools')}</dt>
+            <dd>{fInt(row.tools ?? 0)}</dd>
+          </div>
+          <div>
+            <dt>{t('bgtasks.facts.tokens')}</dt>
+            <dd>{fTok(row.tokens ?? 0)}</dd>
+          </div>
+        {/if}
+      </dl>
     {/if}
   </header>
 
@@ -216,44 +258,6 @@
       <div class="note">{t('bgtasks.gone')}</div>
     {:else}
       <section class="brief">
-        <dl class="facts" role="group" aria-label={title}>
-          <div>
-            <dt>{t('bgtasks.facts.kind')}</dt>
-            <dd>{kindLabel(row.kind)}</dd>
-          </div>
-          <div>
-            <dt>{t('bgtasks.facts.duration')}</dt>
-            <dd class="mono" data-task-duration>{duration !== null ? fDur(duration) : '—'}</dd>
-          </div>
-          {#if code !== null}
-            <div>
-              <dt>{t('bgtasks.facts.exit')}</dt>
-              <dd class="mono" data-task-exit>{code}</dd>
-            </div>
-          {/if}
-          {#if owner}
-            <div>
-              <dt>{t('bgtasks.facts.by')}</dt>
-              <dd>{owner.title}</dd>
-            </div>
-          {/if}
-          {#if row.kind === 'workflow'}
-            {#if row.now}
-              <div>
-                <dt>{t('bgtasks.facts.phase')}</dt>
-                <dd>{row.now}</dd>
-              </div>
-            {/if}
-            <div>
-              <dt>{t('bgtasks.facts.tools')}</dt>
-              <dd class="mono">{fInt(row.tools ?? 0)}</dd>
-            </div>
-            <div>
-              <dt>{t('bgtasks.facts.tokens')}</dt>
-              <dd class="mono">{fTok(row.tokens ?? 0)}</dd>
-            </div>
-          {/if}
-        </dl>
         {#if command}
           <div class="block">
             <div class="k">{t('bgtasks.command')}</div>
@@ -324,16 +328,16 @@
     position: relative;
     flex: 1;
     min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
   }
-  .head {
-    height: 60px;
+  /* Its head (2.0 design): the breadcrumb, its state with « Arrêter », its facts under them. */
+  .sv-head {
     flex: none;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 0 24px;
+    display: grid;
+    gap: 10px;
+    padding: 14px 22px;
     border-bottom: 1px solid var(--line);
     min-width: 0;
   }
@@ -342,161 +346,145 @@
     align-items: center;
     gap: 6px;
     min-width: 0;
-    font-size: 14px;
+    color: var(--muted);
+    font-size: 12.5px;
     white-space: nowrap;
   }
   .crumb {
     min-width: 0;
-    max-width: 260px;
+    max-width: 320px;
     overflow: hidden;
     text-overflow: ellipsis;
+    padding: 0;
     border: none;
+    border-radius: 4px;
     background: none;
-    padding: 2px 4px;
-    border-radius: var(--r-sm);
     font: inherit;
     color: var(--muted);
     cursor: pointer;
   }
   button.crumb:hover {
     color: var(--text);
-    background: var(--elev);
   }
-  button.crumb:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
+  button.crumb:focus-visible,
+  .crumb.here:focus-visible {
+    outline: 2px solid var(--p-ink);
+    outline-offset: 2px;
   }
   .crumb.here {
     color: var(--text);
-    font-weight: 700;
+    font-weight: 600;
     cursor: default;
   }
-  /* The view puts the focus here when it opens: the keyboard shows where it is. */
-  .crumb.here:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
   .sep {
-    color: var(--dim);
+    display: flex;
+    color: var(--muted);
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
   }
   .st {
     flex: none;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
+    height: 20px;
+    padding: 0 8px 0 7px;
+    border-radius: 10px;
+    background: rgba(var(--fg-rgb), 0.05);
     color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 550;
+    white-space: nowrap;
   }
-  .st .dot {
-    width: 7px;
-    height: 7px;
+  .st i {
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
-    background: var(--dim);
+    background: currentColor;
   }
   .st.running {
-    color: var(--ok);
-  }
-  .st.running .dot {
-    background: var(--ok);
+    background: oklch(from var(--run) l c h / 0.1);
+    color: var(--run);
   }
   .st.failed {
+    background: oklch(from var(--del) l c h / 0.1);
     color: var(--del);
   }
-  .st.failed .dot {
-    background: var(--del);
-  }
-  .st.stopped .dot,
-  .st.interrupted .dot {
-    background: var(--wait);
+  .st.stopped,
+  .st.interrupted {
+    background: oklch(from var(--wait) l c h / 0.1);
+    color: var(--wait);
   }
   .stop {
-    height: 28px;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 0 11px;
-    font-size: 12px;
-    font-weight: 600;
+    margin-left: auto;
     flex: none;
+    color: var(--del);
   }
-  .stop:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-  .stop .glyph {
-    font-size: 9px;
+  .stop :global(.icon) {
     color: var(--del);
   }
   .where {
-    flex: none;
-    max-width: 320px;
-    font-size: 11.5px;
-    line-height: 1.4;
-    color: var(--dim);
-    text-align: right;
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 12px;
   }
-  /* The page fills what is left under the head: the log takes the room the facts do not, and the whole scrolls when the
-     window is too short for both. */
+  .facts-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 22px;
+    margin: 0;
+    font-size: 12px;
+  }
+  .facts-row div {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+  }
+  .facts-row dt {
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .facts-row dd {
+    margin: 0;
+    color: var(--soft);
+    font-weight: 550;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
   .page {
     flex: 1;
     min-height: 0;
     overflow: auto;
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    padding: 20px 28px 24px;
-  }
-  .page > * {
-    width: 100%;
-    max-width: 980px;
-    margin-inline: auto;
-    box-sizing: border-box;
+    gap: 14px;
+    padding: 14px 22px 22px;
   }
   .brief {
     flex: none;
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 12px;
-    padding: 14px 16px;
-    border: 1px solid var(--line);
-    border-radius: var(--r);
-    background: var(--panel);
   }
-  .facts {
-    margin: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 26px;
-  }
-  .facts div {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    min-width: 0;
-  }
-  .facts dt,
   .k {
-    font-size: 10.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--dim);
-  }
-  .facts dd {
     margin: 0;
-    font-size: 13px;
-    overflow-wrap: anywhere;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 600;
   }
-  h3.k {
-    margin: 0;
-    font-weight: inherit;
-  }
-  .block .k {
-    margin-bottom: 5px;
+  .block {
+    display: grid;
+    gap: 6px;
+    padding: 11px 14px;
+    border-radius: 10px;
+    background: rgba(var(--fg-rgb), 0.03);
+    box-shadow: inset 0 0 0 1px var(--line);
   }
   .cmd {
-    padding: 8px 12px;
-    border-left: 2px solid var(--line2);
-    color: var(--muted);
+    color: var(--soft);
     font-size: 12.5px;
     line-height: 1.5;
     white-space: pre-wrap;
@@ -505,51 +493,53 @@
     overflow: auto;
   }
   .cmd.folded {
-    max-height: 7.5em;
+    max-height: 4.5em;
     overflow: hidden;
     mask-image: linear-gradient(to bottom, #000 60%, transparent);
   }
   .more {
-    margin-top: 6px;
+    justify-self: start;
+    padding: 0;
     border: none;
     background: none;
-    padding: 0;
     font: inherit;
     font-size: 12px;
-    color: var(--accent);
+    color: var(--muted);
     cursor: pointer;
   }
   .more:hover {
-    text-decoration: underline;
+    color: var(--text);
   }
   .summary {
     flex: none;
-    padding: 12px 16px;
-    border-radius: var(--r);
-    border: 1px solid color-mix(in oklch, var(--ok) 40%, transparent);
-    background: color-mix(in oklch, var(--ok) 5%, var(--panel));
+    display: grid;
+    gap: 6px;
+    padding: 12px 14px;
+    border-radius: 11px;
+    box-shadow: inset 0 0 0 1px oklch(from var(--add) l c h / 0.35);
   }
   .summary.bad {
-    border-color: color-mix(in oklch, var(--del) 50%, transparent);
-    background: color-mix(in oklch, var(--del) 6%, var(--panel));
+    background: oklch(from var(--del) l c h / 0.06);
+    box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.35);
   }
   .summary h3 {
-    margin: 0 0 6px;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--ok);
+    margin: 0;
+    color: var(--add);
+    font-size: 12px;
+    font-weight: 600;
   }
   .summary.bad h3 {
     color: var(--del);
   }
   .summary p {
     margin: 0;
+    color: var(--soft);
     font-size: 12.5px;
     line-height: 1.5;
     overflow-wrap: anywhere;
     white-space: pre-wrap;
   }
+  /* Its output, followed: a terminal's well. */
   .outsec {
     flex: 1 1 260px;
     min-height: 200px;
@@ -562,11 +552,15 @@
     display: flex;
     align-items: baseline;
     flex-wrap: wrap;
-    gap: 4px 14px;
+    gap: 4px 12px;
+  }
+  .outhead .k {
+    color: var(--soft);
+    font-size: 12px;
   }
   .meta {
-    font-size: 11.5px;
-    color: var(--dim);
+    color: var(--muted);
+    font-size: 12px;
   }
   .meta.err {
     color: var(--del);
@@ -581,20 +575,20 @@
     flex: 1;
     min-width: 0;
     margin: 0;
-    padding: 10px 12px;
+    padding: 12px 14px;
     overflow: auto;
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    background: var(--term);
-    color: var(--text);
+    border-radius: 10px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--code-fg);
     font-family: var(--mono);
     font-size: 12px;
-    line-height: 1.5;
+    line-height: 1.6;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
   .log:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--p-ink);
     outline-offset: 1px;
   }
   .ph {
@@ -607,36 +601,39 @@
     padding: 0 20px;
     text-align: center;
     font-size: 12.5px;
-    color: var(--dim);
+    color: var(--muted);
     pointer-events: none;
   }
   .follow {
     position: absolute;
-    right: 18px;
+    right: 14px;
     bottom: 12px;
-    height: 26px;
+    height: 28px;
     padding: 0 11px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: var(--elev);
+    border: none;
+    border-radius: 8px;
+    background: var(--raise-2);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 12px 32px -8px rgba(0, 0, 0, calc(0.7 * var(--shade)));
     color: var(--text);
     font: inherit;
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 550;
     cursor: pointer;
   }
   .follow:hover {
-    border-color: var(--accent);
+    background: var(--raise);
   }
   .follow:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--p-ink);
     outline-offset: 1px;
   }
   .note {
     flex: none;
     padding: 10px 14px;
-    border-radius: var(--r);
-    border: 1px dashed var(--line2);
+    border-radius: 10px;
+    box-shadow: inset 0 0 0 1px var(--line);
     font-size: 12.5px;
     color: var(--muted);
   }

@@ -13,22 +13,31 @@
     if (item.until === null) return t('handover.separator.limited', words);
     return t('handover.separator.limitedUntil', { ...words, time: fTime(item.until) });
   });
+  // Where it goes on, in bold, before why.
+  const cut = $derived(text.indexOf(' · '));
 </script>
 
-<div class="sep mono" role="separator" aria-label={text} data-testid="handover">
-  <span class="line"></span>
-  <span class="text">{text}</span>
-  <span class="line"></span>
+<div class="sep" role="separator" aria-label={text} data-testid="handover">
+  <span class="text"
+    >{#if cut > 0}<b>{text.slice(0, cut)}</b>{text.slice(cut)}{:else}{text}{/if}</span
+  >
 </div>
 
 <style>
   .sep {
-    margin-left: 34px;
     display: flex;
     align-items: center;
-    gap: 12px;
-    font-size: 11.5px;
-    color: var(--accent);
+    gap: 10px;
+    margin: 14px 0 4px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .sep::before,
+  .sep::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--line-2);
   }
   .text {
     flex: none;
@@ -36,9 +45,8 @@
     overflow-wrap: anywhere;
     text-align: center;
   }
-  .line {
-    flex: 1;
-    height: 1px;
-    background: color-mix(in oklch, var(--accent) 40%, transparent);
+  b {
+    color: var(--soft);
+    font-weight: 550;
   }
 </style>

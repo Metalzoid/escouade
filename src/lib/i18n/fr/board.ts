@@ -163,6 +163,9 @@ export default {
   // The report an agent gives when it hands a ticket over: its criteria, its progress, its test launch.
   report: {
     title: 'Bilan des critères',
+    /** The mark before a criterion, read by a screen reader. */
+    met: 'Atteint',
+    unmet: 'Pas encore atteint',
     criterion: 'Critère {n}',
     doneHeading: 'Ce qui a été fait',
     progressLabel: 'Avancement',

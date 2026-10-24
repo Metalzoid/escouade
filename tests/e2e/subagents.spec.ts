@@ -149,7 +149,7 @@ test('a subagent that runs is read, answered and stopped from its own view', asy
   await expect(view).toHaveCount(0);
   await expect(conv.getByText('Le sous-agent a été arrêté.')).toBeVisible();
   // Its request, answered in its view, is there too, no longer waiting.
-  await expect(conv.getByText('↳ Demande du sous-agent « Surveiller le serveur »')).toBeVisible();
+  await expect(conv.getByText('Demande du sous-agent « Surveiller le serveur »')).toBeVisible();
   await expect(conv.getByTestId('permission-pending')).toHaveCount(0);
 
   // In the sidebar none runs: the group folds, and counts one finished, which the button unfolds.
@@ -172,7 +172,7 @@ test('a finished subagent is answered from the conversation of its agent, and st
 
   // The request of the subagent is in the conversation of the agent, with who asks.
   const { agent: conv, sub: view } = views(page);
-  await expect(conv.getByText('↳ Demande du sous-agent « Chercher la cause »')).toBeVisible();
+  await expect(conv.getByText('Demande du sous-agent « Chercher la cause »')).toBeVisible();
   const ask = conv.getByTestId('permission-pending');
   await expect(ask).toContainText('grep -n pdf src/filter.ts');
   await ask.getByRole('button', { name: 'Autoriser', exact: true }).click();

@@ -5,11 +5,13 @@
   import { t } from '../lib/i18n';
   import { app } from '../lib/state.svelte';
   import { tip } from '../lib/tip';
+  import Icon from './Icon.svelte';
   import Level from './Level.svelte';
 
   // The microphone beside a field: a click starts the dictation and another ends it, a press held dictates until it is
   // let go. While it listens, its panel shows the level and the time; the first time, it offers the model's download.
-  let { target, below = false }: { target: DictationTarget; below?: boolean } = $props();
+  // `panel`: false where the field draws the dictation itself (the composer's band, DictationBand).
+  let { target, below = false, panel = true }: { target: DictationTarget; below?: boolean; panel?: boolean } = $props();
 
   $effect(() => dictation.register(target));
 
@@ -38,7 +40,7 @@
 </script>
 
 <div class="mic-wrap">
-  {#if phase !== 'idle'}
+  {#if panel && phase !== 'idle'}
     <div class="panel" class:below role="status" aria-live="polite" data-voice-phase={phase}>
       {#if phase === 'starting'}
         <span class="muted">{t('voice.panel.starting')}</span>
@@ -90,24 +92,13 @@
     aria-label={listening ? t('voice.button.stop') : t('voice.button.label')}
     aria-keyshortcuts={(app.settings.voice?.shortcut || DEFAULT_SHORTCUT).replace('Mod', 'Control')}
     use:tip={t('voice.button.title', { key })}
-    style:--level={listening ? dictation.level : 0}
     onpointerdown={down}
     onpointerup={() => dictation.release()}
     onpointercancel={() => dictation.release()}
     onkeydown={(e) => key_(e, true)}
     onkeyup={(e) => key_(e, false)}
   >
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10a7 7 0 0 0 14 0" /><path d="M12 17v4" /></svg
-    >
+    <Icon name="mic" size={14} />
   </button>
 </div>
 
@@ -119,11 +110,10 @@
   .mic {
     position: relative;
   }
+  /* Listening: in the project's colour, as the band that says it. */
   .mic.on {
-    color: var(--del);
-    /* The level, as a halo that grows with the voice. */
-    box-shadow: 0 0 0 calc(2px + var(--level) * 6px) color-mix(in oklch, var(--del) 30%, transparent);
-    transition: box-shadow 0.06s linear;
+    background: color-mix(in oklch, var(--p) 14%, transparent);
+    color: var(--p-ink);
   }
   .mic.busy {
     opacity: 0.6;
@@ -138,10 +128,11 @@
     flex-direction: column;
     gap: 8px;
     padding: 12px 14px;
-    border-radius: var(--r);
-    border: 1px solid var(--line2);
-    background: var(--elev);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+    border-radius: 10px;
+    background: var(--raise-2);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 16px 40px -12px rgba(0, 0, 0, calc(0.7 * var(--shade)));
     font-size: 12.5px;
     text-align: left;
   }
@@ -168,7 +159,7 @@
   }
   .strong {
     font-weight: 600;
-    color: var(--fg);
+    color: var(--text);
   }
   .time {
     margin-left: auto;
@@ -192,7 +183,7 @@
     overflow: hidden;
     display: flex;
     flex-direction: column-reverse;
-    color: var(--fg);
+    color: var(--text);
     font-size: 13px;
     line-height: 1.5;
   }
@@ -204,9 +195,6 @@
   @media (prefers-reduced-motion: reduce) {
     .dot {
       animation: none;
-    }
-    .mic.on {
-      transition: none;
     }
   }
 </style>

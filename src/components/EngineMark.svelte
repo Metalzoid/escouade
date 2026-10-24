@@ -7,8 +7,14 @@
   // The brand of an agent's harness, a word in a hairline (« Claude », « Codex », « OpenCode », « Copilot »), never a
   // colour: the same on its card, in the overview, its header, its ticket and the menus. Only once agents run on two
   // harnesses: with one, it would say nothing. `large`: in a header, or beside a title.
-  // `always`: shown whatever the agents run on (the menu « Harness », where it names each harness).
-  let { engine, large = false, always = false }: { engine: EngineId | null | undefined; large?: boolean; always?: boolean } = $props();
+  // `always`: shown whatever the agents run on (the menu « Harness », where it names each harness). `full`: its whole name
+  // (« Claude Code »), where there is room for it (an agent's header).
+  let {
+    engine,
+    large = false,
+    always = false,
+    full = false,
+  }: { engine: EngineId | null | undefined; large?: boolean; always?: boolean; full?: boolean } = $props();
 
   const name = $derived(engineName(engine ?? 'claude'));
   /** Its first word: « Claude » for Claude Code, « Copilot » for Copilot CLI. */
@@ -22,7 +28,7 @@
     data-engine={engine ?? 'claude'}
     role="img"
     aria-label={t('nav.sidebar.engineMark', { engine: name })}
-    use:tip={{ text: t('nav.sidebar.engineMark', { engine: name }), aria: false }}>{short}</span
+    use:tip={{ text: t('nav.sidebar.engineMark', { engine: name }), aria: false }}>{full ? name : short}</span
   >
 {/if}
 

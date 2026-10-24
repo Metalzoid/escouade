@@ -142,6 +142,8 @@ pub struct EngineCaps {
     pub todo_tools: bool,
     /// It tells which requests it would refuse by default (« Claude Code refuserait par défaut »).
     pub default_refusal: bool,
+    /// Its commands run in a sandbox, which the modes set (Codex): « Bac à sable » in the agent's header.
+    pub sandbox: bool,
 }
 
 /// The versions of a harness Escouade was tested with, oldest and newest.

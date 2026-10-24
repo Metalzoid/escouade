@@ -27,51 +27,56 @@
 </div>
 
 <style>
+  /* A diff in its frame (the frame is its container's): line numbers, signs, added and removed lines tinted. */
   .patch {
+    padding: 10px 0;
     font-family: var(--mono);
     font-size: 12px;
-    line-height: 1.5;
+    line-height: 1.7;
     overflow: auto;
     max-height: 420px;
-    background: var(--term);
+    background: var(--well);
+    color: var(--code-fg);
   }
   .l {
     display: flex;
     white-space: pre;
     min-width: max-content;
+    padding-right: 14px;
   }
   .no {
-    width: 44px;
+    width: 34px;
     flex: none;
-    padding-right: 8px;
+    padding-right: 10px;
     text-align: right;
-    color: var(--dim);
+    color: var(--code-ln);
     user-select: none;
   }
   .sign {
     width: 16px;
     flex: none;
-    color: var(--dim);
+    color: var(--code-ln);
     user-select: none;
   }
   .add {
-    background: color-mix(in oklch, var(--add) 14%, transparent);
+    background: oklch(from var(--add) l c h / 0.08);
   }
   .add .sign {
     color: var(--add);
   }
   .del {
-    background: color-mix(in oklch, var(--del) 14%, transparent);
+    background: oklch(from var(--del) l c h / 0.09);
   }
   .del .sign {
     color: var(--del);
   }
   .meta {
-    color: var(--dim);
+    color: var(--code-dim);
   }
   .more {
-    padding: 6px 12px;
-    color: var(--dim);
-    font-size: 11px;
+    padding: 6px 14px 0;
+    color: var(--muted);
+    font-family: var(--ui);
+    font-size: 11.5px;
   }
 </style>

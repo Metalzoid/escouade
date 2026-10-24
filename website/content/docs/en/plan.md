@@ -79,7 +79,7 @@ One click is enough, on any of these:
 - the subagent’s line in the sidebar;
 - the stack of dots in the “Plan” banner: in one click for a single subagent that runs, through a menu of all those that run when there are several (whether they work on a task or not);
 - the `↳ name` of a task;
-- the ↗ button at the right of the line of its call (the `Agent` tool), in the agent’s conversation;
+- the button at the end of the line of its call (the `Agent` tool), in the agent’s conversation;
 - “Open its conversation”, above a permission request or a question it asked.
 
 At the top, a breadcrumb “agent › subagent” tells you where you are. For a subagent started by another, it shows the whole chain, and each link opens the subagent it names. A click on the agent’s name, or `Esc`, takes you back to its conversation, and the focus returns to where you clicked (for the banner’s stack of dots, on its button, even if you chose the subagent in its menu); a click on the agent’s card in the sidebar brings you back too. `Esc` does nothing while a field holds text you typed: a draft isn’t lost to a key.
@@ -114,7 +114,7 @@ Claude can also list an agent’s subagents, read their report, stop a subagent 
 
 A finished subagent’s conversation can still be read. Escouade keeps each subagent’s prompt, its report, and its final figures (state, tokens, tools, duration) with the agent’s conversation. The prompt and the report are cut at 16,000 bytes, and a cut text ends with “…”. When a subagent finishes without handing back a report in due form, its last message serves as its report. The report of a subagent in the foreground is the result of its call, cut at 8,000 bytes.
 
-Its conversation can therefore be read after Escouade restarts, and even when the sidebar no longer has its line (beyond 30 subagents, or once the plan has started over): the ↗ button on the line of its call, in the agent’s conversation, still opens it. A subagent that was running when Escouade closed is shown as “Interrupted”.
+Its conversation can therefore be read after Escouade restarts, and even when the sidebar no longer has its line (beyond 30 subagents, or once the plan has started over): the button on the line of its call, in the agent’s conversation, still opens it. A subagent that was running when Escouade closed is shown as “Interrupted”.
 
 ## Background tasks
 

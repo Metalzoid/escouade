@@ -219,8 +219,9 @@ impl<R: Runtime> Core<R> {
             account.id
         );
         let line = switched_line(lang, &to, &from, &meter);
+        // A separator in its conversation, as a handover's (2.0 design, choice 24).
         let (name, project) = match self.with_agent(id, |rt, fx| {
-            rt.notice("info", line, fx);
+            rt.notice("switch", line, fx);
             Ok((rt.meta.name.clone(), rt.meta.project_id.clone()))
         }) {
             Ok(x) => x,

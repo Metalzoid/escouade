@@ -60,6 +60,8 @@ export const ICONS = {
   mute: '<path d="M2.75 6.25h2.25L8.25 3.5v9L5 9.75H2.75z" /><path d="M10.75 6.25l3 3.5M13.75 6.25l-3 3.5" />',
   restore: '<path d="M5.5 3.5h7v7" /><rect x="3.5" y="5.5" width="7" height="7" rx="0.5" />',
   close: '<path d="M3.5 3.5l9 9M12.5 3.5l-9 9" />',
+  // The Enter key, in the key of « Envoyer » (not in the preview, which writes it with a character).
+  enter: '<path d="M12.5 3.5v4.25a2 2 0 0 1-2 2H4M6.75 6.75L4 9.75l2.75 3" />',
   mic: '<rect x="5.75" y="2.25" width="4.5" height="7.5" rx="2.25" /><path d="M3.5 7.75a4.5 4.5 0 0 0 9 0M8 12.25v1.5" />',
   wave: '<path d="M2.75 7v2M5.25 5v6M7.75 3v10M10.25 5.5v5M12.75 7v2" />',
   image:

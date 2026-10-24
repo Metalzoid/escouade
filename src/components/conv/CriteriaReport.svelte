@@ -4,6 +4,7 @@
   import { app } from '../../lib/state.svelte';
   import { canTest, testAgent } from '../../lib/test-launch.svelte';
   import type { Agent, Criterion } from '../../lib/types';
+  import Icon from '../Icon.svelte';
 
   let { report, criteria = [], agent }: { report: Report; criteria?: Criterion[]; agent: Agent } = $props();
 
@@ -20,9 +21,11 @@
     <ul aria-label={t('board.report.title')}>
       {#each report.criteria as c, i (i)}
         <li class:ok={c.ok}>
-          <span class="mark">{c.ok ? '✓' : '○'}</span><span class="text"
-            >{criteria[c.n - 1]?.text ?? t('board.report.criterion', { n: c.n })}</span
-          >{#if c.note}<span class="note">{c.note}</span>{/if}
+          <span class="mark" role="img" aria-label={c.ok ? t('board.report.met') : t('board.report.unmet')}
+            ><Icon name={c.ok ? 'check-c' : 'circle'} size={14} /></span
+          ><span class="text">{criteria[c.n - 1]?.text ?? t('board.report.criterion', { n: c.n })}</span>{#if c.note}<span class="note"
+              >{c.note}</span
+            >{/if}
         </li>
       {/each}
     </ul>
@@ -50,20 +53,19 @@
       {/each}
     </ul>
     {#if project && canTest(agent)}
-      <button class="btn test" onclick={() => testAgent(agent, project)}>▶ {t('board.report.test')}</button>
+      <button class="btn test" onclick={() => testAgent(agent, project)}><Icon name="play" size={14} />{t('board.report.test')}</button>
     {/if}
   {/if}
 </div>
 
 <style>
+  /* The agent's report of its ticket's criteria, of what it did, of how to test it: a card with a hairline. */
   .report {
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 8px;
     padding: 12px 14px;
-    border-radius: var(--r);
-    border: 1px solid var(--line2);
-    background: var(--elev);
+    border-radius: 11px;
+    box-shadow: inset 0 0 0 1px var(--line);
   }
   .head {
     display: flex;
@@ -71,37 +73,39 @@
     gap: 8px;
   }
   .t {
-    font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
   }
   .n {
-    font-size: 11px;
-    color: var(--dim);
+    color: var(--muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
   }
   ul {
     list-style: none;
     margin: 0;
     padding: 0;
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 5px;
   }
   li {
     display: flex;
     flex-wrap: wrap;
+    align-items: baseline;
     gap: 7px;
+    color: var(--soft);
     font-size: 12.5px;
     line-height: 1.45;
     /* Long commands, addresses and notes wrap rather than widen the card. */
     overflow-wrap: anywhere;
   }
   .mark {
-    width: 12px;
     flex: none;
-    color: var(--dim);
+    align-self: center;
+    display: flex;
+    color: var(--muted);
   }
   li.ok .mark {
-    color: var(--ok);
+    color: var(--add);
   }
   .note {
     color: var(--muted);
@@ -116,10 +120,10 @@
   }
   .steps li::before {
     content: '·';
-    width: 12px;
+    width: 14px;
     flex: none;
     text-align: center;
-    color: var(--dim);
+    color: var(--sep);
   }
   .name {
     font-weight: 600;
@@ -130,8 +134,7 @@
     font-size: 11.5px;
   }
   .test {
-    align-self: flex-start;
-    height: 28px;
-    font-size: 12px;
+    justify-self: start;
+    height: 30px;
   }
 </style>

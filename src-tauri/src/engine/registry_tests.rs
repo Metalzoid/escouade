@@ -111,6 +111,19 @@ fn every_harness_declares_its_program_versions_and_capabilities() {
     assert_eq!(declared()[0].name, "Claude Code");
 }
 
+/// Only Codex runs its commands in a sandbox: its header says « Bac à sable » (2.0 design, lot 4).
+#[test]
+fn only_codex_declares_a_sandbox() {
+    for e in all() {
+        assert_eq!(
+            e.caps().sandbox,
+            e.id() == crate::engine::CODEX.id(),
+            "{}",
+            e.name()
+        );
+    }
+}
+
 /// The declaration of Claude Code as the window's tests take it (`src/test/ipc.ts`): the file and
 /// the declaration stay the same.
 #[test]

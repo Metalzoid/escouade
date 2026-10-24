@@ -103,15 +103,17 @@ const LANGS: Record<string, () => Promise<any>> = {
 };
 
 let highlighterP: Promise<any> | null = null;
+const THEME = 'escouade';
 
 function highlighter() {
   highlighterP ??= (async () => {
-    const [{ createHighlighterCore }, { createJavaScriptRegexEngine }, theme] = await Promise.all([
+    const [{ createCssVariablesTheme, createHighlighterCore }, { createJavaScriptRegexEngine }] = await Promise.all([
       import('shiki/core'),
       import('shiki/engine/javascript'),
-      import('shiki/themes/vitesse-dark.mjs'),
     ]);
-    return createHighlighterCore({ themes: [theme.default], langs: [], engine: createJavaScriptRegexEngine() });
+    // Its colours are the app's syntax tokens (`--shiki-*` in app.css): they follow the theme, light or dark.
+    const theme = createCssVariablesTheme({ name: THEME, variablePrefix: '--shiki-' });
+    return createHighlighterCore({ themes: [theme], langs: [], engine: createJavaScriptRegexEngine() });
   })();
   return highlighterP;
 }
@@ -123,7 +125,7 @@ async function highlightCode(code: string, lang: string): Promise<string | null>
   const mod = await loader();
   const id = (Array.isArray(mod.default) ? mod.default : [mod.default]).at(-1)?.name;
   if (!hl.getLoadedLanguages().includes(id)) await hl.loadLanguage(mod.default);
-  return hl.codeToHtml(code, { lang: id, theme: 'vitesse-dark' });
+  return hl.codeToHtml(code, { lang: id, theme: THEME });
 }
 
 /** Highlights the not-yet-highlighted code blocks inside `root`. */

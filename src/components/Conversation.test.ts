@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 /** The interfaces of Claude Code started (« Vue Claude Code »). */
 const tui = vi.hoisted(() => ({ opened: 0 }));
 
-// "▶ Tester" starts test launches, which have logs (xterm.js): none in jsdom.
+// "Tester" starts test launches, which have logs (xterm.js): none in jsdom.
 vi.mock('../lib/terminals', () => ({
   launchLog: () => ({
     term: { cols: 80, rows: 24, buffer: { active: { cursorY: 0 } }, write: (_: unknown, done?: () => void) => done?.() },
@@ -35,7 +35,6 @@ import { app } from '../lib/state.svelte';
 import type { Agent } from '../lib/types';
 import { answerClock, settle } from '../test/conversation';
 import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, gitInfo, project, pullRequest, resetApp, ticket } from '../test/ipc';
-import { openTerminal } from '../lib/terminals';
 import Conversation from './Conversation.svelte';
 import ContextMenu from './ContextMenu.svelte';
 
@@ -93,7 +92,7 @@ describe('Conversation', () => {
     setup({ status: 'idle', worktree: null, worktreePending: true });
     expect(screen.getByText('Le worktree sera créé au premier message, au nom de l’agent.')).toBeInTheDocument();
     // Not on the project's branch: on none yet.
-    expect(screen.getByText('demo-api / —')).toBeInTheDocument();
+    expect(document.querySelector('.crumbs')).toHaveTextContent('demo-api/—');
   });
 
   it('says the branch of the worktree the agent went into by itself, not the project’s folder’s (ESC-161)', () => {
@@ -108,7 +107,7 @@ describe('Conversation', () => {
     app.git[project().id] = gitInfo({ branch: 'dev' });
     const b = fakeBackend({ get_conversation: () => [] });
     render(Conversation, { agent: a, project: project() });
-    expect(screen.getByText('demo-api / feat/a')).toBeInTheDocument();
+    expect(document.querySelector('.crumbs .branch')).toHaveTextContent('feat/a');
     expect(screen.getByRole('button', { name: 'Ouvrir une PR' })).toBeInTheDocument();
     expect(b.called('agent_prs_refresh').map((c) => c.args)).toEqual([{ id: 'found1', now: false }]);
   });
@@ -196,7 +195,7 @@ describe('Conversation', () => {
       const { backend, textarea } = sendDuringSetup();
       await userEvent.type(textarea, 'Ajoute des tests{Enter}');
       await waitFor(() => expect(backend.called('send_message')).toHaveLength(1));
-      const bubble = (await screen.findByText('Ajoute des tests')).closest('.bubble') as HTMLElement;
+      const bubble = (await screen.findByText('Ajoute des tests')).closest('.msg') as HTMLElement;
       expect(within(bubble).getByText('En attente de la préparation…')).toBeInTheDocument();
       expect(textarea).toHaveValue('');
     });
@@ -208,7 +207,7 @@ describe('Conversation', () => {
       render(Conversation, { agent: a, project: project() });
       await userEvent.type(screen.getByRole('textbox'), 'Ajoute un bouton{Enter}');
       await waitFor(() => expect(backend.called('send_message')).toHaveLength(1));
-      const bubble = (await screen.findByText('Ajoute un bouton')).closest('.bubble') as HTMLElement;
+      const bubble = (await screen.findByText('Ajoute un bouton')).closest('.msg') as HTMLElement;
       expect(within(bubble).getByText('En attente de la préparation…')).toBeInTheDocument();
     });
 
@@ -294,7 +293,7 @@ describe('Conversation', () => {
       );
       await screen.findByText('rapport.pdf');
       await userEvent.type(textarea, 'Résume{Enter}');
-      const bubble = (await screen.findByText('En attente de la préparation…')).closest('.bubble') as HTMLElement;
+      const bubble = (await screen.findByText('En attente de la préparation…')).closest('.msg') as HTMLElement;
       expect(within(bubble).getByText(/rapport\.pdf/)).toBeInTheDocument();
     });
 
@@ -1022,10 +1021,11 @@ describe('Conversation', () => {
     });
   });
 
-  it('names the agent’s model with the version Claude Code runs for it', () => {
+  it('names the agent’s model with the version Claude Code runs for it, in the composer’s chip (no more in the header)', () => {
     const { container } = setup({ model: 'sonnet' });
     app.models = [{ value: 'sonnet', resolvedModel: 'claude-sonnet-5-5' }];
-    return waitFor(() => expect(container.querySelector('.head .model')).toHaveTextContent('Sonnet 5.5'));
+    expect(container.querySelector('.head .model')).toBeNull();
+    return waitFor(() => expect(screen.getByRole('button', { name: /^Modèle/ })).toHaveTextContent('Sonnet 5.5'));
   });
 
   it('says so when the conversation cannot be loaded', async () => {
@@ -1139,8 +1139,10 @@ describe('Conversation', () => {
     app.tickets.t1 = ticket({ agentId: a.id, column: 'doing' });
     const list = await screen.findByRole('list', { name: 'Bilan des critères' });
     const items = within(list).getAllByRole('listitem');
-    expect(items[0]).toHaveTextContent('✓Le fichier existevérifié');
-    expect(items[1]).toHaveTextContent('○Tests vertsreste');
+    expect(items[0]).toHaveTextContent('Le fichier existevérifié');
+    expect(items[0].querySelector('.mark')).toHaveAccessibleName('Atteint');
+    expect(items[1]).toHaveTextContent('Tests vertsreste');
+    expect(items[1].querySelector('[data-icon="circle"]')).not.toBeNull();
     expect(screen.getByText('Lancement de test')).toBeInTheDocument();
     expect(screen.getByText('http://localhost:4101')).toBeInTheDocument();
     expect(screen.getByText('Fait.')).toBeInTheDocument();
@@ -1159,7 +1161,7 @@ describe('Conversation', () => {
       within(criteria)
         .getAllByRole('listitem')
         .map((li) => li.textContent),
-    ).toEqual(['✓Critère 1', '○Critère 3reste']);
+    ).toEqual(['Critère 1', 'Critère 3reste']);
     expect(screen.getByText('1/2')).toBeInTheDocument();
     expect(screen.getByText('Ce qui a été fait')).toBeInTheDocument();
     const done = screen.getByRole('list', { name: 'Avancement' });
@@ -1192,7 +1194,7 @@ describe('Conversation', () => {
       { kind: 'text', id: 'm1', text, streaming: false },
     ]);
     const list = await screen.findByRole('list', { name: 'Lancement de test' });
-    await userEvent.click(within(list.closest('.report') as HTMLElement).getByRole('button', { name: '▶ Tester' }));
+    await userEvent.click(within(list.closest('.report') as HTMLElement).getByRole('button', { name: 'Tester' }));
     expect(app.modal).toEqual({ kind: 'testLaunch', agentId: a.id });
   });
 
@@ -1202,11 +1204,11 @@ describe('Conversation', () => {
     const { a, unmount } = setup({ status: 'done', worktree: WT, recipe }, [{ kind: 'text', id: 'm1', text, streaming: false }]);
     app.tickets.t1 = ticket({ agentId: a.id, column: 'review', step: 'Merge…' });
     const list = await screen.findByRole('list', { name: 'Lancement de test' });
-    expect(within(list.closest('.report') as HTMLElement).queryByRole('button', { name: '▶ Tester' })).not.toBeInTheDocument();
+    expect(within(list.closest('.report') as HTMLElement).queryByRole('button', { name: 'Tester' })).not.toBeInTheDocument();
     unmount();
     setup({ status: 'done', worktree: WT, recipe, archived: true }, [{ kind: 'text', id: 'm1', text, streaming: false }]);
     await screen.findByRole('list', { name: 'Lancement de test' });
-    expect(screen.queryByRole('button', { name: '▶ Tester' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tester' })).not.toBeInTheDocument();
   });
 
   it('lists the preparation of a recipe that only prepares', async () => {
@@ -1226,6 +1228,49 @@ describe('Conversation', () => {
     setup({ status: 'done' }, [{ kind: 'text', id: 'm1', text, streaming: false }]);
     expect(await screen.findByText(/oups/)).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Bilan des critères' })).not.toBeInTheDocument();
+  });
+});
+
+describe('Conversation of an agent whose harness has no account (choice 19)', () => {
+  const NO_CODEX = 'no-account:codex|Aucun compte Codex : ajoute-en un dans Réglages › Comptes.';
+  const CODEX = { ...BARE_ENGINE, id: 'codex' as const, name: 'Codex', speaker: 'Codex' };
+
+  it('says so in an amber card, keeps the message in the field, and adds an account from it', async () => {
+    const a = agent({ id: `na${Math.random()}`, status: 'idle', engine: 'codex' });
+    resetApp({ projects: [project()], agents: [a] });
+    app.engines = [CLAUDE_ENGINE, CODEX];
+    fakeBackend({
+      get_conversation: () => [],
+      send_message: () => {
+        throw NO_CODEX;
+      },
+    });
+    render(Conversation, { agent: a, project: project() });
+    await userEvent.type(screen.getByRole('textbox'), 'Ajoute un bouton{Enter}');
+    const card = await screen.findByRole('group', { name: 'Aucun compte Codex : ajoute-en un dans Réglages › Comptes.' });
+    expect(card).toHaveClass('limit');
+    expect(screen.getByRole('textbox')).toHaveValue('Ajoute un bouton');
+    // Said once, in the card: no toast besides.
+    expect(app.toasts).toHaveLength(0);
+    await userEvent.click(within(card).getByRole('button', { name: 'Ajouter un compte Codex…' }));
+    expect(app.modal).toEqual({ kind: 'account', engine: 'codex' });
+  });
+
+  it('goes once an account of its harness is there', async () => {
+    const a = agent({ id: `nb${Math.random()}`, status: 'idle', engine: 'codex' });
+    resetApp({ projects: [project()], agents: [a] });
+    app.engines = [CLAUDE_ENGINE, CODEX];
+    fakeBackend({
+      get_conversation: () => [],
+      send_message: () => {
+        throw NO_CODEX;
+      },
+    });
+    render(Conversation, { agent: a, project: project() });
+    await userEvent.type(screen.getByRole('textbox'), 'Ajoute un bouton{Enter}');
+    await screen.findByRole('group', { name: /Aucun compte Codex/ });
+    app.settings.accounts = [...(app.settings.accounts ?? []), { ...app.settings.accounts![0], id: 'cx', engine: 'codex', active: true }];
+    await waitFor(() => expect(screen.queryByRole('group', { name: /Aucun compte Codex/ })).not.toBeInTheDocument());
   });
 });
 
@@ -1261,7 +1306,7 @@ describe('Conversation header test launch', () => {
     const prepare = screen.getByRole('button', { name: 'Préparer le lancement' });
     expect(prepare.querySelector('.lbl')).toHaveTextContent('Préparer le lancement');
     await rerender({ agent: { ...a, recipe }, project: project() });
-    expect(screen.getByRole('button', { name: '▶ Tester' }).querySelector('.lbl')).toHaveTextContent('Tester');
+    expect(screen.getByRole('button', { name: 'Tester' }).querySelector('.lbl')).toHaveTextContent('Tester');
     expect(screen.queryByRole('button', { name: 'Préparer le lancement' })).not.toBeInTheDocument();
   });
 
@@ -1276,14 +1321,14 @@ describe('Conversation header test launch', () => {
 
   it('offers no test while the agent’s ticket is being validated', async () => {
     const { a } = setup({ worktree: WT, recipe });
-    expect(screen.getByRole('button', { name: '▶ Tester' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tester' })).toBeInTheDocument();
     app.tickets.t1 = ticket({ agentId: a.id, column: 'review', step: 'Tests…' });
-    await waitFor(() => expect(screen.queryByRole('button', { name: '▶ Tester' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Tester' })).not.toBeInTheDocument());
   });
 
   it('tests a worktree whose services isola runs without a recipe, and asks for none', () => {
     setup({ worktree: WT, isola: true });
-    expect(screen.getByRole('button', { name: '▶ Tester' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Tester' })).toHaveAttribute(
       'data-tip',
       'Lance les services isola de ce worktree et ouvre la fonctionnalité dans le navigateur',
     );
@@ -1292,7 +1337,7 @@ describe('Conversation header test launch', () => {
 
   it('offers neither to an agent without a worktree, nor to an archived one', () => {
     const { unmount } = setup({ recipe });
-    expect(screen.queryByRole('button', { name: '▶ Tester' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tester' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Préparer le lancement' })).not.toBeInTheDocument();
     unmount();
     setup({ worktree: WT, archived: true });
@@ -1303,20 +1348,26 @@ describe('Conversation header test launch', () => {
 describe('Conversation header usage', () => {
   it('shows how full the context is, out of the model’s window', () => {
     setup({ contextTokens: 45_200, contextWindow: 200_000 });
-    const ctx = screen.getByText('Contexte').closest('.m')!;
-    expect(ctx).toHaveTextContent('45,2 k / 200 k');
+    const ctx = screen.getByText('Contexte').closest('.fig')!;
+    expect(ctx.querySelector('dd')).toHaveTextContent('45,2 k / 200 k');
     expect(ctx).toHaveAttribute('data-tip', expect.stringContaining('23 %'));
-    expect(ctx.querySelector('.v')).not.toHaveClass('full');
+    expect(ctx.querySelector('dd')).not.toHaveClass('full');
+    // A thin gauge under the figure, filled to the share used.
+    expect(ctx.querySelector<HTMLElement>('.ctx-meter i')!.style.width).toBe('23%');
   });
 
   it('warns when the context is nearly full', () => {
     setup({ contextTokens: 900_000, contextWindow: 1_000_000 });
-    expect(screen.getByText('900,0 k / 1 M')).toHaveClass('full');
+    const dd = screen.getByText('Contexte').closest('.fig')!.querySelector('dd');
+    expect(dd).toHaveTextContent('900,0 k / 1 M');
+    expect(dd).toHaveClass('full');
   });
 
   it('shows the context alone while the window is unknown', () => {
     setup({ contextTokens: 12_300, contextWindow: 0 });
-    expect(screen.getByText('Contexte').closest('.m')).toHaveTextContent('12,3 k');
+    const ctx = screen.getByText('Contexte').closest('.fig')!;
+    expect(ctx.querySelector('dd')).toHaveTextContent(/^12,3 k$/);
+    expect(ctx.querySelector('.ctx-meter')).toBeNull();
   });
 
   it('counts the running turn in the tokens and the estimated cost', () => {
@@ -1327,29 +1378,9 @@ describe('Conversation header usage', () => {
 });
 
 describe('Conversation editor entry', () => {
-  it('opens the editor on the agent’s worktree from its header', async () => {
-    const wt = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a1', branch: 'escouade/a1', baseBranch: 'main' };
-    resetApp({ agents: [agent({ worktree: wt })] });
-    fakeBackend({ get_conversation: () => [] });
-    render(Conversation, { agent: app.agents.a1, project: project() });
-    await userEvent.click(screen.getByRole('button', { name: /Éditeur/ }));
-    expect(app.editorOn).toBe(true);
-    expect(app.editor.p1.source).toBe('a1');
-  });
-
-  it('names the header button without its text, which a narrow header hides', () => {
-    resetApp({ agents: [agent()] });
-    fakeBackend({ get_conversation: () => [] });
-    render(Conversation, { agent: app.agents.a1, project: project() });
-    expect(screen.getByRole('button', { name: 'Éditeur' })).toBeInTheDocument();
-  });
-
-  it('opens the editor on the project checkout from the header of an agent without a worktree', async () => {
-    resetApp({ agents: [agent()] });
-    fakeBackend({ get_conversation: () => [] });
-    render(Conversation, { agent: app.agents.a1, project: project() });
-    await userEvent.click(screen.getByRole('button', { name: /Éditeur/ }));
-    expect(app.editor.p1).toMatchObject({ on: true, source: 'project' });
+  it('has no « Éditeur » of its own: the title bar has it (2.0 design, choice 5)', () => {
+    setup({ worktree: WT });
+    expect(screen.queryByRole('button', { name: /Éditeur/ })).not.toBeInTheDocument();
   });
 
   it('asks a worktree agent for its launch recipe from its header, then tests it', async () => {
@@ -1362,7 +1393,7 @@ describe('Conversation editor entry', () => {
     expect(backend.called('agent_prepare_launch')).toEqual([{ cmd: 'agent_prepare_launch', args: { id: 'w1' } }]);
     // A recipe without processes: the modal opens, nothing starts.
     await rerender({ agent: { ...a, recipe: { prepare: [], processes: [], open: '' } }, project: project() });
-    await userEvent.click(screen.getByRole('button', { name: '▶ Tester' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Tester' }));
     expect(app.modal).toEqual({ kind: 'testLaunch', agentId: 'w1' });
   });
 
@@ -1389,82 +1420,27 @@ describe('Conversation editor entry', () => {
   });
 });
 
-describe('Conversation terminal entry (ESC-18)', () => {
-  const PWSH = { id: 'pwsh', label: 'PowerShell 7', path: 'pwsh.exe' };
-  /** An agent of this name, with the shells the app found, in a conversation drawn. */
-  function open(over: Partial<Agent> = {}, shells = [PWSH]) {
-    const a = agent({ id: 'tw1', name: 'refacto-auth', ...over });
-    resetApp({ projects: [project()], agents: [a] });
-    app.shells = shells;
-    fakeBackend({ get_conversation: () => [] });
-    return { a, ...render(Conversation, { agent: a, project: project() }) };
-  }
-  beforeEach(() => vi.mocked(openTerminal).mockClear());
-
-  it('opens a terminal in the worktree of the agent from its header, named after it', async () => {
-    open({ worktree: WT });
-    await userEvent.click(screen.getByRole('button', { name: 'Terminal' }));
-    expect(openTerminal).toHaveBeenCalledWith('p1', 'pwsh', 'pwsh · refacto-auth', { agentId: 'tw1' });
-    await waitFor(() => expect(app.term?.name).toBe('pwsh · refacto-auth'));
+describe('Conversation header « … » (2.0 design, choice 6)', () => {
+  it('asks the sidebar for the menu of the agent, under the button, the one of its card', async () => {
+    const { a } = setup({ worktree: WT });
+    const more = screen.getByRole('button', { name: 'Actions de l’agent' });
+    expect(more).toHaveAttribute('aria-haspopup', 'menu');
+    expect(more.querySelector('[data-icon="more"]')).not.toBeNull();
+    await userEvent.click(more);
+    expect(app.agentMenuAsk).toMatchObject({ id: a.id, seq: 1 });
+    await userEvent.click(more);
+    expect(app.agentMenuAsk).toMatchObject({ id: a.id, seq: 2 });
   });
 
-  it('sits right after the editor button, with the glyph of the first shell, its text and its tooltip', () => {
-    open({ worktree: WT });
-    const button = screen.getByRole('button', { name: 'Terminal' });
-    expect(screen.getByRole('button', { name: 'Éditeur' }).nextElementSibling).toBe(button);
-    expect(button).toHaveClass('btn', 'term');
-    expect(button.querySelector('.glyph')).toHaveTextContent('PS');
-    expect(button.querySelector('.glyph')).toHaveClass('mono');
-    // Its text is what a narrow header hides: it is named without it.
-    expect(button.querySelector('.lbl')).toHaveTextContent('Terminal');
-    expect(button).toHaveAttribute('data-tip', 'Ouvrir un terminal dans le worktree de l’agent');
-  });
-
-  it('takes the glyph of the first shell the app found, « $_ » when it found none', () => {
-    const first = open({ worktree: WT }, [
-      { id: 'wsl', label: 'WSL', path: 'wsl.exe' },
-      { id: 'bash', label: 'Git Bash', path: 'bash.exe' },
-    ]);
-    expect(screen.getByRole('button', { name: 'Terminal' }).querySelector('.glyph')).toHaveTextContent('λ');
-    first.unmount();
-    open({ worktree: WT }, []);
-    expect(screen.getByRole('button', { name: 'Terminal' }).querySelector('.glyph')).toHaveTextContent('$_');
-  });
-
-  it('says so when the app found no shell, and opens nothing', async () => {
-    open({ worktree: WT }, []);
-    await userEvent.click(screen.getByRole('button', { name: 'Terminal' }));
-    expect(openTerminal).not.toHaveBeenCalled();
-    expect(app.toasts.at(-1)).toMatchObject({ kind: 'error' });
-  });
-
-  it('is not offered to an agent without a worktree', () => {
-    open();
-    expect(screen.queryByRole('button', { name: 'Terminal' })).not.toBeInTheDocument();
-    // The editor button is still there.
-    expect(screen.getByRole('button', { name: 'Éditeur' })).toBeInTheDocument();
-  });
-
-  it('is not offered to an archived agent, whose worktree is gone', () => {
-    open({ worktree: WT, archived: true });
+  it('has no « Terminal » of its own: the menu opens one in the agent’s worktree', () => {
+    setup({ worktree: WT });
     expect(screen.queryByRole('button', { name: 'Terminal' })).not.toBeInTheDocument();
   });
 
-  it('follows the agent: offered once its worktree is there, taken back when it is archived', async () => {
-    const { a, rerender } = open();
-    expect(screen.queryByRole('button', { name: 'Terminal' })).not.toBeInTheDocument();
-    await rerender({ agent: { ...a, worktree: WT }, project: project() });
-    expect(screen.getByRole('button', { name: 'Terminal' })).toBeInTheDocument();
-    await rerender({ agent: { ...a, worktree: WT, archived: true }, project: project() });
-    expect(screen.queryByRole('button', { name: 'Terminal' })).not.toBeInTheDocument();
-  });
-
-  it('is written in English', () => {
+  it('is said in English', () => {
     setLang('en');
-    open({ worktree: WT });
-    const button = screen.getByRole('button', { name: 'Terminal' });
-    expect(button.querySelector('.lbl')).toHaveTextContent('Terminal');
-    expect(button).toHaveAttribute('data-tip', 'Open a terminal in the agent’s worktree');
+    setup();
+    expect(screen.getByRole('button', { name: 'Agent actions' })).toBeInTheDocument();
   });
 });
 
@@ -1746,11 +1722,11 @@ describe('Conversation in English', () => {
     setLang('en');
     setup({ status: 'running', contextTokens: 120_000, contextWindow: 200_000, activeMs: 151_000 });
     expect(screen.getByText('Running')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Editor' })).toHaveAttribute('data-tip', 'Browse and edit the files of this agent');
+    expect(screen.getByRole('button', { name: 'Agent actions' })).toHaveAttribute('aria-haspopup', 'menu');
     expect(screen.getByText('Context').nextElementSibling).toHaveTextContent('120.0k / 200k');
     expect(screen.getByText('Cost')).toBeInTheDocument();
     expect(screen.getByText('Duration').nextElementSibling).toHaveTextContent('2m 31s');
-    expect(screen.getByText('Files ▸')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Files 0' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: /^Layout \(Ctrl\+Shift\+L\)$/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Classic layout' })).toBeInTheDocument();
     expect(screen.getByText('Claude is working…')).toBeInTheDocument();
@@ -2149,7 +2125,7 @@ describe('Conversation and the subagents of its agent', () => {
 
   it('says which subagent made a request, which is answered here too, and opens it', async () => {
     const { a } = setup({ status: 'waiting', pending: ['r1'] }, [launch, asked]);
-    expect(await screen.findByText('↳ Demande du sous-agent « Chercher la cause »')).toBeInTheDocument();
+    expect(await screen.findByText('Demande du sous-agent « Chercher la cause »')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Autoriser/ })).toBeInTheDocument();
     const opens = screen.getAllByRole('button', { name: 'Ouvrir sa conversation' });
     await userEvent.click(opens.at(-1)!);
@@ -2315,8 +2291,10 @@ describe('« Vue OpenCode » (ESC-46)', () => {
     const { container } = render(Conversation, { agent: a, project: project() });
     expect(container.querySelector('.scroll')).toBeNull();
     expect(container.querySelector('.tui')).not.toBeNull();
+    // The two views in segments: the one shown pressed.
+    expect(screen.getByRole('button', { name: 'Vue OpenCode' })).toHaveAttribute('aria-pressed', 'true');
     const back = screen.getByRole('button', { name: 'Vue Escouade' });
-    expect(back).toHaveAttribute('aria-pressed', 'true');
+    expect(back).toHaveAttribute('aria-pressed', 'false');
     await userEvent.click(back);
     expect(b.called('set_agent_view')[0].args).toEqual({ id: 'oa1', terminal: false });
   });
@@ -2362,7 +2340,12 @@ describe('Conversation header — the agent’s pull requests (ESC-64)', () => {
     resetApp({ projects: [project()], agents: [a] });
     fakeBackend({ get_conversation: () => [] });
     render(Conversation, { agent: a, project: project() });
-    expect(screen.getByRole('button', { name: 'Ouvrir la MR #12 dans le navigateur (ouverte)' })).toHaveTextContent('✗#12');
+    const twelve = screen.getByRole('button', { name: 'Ouvrir la MR #12 dans le navigateur (ouverte)' });
+    expect(twelve).toHaveTextContent(/^#12$/);
+    // Beside the branch, the icon of its state coloured by what to look at first.
+    expect(twelve.closest('.crumbs')).not.toBeNull();
+    expect(twelve).toHaveClass('fail');
+    expect(twelve.querySelector('[data-icon="close"]')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Ouvrir la MR #9 dans le navigateur (mergée)' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Ouvrir une MR' })).not.toBeInTheDocument();
   });

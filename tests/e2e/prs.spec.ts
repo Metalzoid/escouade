@@ -248,7 +248,7 @@ test('each agent follows the pull requests of the worktree it went into by itsel
     const name = (await group.getAttribute('aria-label'))!.replace('Pull requests de ', '');
     await cards.filter({ has: page.getByText(name, { exact: true }) }).click();
     // Its header says its branch, not the project's folder's, and its pull request alone.
-    await expect(header.getByText(` / ${branch}`)).toBeVisible();
+    await expect(header.locator('.crumbs .branch')).toHaveText(branch);
     await expect(anyChip(header)).toHaveCount(1);
     await expect(chip(header, n)).toHaveCount(1);
   }

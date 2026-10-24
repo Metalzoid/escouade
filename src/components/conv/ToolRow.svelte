@@ -2,24 +2,28 @@
   import { t } from '../../lib/i18n';
   import { firstChangedLine, patchLines } from '../../lib/diff';
   import { callTitle, isSubagentCall } from '../../lib/subagents';
-  import { hasDiff, isQuietTool, toolArg, toolLabel, toolResultSummary } from '../../lib/tools';
+  import { hasDiff, isQuietTool, toolArg, toolIcon, toolLabel, toolResultSummary } from '../../lib/tools';
   import type { ConvItem, ToolItem } from '../../lib/types';
+  import Icon from '../Icon.svelte';
   import Markdown from './Markdown.svelte';
   import PatchView from './PatchView.svelte';
   import Self from './ToolRow.svelte';
   import { tip } from '../../lib/tip';
 
   // `onOpenFile`: opens a file the tool edited (its path) in the editor, at a line. `onOpenSub`: opens the conversation
-  // of the subagent a call launched (by the call's id), in place of the agent's.
+  // of the subagent a call launched (by the call's id), in place of the agent's. `linked`: the next item of the conversation
+  // is a call too, which the thread ties to this one.
   let {
     item,
     cwd,
+    linked = false,
     childrenOf = () => [],
     onOpenFile,
     onOpenSub,
   }: {
     item: ToolItem;
     cwd: string;
+    linked?: boolean;
     childrenOf?: (id: string) => ConvItem[];
     onOpenFile?: (abs: string, line: number | null) => void;
     onOpenSub?: (call: string) => void;
@@ -46,7 +50,7 @@
 </script>
 
 <!-- Reading the list of tasks is no change to the plan: a step back, in softer colours. -->
-<div class="tool" class:err={item.status === 'error'} class:quiet={isQuietTool(item.name)}>
+<div class="tool" class:err={item.status === 'error'} class:quiet={isQuietTool(item.name)} class:linked={linked && !open}>
   <!-- Not a <button>: the edited file's path inside it is one. -->
   <div
     class="row"
@@ -64,6 +68,7 @@
       }
     }}
   >
+    <span class="ic" aria-hidden="true"><Icon name={toolIcon(item.name)} size={14} /></span>
     <span class="badge">{toolLabel(item.name)}</span>
     {#if file}
       <button
@@ -81,11 +86,13 @@
       <span class="arg">{arg}</span>
     {/if}
     {#if item.status === 'running'}
-      <span class="spin" aria-label={t('conv.tool.running')}></span>
+      <span class="spin" role="img" aria-label={t('conv.tool.running')}></span>
     {:else if diff}
-      <span class="add">+{item.result?.add}</span><span class="del">−{item.result?.del}</span>
+      <span class="res"><span class="add">+{item.result?.add}</span> <span class="del">−{item.result?.del}</span></span>
     {:else if res}
-      <span class="res">{res}</span>
+      <span class="res"
+        >{#if item.status === 'ok'}<span class="ok"><Icon name="check" size={14} /></span>{/if}{res}</span
+      >
     {/if}
     {#if subTools.length}<span class="res">{t('conv.tool.subTools', { count: subTools.length })}</span>{/if}
     {#if sub}
@@ -98,9 +105,10 @@
         onclick={(e) => {
           e.stopPropagation();
           onOpenSub?.(item.id);
-        }}><span aria-hidden="true">↗</span></button
+        }}><Icon name="ext" size={14} /></button
       >
     {/if}
+    {#if expandable}<span class="chev" aria-hidden="true"><Icon name="right" size={14} /></span>{/if}
   </div>
   {#if open}
     <div class="detail">
@@ -110,7 +118,7 @@
         <ul class="todos">
           {#each item.input.todos as todo, i (i)}
             <li class={todo.status}>
-              <span>{todo.status === 'completed' ? '☑' : todo.status === 'in_progress' ? '◐' : '☐'}</span>
+              <Icon name={todo.status === 'completed' ? 'check-c' : 'circle'} size={14} />
               {todo.content ?? todo.activeForm}
             </li>
           {/each}
@@ -138,132 +146,184 @@
 </div>
 
 <style>
+  /* A call: one line of the turn's thread, not a box (2.0 design). Its detail, once open, keeps a frame. */
   .tool {
-    margin-left: 34px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line);
-    background: var(--panel);
-    overflow: hidden;
+    position: relative;
     min-width: 0;
   }
-  .tool.err {
-    border-color: color-mix(in oklch, var(--del) 45%, transparent);
-  }
-  .tool.quiet {
-    margin-left: 52px;
-    color: var(--muted);
-  }
-  .quiet .badge {
-    background: transparent;
-    color: var(--muted);
-  }
   .row {
-    width: 100%;
+    position: relative;
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 7px 10px;
-    border: none;
-    background: transparent;
-    font-family: var(--mono);
-    font-size: 12px;
+    min-height: 30px;
+    min-width: 0;
+    padding: 0 8px 0 4px;
+    border-radius: 7px;
+    color: var(--soft);
+    font-size: 12.5px;
+    line-height: 1.62;
     text-align: left;
     cursor: pointer;
-    min-width: 0;
   }
   .row:hover {
-    background: color-mix(in oklch, var(--elev) 60%, transparent);
+    background: var(--hover);
   }
-  /* The tool's frame clips an outline drawn outside the row. */
   .row:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--p-ink);
     outline-offset: -2px;
   }
-  .badge {
-    padding: 2px 6px;
-    border-radius: 3px;
-    background: var(--elev2);
-    font-weight: 600;
-    font-size: 11px;
+  .ic {
     flex: none;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: rgba(var(--fg-rgb), 0.05);
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--muted);
   }
-  .err .badge {
+  /* The thread that ties a turn's calls together, from this one's icon to the next one's. */
+  .linked > .row .ic::after {
+    content: '';
+    position: absolute;
+    left: 14.5px;
+    top: 26px;
+    width: 1px;
+    height: 12px;
+    background: var(--line-2);
+  }
+  .badge {
+    flex: none;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .err .badge,
+  .err .ic {
     color: var(--del);
   }
+  /* Reading the list of tasks is no change to the plan: a step back. */
+  .quiet .badge {
+    font-weight: 500;
+    color: var(--muted);
+  }
   .arg {
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.92em;
+    letter-spacing: -0.01em;
   }
   .fill {
     flex: 1;
     min-width: 0;
   }
   .arg.link {
-    flex: 0 1 auto;
     border: none;
     background: none;
     padding: 0;
-    font: inherit;
-    color: inherit;
     text-align: left;
     cursor: pointer;
   }
   .arg.link:hover {
-    color: var(--accent);
+    color: var(--p-ink);
     text-decoration: underline;
   }
-  .add {
-    color: var(--add);
-    flex: none;
-  }
-  .del {
-    color: var(--del);
-    flex: none;
-  }
   .res {
-    color: var(--muted);
     flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     max-width: 40%;
+    margin-left: auto;
+    padding-left: 12px;
     overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .res + .res {
+    margin-left: 0;
+  }
+  .res .ok {
+    display: flex;
+    color: var(--add);
   }
   .err .res {
     color: var(--del);
   }
+  .add {
+    color: var(--add);
+  }
+  .del {
+    color: var(--del);
+  }
   .open-sub {
     flex: none;
-    height: 20px;
-    padding: 0 7px;
-    border: 1px solid var(--line2);
-    border-radius: 3px;
-    background: var(--elev);
-    color: var(--accent);
-    font: inherit;
-    font-size: 11px;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--p-ink);
     cursor: pointer;
   }
   .open-sub:hover {
-    border-color: var(--accent);
+    background: var(--hover);
   }
   .open-sub:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--p-ink);
     outline-offset: 1px;
   }
+  .chev {
+    flex: none;
+    display: flex;
+    color: var(--dim);
+    transition: transform 0.2s var(--ease);
+  }
+  .res ~ .chev,
+  .spin ~ .chev,
+  .open-sub ~ .chev {
+    margin-left: 0;
+  }
+  .row[aria-expanded='true'] .chev {
+    transform: rotate(90deg);
+  }
   .spin {
+    flex: none;
     width: 11px;
     height: 11px;
+    margin-left: auto;
     border-radius: 50%;
-    border: 1.5px solid var(--line2);
-    border-top-color: var(--accent);
+    border: 1.5px solid var(--line-2);
+    border-top-color: var(--p-ink);
     animation: ccSpin 0.8s linear infinite;
-    flex: none;
   }
+  @media (prefers-reduced-motion: reduce) {
+    .spin {
+      animation: none;
+    }
+    .chev {
+      transition: none;
+    }
+  }
+  /* The detail of a call: its output, its diff, its subagent's calls, in a frame. */
   .detail {
-    border-top: 1px solid var(--line);
+    margin: 4px 0 6px 36px;
+    overflow: hidden;
+    border-radius: 10px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--line);
   }
   .out {
     margin: 0;
@@ -272,11 +332,10 @@
     overflow: auto;
     font-family: var(--mono);
     font-size: 12px;
-    line-height: 1.5;
+    line-height: 1.6;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    background: var(--term);
-    color: #cfc7bb;
+    color: var(--code-fg);
   }
   .out.cmd {
     color: var(--text);
@@ -294,28 +353,26 @@
   }
   .todos li {
     display: flex;
+    align-items: center;
     gap: 8px;
   }
   .todos .completed {
-    color: var(--dim);
+    color: var(--muted);
     text-decoration: line-through;
   }
   .todos .in_progress {
-    color: var(--accent);
+    color: var(--p-ink);
   }
   .sub {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 10px 10px 10px 0;
-  }
-  .sub :global(.tool) {
-    margin-left: 12px;
+    gap: 0;
+    padding: 8px 8px 8px 4px;
   }
   .prompt {
-    margin-left: 12px;
-    padding: 8px 12px;
-    border-left: 2px solid var(--line2);
+    margin: 0 0 6px 8px;
+    padding: 4px 12px;
+    border-left: 1px solid var(--line-3);
     color: var(--muted);
     font-size: 12.5px;
     white-space: pre-wrap;
@@ -323,7 +380,7 @@
     overflow: auto;
   }
   .subtext {
-    margin-left: 12px;
-    padding: 4px 4px 0 12px;
+    margin: 6px 0 0 8px;
+    padding: 0 4px 0 12px;
   }
 </style>

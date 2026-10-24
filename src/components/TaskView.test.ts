@@ -68,7 +68,7 @@ describe('TaskView', () => {
   it('heads a command with the way back to its agent, what it is, its state, its duration, and shows its command', async () => {
     const { a } = setup();
     const crumbs = screen.getByRole('navigation', { name: 'Fil d’Ariane' });
-    expect(crumbs).toHaveTextContent(/refacto-auth\s*›\s*Ticker/);
+    expect(crumbs).toHaveTextContent(/^refacto-auth\s*Ticker$/);
     expect(within(crumbs).getByText('Ticker')).toHaveAttribute('aria-current', 'page');
     const facts = screen.getByRole('group', { name: 'Ticker' });
     expect(facts).toHaveTextContent(/Type\s*Commande en fond/);
@@ -234,7 +234,7 @@ describe('TaskView', () => {
 
     it('says its phase, its tools and its tokens, and has no output to follow', async () => {
       const { backend } = asFlow();
-      expect(screen.getByRole('navigation', { name: 'Fil d’Ariane' })).toHaveTextContent(/refacto-auth\s*›\s*Revue du diff/);
+      expect(screen.getByRole('navigation', { name: 'Fil d’Ariane' })).toHaveTextContent(/^refacto-auth\s*Revue du diff$/);
       const facts = screen.getByRole('group', { name: 'Revue du diff' });
       expect(facts).toHaveTextContent(/Type\s*Workflow/);
       expect(facts).toHaveTextContent(/Phase en cours\s*Phase 1 : lecteur A/);

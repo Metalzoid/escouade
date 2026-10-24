@@ -288,6 +288,9 @@ export const test = base.extend<{
         telemetry: false,
         // Settings of this version: no update to bring them through (ESC-128), unless a test says otherwise.
         accountsVersion: 1,
+        // No automatic restart for an update of Escouade: the hidden window of the tests reads as nobody there, and a
+        // version published during a run would restart the app under test (a message typed then stays in its field).
+        autoUpdate: false,
         ...given,
         accounts: accountsFor(given, appEnv),
       }),

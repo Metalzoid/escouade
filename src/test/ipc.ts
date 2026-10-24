@@ -441,6 +441,7 @@ export const BARE_ENGINE: EngineDecl = {
     backgroundTasks: false,
     todoTools: false,
     defaultRefusal: false,
+    sandbox: false,
   },
   install: { windows: 'npm install -g @openai/codex', unix: 'npm install -g @openai/codex' },
   models: [

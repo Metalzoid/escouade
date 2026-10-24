@@ -60,6 +60,8 @@
   --primary: #f2f3f4;
   --primary-hover: #fff;
   --on-primary: #08090a;
+  /* Under the files dropped on the composer. */
+  --drop-base: rgba(10, 11, 13, 0.86);
   --on-primary-line: rgba(0, 0, 0, 0.12);
   --on-primary-kbd: rgba(0, 0, 0, 0.18);
   --on-primary-dim: #4a4e55;
@@ -166,6 +168,8 @@
   --primary: #1b1d22;
   --primary-hover: #30333a;
   --on-primary: #f7f8f8;
+  /* Under the files dropped on the composer. */
+  --drop-base: rgba(250, 250, 251, 0.9);
   --on-primary-line: rgba(0, 0, 0, 0.3);
   --on-primary-kbd: rgba(255, 255, 255, 0.22);
   --on-primary-dim: #a3a8b0;
@@ -672,9 +676,11 @@ kbd,
 }
 
 /* ---------- markdown ---------- */
+/* The agent's answer (2.0 design): a softer white than the interface's, code and its blocks in a frame. */
 .md {
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 13.5px;
+  line-height: 1.62;
+  color: var(--text-ai);
   text-wrap: pretty;
   overflow-wrap: anywhere;
   min-width: 0;
@@ -734,20 +740,41 @@ kbd,
   margin: 0;
 }
 
+.md strong {
+  color: var(--text);
+  font-weight: 620;
+}
+
+.md a {
+  color: var(--p-ink);
+}
+
 .md code {
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 12px;
   padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--elev2);
+  border-radius: 5px;
+  background: rgba(var(--fg-rgb), 0.07);
 }
 
 .md pre {
+  /* The colours of shiki's highlighting (lib/markdown.ts): the syntax tokens of both themes. */
+  --shiki-foreground: var(--code-fg);
+  --shiki-background: transparent;
+  --shiki-token-keyword: var(--syn-k);
+  --shiki-token-function: var(--syn-f);
+  --shiki-token-string: var(--syn-s);
+  --shiki-token-string-expression: var(--syn-s);
+  --shiki-token-constant: var(--syn-n);
+  --shiki-token-parameter: var(--code-fg);
+  --shiki-token-punctuation: var(--code-fg);
+  --shiki-token-comment: var(--code-dim);
+  --shiki-token-link: var(--ansi-cy);
   position: relative;
   padding: 0;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--line);
-  background: var(--term);
+  border-radius: 10px;
+  background: var(--well);
+  box-shadow: inset 0 0 0 1px var(--line);
   overflow: hidden;
 }
 
@@ -757,8 +784,9 @@ kbd,
   padding: 12px 14px;
   overflow-x: auto;
   background: transparent !important;
-  font-size: 12.5px;
-  line-height: 1.55;
+  color: var(--code-fg);
+  font-size: 12px;
+  line-height: 1.7;
 }
 
 .md pre code {
@@ -769,20 +797,19 @@ kbd,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 28px;
+  height: 34px;
   padding: 0 6px 0 12px;
   border-bottom: 1px solid var(--line);
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--dim);
-  background: var(--panel);
+  font-family: var(--ui);
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .md pre .copy-btn {
-  height: 22px;
+  height: 24px;
   padding: 0 8px;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted);
   font-family: var(--ui);
@@ -791,7 +818,7 @@ kbd,
 }
 
 .md pre .copy-btn:hover {
-  background: var(--elev2);
+  background: var(--hover);
   color: var(--text);
 }
 

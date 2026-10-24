@@ -15,6 +15,8 @@
   import Thinking from './conv/Thinking.svelte';
   import ToolRow from './conv/ToolRow.svelte';
   import { tip } from '../lib/tip';
+  import EngineMark from './EngineMark.svelte';
+  import Icon from './Icon.svelte';
 
   // The conversation of a subagent of `agent`, in place of the agent's (ESC-13): `call` is the call that launched it.
   // Its thread is the items of the agent's conversation that name the call (`parent`), and the requests it made; its
@@ -215,13 +217,13 @@
 
 <!-- `.conv`: the keys answering a waiting request apply here too (answersHere, in shortcuts.ts). -->
 <main class="conv subview">
-  <header class="head">
+  <header class="head sv-head">
     <nav class="crumbs" aria-label={t('subagents.crumbs')}>
       <button class="crumb" use:tip={t('subagents.back', { name: agent.name })} onclick={() => app.closeSubagent(agent.id)}
         >{agent.name}</button
       >
       {#each chain as c, i (c.call)}
-        <span class="sep" aria-hidden="true">›</span>
+        <span class="sep" aria-hidden="true"><Icon name="right" size={12} /></span>
         {#if i < chain.length - 1}
           <button class="crumb" onclick={() => openSub(c.call)}>{c.title}</button>
         {:else}
@@ -229,18 +231,44 @@
         {/if}
       {/each}
     </nav>
+    <div class="row">
+      {#if info}
+        <span class="st {info.status ?? 'unknown'}"><i aria-hidden="true"></i>{statusWord}</span>
+      {/if}
+      <EngineMark engine={agent.engine} full large />
+      {#if stoppable}
+        <!-- aria-disabled, not disabled: focusable and hovered still, for its tooltip to say why it cannot stop it yet. -->
+        <button
+          class="btn stop"
+          aria-disabled={!canStop || stopping}
+          use:tip={canStop ? t('subagents.stopHint') : t('subagents.stopLater')}
+          onclick={stop}><Icon name="stop" size={14} />{t('subagents.stop')}</button
+        >
+      {/if}
+    </div>
     {#if info}
-      <span class="st {info.status ?? 'unknown'}"><span class="dot" aria-hidden="true"></span>{statusWord}</span>
-    {/if}
-    <div style="flex:1"></div>
-    {#if stoppable}
-      <!-- aria-disabled, not disabled: focusable and hovered still, for its tooltip to say why it cannot stop it yet. -->
-      <button
-        class="btn stop"
-        aria-disabled={!canStop || stopping}
-        use:tip={canStop ? t('subagents.stopHint') : t('subagents.stopLater')}
-        onclick={stop}><span class="glyph" aria-hidden="true">■</span>{t('subagents.stop')}</button
-      >
+      <dl class="facts facts-row" role="group" aria-label={info.title}>
+        {#if info.kind}<div>
+            <dt>{t('subagents.facts.kind')}</dt>
+            <dd>{info.kind}</dd>
+          </div>{/if}
+        {#if info.model}<div>
+            <dt>{t('subagents.facts.model')}</dt>
+            <dd>{modelLabel(info.model, app.models)}</dd>
+          </div>{/if}
+        <div>
+          <dt>{t('subagents.facts.tokens')}</dt>
+          <dd>{info.tokens !== undefined ? fTok(info.tokens) : '—'}</dd>
+        </div>
+        {#if info.tools !== undefined}<div>
+            <dt>{t('subagents.facts.tools')}</dt>
+            <dd>{fInt(info.tools)}</dd>
+          </div>{/if}
+        <div>
+          <dt>{t('subagents.facts.duration')}</dt>
+          <dd>{duration !== null ? fDur(duration) : '—'}</dd>
+        </div>
+      </dl>
     {/if}
   </header>
 
@@ -252,38 +280,18 @@
         {#if conv.loaded}<div class="note">{t('subagents.gone')}</div>{/if}
       {:else}
         <section class="brief">
-          <dl class="facts" role="group" aria-label={info.title}>
-            {#if info.kind}<div>
-                <dt>{t('subagents.facts.kind')}</dt>
-                <dd>{info.kind}</dd>
-              </div>{/if}
-            {#if info.model}<div>
-                <dt>{t('subagents.facts.model')}</dt>
-                <dd>{modelLabel(info.model, app.models)}</dd>
-              </div>{/if}
-            <div>
-              <dt>{t('subagents.facts.tokens')}</dt>
-              <dd class="mono">{info.tokens !== undefined ? fTok(info.tokens) : '—'}</dd>
-            </div>
-            {#if info.tools !== undefined}<div>
-                <dt>{t('subagents.facts.tools')}</dt>
-                <dd class="mono">{fInt(info.tools)}</dd>
-              </div>{/if}
-            <div>
-              <dt>{t('subagents.facts.duration')}</dt>
-              <dd class="mono">{duration !== null ? fDur(duration) : '—'}</dd>
-            </div>
-          </dl>
           {#if info.prompt}
             {@const long = info.prompt.length > LONG_PROMPT || info.prompt.split('\n').length > 6}
             <div class="prompt">
-              <div class="k">{t('subagents.prompt')}</div>
+              <div class="k">
+                {t('subagents.prompt')}
+                {#if long}
+                  <button class="more" aria-expanded={promptOpen} onclick={() => (promptOpen = !promptOpen)}
+                    >{promptOpen ? t('subagents.promptLess') : t('subagents.promptMore')}</button
+                  >
+                {/if}
+              </div>
               <div class="ptext" class:folded={long && !promptOpen}>{info.prompt}</div>
-              {#if long}
-                <button class="more" aria-expanded={promptOpen} onclick={() => (promptOpen = !promptOpen)}
-                  >{promptOpen ? t('subagents.promptLess') : t('subagents.promptMore')}</button
-                >
-              {/if}
             </div>
           {/if}
         </section>
@@ -297,10 +305,7 @@
           {#if shows(item)}
             <div class="item" data-item={item.id}>
               {#if item.kind === 'text'}
-                <div class="assistant">
-                  <span class="avatar" aria-hidden="true">↳</span>
-                  <div class="blocks"><Markdown text={item.text} streaming={item.streaming} /></div>
-                </div>
+                <div class="blocks"><Markdown text={item.text} streaming={item.streaming} /></div>
               {:else if item.kind === 'thinking'}
                 <Thinking {item} />
               {:else if item.kind === 'tool'}
@@ -329,7 +334,11 @@
         {/each}
 
         {#if running}
-          <div class="working"><span class="dots"><span></span><span></span><span></span></span>{t('subagents.working')}</div>
+          <div class="working">
+            <span class="spark" aria-hidden="true"><Icon name="spark" size={14} /></span><span class="shimmer"
+              >{t('subagents.working')}</span
+            >
+          </div>
         {:else if report}
           <section class="report" aria-label={t('subagents.report')}>
             <h3>{t('subagents.report')}</h3>
@@ -353,23 +362,25 @@
       }}
     >
       <label for="sub-write-{call}">{t('subagents.write', { name: agent.name })}</label>
-      <textarea
-        id="sub-write-{call}"
-        rows="2"
-        placeholder={t('subagents.writePlaceholder')}
-        bind:value={() => message, setMessage}
-        onkeydown={(e) => {
-          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-            e.preventDefault();
-            send();
-          }
-        }}
-      ></textarea>
-      <div class="wrow">
-        <span class="hint">{canWrite ? t('subagents.writeHint', { name: agent.name }) : t('subagents.writeEnded')}</span>
-        <button class="btn primary" type="submit" disabled={!canWrite || !message.trim() || sending}
-          >{t('subagents.writeSend', { name: agent.name })}</button
-        >
+      <div class="box">
+        <textarea
+          id="sub-write-{call}"
+          rows="2"
+          placeholder={t('subagents.writePlaceholder')}
+          bind:value={() => message, setMessage}
+          onkeydown={(e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              send();
+            }
+          }}
+        ></textarea>
+        <div class="wrow">
+          <span class="hint">{canWrite ? t('subagents.writeHint', { name: agent.name }) : t('subagents.writeEnded')}</span>
+          <button class="btn primary send" type="submit" disabled={!canWrite || !message.trim() || sending}
+            >{t('subagents.writeSend', { name: agent.name })}<kbd aria-hidden="true"><Icon name="enter" size={12} /></kbd></button
+          >
+        </div>
       </div>
     </form>
   {/if}
@@ -380,16 +391,17 @@
     position: relative;
     flex: 1;
     min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
+    container: conv / inline-size;
   }
-  .head {
-    height: 60px;
+  /* Its head (2.0 design): the breadcrumb, its state and harness with « Arrêter », its facts under them. */
+  .sv-head {
     flex: none;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 0 24px;
+    display: grid;
+    gap: 10px;
+    padding: 14px 22px;
     border-bottom: 1px solid var(--line);
     min-width: 0;
   }
@@ -398,7 +410,8 @@
     align-items: center;
     gap: 6px;
     min-width: 0;
-    font-size: 14px;
+    color: var(--muted);
+    font-size: 12.5px;
     white-space: nowrap;
   }
   .crumb {
@@ -406,138 +419,141 @@
     max-width: 260px;
     overflow: hidden;
     text-overflow: ellipsis;
+    padding: 0;
     border: none;
+    border-radius: 4px;
     background: none;
-    padding: 2px 4px;
-    border-radius: var(--r-sm);
     font: inherit;
     color: var(--muted);
     cursor: pointer;
   }
   button.crumb:hover {
     color: var(--text);
-    background: var(--elev);
   }
-  button.crumb:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
+  button.crumb:focus-visible,
+  .crumb.here:focus-visible {
+    outline: 2px solid var(--p-ink);
+    outline-offset: 2px;
   }
   .crumb.here {
     color: var(--text);
-    font-weight: 700;
+    font-weight: 600;
     cursor: default;
   }
-  /* The view puts the focus here when it opens: the keyboard shows where it is. */
-  .crumb.here:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
   .sep {
-    color: var(--dim);
+    display: flex;
+    color: var(--muted);
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
   }
   .st {
     flex: none;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
+    height: 20px;
+    padding: 0 8px 0 7px;
+    border-radius: 10px;
+    background: rgba(var(--fg-rgb), 0.05);
     color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 550;
+    white-space: nowrap;
   }
-  .st .dot {
-    width: 7px;
-    height: 7px;
+  .st i {
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
-    background: var(--dim);
+    background: currentColor;
   }
   .st.running {
-    color: var(--ok);
-  }
-  .st.running .dot {
-    background: var(--ok);
+    background: oklch(from var(--run) l c h / 0.1);
+    color: var(--run);
   }
   .st.failed {
+    background: oklch(from var(--del) l c h / 0.1);
     color: var(--del);
   }
-  .st.failed .dot {
-    background: var(--del);
+  .st.stopped,
+  .st.interrupted {
+    background: oklch(from var(--wait) l c h / 0.1);
+    color: var(--wait);
   }
-  .st.stopped .dot,
-  .st.interrupted .dot {
-    background: var(--wait);
+  .stop {
+    margin-left: auto;
+    flex: none;
+    color: var(--del);
+  }
+  .stop :global(.icon) {
+    color: var(--del);
   }
   .stop[aria-disabled='true'] {
     opacity: 0.5;
     cursor: default;
   }
-  .stop {
-    height: 28px;
+  .facts-row {
     display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 0 11px;
+    flex-wrap: wrap;
+    gap: 6px 22px;
+    margin: 0;
     font-size: 12px;
-    font-weight: 600;
-    flex: none;
   }
-  .stop .glyph {
-    font-size: 9px;
-    color: var(--del);
+  .facts-row div {
+    display: grid;
+    gap: 1px;
+  }
+  .facts-row dt {
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .facts-row dd {
+    margin: 0;
+    color: var(--soft);
+    font-weight: 550;
+    font-variant-numeric: tabular-nums;
   }
   .scroll {
     flex: 1;
     min-height: 160px;
     overflow: auto;
+    scrollbar-gutter: stable;
   }
   .msgs {
-    max-width: 780px;
-    margin: 0 auto;
-    padding: 24px 28px;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 18px;
+    width: min(780px, 100% - 64px);
+    margin: 0 auto;
+    padding: 14px 0 24px;
   }
   .brief {
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 12px;
-    padding: 14px 16px;
-    border: 1px solid var(--line);
-    border-radius: var(--r);
-    background: var(--panel);
   }
-  .facts {
-    margin: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 26px;
-  }
-  .facts div {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-  .facts dt {
-    font-size: 10.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--dim);
-  }
-  .facts dd {
-    margin: 0;
-    font-size: 13px;
+  /* Its brief, folded to its first lines while long. */
+  .prompt {
+    display: grid;
+    gap: 6px;
+    padding: 11px 14px;
+    border-radius: 10px;
+    background: rgba(var(--fg-rgb), 0.03);
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--soft);
+    font-size: 12.5px;
   }
   .prompt .k {
-    font-size: 10.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--dim);
-    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 600;
   }
   .ptext {
-    padding: 8px 12px;
-    border-left: 2px solid var(--line2);
-    color: var(--muted);
-    font-size: 12.5px;
     line-height: 1.5;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -545,148 +561,154 @@
     overflow: auto;
   }
   .ptext.folded {
-    max-height: 7.5em;
+    max-height: 3em;
     overflow: hidden;
     mask-image: linear-gradient(to bottom, #000 60%, transparent);
   }
   .more {
-    margin-top: 6px;
+    margin-left: auto;
+    padding: 0;
     border: none;
     background: none;
-    padding: 0;
     font: inherit;
-    font-size: 12px;
-    color: var(--accent);
+    font-weight: 500;
+    color: var(--muted);
     cursor: pointer;
   }
   .more:hover {
-    text-decoration: underline;
+    color: var(--text);
   }
   .item {
     display: flex;
     flex-direction: column;
     min-width: 0;
   }
-  .assistant {
-    display: flex;
-    gap: 12px;
-    min-width: 0;
-  }
   .blocks {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 10px;
-  }
-  .avatar {
-    width: 22px;
-    height: 22px;
-    flex: none;
-    margin-top: 1px;
-    border-radius: var(--r-sm);
-    background: var(--elev2);
-    color: var(--accent);
-    font-size: 12px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    min-width: 0;
   }
   .note {
     padding: 10px 14px;
-    border-radius: var(--r);
-    border: 1px dashed var(--line2);
-    font-size: 12.5px;
+    border-radius: 10px;
+    box-shadow: inset 0 0 0 1px var(--line);
     color: var(--muted);
+    font-size: 12.5px;
   }
   .note.err {
-    border-style: solid;
-    border-color: color-mix(in oklch, var(--del) 50%, transparent);
+    background: oklch(from var(--del) l c h / 0.06);
+    box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.35);
   }
   .working {
-    margin-left: 34px;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 10px;
-    font-size: 12.5px;
     color: var(--muted);
+    font-size: 12.5px;
   }
-  .dots {
-    display: inline-flex;
-    gap: 3px;
+  .spark {
+    display: flex;
+    color: var(--p-ink);
+    animation: spin 3.2s linear infinite;
   }
-  .dots span {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--accent);
-    animation: ccBlink 1.2s infinite;
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
-  .dots span:nth-child(2) {
-    animation-delay: 0.15s;
+  .shimmer {
+    background: linear-gradient(90deg, var(--muted) 0 40%, var(--text) 50%, var(--muted) 60% 100%);
+    background-size: 250% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 2.4s linear infinite;
   }
-  .dots span:nth-child(3) {
-    animation-delay: 0.3s;
+  @keyframes shimmer {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: -50% 0;
+    }
   }
+  /* What it handed back: a card with a hairline in the green of what is done. */
   .report {
-    padding: 14px 16px;
-    border-radius: var(--r);
-    border: 1px solid color-mix(in oklch, var(--ok) 40%, transparent);
-    background: color-mix(in oklch, var(--ok) 5%, var(--panel));
+    display: grid;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 11px;
+    box-shadow: inset 0 0 0 1px oklch(from var(--add) l c h / 0.35);
   }
   .report h3 {
-    margin: 0 0 8px;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--ok);
-  }
-  .write {
-    max-width: 780px;
-    width: calc(100% - 56px);
-    margin: 0 auto 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 10px 12px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r);
-    background: var(--panel);
-  }
-  .write label {
+    margin: 0;
+    color: var(--add);
     font-size: 12px;
     font-weight: 600;
   }
-  .write textarea {
-    resize: vertical;
-    min-height: 44px;
-    padding: 8px 10px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: var(--bg);
-    font: inherit;
-    font-size: 13px;
-    color: var(--text);
+  /* A message to it, through the agent: said above a composer like the conversation's. */
+  .write {
+    display: grid;
+    gap: 6px;
+    width: min(780px, 100% - 64px);
+    margin: 0 auto 18px;
   }
-  .write textarea:focus {
-    outline: none;
-    border-color: var(--accent);
+  .write label {
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .write .box {
+    border-radius: 14px;
+    background: var(--raise);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 12px 32px -12px rgba(0, 0, 0, calc(0.6 * var(--shade)));
+  }
+  .write .box:focus-within {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--p) 55%, transparent),
+      0 0 0 3px color-mix(in oklch, var(--p) 14%, transparent);
+  }
+  .write textarea {
+    display: block;
+    width: 100%;
+    min-height: 52px;
+    padding: 14px 16px 6px;
+    border: 0;
+    outline: 0;
+    resize: none;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-size: 13.5px;
+  }
+  .write textarea::placeholder {
+    color: var(--muted);
   }
   .wrow {
     display: flex;
     align-items: center;
     gap: 12px;
+    padding: 6px 8px 8px 16px;
   }
   .hint {
     flex: 1;
+    color: var(--muted);
     font-size: 11.5px;
-    color: var(--dim);
     line-height: 1.4;
   }
+  .send {
+    height: 32px;
+    border-radius: 9px;
+  }
   @media (prefers-reduced-motion: reduce) {
-    .dots span {
+    .spark {
       animation: none;
+    }
+    .shimmer {
+      animation: none;
+      background: none;
+      color: var(--muted);
     }
   }
 </style>

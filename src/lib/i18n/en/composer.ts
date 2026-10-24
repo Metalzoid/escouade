@@ -17,6 +17,9 @@ export default defineZone('composer', {
     bypassPermissions: { label: 'Bypass', title: 'No permission requests (only for safe environments)' },
     autoUnavailableDetail: 'unavailable with this model',
     autoUnavailableTitle: 'Auto mode isn’t available with this model, as this account’s Claude Code says',
+    /** A mode its harness lacks, greyed in its place (choice 17): `{harness}`, `{mode}`. */
+    missing: '{harness} has no {mode} mode.',
+    missingAuto: '{harness} has no Auto mode: nothing decides for you.',
     bypassToast: 'Bypass mode: {engine} will act without any permission request.',
   },
 
@@ -35,6 +38,11 @@ export default defineZone('composer', {
   attach: {
     label: 'Attach a file',
     title: 'Attach a file (or paste / drop it)',
+  },
+  /** Files dragged over the composer: the whole field takes them. */
+  drop: {
+    title: 'Drop to attach to your message',
+    detail: 'Images, PDFs and texts go in the message; the rest, by its path',
   },
 
   placeholder: {
@@ -77,18 +85,20 @@ export default defineZone('composer', {
     denied: 'Denied',
     allowed: 'Allowed',
     alwaysAllowed: 'Always allowed',
-    allowedBy: 'Allowed by {author} through Escouade',
-    deniedBy: 'Denied by {author} through Escouade',
+    /** Answered through the MCP server, not by the user in the window: « par <author> », then « via Escouade ». */
+    by: 'by',
+    via: 'via Escouade',
     cancelled: 'Request canceled',
   },
 
   question: {
     waiting: '{engine} is waiting for your answer',
+    asked: '{engine} asked you a question',
     orWrite: 'or answer freely in the field below',
     saidAnswer: 'Answer said: “{text}”',
     submit: 'Submit',
     unanswered: 'Question left unanswered',
-    answeredBy: 'Answered by {author} through Escouade',
+    answered: 'Answered',
     form: 'Form from {source}',
     formNoSource: 'Form',
     required: 'required',

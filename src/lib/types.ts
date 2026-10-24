@@ -591,6 +591,8 @@ export interface EngineCaps {
   todoTools: boolean;
   /** It tells which requests it would refuse by default. */
   defaultRefusal: boolean;
+  /** Its commands run in a sandbox, which the modes set (Codex): « Bac à sable » in the agent's header. */
+  sandbox: boolean;
 }
 
 /** The versions of a harness Escouade was tested with. */
@@ -1767,8 +1769,9 @@ export interface HandedFrom {
 export interface NoticeItem extends Base {
   kind: 'notice';
   ts: number;
-  /** 'output': what a local command printed (`/cost`, `! ls`), its lines kept (ESC-154). */
-  level: 'info' | 'warn' | 'error' | 'output';
+  /** 'output': what a local command printed (`/cost`, `! ls`), its lines kept (ESC-154). 'switch': the agent went on on
+   * another account past the threshold (ESC-148), a separator. */
+  level: 'info' | 'warn' | 'error' | 'output' | 'switch';
   text: string;
 }
 

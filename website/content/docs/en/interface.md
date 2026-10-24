@@ -144,21 +144,19 @@ The header of an agent’s conversation shows, from left to right:
 
 | Element | What it shows or does |
 |---|---|
-| Name and status | The agent’s name (double-click to rename it) and its status. |
-| `project / branch` | The project, and the agent’s branch if it has a worktree, otherwise the branch of the project’s folder. |
-| “Editor” | Opens the editor on the agent’s files. |
-| “Terminal” | For an agent in a worktree (not archived): opens a [terminal](terminals) in that worktree. |
-| “▶ Test” or “Prepare launch” | For an agent in a worktree: launch its work to try it, or ask the agent how to launch it. See [review and approve](testing). |
-| “Claude Code view” or “Escouade view” | Runs the agent in Claude Code’s own interface, or brings it back to Escouade’s conversation. Absent for a ticket’s agent. See [the Claude Code view](claude-code-view). |
-| The model | The agent’s model, with its version. |
-| “Context” | The context’s tokens out of the size of the model’s window (“76.2k / 200k”). The figure turns amber from 80%, when the context is nearly full. |
+| Name and status | The agent’s name (double-click to rename it) and its status, in a pill. |
+| Harness, `project / branch` | The agent’s harness (when several are installed), the project, and the agent’s branch if it has a worktree, otherwise the branch of the project’s folder; then the number of its pull requests, and “Sandbox” for a Codex agent. |
+| “Context” | The context’s tokens out of the size of the model’s window (“76.2k / 200k”), with a thin gauge under it. The figure turns amber from 80%, when the context is nearly full. |
 | “Tokens”, “Cost”, “Duration” | What the agent has used and the time it has worked. |
 | “Files” | The number of the agent’s uncommitted files. |
+| “Open a PR”, “Test” or “Prepare launch” | A single place: open the pull request of its branch while it has commits without a PR; otherwise, for an agent in a worktree, launch its work to try it, or ask the agent how to launch it. See [review and approve](testing). |
+| “Escouade” and “Claude Code” | The agent’s two views, as segments: Escouade’s conversation, or Claude Code’s own interface. Absent for a ticket’s agent. See [the Claude Code view](claude-code-view). |
+| “…” | The agent’s menu, the same as the right click on its card: the editor, a [terminal](terminals) in its worktree, rename, archive… |
 | Two buttons | The choice of layout (see below). |
 
-Under the header, the conversation shows your messages, Claude’s replies in markdown, its foldable reasoning, its tool calls as compact rows you can unfold, the cards for questions and permissions, and a line or a card at the end of each turn. When the agent follows a plan, a “Plan” banner sits between the header and the messages: see [plan progress](plan). A long conversation only shows its latest 80 items: “Show the previous N messages” adds more. If new messages arrive while you read higher up, the “↓ New messages” button takes you back down. `Ctrl+K` searches the conversations.
+Under the header, the conversation shows your messages, Claude’s replies in markdown, its foldable reasoning, its tool calls as compact rows you can unfold, the cards for questions and permissions, and a line or a card at the end of each turn. When the agent follows a plan, a “Plan” banner sits between the header and the messages: see [plan progress](plan). A long conversation only shows its latest 80 items: “Show the previous N messages” adds more. If new messages arrive while you read higher up, the “New messages” button takes you back down. `Ctrl+K` searches the conversations.
 
-The message field is at the bottom: its “Model”, “Effort” and “Mode” menus, the paperclip, “Send”, and “■ Stop” during a turn. An archived agent shows “Agent archived.” instead, with a “Restore” button. An agent in error says so (“The agent stopped.”): a new message restarts Claude on the same session. See [the conversation](chat) and [agents](managing-agents).
+The message field floats at the bottom, as wide as the conversation: its “Model”, “Effort” and “Mode” chips, then attach a file, dictate and talk aloud, “Stop” during a turn and “Send”. An archived agent shows “Agent archived.” instead, with a “Restore” button. An agent in error says so (“The agent stopped.”): a new message restarts Claude on the same session. See [the conversation](chat) and [agents](managing-agents).
 
 ## The side panel
 
@@ -182,13 +180,13 @@ You choose with the two buttons to the right of the header, “Classic layout”
 
 | Item | Classic | Side by side |
 |---|---|---|
-| Side panel | Optional, 330 px wide: “Files ▸” in the header or `Ctrl+Shift+B` opens it, the × closes it. | Always displayed, on the right half of the main area. `Ctrl+Shift+B` does nothing. |
+| Side panel | Optional, 330 px wide: “Files” in the header or `Ctrl+Shift+B` opens it, the × closes it. | Always displayed, on the right half of the main area. `Ctrl+Shift+B` does nothing. |
 | Click on a file | The diff opens in a large window. | The diff shows under the list, in the panel. |
 | “Files” in the header | A button that opens the panel. | A plain number. |
 
 ![The side-by-side layout: the conversation on the left, the uncommitted files and the diff of the chosen file on the right](/images/en/git.jpg)
 
-When the conversation is narrow, which happens in the side-by-side layout, the header first drops “Tokens” and “Duration” as well as the text of its buttons, then “Cost” and “Files”. The cards of the sidebar show the same figures.
+When the conversation is narrow, which happens in the side-by-side layout, the header first drops “Tokens” and “Files”, then “Duration” and the text of its buttons, then its figures. The cards of the sidebar show the same figures.
 
 ## The status bar
 

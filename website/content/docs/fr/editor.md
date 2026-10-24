@@ -10,7 +10,7 @@ L’éditeur prend la place de la conversation dans la zone principale. Le bouto
 
 | Pour ouvrir… | Fais ceci |
 |---|---|
-| L’éditeur de l’agent affiché | Le bouton « Éditeur » de l’en-tête de la conversation (« Parcourir et éditer les fichiers de cet agent »), ou « Ouvrir dans l’éditeur » dans le menu de la carte de l’agent. Il s’ouvre sur son worktree, ou sur le projet s’il n’en a pas. |
+| L’éditeur de l’agent affiché | « Ouvrir dans l’éditeur » dans le menu de l’agent (clic droit sur sa carte, ou « … » de l’en-tête de sa conversation). Il s’ouvre sur son worktree, ou sur le projet s’il n’en a pas. |
 | L’éditeur du projet | Le bouton « Éditeur » en haut à droite de la barre de titre, ou « Parcourir » au pied de la barre latérale. |
 | Un fichier modifié | Le bouton `</>` d’une ligne du [panneau des fichiers non commités](git), ou « Ouvrir dans l’éditeur » dans son menu. |
 | Un fichier que l’agent a édité | Le nom du fichier sur une ligne d’appel d’outil (Edit, Write…) dans la conversation : l’éditeur s’ouvre à la première ligne que cette édition a modifiée. La liste des fichiers modifiés qui résume la fin d’un tour fait de même, sans ligne précise. |

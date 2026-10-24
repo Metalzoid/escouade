@@ -82,7 +82,7 @@ Clique dans le champ de message, décris la tâche (« Décris la tâche à con
 - Tape `@` suivi d’un bout de nom de fichier pour choisir un fichier du projet, ou `/` pour choisir une commande.
 - Colle ou glisse n’importe quel fichier (une image, un PDF, un texte, mais aussi une archive ou un tableur) dans le champ, ou clique sur le trombone, pour le joindre au message.
 
-Dès l’envoi, le statut de l’agent passe à « En cours » et la conversation dit « Claude travaille… ». Ses appels d’outils apparaissent en lignes compactes que tu peux déplier. Tu peux lui écrire pendant qu’il travaille : il en tient compte dès sa prochaine étape. Pour l’arrêter, appuie sur `Échap` dans le champ de message ou clique sur « ■ Stop ».
+Dès l’envoi, le statut de l’agent passe à « En cours » et la conversation dit « Claude travaille… ». Ses appels d’outils apparaissent en lignes compactes que tu peux déplier. Tu peux lui écrire pendant qu’il travaille : il en tient compte dès sa prochaine étape. Pour l’arrêter, appuie sur `Échap` dans le champ de message ou clique sur « Stop ».
 
 ## Répondre à une question ou à une autorisation
 

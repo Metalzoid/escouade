@@ -146,6 +146,9 @@ export default defineZone('board', {
 
   report: {
     title: 'Criteria report',
+    /** The mark before a criterion, read by a screen reader. */
+    met: 'Met',
+    unmet: 'Not met yet',
     criterion: 'Criterion {n}',
     doneHeading: 'What was done',
     progressLabel: 'Progress',

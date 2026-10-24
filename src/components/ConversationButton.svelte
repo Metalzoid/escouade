@@ -4,6 +4,7 @@
   import { fBytes } from '../lib/format';
   import { t } from '../lib/i18n';
   import { tip } from '../lib/tip';
+  import Icon from './Icon.svelte';
   import type { Agent } from '../lib/types';
 
   // « Conversation » in the composer of the Escouade view (ESC-97): a click starts the voice conversation with the
@@ -17,7 +18,6 @@
   const conv = $derived(conversationOf(agentId));
   const progress = $derived(mine ? conversation.progress : null);
   const pct = $derived(progress && progress.total ? Math.min(100, (progress.done / progress.total) * 100) : 0);
-  const ears = $derived(phase === 'listening' || phase === 'hearing' || phase === 'question');
 
   // The agent's state and conversation, as they change: its questions are read, the end of its turn has its passage read.
   $effect(() => {
@@ -57,7 +57,7 @@
           >{t('voice.conversation.downloading', { name: progress.id, done: fBytes(progress.done), total: fBytes(progress.total) })}</span
         >
         <div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(pct)}>
-          <div class="fill" style:width="{pct}%"></div>
+          <div class="fill" style:transform="scaleX({pct / 100})"></div>
         </div>
         <div class="actions">
           <button class="btn ghost" onclick={() => conversation.stop()}>{t('voice.conversation.cancel')}</button>
@@ -71,20 +71,9 @@
     aria-pressed={mine && conversation.active}
     aria-label={t('voice.conversation.button')}
     use:tip={t('voice.conversation.buttonTitle')}
-    style:--level={ears ? conversation.level : 0}
     onclick={toggle}
   >
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"><path d="M3 10v4" /><path d="M7 6v12" /><path d="M11 3v18" /><path d="M15 7v10" /><path d="M19 10v4" /></svg
-    >
+    <Icon name="wave" size={14} />
   </button>
 </div>
 
@@ -94,9 +83,8 @@
     flex: none;
   }
   .conv.on {
-    color: var(--accent);
-    box-shadow: 0 0 0 calc(2px + var(--level) * 6px) color-mix(in oklch, var(--accent) 30%, transparent);
-    transition: box-shadow 0.06s linear;
+    background: color-mix(in oklch, var(--p) 14%, transparent);
+    color: var(--p-ink);
   }
   .panel {
     position: absolute;
@@ -108,10 +96,11 @@
     flex-direction: column;
     gap: 8px;
     padding: 12px 14px;
-    border-radius: var(--r);
-    border: 1px solid var(--line2);
-    background: var(--elev);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+    border-radius: 10px;
+    background: var(--raise-2);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 16px 40px -12px rgba(0, 0, 0, calc(0.7 * var(--shade)));
     font-size: 12.5px;
     text-align: left;
   }
@@ -123,15 +112,16 @@
     line-height: 1.45;
   }
   .meter {
-    height: 6px;
-    border-radius: 3px;
-    background: var(--panel);
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(var(--fg-rgb), 0.1);
     overflow: hidden;
   }
   .fill {
     height: 100%;
-    background: var(--accent);
-    transition: width 0.06s linear;
+    background: var(--p-ink);
+    transform-origin: left;
+    transition: transform 0.06s linear;
   }
   .actions {
     display: flex;
@@ -139,7 +129,6 @@
     gap: 6px;
   }
   @media (prefers-reduced-motion: reduce) {
-    .conv.on,
     .fill {
       transition: none;
     }

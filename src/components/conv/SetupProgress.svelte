@@ -3,6 +3,7 @@
   import { t } from '../../lib/i18n';
   import { app } from '../../lib/state.svelte';
   import type { Agent } from '../../lib/types';
+  import Icon from '../Icon.svelte';
 
   // The setup of the agent's new worktree under way: the step running and, unfolded, what it writes as it comes (its
   // last lines: the whole output goes to the agent's setup log).
@@ -33,10 +34,10 @@
 
 <div class="setup">
   <div class="line">
-    <span class="dots" aria-hidden="true"><span></span><span></span><span></span></span>
+    <span class="spark" aria-hidden="true"><Icon name="spark" size={14} /></span>
     <span role="status"><Rich k="conv.setup.running">{#snippet step()}<span class="mono">{agent.setup}</span>{/snippet}</Rich></span>
     <button class="see" aria-expanded={open} aria-controls={open ? outId : undefined} onclick={toggle}>
-      <span class="chev" aria-hidden="true">{open ? '▾' : '▸'}</span>{t('conv.setup.showOutput')}
+      <span class="chev" aria-hidden="true"><Icon name="right" size={14} /></span>{t('conv.setup.showOutput')}
     </button>
   </div>
   {#if open}
@@ -58,9 +59,7 @@
 
 <style>
   .setup {
-    margin-left: 34px;
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 8px;
     min-width: 0;
   }
@@ -69,73 +68,72 @@
     align-items: center;
     flex-wrap: wrap;
     gap: 10px;
-    font-size: 12.5px;
     color: var(--muted);
+    font-size: 12.5px;
+  }
+  .spark {
+    display: flex;
+    color: var(--p-ink);
+    animation: spin 3.2s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   .see {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    height: 22px;
-    padding: 0 8px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
+    height: 24px;
+    padding: 0 8px 0 5px;
+    border: none;
+    border-radius: 6px;
     background: transparent;
     color: var(--muted);
-    font-size: 11.5px;
+    font-size: 12px;
     cursor: pointer;
   }
   .see:hover,
   .see[aria-expanded='true'] {
+    background: var(--hover);
     color: var(--text);
-    background: var(--elev);
   }
   .chev {
-    font-size: 10px;
+    display: flex;
+    transition: transform 0.2s var(--ease);
+  }
+  .see[aria-expanded='true'] .chev {
+    transform: rotate(90deg);
   }
   .out {
     margin: 0;
     padding: 10px 12px;
     max-height: 260px;
     overflow: auto;
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    background: var(--term);
-    color: var(--muted);
+    border-radius: 10px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--code-fg);
     font-family: var(--mono);
     font-size: 11.5px;
-    line-height: 1.5;
+    line-height: 1.6;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
   .out:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--p-ink);
     outline-offset: 1px;
   }
   .out.empty {
-    color: var(--dim);
-  }
-  .dots {
-    display: inline-flex;
-    gap: 3px;
-  }
-  .dots span {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--accent);
-    animation: ccBlink 1.2s infinite;
-  }
-  .dots span:nth-child(2) {
-    animation-delay: 0.15s;
-  }
-  .dots span:nth-child(3) {
-    animation-delay: 0.3s;
+    color: var(--code-dim);
   }
   @media (prefers-reduced-motion: reduce) {
-    .dots span {
+    .spark {
       animation: none;
-      opacity: 0.6;
+    }
+    .chev {
+      transition: none;
     }
   }
 </style>

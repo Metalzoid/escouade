@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from '../../lib/i18n';
   import type { ThinkingItem } from '../../lib/types';
+  import Icon from '../Icon.svelte';
 
   let { item }: { item: ThinkingItem } = $props();
   let open = $state(false);
@@ -9,9 +10,9 @@
 {#if item.text.trim() || item.streaming}
   <div class="think">
     <button class="head" onclick={() => (open = !open)} aria-expanded={open}>
-      <span class="chev">{open ? '▾' : '▸'}</span>
-      {t('conv.thinking.title')}
-      {#if item.streaming}<span class="live">…</span>{/if}
+      <span class="chev" aria-hidden="true"><Icon name="right" size={14} /></span>{t('conv.thinking.title')}{#if item.streaming}<span
+          class="live">…</span
+        >{/if}
     </button>
     {#if open}
       <div class="body">{item.text}</div>
@@ -21,39 +22,50 @@
 
 <style>
   .think {
-    margin-left: 34px;
+    display: grid;
+    justify-items: start;
+    gap: 6px;
   }
   .head {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 2px 0;
+    padding: 0;
     border: none;
     background: transparent;
-    color: var(--dim);
-    font-size: 12px;
-    font-style: italic;
+    color: var(--muted);
+    font-size: 12.5px;
     cursor: pointer;
   }
   .head:hover {
-    color: var(--muted);
+    color: var(--text);
   }
   .chev {
-    font-style: normal;
-    font-size: 10px;
+    display: flex;
+    transition: transform 0.2s var(--ease);
+  }
+  .head[aria-expanded='true'] .chev {
+    transform: rotate(90deg);
   }
   .live {
     animation: ccBlink 1.2s infinite;
   }
   .body {
-    margin-top: 6px;
-    padding: 10px 14px;
-    border-left: 2px solid var(--line2);
+    padding: 2px 0 2px 12px;
+    border-left: 1px solid var(--line-3);
     color: var(--muted);
     font-size: 13px;
     line-height: 1.55;
     white-space: pre-wrap;
     max-height: 360px;
     overflow: auto;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .chev {
+      transition: none;
+    }
+    .live {
+      animation: none;
+    }
   }
 </style>

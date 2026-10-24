@@ -20,8 +20,9 @@
   import { getDraft, setDraft } from '../lib/drafts';
   import { injectedSource } from '../lib/events';
   import { parseLocalCommand } from '../lib/localcmd';
+  import { errorText, missingAccountOf } from '../lib/refusal';
   import { fileOrigins } from '../lib/file-origin';
-  import { basename, dirname } from '../lib/format';
+  import { basename, dirname, fSize } from '../lib/format';
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { EFFORTS, MODES, modeTitle, modelOptions } from '../lib/models';
@@ -37,6 +38,7 @@
     searchesModels,
     setFavorite,
     speakerOf,
+    engineName,
   } from '../lib/engines';
   import { keyLabel } from '../lib/platform';
   import { observeWidth } from '../lib/resize';
@@ -45,6 +47,8 @@
   import { insertAt } from '../lib/dictation';
   import type { DictationTarget } from '../lib/dictation.svelte';
   import AttachmentChip from './AttachmentChip.svelte';
+  import DictationBand from './DictationBand.svelte';
+  import Icon from './Icon.svelte';
   import ConversationButton from './ConversationButton.svelte';
   import MicButton from './MicButton.svelte';
   import Dropdown from './Dropdown.svelte';
@@ -116,8 +120,16 @@
   );
   // The modes its harness takes, each with what it means there when that is not what Escouade's menu says.
   const caps = $derived(capsOf(agent.engine));
+  // The five modes keep their places: one its harness lacks is greyed, with why (choice 17 of the 2.0 design).
+  const takes = $derived(new Set(modesOf(agent, MODES).map((m) => m.value)));
   const modeOptions = $derived(
-    modesOf(agent, MODES).map((md) => {
+    MODES.map((md) => {
+      if (!takes.has(md.value)) {
+        const harness = engineName(agent.engine);
+        const reason =
+          md.value === 'auto' ? t('composer.mode.missingAuto', { harness }) : t('composer.mode.missing', { harness, mode: md.label });
+        return { value: md.value, label: md.label, disabled: true, reason };
+      }
       const unavailable = md.value === 'auto' && !modelTakes(agent, agent.model, 'auto');
       const meaning = caps?.modes.find((m) => m.id === md.value)?.meaning ?? modeTitle(md.value, speakerOf(agent.engine));
       return {
@@ -152,8 +164,10 @@
             .map((a) => ({ value: a.id, label: a.active ? accountName(a) : t('accounts.composer.inactive', { name: accountName(a) }) })),
         ],
   );
-  // Keeps the send button on the same line in a narrow column (split layout): drop the captions.
-  const tight = $derived(width > 0 && width < (busy ? 640 : 540));
+  // A narrow composer (a small window, the split layout) drops the chips' captions, as the preview does under 760 px of
+  // conversation; a narrower one, Stop's word too.
+  const tight = $derived(width > 0 && width < 696);
+  const narrow = $derived(width > 0 && width < 520);
   const placeholder = $derived(
     pendingItem
       ? pendingItem.kind === 'permission'
@@ -432,42 +446,73 @@
     }
   }
 
+  /** The send under way: a message sent before it is taken goes right after it, never dropped. */
+  let inflight: Promise<void> | null = null;
+
   async function send() {
     const body = text.trim();
     if ((!body && !files.length) || reading || copying) return;
-    if (sending) {
-      // The one before waits for the worktree, which can take minutes: this one is not dropped without a word.
-      if (heldFor === agent.id) app.toast(t('composer.send.alreadyWaiting'));
+    // The one before waits for the worktree, which can take minutes: this one is not dropped without a word.
+    if (sending && heldFor === agent.id) {
+      app.toast(t('composer.send.alreadyWaiting'));
       return;
     }
     // Text typed while Claude waits answers the question / refuses the permission.
     const answering = body ? pendingItem : undefined;
+    const message = { id: agent.id, conv, owner: draftFor, body, answering, prevText: text, prevFiles: files };
+    // Another one may still be on its way (its answer can show before its call returns): this one leaves the field at
+    // once, as it would, and goes right after it.
+    const before = inflight;
+    text = '';
+    if (!answering) files = [];
+    const mine = (async () => {
+      if (before) await before;
+      await deliver(message);
+    })();
+    inflight = mine;
+    await mine;
+    if (inflight === mine) inflight = null;
+  }
+
+  async function deliver({
+    id,
+    conv,
+    owner,
+    body,
+    answering,
+    prevText,
+    prevFiles,
+  }: {
+    id: string;
+    conv: ReturnType<typeof conversationOf>;
+    owner: string;
+    body: string;
+    answering: typeof pendingItem;
+    prevText: string;
+    prevFiles: DraftAttachment[];
+  }) {
     sending = true;
-    const owner = draftFor;
-    const prevText = text;
-    const prevFiles = files;
+    const agent = app.agents[id];
     // A new worktree is prepared first (made first, when it waits for the first message: ESC-156): the backend holds the
     // message until then, and it shows meanwhile.
     const unhold =
-      !answering && (agent.setup || agent.worktreePending)
+      !answering && (agent?.setup || agent?.worktreePending)
         ? conv.holdMessage({
             text: body,
             images: prevFiles.filter((f) => f.kind === 'image').length,
             files: prevFiles.filter((f) => f.kind !== 'image').map((f) => f.name),
           })
         : undefined;
-    if (unhold) heldFor = agent.id;
-    text = '';
-    if (!answering) files = [];
+    if (unhold) heldFor = id;
     try {
       if (answering?.kind === 'question') {
         const q = answering as QuestionItem;
-        await api.answerQuestion(agent.id, q.id, Object.fromEntries(q.questions.map((x) => [x.question, body])));
+        await api.answerQuestion(id, q.id, Object.fromEntries(q.questions.map((x) => [x.question, body])));
       } else if (answering?.kind === 'permission') {
-        await api.answerPermission(agent.id, answering.id, 'deny', body);
+        await api.answerPermission(id, answering.id, 'deny', body);
       } else {
         await api.sendMessage(
-          agent.id,
+          id,
           body,
           prevFiles.filter((f) => f.kind !== 'file').map(({ name, mediaType, data }) => ({ name, mediaType, data })),
           prevFiles.filter((f) => f.file).map((f) => $state.snapshot(f.file!)),
@@ -476,10 +521,14 @@
       if (answering && prevFiles.length) {
         app.toast(t('composer.send.filesKept'));
       }
+      conv.noAccount = null;
     } catch (e) {
       // The files of an answer never left the field.
       giveBack(owner, prevText, answering ? [] : prevFiles);
-      app.toast(String(e), 'error');
+      // For want of an account of its harness: said in the conversation, with the way out (choice 19).
+      const missing = missingAccountOf(e);
+      if (missing) conversationOf(owner).noAccount = { engine: missing, text: errorText(e) };
+      else app.toast(errorText(e), 'error');
     }
     // Recorded by now, or given back to the field above.
     unhold?.();
@@ -547,7 +596,7 @@
   <div
     class="composer"
     class:pending={!!pendingItem}
-    class:drag={dragOver}
+    class:dragging={dragOver}
     role="group"
     ondragover={(e) => {
       if (e.dataTransfer?.types.includes('Files')) {
@@ -555,9 +604,21 @@
         dragOver = true;
       }
     }}
-    ondragleave={() => (dragOver = false)}
+    ondragleave={(e) => {
+      // Leaving for one of its own children is no leaving.
+      if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null)) dragOver = false;
+    }}
     ondrop={onDrop}
   >
+    <!-- Dropped files: the whole field takes them. -->
+    {#if dragOver}
+      <div class="drop" aria-hidden="true">
+        <div>
+          <span><Icon name="clip" size={16} />{t('composer.drop.title')}</span>
+          <small>{t('composer.drop.detail')}</small>
+        </div>
+      </div>
+    {/if}
     {#if suggestions.length}
       <div class="suggest" role="listbox">
         {#each suggestions as s, i (s.value)}
@@ -578,14 +639,19 @@
         {/each}
       </div>
     {/if}
+    <!-- The dictation, in the field itself: listening, the model's offer, its download. -->
+    <DictationBand targetId={dictated.id} />
     {#if files.length}
       <div class="atts">
         {#each files as f, i (i)}
           {#if f.url}
-            <div class="img">
-              <img src={f.url} alt={f.name} />
-              <button class="rm" aria-label={t('composer.attachments.remove', { name: f.name })} onclick={() => remove(i)}>×</button>
-            </div>
+            <span class="att img" use:tip={{ text: f.name, cut: true }}>
+              <img class="th" src={f.url} alt={f.name} />
+              <span class="nm2"><b>{f.name}</b><span>{fSize(f.size)}</span></span>
+              <button class="x" aria-label={t('composer.attachments.remove', { name: f.name })} onclick={() => remove(i)}
+                ><Icon name="close" size={14} /></button
+              >
+            </span>
           {:else}
             <AttachmentChip attachment={f} onremove={() => remove(i)} />
           {/if}
@@ -596,7 +662,7 @@
       bind:this={ta}
       bind:value={text}
       {placeholder}
-      rows="2"
+      rows="1"
       spellcheck="false"
       oninput={() => {
         autosize();
@@ -655,58 +721,50 @@
         onToggle={() => toggleMenu('mode')}
         onPick={(v) => pick({ mode: v })}
       />
-      <div style="flex:1"></div>
-      {#if busy}
+      <div class="end">
+        <input
+          bind:this={fileInput}
+          type="file"
+          multiple
+          hidden
+          aria-label={t('composer.attach.label')}
+          onchange={(e) => {
+            // Copied first: the list is the input's own, emptied with its value below, before `addFiles` reads it.
+            addFiles([...(e.currentTarget.files ?? [])]);
+            e.currentTarget.value = '';
+          }}
+        />
         <button
-          class="btn ghost stop"
-          class:icon={tight}
-          onclick={stop}
-          use:tip={t('composer.bar.interrupt', { key: keyLabel('Esc') })}
-          aria-label={t('composer.bar.stop')}>{tight ? '■' : `■ ${t('composer.bar.stop')}`}</button
+          class="icon-btn attach"
+          use:tip={t('composer.attach.title')}
+          aria-label={t('composer.attach.label')}
+          onclick={() => fileInput?.click()}><Icon name="clip" size={14} /></button
         >
-      {/if}
-      <input
-        bind:this={fileInput}
-        type="file"
-        multiple
-        hidden
-        aria-label={t('composer.attach.label')}
-        onchange={(e) => {
-          // Copied first: the list is the input's own, emptied with its value below, before `addFiles` reads it.
-          addFiles([...(e.currentTarget.files ?? [])]);
-          e.currentTarget.value = '';
-        }}
-      />
-      <ConversationButton {agent} />
-      <MicButton target={dictated} />
-      <button
-        class="icon-btn attach"
-        use:tip={t('composer.attach.title')}
-        aria-label={t('composer.attach.label')}
-        onclick={() => fileInput?.click()}
-      >
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          ><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" /></svg
+        <MicButton target={dictated} panel={false} />
+        <ConversationButton {agent} />
+        <span class="c-sep" aria-hidden="true"></span>
+        {#if busy}
+          <button
+            class="btn stop"
+            class:icon={narrow}
+            onclick={stop}
+            use:tip={t('composer.bar.interrupt', { key: keyLabel('Esc') })}
+            aria-label={t('composer.bar.stop')}
+            ><Icon name="stop" size={14} />{#if !narrow}{t('composer.bar.stop')}{#if !tight}<kbd aria-hidden="true">{keyLabel('Esc')}</kbd
+                >{/if}{/if}</button
+          >
+        {/if}
+        <button
+          class="btn primary send"
+          use:tip={busy && !pendingItem
+            ? t('composer.send.titleQueued', { engine: speakerOf(agent.engine), enter: keyLabel('Enter') })
+            : t('composer.send.title', { enter: keyLabel('Enter'), newline: keyLabel('Shift+Enter') })}
+          disabled={sending || reading > 0 || copying || (!text.trim() && !files.length)}
+          onclick={send}
         >
-      </button>
-      <button
-        class="btn primary"
-        use:tip={busy && !pendingItem
-          ? t('composer.send.titleQueued', { engine: speakerOf(agent.engine), enter: keyLabel('Enter') })
-          : t('composer.send.title', { enter: keyLabel('Enter'), newline: keyLabel('Shift+Enter') })}
-        disabled={sending || reading > 0 || copying || (!text.trim() && !files.length)}
-        onclick={send}
-      >
-        {t('composer.send.label')}
-      </button>
+          {t('composer.send.label')}<kbd aria-hidden="true"><Icon name="enter" size={12} /></kbd>
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -714,90 +772,196 @@
 <style>
   .composer-wrap {
     flex: none;
-    padding: 0 28px 20px;
   }
+  /* The composer floats above the panel, the width of the thread (2.0 design). */
   .composer {
     position: relative;
-    max-width: 780px;
-    margin: 0 auto;
-    display: flex;
-    flex-direction: column;
-    border-radius: var(--r);
-    border: 1px solid var(--line2);
-    background: var(--elev);
-    transition: border-color 0.15s;
+    width: min(780px, 100% - 64px);
+    margin: 0 auto 18px;
+    border-radius: 14px;
+    background: var(--raise);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 12px 32px -12px rgba(0, 0, 0, calc(0.6 * var(--shade)));
+    transition: box-shadow 0.2s;
   }
   .composer:focus-within {
-    border-color: color-mix(in oklch, var(--accent) 55%, var(--line2));
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--p) 55%, transparent),
+      0 0 0 3px color-mix(in oklch, var(--p) 14%, transparent),
+      0 12px 32px -12px rgba(0, 0, 0, calc(0.6 * var(--shade)));
   }
+  /* A question or a permission waits: what is typed answers it, in amber. */
   .composer.pending {
-    border-color: var(--wait);
+    box-shadow:
+      inset 0 0 0 1px var(--wait-line),
+      0 12px 32px -12px rgba(0, 0, 0, calc(0.6 * var(--shade)));
   }
-  .composer.drag {
-    border-style: dashed;
-    border-color: var(--accent);
+  .composer.dragging {
+    box-shadow:
+      inset 0 0 0 1.5px var(--p-ink),
+      0 0 0 4px color-mix(in oklch, var(--p) 18%, transparent);
+  }
+  .drop {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    border-radius: 14px;
+    background: color-mix(in oklch, var(--p) 14%, var(--drop-base));
+    color: var(--text);
+    font-weight: 550;
+    pointer-events: none;
+  }
+  .drop span {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .drop small {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+    font-weight: 450;
+    text-align: center;
   }
   textarea {
-    resize: none;
-    border: none;
-    outline: none;
-    background: transparent;
-    font-size: 14px;
-    line-height: 1.5;
+    display: block;
+    width: 100%;
+    min-height: 52px;
     padding: 14px 16px 6px;
-    min-height: 58px;
+    border: 0;
+    outline: 0;
+    resize: none;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-size: 13.5px;
+    line-height: 1.5;
   }
+  textarea::placeholder {
+    color: var(--muted);
+  }
+  /* Model, effort and mode in chips at the left; join, dictate, converse, then Stop and Send at the right. The bar
+     wraps when there is no room. */
   .bar {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 10px 10px 14px;
-    min-width: 0;
-  }
-  .bar > :global(button) {
-    flex: none;
-  }
-  .stop {
-    height: 30px;
-    color: var(--del);
-  }
-  .stop.icon {
-    padding: 0 10px;
-  }
-  .atts {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    gap: 4px;
+    row-gap: 6px;
+    padding: 6px 8px 8px 10px;
+    min-width: 0;
+  }
+  .end {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+  }
+  .end :global(.icon-btn) {
+    width: 30px;
+    height: 28px;
+    padding: 0;
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+  .c-sep {
+    width: 1px;
+    height: 18px;
+    margin: 0 4px;
+    background: var(--line-2);
+  }
+  .stop :global(.icon) {
+    color: var(--muted);
+  }
+  .stop kbd {
+    height: 16px;
+    font-size: 10.5px;
+  }
+  .stop.icon {
+    width: 30px;
+    padding: 0;
+    justify-content: center;
+  }
+  .send {
+    height: 32px;
+    padding: 0 10px 0 12px;
+    border-radius: 9px;
+  }
+  .send kbd {
+    border-color: var(--on-primary-kbd);
+    color: var(--on-primary-dim);
+  }
+  @container conv (max-width: 760px) {
+    .stop kbd {
+      display: none;
+    }
+  }
+  /* Files attached, in a row of chips above the text. */
+  .atts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 10px 0;
+  }
+  .att {
+    display: inline-flex;
+    align-items: center;
     gap: 8px;
-    padding: 12px 14px 0;
+    max-width: 260px;
+    height: 40px;
+    padding: 0 6px;
+    border-radius: 9px;
+    background: rgba(var(--fg-rgb), 0.04);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    font-size: 12px;
   }
-  .img {
-    position: relative;
-    width: 64px;
-    height: 64px;
-    border-radius: var(--r-sm);
-    overflow: hidden;
-    border: 1px solid var(--line2);
-  }
-  .img img {
-    width: 100%;
-    height: 100%;
+  .att .th {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
     object-fit: cover;
   }
-  .rm {
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    width: 18px;
-    height: 18px;
+  .nm2 {
+    display: grid;
+    min-width: 0;
+    line-height: 1.25;
+  }
+  .nm2 b {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 550;
+  }
+  .nm2 span {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .x {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
     border: none;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.7);
-    color: #fff;
-    font-size: 12px;
-    line-height: 1;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
     cursor: pointer;
   }
+  .x:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+  /* The `/` commands and the files of `@`, above the field. */
   .suggest {
     position: absolute;
     left: 0;
@@ -806,39 +970,45 @@
     z-index: 30;
     display: flex;
     flex-direction: column;
-    padding: 5px;
+    padding: 4px;
     max-height: 320px;
     overflow: auto;
-    border-radius: var(--r);
-    border: 1px solid var(--line2);
-    background: var(--elev);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+    border-radius: 10px;
+    background: var(--raise-2);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 16px 40px -12px rgba(0, 0, 0, calc(0.7 * var(--shade)));
   }
   .sug {
     display: flex;
     align-items: baseline;
     gap: 12px;
-    padding: 7px 10px;
+    min-width: 0;
+    padding: 7px 9px;
     border: none;
-    border-radius: var(--r-sm);
+    border-radius: 7px;
     background: transparent;
     text-align: left;
     cursor: pointer;
-    min-width: 0;
   }
   .sug.on {
-    background: var(--elev2);
+    background: var(--hover);
   }
   .sl {
-    font-size: 12.5px;
     flex: none;
+    font-size: 12.5px;
   }
   .sd {
-    font-size: 12px;
-    color: var(--dim);
+    min-width: 0;
     overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
     text-overflow: ellipsis;
     white-space: nowrap;
-    min-width: 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .composer {
+      transition: none;
+    }
   }
 </style>

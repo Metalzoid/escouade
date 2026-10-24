@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// "▶ Tester" starts test launches, which have logs (xterm.js): none in jsdom.
+// "Tester" starts test launches, which have logs (xterm.js): none in jsdom.
 vi.mock('../../lib/terminals', () => ({
   launchLog: () => ({
     term: { cols: 80, rows: 24, buffer: { active: { cursorY: 0 } }, write: (_: unknown, done?: () => void) => done?.() },
@@ -59,7 +59,7 @@ describe('CriteriaReport', () => {
     expect(launch.getByText('Préparation')).toBeInTheDocument();
     expect(launch.getByText('web')).toBeInTheDocument();
     expect(launch.getByText('processus 2')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '▶ Tester' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tester' })).toBeInTheDocument();
   });
 
   it('is written in English', () => {
@@ -73,6 +73,6 @@ describe('CriteriaReport', () => {
     const launch = within(screen.getByRole('list', { name: 'Test launch' }));
     expect(launch.getByText('Setup')).toBeInTheDocument();
     expect(launch.getByText('process 2')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '▶ Test' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Test' })).toBeInTheDocument();
   });
 });

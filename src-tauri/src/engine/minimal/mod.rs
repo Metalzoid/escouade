@@ -70,6 +70,7 @@ impl Engine for Minimal {
             background_tasks: false,
             todo_tools: false,
             default_refusal: false,
+            sandbox: false,
         }
     }
 

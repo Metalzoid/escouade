@@ -72,9 +72,9 @@ describe('the card of a request asked aloud', () => {
     expect(box('PostgreSQL').classList.contains('on')).toBe(false);
     await answer('La première et la troisième');
     await tick();
-    expect(box('Unitaires').textContent).toContain('☑');
-    expect(box('Lint').textContent).toContain('☑');
-    expect(box('E2E').textContent).toContain('☐');
+    expect(box('Unitaires').querySelector('[data-icon="check-c"]')).not.toBeNull();
+    expect(box('Lint').querySelector('[data-icon="check-c"]')).not.toBeNull();
+    expect(box('E2E').querySelector('[data-icon="circle"]')).not.toBeNull();
     // The button of the card: not yet, a question has no answer.
     expect(screen.getByRole('button', { name: /Envoyer|Répondre|Valider/ })).toBeDisabled();
     await answer('Escouade-front');

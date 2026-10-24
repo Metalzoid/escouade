@@ -28,7 +28,8 @@
     "remoteControl": true,
     "backgroundTasks": true,
     "todoTools": true,
-    "defaultRefusal": true
+    "defaultRefusal": true,
+    "sandbox": false
   },
   "install": {
     "windows": "irm https://claude.ai/install.ps1 | iex",

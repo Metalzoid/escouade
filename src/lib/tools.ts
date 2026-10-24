@@ -1,6 +1,7 @@
 // One-line summaries of tool calls for the compact rows of the conversation.
 
 import { fInt, relPath } from './format';
+import type { IconName } from './icons';
 import { t, type Key } from './i18n';
 import type { ConvItem, ToolItem } from './types';
 
@@ -77,6 +78,40 @@ const TASK_STATUS: Record<string, Key> = {
 
 /** A tool of Escouade's own MCP server. */
 export const isEscouadeTool = (name: string) => name.startsWith(ESCOUADE);
+
+/** The icon of a call in the conversation's thread, by what it does (2.0 design). */
+export function toolIcon(name: string): IconName {
+  if (isEscouadeTool(name)) return 'kanban';
+  if (name.startsWith('mcp__')) return 'plug';
+  switch (name) {
+    case 'Read':
+    case 'NotebookRead':
+      return 'read';
+    case 'Edit':
+    case 'Write':
+    case 'MultiEdit':
+    case 'NotebookEdit':
+      return 'edit';
+    case 'Grep':
+    case 'Glob':
+    case 'WebSearch':
+      return 'search';
+    case 'Bash':
+    case 'PowerShell':
+    case 'BashOutput':
+    case 'KillShell':
+      return 'bash';
+    case 'Task':
+    case 'Agent':
+      return 'sub';
+    case 'WebFetch':
+      return 'globe';
+    case 'TodoWrite':
+      return 'check-c';
+    default:
+      return 'code';
+  }
+}
 
 export function toolLabel(name: string): string {
   if (isEscouadeTool(name)) {

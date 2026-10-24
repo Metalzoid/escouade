@@ -51,6 +51,19 @@ describe('MicButton in the composer', () => {
     expect(mic()).toHaveAttribute('aria-keyshortcuts', 'Control+Shift+Space');
   });
 
+  it('shows the dictation in the field itself, above the text, not in a panel over the microphone (2.0 design)', async () => {
+    composer();
+    await click(mic());
+    await waitFor(() => expect(mic()).toHaveAttribute('aria-pressed', 'true'));
+    const band = panel()!;
+    expect(band).toHaveClass('dict');
+    expect(band.closest('.composer')).not.toBeNull();
+    expect(band.compareDocumentPosition(screen.getByRole('textbox')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(mic().closest('.mic-wrap')!.querySelector('.panel')).toBeNull();
+    // Listening: the microphone in the project's colour.
+    expect(mic()).toHaveClass('on');
+  });
+
   it('a click listens, shows the level and the time, a second puts the text at the cursor, unsent', async () => {
     const { backend, textarea } = composer('les tests');
     await userEvent.type(textarea, 'Lance  puis commite');

@@ -10,6 +10,8 @@
   import { app } from '../../lib/state.svelte';
   import type { Question, QuestionItem } from '../../lib/types';
   import { tip } from '../../lib/tip';
+  import Icon from '../Icon.svelte';
+  import Via from './Via.svelte';
 
   // `current`: several requests can wait at once, and the keyboard answers the first (as the message field does).
   let { item, agentId, pending, current = true }: { item: QuestionItem; agentId: string; pending: boolean; current?: boolean } = $props();
@@ -27,6 +29,8 @@
   const keys = $derived(pending && current);
   // « Claude attend ta réponse », its agent named as its harness names it.
   const waiting = $derived(t('composer.question.waiting', { engine: speakerOf(app.agents[agentId]?.engine) }));
+  // « Codex t’a posé une question », once answered.
+  const asked = $derived(t('composer.question.asked', { engine: speakerOf(app.agents[agentId]?.engine) }));
   // A form of an MCP server: who asks, and its fields to fill.
   const formTitle = $derived(
     item.form ? (item.form.source ? t('composer.question.form', { source: item.form.source }) : t('composer.question.formNoSource')) : '',
@@ -104,7 +108,7 @@
 
 {#if pending}
   <div class="card pending" data-testid="question-pending" role="group" aria-label={waiting} bind:this={card}>
-    <div class="title"><span class="pulse" style="width:8px;height:8px"></span>{waiting}</div>
+    <div class="rt"><Icon name="agents" size={14} />{waiting}</div>
     {#if item.form}
       <div class="form-head" data-testid="question-form">
         <span class="chip">{formTitle}</span>
@@ -147,8 +151,8 @@
               aria-keyshortcuts={hint ? `Alt+${j + 1}` : undefined}
               onclick={() => choose(qi, o.label)}
             >
-              {#if q.multiSelect}<span class="box">{on ? '☑' : '☐'}</span>{/if}{o.label}
-              {#if hint}<kbd class="kbd" aria-hidden="true">{keyLabel(`Alt+${j + 1}`)}</kbd>{/if}
+              {#if q.multiSelect}<span class="box"><Icon name={on ? 'check-c' : 'circle'} size={14} /></span>{/if}{o.label}
+              {#if hint}<kbd aria-hidden="true">{keyLabel(`Alt+${j + 1}`)}</kbd>{/if}
             </button>
           {/each}
         </div>
@@ -175,141 +179,164 @@
           onclick={submit}
         >
           {t('composer.question.submit')}
-          {#if keys && complete}<kbd class="kbd" aria-hidden="true">{keyLabel('Ctrl+Enter')}</kbd>{/if}
+          {#if keys && complete}<kbd aria-hidden="true">{keyLabel('Ctrl+Enter')}</kbd>{/if}
         </button>
       {/if}
     </div>
   </div>
 {:else if item.answers}
   <div class="card done">
+    <div class="rt"><Icon name="agents" size={14} />{asked}</div>
     {#each item.questions as q, qi (qi)}
+      {@const answer = item.answers[q.question] ?? ''}
+      {@const picked = answer.split(', ')}
       <div class="done-q">{q.question}</div>
-      <div class="ans mono">→ {item.answers[q.question] ?? '—'}</div>
+      <!-- Its choices, the one taken marked; a free answer (or a field's) said as it was given. -->
+      <div class="opts-r">
+        {#if q.options.length && !q.field && picked.every((p) => q.options.some((o) => o.label === p))}
+          {#each q.options as o, j (j)}<span class="opt-r" class:picked={picked.includes(o.label)}>{o.label}</span>{/each}
+        {:else}
+          <span class="opt-r picked">{answer || '—'}</span>
+        {/if}
+      </div>
     {/each}
     <!-- Answered through the MCP server and not by the user in the window: it says by whom. -->
-    {#if item.by}<div class="by">{t('composer.question.answeredBy', { author: item.by })}</div>{/if}
+    <div class="by">
+      <Icon name="check" size={14} /><span class="verdict">{t('composer.question.answered')}</span>
+      {#if item.by}<Via author={item.by} />{/if}
+    </div>
   </div>
 {:else}
   <div class="card done">
+    <div class="rt"><Icon name="agents" size={14} />{asked}</div>
     {#each item.questions as q, qi (qi)}<div class="done-q">{q.question}</div>{/each}
-    <div class="ans mono" style="color:var(--dim)">{t('composer.question.unanswered')}</div>
+    <div class="by"><Icon name="circle" size={14} /><span>{t('composer.question.unanswered')}</span></div>
   </div>
 {/if}
 
 <style>
+  /* A question of the agent (2.0 design): amber while it waits for the user, a hairline once answered. */
   .card {
-    margin-left: 34px;
-    display: flex;
-    flex-direction: column;
-    border-radius: var(--r);
+    display: grid;
+    gap: 9px;
+    min-width: 0;
+    padding: 12px 14px;
+    border-radius: 11px;
+    box-shadow: inset 0 0 0 1px var(--line);
   }
   .pending {
     gap: 12px;
-    padding: 16px 18px;
-    border: 1px solid var(--wait);
-    background: var(--wait-soft);
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
     animation: ccFadeIn 0.2s ease-out;
   }
-  .title {
+  .rt {
     display: flex;
     align-items: center;
-    gap: 9px;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--wait);
-    letter-spacing: 0.02em;
+    gap: 8px;
+    font-weight: 600;
   }
-  .q {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .chip {
-    align-self: flex-start;
-    font-family: var(--mono);
-    font-size: 10.5px;
-    padding: 2px 7px;
-    border-radius: 99px;
-    background: var(--elev2);
+  .rt :global(.icon) {
     color: var(--muted);
   }
+  .pending .rt :global(.icon) {
+    color: var(--wait);
+  }
+  .q {
+    display: grid;
+    gap: 9px;
+  }
+  .chip {
+    justify-self: start;
+    padding: 2px 7px;
+    border-radius: 5px;
+    background: rgba(var(--fg-rgb), 0.05);
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 550;
+  }
   .text {
-    font-size: 14px;
+    color: var(--soft);
+    font-size: 13.5px;
     line-height: 1.55;
     text-wrap: pretty;
   }
   .opts {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-  }
-  .opt {
-    height: 32px;
-    padding: 0 14px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line2);
-    background: transparent;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
     gap: 6px;
   }
-  .opt:hover:not(:disabled) {
-    filter: brightness(1.08);
-    border-color: var(--wait);
+  /* A choice: a button of the app, the one ticked in the project's colour, the one a click sends in white. */
+  .opt {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 30px;
+    padding: 0 11px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(var(--fg-rgb), 0.04);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text);
+    font-weight: 550;
+    cursor: pointer;
   }
-  .opt.primary,
+  .opt:hover:not(:disabled) {
+    background: rgba(var(--fg-rgb), 0.08);
+    box-shadow: inset 0 0 0 1px var(--line-3);
+  }
+  .opt.primary {
+    background: var(--primary);
+    box-shadow: inset 0 -1px 0 var(--on-primary-line);
+    color: var(--on-primary);
+  }
+  .opt.primary:hover:not(:disabled) {
+    background: var(--primary-hover);
+  }
   .opt.on {
-    background: var(--wait);
-    border-color: var(--wait);
-    color: #2a1f05;
+    background: color-mix(in oklch, var(--p) 14%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 55%, transparent);
+    color: var(--text);
   }
   .box {
-    font-size: 13px;
+    display: flex;
+    color: var(--muted);
   }
-  /* The shortcut, in the button's own colors: the amber of a picked option is no place for the dim gray. */
-  .opt .kbd,
-  .btn .kbd {
+  .on .box {
+    color: var(--p-ink);
+  }
+  .opt kbd {
     margin-left: 2px;
-    color: inherit;
-    opacity: 0.7;
+  }
+  .opt.primary kbd {
+    border-color: var(--on-primary-kbd);
+    color: var(--on-primary-dim);
   }
   .form-head {
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 8px;
   }
   .req {
+    color: var(--muted);
     font-size: 11.5px;
-    color: var(--dim);
   }
   .field {
-    height: 32px;
-    padding: 0 10px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line2);
-    background: var(--bg);
-    color: var(--text);
-    font-size: 13px;
     max-width: 360px;
   }
-  .field:focus {
-    outline: none;
-    border-color: var(--wait);
-  }
   .said {
-    font-size: 12.5px;
     color: var(--muted);
+    font-size: 12.5px;
   }
   .descs {
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 3px;
-    font-size: 12px;
     color: var(--muted);
+    font-size: 12px;
     line-height: 1.45;
+  }
+  .descs b {
+    color: var(--soft);
+    font-weight: 550;
   }
   .foot {
     display: flex;
@@ -318,25 +345,53 @@
     gap: 12px;
   }
   .hint {
+    color: var(--muted);
     font-size: 11.5px;
-    color: var(--dim);
-  }
-  .done {
-    gap: 6px;
-    padding: 12px 16px;
-    border: 1px solid var(--line);
   }
   .done-q {
+    color: var(--soft);
     font-size: 13px;
     line-height: 1.5;
-    color: var(--muted);
     text-wrap: pretty;
   }
-  .ans {
-    font-size: 11.5px;
+  .opts-r {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .opt-r {
+    display: inline-flex;
+    align-items: center;
+    min-height: 26px;
+    padding: 0 9px;
+    border-radius: 7px;
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--muted);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+  .opt-r.picked {
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 55%, transparent);
+    color: var(--text);
   }
   .by {
-    font-size: 11.5px;
-    color: var(--dim);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .by :global(.icon) {
+    color: var(--add);
+  }
+  .verdict {
+    color: var(--soft);
+    font-weight: 550;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pending {
+      animation: none;
+    }
   }
 </style>

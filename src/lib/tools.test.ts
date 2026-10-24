@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { setLang } from './i18n';
-import { editsByTurn, escouadeArgs, hasDiff, isEscouadeTool, isQuietTool, toolArg, toolLabel, toolResultSummary } from './tools';
+import { editsByTurn, escouadeArgs, hasDiff, isEscouadeTool, isQuietTool, toolArg, toolIcon, toolLabel, toolResultSummary } from './tools';
 import type { ConvItem, ToolItem, TurnItem } from './types';
 
 const CWD = 'C:\\code\\app';
@@ -85,6 +85,21 @@ describe('the task tools of Claude Code', () => {
     expect(arg('Agent', { description: 'Explorer', subagent_type: 'Explore' })).toBe('Explorer');
     expect(toolLabel('Agent')).toBe('Agent');
     expect(toolResultSummary(tool('Agent', {}, { result: { text: 'x', isError: false } }))).toBe('terminé');
+  });
+});
+
+describe('toolIcon', () => {
+  it('draws a call by what it does: read, edit, search, a command, a subagent, Escouade, another server', () => {
+    expect(['Read', 'NotebookRead'].map(toolIcon)).toEqual(['read', 'read']);
+    expect(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].map(toolIcon)).toEqual(['edit', 'edit', 'edit', 'edit']);
+    expect(['Grep', 'Glob', 'WebSearch'].map(toolIcon)).toEqual(['search', 'search', 'search']);
+    expect(['Bash', 'PowerShell', 'BashOutput', 'KillShell'].map(toolIcon)).toEqual(['bash', 'bash', 'bash', 'bash']);
+    expect(['Task', 'Agent'].map(toolIcon)).toEqual(['sub', 'sub']);
+    expect(toolIcon('WebFetch')).toBe('globe');
+    expect(toolIcon('TodoWrite')).toBe('check-c');
+    expect(toolIcon('mcp__escouade__report_progress')).toBe('kanban');
+    expect(toolIcon('mcp__jira__create_issue')).toBe('plug');
+    expect(toolIcon('Unknown')).toBe('code');
   });
 });
 

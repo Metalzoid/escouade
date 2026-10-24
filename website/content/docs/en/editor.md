@@ -10,7 +10,7 @@ The editor takes the place of the conversation in the main area. The “← Conv
 
 | To open… | Do this |
 |---|---|
-| The editor of the displayed agent | The “Editor” button in the conversation’s header (“Browse and edit the files of this agent”), or “Open in editor” in the menu of the agent’s card. It opens on its worktree, or on the project if it has none. |
+| The editor of the displayed agent | “Open in editor” in the agent’s menu (right click on its card, or “…” of its conversation’s header). It opens on its worktree, or on the project if it has none. |
 | The project’s editor | The “Editor” button at the top right of the title bar, or “Browse” at the foot of the sidebar. |
 | A changed file | The `</>` button on a row of the [uncommitted files panel](git), or “Open in editor” in its menu. |
 | A file the agent edited | The file name on a tool call row (Edit, Write…) in the conversation: the editor opens at the first line that edit changed. The list of changed files that wraps up the end of a turn does the same, without a specific line. |

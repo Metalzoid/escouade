@@ -103,6 +103,14 @@ async fn past_the_threshold_an_agent_finishes_its_turn_then_goes_on_on_another_a
     // Said in its conversation, by a notification, and in the window.
     let said = "L’agent passe sur le compte Équipe : Pro est à 96 % de sa fenêtre de 5 h.";
     assert_eq!(notices(&h, &id), [said]);
+    // A separator in the conversation, as a handover's (2.0 design, choice 24).
+    let levels: Vec<_> = h
+        .items(&id)
+        .iter()
+        .filter(|i| i["kind"] == "notice")
+        .map(|i| i["level"].clone())
+        .collect();
+    assert_eq!(levels, [json!("switch")]);
     assert!(
         h.alerts().iter().any(|a| a.ends_with(said)),
         "{:?}",

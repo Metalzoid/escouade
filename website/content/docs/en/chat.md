@@ -8,13 +8,15 @@ On macOS, `Ctrl` becomes `⌘` for shortcuts.
 
 ## The header
 
-The conversation header shows the agent’s name (a double-click renames it), its status, then `project / branch` below. On the right:
+The conversation header shows the agent’s name (a double-click renames it) and its status in a pill, then, below, its harness (when several are installed), `project / branch`, the number of its pull requests and, for a Codex agent, “Sandbox” (the tooltip says what its mode lets it do). Then:
 
-- “Editor” opens the [editor](editor) on the agent’s files;
-- “Test” or “Prepare launch”, depending on the agent, launches its worktree or asks the agent how to launch it (see [testing](testing));
-- “Claude Code view” runs the agent in Claude Code’s own interface (see [the Claude Code view](claude-code-view)). The button doesn’t exist for a ticket agent or an archived agent;
-- the model, then the agent’s figures: “Context” (for example “76.2k / 200k”: how much of the model’s window is already filled, with the percentage in the tooltip; the value takes on a warning color from 80%), “Tokens”, “Cost” (preceded by “≈” during a turn: it’s an estimate), “Files” (in the classic layout, a click shows the uncommitted files, see [git](git)), and “Duration”;
+- the agent’s figures, the label above the value: “Context” (for example “76.2k / 200k”, with a thin gauge under it: how much of the model’s window is already filled, with the percentage in the tooltip; the value takes on a warning color from 80%), “Tokens”, “Cost” (preceded by “≈” during a turn: it’s an estimate), “Files” (in the classic layout, a click shows the uncommitted files, see [git](git)), and “Duration”;
+- a single action button: “Open a PR” while the agent’s branch has commits without a pull request (see [pull requests](git)), otherwise “Test” or “Prepare launch”, depending on the agent, which launches its worktree or asks the agent how to launch it (see [testing](testing));
+- the two views, “Escouade” and “Claude Code”, as segments: the second runs the agent in Claude Code’s own interface (see [the Claude Code view](claude-code-view)). They don’t exist for a ticket agent or an archived agent;
+- “…”, the agent’s menu, the same as the right click on its card: rename, duplicate, open the [editor](editor) or a [terminal](terminals) in its worktree, launch, open a PR, archive, delete…;
 - two layout buttons: classic, or the conversation and the files side by side (`Ctrl+Shift+L`, see [the interface](interface)).
+
+When the conversation narrows (side-by-side layout, small window), the header first drops “Tokens” and “Files”, then “Duration” and the text of its buttons, then its figures.
 
 ## Writing a message
 
@@ -114,7 +116,7 @@ The **Conversation** button, left of the microphone in the message field of the 
 
 1. you speak; when you stop, what you said **goes by itself** to the agent after a short silence (“Delay before sending”, 1.2 s by default);
 2. the agent works and answers as usual, in the conversation;
-3. it ends its answer with **a short passage written to be read**, less wordy and less technical: Escouade shows it apart under the answer (“🔊 Read aloud”) and **reads it aloud**. Without that passage, Escouade says “Done. The answer is in the conversation.”;
+3. it ends its answer with **a short passage written to be read**, less wordy and less technical: Escouade shows it apart under the answer (“Read aloud”) and **reads it aloud**. Without that passage, Escouade says “Done. The answer is in the conversation.”;
 4. then it listens again.
 
 During the conversation, **it fills Escouade’s window**: in the middle, a glowing orb that follows the sound, the agent’s voice when it speaks (its edge breathes and its halo grows with the level of the sound read) and your microphone when it listens, with an arc turning while it transcribes and while the agent works; below, the state (“Listening”, “Transcribing on your machine…”, “Alice is working…”, “Alice is answering”). At the bottom, **subtitles** as in a cinema: what you said, as soon as it is transcribed, then what the agent says, sentence by sentence, as it is read. The whole history stays in the conversation. `Esc` or “Stop” leaves the mode and closes the microphone.
@@ -161,18 +163,18 @@ Code blocks have a header with their language (“text” when none is given) an
 
 ### Thinking
 
-When Claude thinks, a “Thinking” line (▸) appears, with “…” while it goes on. A click unfolds it.
+When Claude thinks, a “Thinking” line, preceded by a chevron, appears, with “…” while it goes on. A click unfolds it.
 
 ### Tool calls
 
-Each tool Claude uses takes one line: the tool’s name (`Read`, `Edit`, `Bash`, `Grep`…), what it acts on (the command, the file’s path relative to the agent’s folder, the pattern searched, the address), and on the right a short result: for a command, the last line of its output (or a check mark if there is none); for a read, the number of lines; “14 results” or “no results” for a search; “+24 −3” for an edit; “interrupted” or “error”. A circle spins while the tool runs. Hover over the line to read its full text.
+The tools of a turn form a thread, tied by a line, with no box around each one. Each tool Claude uses takes one line: an icon of what it does (read, edit, search, a command, a subagent, Escouade), the tool’s name (`Read`, `Edit`, `Bash`, `Grep`…), what it acts on (the command, the file’s path relative to the agent’s folder, the pattern searched, the address), and on the right a short result: for a command, the last line of its output (or a check mark if there is none); for a read, the number of lines; “14 results” or “no results” for a search; “+24 −3” for an edit; “interrupted” or “error”. A circle spins while the tool runs. Hover over the line to read its full text.
 
 A click on the line (or `Enter` when it has focus) unfolds it:
 
 - **File edit** (`Edit`, `Write`, `MultiEdit`): the diff, with numbered lines, in green and red. It’s unified or side by side depending on the choice you made in the diff viewer (“Unified” or “Side by side”, see [git](git)). Past 400 lines, it stops at “… N more lines”. The file’s path is a link: it opens the file in the editor, at the first changed line.
 - **Command** (`Bash`, `PowerShell`): the command after `$`, then its output.
-- **Task list** (`TodoWrite`): the tasks with ☐, ◐ (in progress), and ☑.
-- **Subagent** (`Agent`): what it was asked, its own tool calls (nested lines, which you can unfold too), and its last text. The line says how many tools it used, and its ↗ button opens the subagent’s conversation in full size, in place of the agent’s (see [a subagent’s conversation](plan#the-conversation-of-a-subagent)).
+- **Task list** (`TodoWrite`): the tasks, each with a circle, ticked once it is done.
+- **Subagent** (`Agent`): what it was asked, its own tool calls (nested lines, which you can unfold too), and its last text. The line says how many tools it used, and its button at the end of the line opens the subagent’s conversation in full size, in place of the agent’s (see [a subagent’s conversation](plan#the-conversation-of-a-subagent)).
 - **Other tools**: their result, otherwise the call’s parameters.
 
 Tools that only reread the task list (`TaskList`, `TaskGet`) are displayed in softer shades. The tools of Escouade’s MCP server carry an “Escouade · …” badge (see [the MCP server](mcp)).
@@ -206,10 +208,10 @@ When the request comes from a subagent, the card is headed by “Request of the 
 The “Claude is waiting for your answer” card shows the question and one button per option. Hover over an option to read its description; it’s also written under the buttons.
 
 - A single-choice question is answered with one click.
-- When there are several questions, or a multiple-choice question (☐ boxes to tick), the answer is confirmed with the “Submit” button, enabled once every question has an answer.
+- When there are several questions, or a multiple-choice question (circles to tick), the answer is confirmed with the “Submit” button, enabled once every question has an answer.
 - You can also answer freely: what you write in the field (“or answer freely in the field below”) is the answer to every question on the card.
 
-Once answered, the card shrinks to the question and the answer (“→ Yes”).
+Once answered, the card says “Claude asked you a question”, the question and its choices, the one taken marked in the project’s color (a free answer is shown alone), then “Answered”.
 
 ### Permissions
 
@@ -225,7 +227,7 @@ When Claude Code would deny the request by default, the “Deny” button is the
 
 In Plan mode, the request is “Claude proposes a plan”: the plan is shown as Markdown, and the buttons are “Approve the plan”, “Approve and accept edits” (the plan is approved and the file edits that follow are accepted), and “Keep planning”. The last one tells Claude to keep planning; if you’d rather say what’s wrong, write it in the field.
 
-A handled request becomes a line: “✓ Allowed · Bash npm test”, “✕ Denied”, “✓ Always allowed”.
+A handled request becomes a quieter card: the tool and its target (“Bash npm test”), then “Allowed”, “Denied”, “Allowed for this session” or “Always allowed”, with a green tick or a red cross. When another agent answered, through the [MCP server](mcp), the card says so: “by chef-escouade” and the “via Escouade” pill.
 
 ### With the keyboard
 

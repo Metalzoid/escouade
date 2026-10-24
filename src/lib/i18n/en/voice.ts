@@ -10,6 +10,10 @@ export default defineZone('voice', {
   },
   panel: {
     starting: 'Opening the microphone…',
+    /** Live transcription (ESC-136): the service, beside what it heard so far. */
+    live: '{service} · live',
+    /** The keys of the dictation, in the composer's band: `{key}` the shortcut, `{escape}` Escape. */
+    keys: '{key} to finish · {escape} to cancel',
     listening: 'Listening',
     hint: 'Click or {key} to end · Esc to cancel',
     holdHint: 'Let go to end · Esc to cancel',

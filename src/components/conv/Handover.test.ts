@@ -31,6 +31,11 @@ describe('the change of harness in the conversation', () => {
     setLang('fr');
   });
 
+  it('draws a hairline on each side, the harness it goes on on in bold', () => {
+    render(Handover, { item: sep() });
+    expect(screen.getByRole('separator').querySelector('b')).toHaveTextContent(/^Suite sur Codex$/);
+  });
+
   it('says where the agent goes on, why, and until when', () => {
     const { unmount } = render(Handover, { item: sep() });
     expect(screen.getByRole('separator')).toHaveTextContent('Suite sur Codex · quota Claude Code épuisé jusqu’à 18:00');
@@ -51,10 +56,12 @@ describe('the change of harness in the conversation', () => {
   it('folds the handover file under its title', async () => {
     const file: UserItem = { kind: 'user', id: 'u1', text: '# Passation : suite…', images: 0, ts: 1, queued: false, origin: 'handover' };
     render(UserMessage, { item: file, engine: 'codex' });
-    const details = screen.getByText('Dossier de passation').closest('details')!;
-    expect(details.open).toBe(false);
-    await userEvent.click(screen.getByText('Dossier de passation'));
-    expect(details.open).toBe(true);
+    const fold = screen.getByRole('button', { name: /Dossier de passation/ });
+    expect(fold).toHaveAttribute('aria-expanded', 'false');
+    expect(fold).toHaveTextContent('Écrit par Escouade depuis la conversation : le premier message de l’agent sur Codex.');
+    expect(screen.queryByText('# Passation : suite…')).not.toBeInTheDocument();
+    await userEvent.click(fold);
+    expect(fold).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('# Passation : suite…')).toBeInTheDocument();
   });
 });

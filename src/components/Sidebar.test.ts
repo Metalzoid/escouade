@@ -386,6 +386,28 @@ describe('Sidebar', () => {
     });
   });
 
+  describe('the menu of an agent asked by « … » of its header (2.0 design, choice 6)', () => {
+    it('opens the menu of its card under the button, the keyboard in it, with « Ouvrir un terminal » in its worktree', async () => {
+      const wt = { path: 'C:\code\demo-api\.claude\worktrees\a1', branch: 'escouade/a1', baseBranch: 'main' };
+      resetApp({ agents: [agent({ worktree: wt })] });
+      app.shells = [{ id: 'pwsh', label: 'PowerShell 7', path: 'pwsh.exe' }];
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      menu.close();
+      const button = document.createElement('button');
+      document.body.append(button);
+      onTestFinished(() => button.remove());
+      app.askAgentMenu('a1', button);
+      await vi.waitFor(() => expect(menu.open).not.toBeNull());
+      expect(menu.open!.keyboard).toBe(true);
+      const labels = menu.open!.items.map((i) => i.label);
+      expect(labels).toContain('Renommer');
+      expect(labels).toContain('Ouvrir un terminal');
+      menu.open!.items.find((i) => i.label === 'Ouvrir un terminal')!.onClick!();
+      await vi.waitFor(() => expect(openTerminal).toHaveBeenCalledWith('p1', 'pwsh', 'pwsh · refacto-auth', { agentId: 'a1' }));
+    });
+  });
+
   describe('« Intégrer <base> »', () => {
     const wt = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a1', branch: 'escouade/a1', baseBranch: 'develop' };
 

@@ -33,16 +33,26 @@ describe('UserMessage', () => {
 });
 
 describe('UserMessage with attachments', () => {
-  it('shows the images count and each attached file by name', () => {
-    render(UserMessage, { item: { ...item(false), images: 2, files: ['rapport.pdf', 'notes.md'] } });
-    expect(screen.getByText('🖼 2 images')).toBeInTheDocument();
-    expect(screen.getByText('📄 rapport.pdf')).toBeInTheDocument();
-    expect(screen.getByText('📄 notes.md')).toBeInTheDocument();
+  it('shows the images count and each attached file by name, in a row of chips drawn with their icon', () => {
+    const { container } = render(UserMessage, { item: { ...item(false), images: 2, files: ['rapport.pdf', 'notes.md'] } });
+    const chips = [...container.querySelectorAll('.atts .att')];
+    expect(chips.map((c) => c.textContent?.trim())).toEqual(['2 images', 'rapport.pdf', 'notes.md']);
+    expect(chips.map((c) => c.querySelector('[data-icon]')?.getAttribute('data-icon'))).toEqual(['image', 'file', 'file']);
   });
 
   it('shows a message saved before files could be attached as before', () => {
-    render(UserMessage, { item: item(false) });
-    expect(screen.queryByText(/📄/)).not.toBeInTheDocument();
+    const { container } = render(UserMessage, { item: item(false) });
+    expect(container.querySelector('.atts')).toBeNull();
+  });
+
+  it('says under the message that it was said aloud, without the instruction Escouade added for the agent', () => {
+    const { container } = render(UserMessage, {
+      item: { ...item(false), text: 'Garde 50 par page\n\n<escouade-voice>Réponds en une phrase.</escouade-voice>' },
+    });
+    const said = container.querySelector('[data-said-aloud]')!;
+    expect(said).toHaveTextContent('Dit à voix haute');
+    expect(said.querySelector('[data-icon="wave"]')).not.toBeNull();
+    expect(said.closest('.bubble')).toBeNull();
   });
 });
 
@@ -57,12 +67,12 @@ describe('UserMessage in English', () => {
   it('counts the images with a plural, and words the notes in English', () => {
     setLang('en');
     const { unmount } = render(UserMessage, { item: { ...item(true), images: 1, origin: 'remote' as const } });
-    expect(screen.getByText('🖼 1 image')).toBeInTheDocument();
+    expect(screen.getByText('1 image')).toBeInTheDocument();
     expect(screen.getByText('sent during the turn')).toHaveAttribute('data-tip', 'Claude takes it into account at its next step');
     expect(screen.getByText('from claude.ai')).toBeInTheDocument();
     unmount();
     render(UserMessage, { item: { ...item(false), images: 2 }, waiting: true });
-    expect(screen.getByText('🖼 2 images')).toBeInTheDocument();
+    expect(screen.getByText('2 images')).toBeInTheDocument();
     expect(screen.getByText('Waiting for the setup…')).toBeInTheDocument();
   });
 });

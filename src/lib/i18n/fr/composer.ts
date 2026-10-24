@@ -19,6 +19,9 @@ export default {
     bypassPermissions: { label: 'Bypass', title: 'Aucune demande de permission (à réserver aux environnements sûrs)' },
     autoUnavailableDetail: 'indisponible avec ce modèle',
     autoUnavailableTitle: "Le mode Auto n'est pas disponible avec ce modèle, d'après le Claude Code de ce compte",
+    /** A mode its harness lacks, greyed in its place (choice 17): `{harness}`, `{mode}`. */
+    missing: '{harness} n’a pas de mode {mode}.',
+    missingAuto: '{harness} n’a pas de mode Auto : rien ne décide à ta place.',
     bypassToast: 'Mode Bypass : {engine} agira sans aucune demande de permission.',
   },
 
@@ -42,6 +45,11 @@ export default {
   attach: {
     label: 'Joindre un fichier',
     title: 'Joindre un fichier (ou colle / glisse-le)',
+  },
+  /** Files dragged over the composer: the whole field takes them. */
+  drop: {
+    title: 'Dépose pour joindre à ton message',
+    detail: 'Images, PDF et textes partent dans le message ; le reste, par son chemin',
   },
 
   placeholder: {
@@ -89,21 +97,22 @@ export default {
     denied: 'Refusé',
     allowed: 'Autorisé',
     alwaysAllowed: 'Toujours autorisé',
-    /** Answered through the MCP server, not by the user in the window: `author` is an agent's name or « Claude (hors Escouade) ». */
-    allowedBy: 'Autorisé par {author} via Escouade',
-    deniedBy: 'Refusé par {author} via Escouade',
+    /** Answered through the MCP server, not by the user in the window: « par <author> », then « via Escouade ». */
+    by: 'par',
+    via: 'via Escouade',
     cancelled: 'Demande annulée',
   },
 
   /** The card of a question Claude asks, pending or answered. */
   question: {
     waiting: '{engine} attend ta réponse',
+    asked: '{engine} t’a posé une question',
     orWrite: 'ou réponds librement dans le champ ci-dessous',
     saidAnswer: 'Réponse dite : « {text} »',
     submit: 'Valider',
     unanswered: 'Question restée sans réponse',
-    /** Answered through the MCP server, not by the user in the window (see `permission.allowedBy`). */
-    answeredBy: 'Répondu par {author} via Escouade',
+    /** Answered through the MCP server, not by the user in the window (see `permission.by`). */
+    answered: 'Répondu',
     /** A form of an MCP server (Copilot: `elicitation`): its fields to fill. */
     form: 'Formulaire de {source}',
     formNoSource: 'Formulaire',

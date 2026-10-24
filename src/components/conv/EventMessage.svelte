@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from '../../lib/i18n';
   import { parseAgentMessage, parseTaskNotification, plainText } from '../../lib/events';
+  import Icon from '../Icon.svelte';
   import Markdown from './Markdown.svelte';
   import { tip } from '../../lib/tip';
 
@@ -41,35 +42,40 @@
 
 {#if message}
   <div class="event agent">
-    <div class="head"><span class="ico" aria-hidden="true">↩</span>{title}</div>
+    <div class="head"><Icon name="sub" size={14} />{title}</div>
     <Markdown text={message.report} />
   </div>
 {:else}
   <div class="event line" class:failed={task?.status === 'failed'}>
-    <span class="ico" aria-hidden="true">◷</span>
+    <span class="ico" aria-hidden="true"><Icon name={source === 'wake' ? 'restart' : 'clock'} size={14} /></span>
     <span class="what">{line.what}</span>
     {#if line.detail}<span class="detail" use:tip={{ text: line.detail, cut: true }}>{line.detail}</span>{/if}
   </div>
 {/if}
 
 <style>
-  .event {
-    margin-left: 34px;
-  }
+  /* A line of what the harness passed on by itself: an icon, what happened, its detail. */
   .line {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 8px;
+    min-width: 0;
+    color: var(--muted);
     font-size: 12px;
     line-height: 1.5;
-    color: var(--dim);
-    min-width: 0;
+  }
+  .ico {
+    flex: none;
+    display: flex;
+    color: var(--muted);
   }
   .line .what {
     flex: none;
-    color: var(--muted);
+    color: var(--soft);
+    font-weight: 550;
   }
-  .line.failed .what {
+  .line.failed .what,
+  .line.failed .ico {
     color: var(--del);
   }
   .detail {
@@ -78,23 +84,21 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* A subagent's or another session's message, in a card. */
   .agent {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 12px 16px;
-    border-radius: var(--r);
-    border: 1px solid var(--line);
-    border-left: 3px solid var(--accent);
-    background: var(--panel);
+    display: grid;
+    gap: 9px;
     min-width: 0;
+    padding: 12px 14px;
+    border-radius: 11px;
+    box-shadow: inset 0 0 0 1px var(--line);
   }
   .head {
     display: flex;
     align-items: center;
     gap: 8px;
+    color: var(--muted);
     font-size: 12px;
     font-weight: 600;
-    color: var(--muted);
   }
 </style>

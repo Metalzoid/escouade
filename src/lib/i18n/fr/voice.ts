@@ -11,6 +11,10 @@ export default {
   },
   panel: {
     starting: 'Ouverture du micro…',
+    /** Live transcription (ESC-136): the service, beside what it heard so far. */
+    live: '{service} · en direct',
+    /** The keys of the dictation, in the composer's band: `{key}` the shortcut, `{escape}` Escape. */
+    keys: '{key} pour finir · {escape} pour annuler',
     listening: 'À l’écoute',
     hint: 'Clique ou {key} pour finir · Échap pour annuler',
     holdHint: 'Relâche pour finir · Échap pour annuler',

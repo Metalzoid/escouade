@@ -129,26 +129,30 @@ describe('QuestionCard', () => {
 
   it('shows the recorded answer once answered', () => {
     render(QuestionCard, { item: item({ answers: { 'Quelle base de données ?': 'PostgreSQL' } }), agentId: 'a1', pending: false });
-    expect(screen.getByText('→ PostgreSQL')).toBeInTheDocument();
+    // Its choices, the one taken marked (2.0 design).
+    expect(screen.getByText('PostgreSQL')).toHaveClass('opt-r', 'picked');
+    expect(screen.getByText('SQLite')).not.toHaveClass('picked');
+    expect(screen.getByText('Claude t’a posé une question')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'SQLite' })).not.toBeInTheDocument();
   });
 
   it('says who answered when a client of the MCP server did, and nothing of an author when the user did', () => {
     const answers = { 'Quelle base de données ?': 'PostgreSQL' };
-    const { unmount } = render(QuestionCard, { item: item({ answers, by: 'agent-2' }), agentId: 'a1', pending: false });
-    expect(screen.getByText('→ PostgreSQL')).toBeInTheDocument();
-    expect(screen.getByText('Répondu par agent-2 via Escouade')).toBeInTheDocument();
+    const { container, unmount } = render(QuestionCard, { item: item({ answers, by: 'agent-2' }), agentId: 'a1', pending: false });
+    expect(screen.getByText('PostgreSQL')).toHaveClass('picked');
+    expect(container.querySelector('.by')).toHaveTextContent(/^Répondu par agent-2 via Escouade$/);
+    expect(screen.getByText('via Escouade')).toHaveClass('via');
     unmount();
     render(QuestionCard, { item: item({ answers }), agentId: 'a1', pending: false });
-    expect(screen.getByText('→ PostgreSQL')).toBeInTheDocument();
+    expect(screen.getByText('PostgreSQL')).toHaveClass('picked');
     expect(screen.queryByText(/via Escouade/)).not.toBeInTheDocument();
   });
 
   it('says in English who answered through the MCP server', () => {
     setLang('en');
     const answers = { 'Quelle base de données ?': 'PostgreSQL' };
-    render(QuestionCard, { item: item({ answers, by: 'Claude (outside Escouade)' }), agentId: 'a1', pending: false });
-    expect(screen.getByText('Answered by Claude (outside Escouade) through Escouade')).toBeInTheDocument();
+    const { container } = render(QuestionCard, { item: item({ answers, by: 'Claude (outside Escouade)' }), agentId: 'a1', pending: false });
+    expect(container.querySelector('.by')).toHaveTextContent(/^Answered by Claude \(outside Escouade\) via Escouade$/);
   });
 
   it('says when the question was never answered', () => {
@@ -250,8 +254,8 @@ describe('QuestionCard keyboard', () => {
     await alt('3');
     await alt('1'); // unticked again
     await alt('2');
-    expect(screen.getByRole('button', { name: /Vitest/ })).toHaveTextContent('☑');
-    expect(screen.getByRole('button', { name: /ESLint/ })).toHaveTextContent('☐');
+    expect(screen.getByRole('button', { name: /Vitest/ }).querySelector('[data-icon="check-c"]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /ESLint/ }).querySelector('[data-icon="circle"]')).not.toBeNull();
     expect(backend.called('answer_question')).toHaveLength(0);
     await ctrlEnter();
     expect(backend.called('answer_question')[0].args.answers).toEqual({ 'Outils ?': 'Vitest, Prettier' });

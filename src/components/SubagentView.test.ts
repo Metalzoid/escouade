@@ -93,7 +93,9 @@ describe('SubagentView', () => {
   it('heads its conversation with the way back to the agent, its type, model, prompt, tokens and duration', async () => {
     const { a } = setup({}, thread());
     const crumbs = screen.getByRole('navigation', { name: 'Fil d’Ariane' });
-    expect(crumbs).toHaveTextContent(/refacto-auth\s*›\s*Chercher la cause/);
+    expect(crumbs).toHaveTextContent(/^refacto-auth\s*Chercher la cause$/);
+    // Its steps are set apart by a chevron, drawn.
+    expect(crumbs.querySelectorAll('.sep [data-icon="right"]')).toHaveLength(1);
     expect(within(crumbs).getByText('Chercher la cause')).toHaveAttribute('aria-current', 'page');
     const facts = await screen.findByRole('group', { name: 'Chercher la cause' });
     expect(facts).toHaveTextContent(/Type\s*Explore/);
@@ -184,7 +186,7 @@ describe('SubagentView', () => {
       'c2',
     );
     const crumbs = screen.getByRole('navigation', { name: 'Fil d’Ariane' });
-    await waitFor(() => expect(crumbs).toHaveTextContent(/refacto-auth\s*›\s*Chercher la cause\s*›\s*Petit/));
+    await waitFor(() => expect(crumbs).toHaveTextContent(/refacto-auth\s*Chercher la cause\s*Petit/));
     await userEvent.click(within(crumbs).getByRole('button', { name: 'Chercher la cause' }));
     expect(app.subView[a.id]).toBe('c1');
   });

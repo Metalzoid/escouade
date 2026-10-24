@@ -82,7 +82,7 @@ Click in the message field, describe the task (“Describe the task to give to C
 - Type `@` followed by a bit of a file name to pick a file of the project, or `/` to pick a command.
 - Paste or drop any file (an image, a PDF, a text file, but also an archive or a spreadsheet) into the field, or click the paperclip, to attach it to the message.
 
-As soon as you send, the agent’s status changes to “Running” and the conversation says “Claude is working…”. Its tool calls show up as compact rows that you can unfold. You can write to it while it works: it takes your message into account at its next step. To stop it, press `Esc` in the message field or click “■ Stop”.
+As soon as you send, the agent’s status changes to “Running” and the conversation says “Claude is working…”. Its tool calls show up as compact rows that you can unfold. You can write to it while it works: it takes your message into account at its next step. To stop it, press `Esc` in the message field or click “Stop”.
 
 ## Answer a question or a permission request
 

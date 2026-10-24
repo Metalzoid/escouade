@@ -13,6 +13,8 @@
   import { patchLines } from '../../lib/diff';
   import Markdown from './Markdown.svelte';
   import PatchView from './PatchView.svelte';
+  import Icon from '../Icon.svelte';
+  import Via from './Via.svelte';
 
   // `current`: several requests can wait at once, and the keyboard answers the first (as the message field does).
   let {
@@ -37,13 +39,12 @@
   // A tool of Escouade's own server creates tickets, starts agents…: all it is given is read here, not a summary.
   const escouade = $derived(isEscouadeTool(item.toolName));
   const args = $derived(escouade ? escouadeArgs(item.input) : []);
-  // Answered through the MCP server and not by the user in the window: the line says by whom.
+  // What was decided; answered through the MCP server and not by the user in the window, the line says by whom too.
   const verdict = $derived.by(() => {
-    const author = item.by;
-    if (item.decision === 'deny') return author ? t('composer.permission.deniedBy', { author }) : t('composer.permission.denied');
+    if (item.decision === 'deny') return t('composer.permission.denied');
     if (item.decision === 'always')
       return item.alwaysScope === 'session' ? t('composer.permission.sessionAllowed') : t('composer.permission.alwaysAllowed');
-    return author ? t('composer.permission.allowedBy', { author }) : t('composer.permission.allowed');
+    return t('composer.permission.allowed');
   });
 
   async function decide(decision: 'allow' | 'always' | 'deny') {
@@ -72,15 +73,12 @@
 </script>
 
 {#if pending}
-  <div class="card pending" data-testid="permission-pending" role="group" aria-label={title} bind:this={card}>
-    <div class="title">
-      <span class="pulse" style="width:8px;height:8px"></span>
-      {title}
-    </div>
+  <div class="req-card pending" data-testid="permission-pending" role="group" aria-label={title} bind:this={card}>
+    <div class="rt"><Icon name="shield" size={14} />{title}</div>
     {#if isPlan && typeof item.input.plan === 'string'}
       <div class="plan"><Markdown text={item.input.plan} /></div>
     {:else if escouade}
-      <div class="what"><span class="badge">{toolLabel(item.toolName)}</span></div>
+      <div class="cmdl"><span class="badge">{toolLabel(item.toolName)}</span></div>
       {#if args.length}
         <!-- What is read is what it gets: an invisible or direction character is spelled out, not drawn. -->
         <dl class="args" role="group" aria-label={t('mcp.permission.args')}>
@@ -96,103 +94,123 @@
       {/if}
       {#if item.description}<div class="desc">{item.description}</div>{/if}
     {:else}
-      <div class="what">
+      <div class="cmdl">
         <span class="badge">{toolLabel(item.toolName)}</span>
         <span class="arg mono">{item.title || summary}</span>
       </div>
+      <!-- What « Toujours autoriser » keeps, when it is not the request itself (OpenCode's pattern), is said here. -->
       {#if item.description}<div class="desc">{item.description}</div>{/if}
-      {#if item.patch?.length}<PatchView lines={patchLines(item.patch)} />{/if}
+      {#if item.patch?.length}<div class="frame"><PatchView lines={patchLines(item.patch)} /></div>{/if}
     {/if}
-    {#if item.reason}<div class="reason">{item.reason}</div>{/if}
-    <div class="opts">
+    {#if item.reason}<div class="desc">{item.reason}</div>{/if}
+    <div class="row-btns">
       <button
-        class="opt"
+        class="btn"
         class:primary={!item.defaultNo}
         disabled={busy}
         aria-keyshortcuts={keys ? ariaEnter() : undefined}
         onclick={() => decide('allow')}
       >
         {isPlan ? t('composer.permission.approvePlan') : t('composer.permission.allow')}
-        {#if keys}<kbd class="kbd" aria-hidden="true">{keyLabel('Ctrl+Enter')}</kbd>{/if}
+        {#if keys}<kbd aria-hidden="true">{keyLabel('Ctrl+Enter')}</kbd>{/if}
       </button>
       {#if item.canAlways}
-        <button class="opt" disabled={busy} aria-keyshortcuts={keys ? ariaEnter(true) : undefined} onclick={() => decide('always')}>
+        <button class="btn" disabled={busy} aria-keyshortcuts={keys ? ariaEnter(true) : undefined} onclick={() => decide('always')}>
           {isPlan
             ? t('composer.permission.approvePlanAndEdits')
             : item.alwaysScope === 'session'
               ? t('composer.permission.forSession')
               : t('composer.permission.always')}
-          {#if keys}<kbd class="kbd" aria-hidden="true">{keyLabel('Ctrl+Shift+Enter')}</kbd>{/if}
+          {#if keys}<kbd aria-hidden="true">{keyLabel('Ctrl+Shift+Enter')}</kbd>{/if}
         </button>
       {/if}
-      <button class="opt" class:primary={item.defaultNo} disabled={busy} onclick={() => decide('deny')}
+      <button class="btn" class:primary={item.defaultNo} disabled={busy} onclick={() => decide('deny')}
         >{isPlan ? t('composer.permission.keepPlanning') : t('composer.permission.deny')}</button
       >
     </div>
     <span class="hint">{t('composer.permission.denyHint')}</span>
   </div>
 {:else}
-  <div class="line mono" class:denied={item.decision === 'deny'}>
-    {#if item.decision === 'deny'}✕ {verdict}{:else if item.decision}✓ {verdict}{:else}· {t('composer.permission.cancelled')}{/if}
-    · {toolLabel(item.toolName)}
-    {isPlan ? '' : summary}
-    {#if item.message}<span class="msg">— {item.message}</span>{/if}
+  <div class="req-card done">
+    {#if !isPlan}
+      <div class="cmdl"><span class="badge">{toolLabel(item.toolName)}</span><span class="arg mono">{summary}</span></div>
+    {/if}
+    <div class="by line" class:denied={item.decision === 'deny'}>
+      <Icon name={item.decision === 'deny' ? 'close' : item.decision ? 'check' : 'circle'} size={14} />
+      <span
+        ><b class="verdict">{item.decision ? verdict : t('composer.permission.cancelled')}</b>{#if isPlan}
+          · {toolLabel(item.toolName)}{/if}</span
+      >
+      {#if item.by}<Via author={item.by} />{/if}
+      {#if item.message}<span class="msg">— {item.message}</span>{/if}
+    </div>
   </div>
 {/if}
 
 <style>
-  .card {
-    margin-left: 34px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 16px 18px;
-    border-radius: var(--r);
-    border: 1px solid var(--wait);
-    background: var(--wait-soft);
+  /* A request of the agent (2.0 design): amber while it waits for the user, a hairline once answered. */
+  .req-card {
+    display: grid;
+    gap: 9px;
+    min-width: 0;
+    padding: 12px 14px;
+    border-radius: 11px;
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .req-card.pending {
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
     animation: ccFadeIn 0.2s ease-out;
   }
-  .title {
+  .rt {
     display: flex;
     align-items: center;
-    gap: 9px;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--wait);
-    letter-spacing: 0.02em;
+    gap: 8px;
+    font-weight: 600;
   }
-  .what {
+  .rt :global(.icon) {
+    color: var(--wait);
+  }
+  .cmdl {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     min-width: 0;
   }
   .badge {
-    padding: 2px 6px;
-    border-radius: 3px;
-    background: var(--elev2);
-    font-family: var(--mono);
-    font-weight: 600;
-    font-size: 11px;
     flex: none;
+    color: var(--muted);
+    font-size: 12px;
   }
   .arg {
-    font-size: 12.5px;
+    min-width: 0;
+    color: var(--soft);
+    font-size: 12px;
     overflow-wrap: anywhere;
   }
-  .desc,
-  .reason {
-    font-size: 13px;
+  .done .arg {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .desc {
     color: var(--muted);
+    font-size: 12px;
     line-height: 1.5;
+    white-space: pre-line;
+  }
+  .frame,
+  .plan,
+  .args {
+    overflow: hidden;
+    border-radius: 10px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--line);
   }
   .plan {
     max-height: 420px;
     overflow: auto;
     padding: 12px 14px;
-    border-radius: var(--r-sm);
-    background: var(--panel);
-    border: 1px solid var(--line);
   }
   /* One argument per line, its name before it; a value of several lines keeps them. */
   .args {
@@ -203,9 +221,7 @@
     max-height: 420px;
     overflow: auto;
     padding: 10px 14px;
-    border-radius: var(--r-sm);
-    background: var(--panel);
-    border: 1px solid var(--line);
+    color: var(--code-fg);
     font-size: 12px;
     line-height: 1.5;
   }
@@ -213,7 +229,7 @@
     display: contents;
   }
   .args dt {
-    color: var(--muted);
+    color: var(--code-dim);
   }
   .args dd {
     margin: 0;
@@ -223,55 +239,46 @@
   /* Under its value, in the value's column. */
   .args dd.cut {
     grid-column: 2;
-    color: var(--wait);
+    color: var(--warn-ink);
     font-size: 11.5px;
     white-space: normal;
   }
-  .opts {
+  .row-btns {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-  }
-  .opt {
-    height: 32px;
-    padding: 0 14px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line2);
-    background: transparent;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .opt:hover:not(:disabled) {
-    border-color: var(--wait);
-  }
-  .opt.primary {
-    background: var(--wait);
-    border-color: var(--wait);
-    color: #2a1f05;
-  }
-  /* The shortcut, in the button's own colors: the amber of the main button is no place for the dim gray. */
-  .opt .kbd {
-    margin-left: 8px;
-    color: inherit;
-    opacity: 0.7;
+    gap: 6px;
   }
   .hint {
-    font-size: 11.5px;
-    color: var(--dim);
-  }
-  .line {
-    margin-left: 34px;
-    font-size: 11.5px;
     color: var(--muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font-size: 11.5px;
   }
-  .line.denied {
+  .by {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+    min-width: 0;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .by :global(.icon) {
+    color: var(--add);
+  }
+  .by.denied :global(.icon),
+  .by.denied .verdict {
     color: var(--del);
   }
+  .verdict {
+    color: var(--soft);
+    font-weight: 550;
+  }
   .msg {
-    color: var(--dim);
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .req-card.pending {
+      animation: none;
+    }
   }
 </style>

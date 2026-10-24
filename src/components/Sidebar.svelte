@@ -4,7 +4,7 @@
 </script>
 
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { keyLabel } from '../lib/platform';
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
@@ -145,6 +145,21 @@
     if (app.newAgentMenu === menuAsked) return;
     menuAsked = app.newAgentMenu;
     if (!app.boardOn) newAgentMenu();
+  });
+
+  // « … » of an agent's header (Conversation): its menu, the one of its card, where the button is; the keyboard goes in.
+  let agentMenuSeq = app.agentMenuAsk?.seq ?? 0;
+  $effect(() => {
+    const ask = app.agentMenuAsk;
+    if (!ask || ask.seq === agentMenuSeq) return;
+    agentMenuSeq = ask.seq;
+    const a = app.agents[ask.id];
+    if (!a) return;
+    const at = { clientX: ask.x, clientY: ask.y, preventDefault() {}, stopPropagation() {} } as MouseEvent;
+    untrack(() => {
+      agentMenu(at, a);
+      if (menu.open) menu.open.keyboard = true;
+    });
   });
 
   /** A permission's decisions, as its card in the conversation names them. */

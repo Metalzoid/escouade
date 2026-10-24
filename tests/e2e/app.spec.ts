@@ -38,7 +38,8 @@ test('a question from Claude is signalled and answered in one click', async ({ a
   await card.getByRole('button', { name: 'SQLite' }).click();
   await expect(page.getByText('Choix retenu : SQLite')).toBeVisible();
   await expect(page.locator('footer')).toContainText('0 en attente');
-  await expect(page.getByText('→ SQLite')).toBeVisible();
+  // Answered: its choices, the one taken marked.
+  await expect(page.locator('.opt-r.picked', { hasText: 'SQLite' })).toBeVisible();
 });
 
 test('a permission can be refused with an explanation typed in the composer', async ({ app }) => {
@@ -51,7 +52,9 @@ test('a permission can be refused with an explanation typed in the composer', as
   await page.waitForTimeout(600);
   await send(page, 'utilise npm run clean');
   await expect(page.getByText('Compris : utilise npm run clean')).toBeVisible();
-  await expect(page.getByText('✕ Refusé · Bash rm -rf build')).toBeVisible();
+  const refused = page.locator('.req-card.done', { hasText: 'rm -rf build' });
+  await expect(refused.locator('.by')).toContainText('Refusé');
+  await expect(refused.locator('.cmdl .badge')).toHaveText('Bash');
 });
 
 test('uncommitted changes show up beside the project’s name, in the files panel and the diff', async ({ app }) => {
@@ -206,7 +209,7 @@ test('a subagent’s report and a background task are shown as such, not as the 
   await expect(page.locator('.bubble')).toHaveCount(1);
   await expect(page.locator('.bubble')).toContainText('lance un sous-agent');
   // The context, out of the window the CLI told.
-  await expect(page.locator('header.head .m', { hasText: 'Contexte' })).toContainText('/ 200 k');
+  await expect(page.locator('header.head .fig', { hasText: 'Contexte' })).toContainText('/ 200 k');
 });
 
 test('a local command shows as typed with its output under it, and the wake-up of a loop as a wake-up, no tag shown (ESC-154)', async ({
@@ -308,7 +311,7 @@ test('an agent in remote control shows what is sent to it from claude.ai', async
   await page.getByRole('menuitem', { name: /Activer le remote control/ }).click();
   await expect(card.locator('[data-tip*="Remote control : connecté"]')).toBeVisible();
   // The fake CLI then plays a message sent from the phone, and Claude answers it.
-  await expect(page.locator('.bubble', { hasText: 'Message depuis le téléphone' })).toContainText('depuis claude.ai');
+  await expect(page.locator('.msg', { hasText: 'Message depuis le téléphone' })).toContainText('depuis claude.ai');
   await expect(page.getByText('Bonjour, tu as dit : Message depuis le téléphone')).toBeVisible();
   await card.click({ button: 'right' });
   await expect(page.getByRole('menuitem', { name: 'Ouvrir sur claude.ai' })).toBeVisible();
@@ -572,8 +575,10 @@ test('a terminal opens in the worktree of an agent from the + of the terminals a
   await page.getByRole('menuitem', { name: 'agent-1', exact: true }).click();
   await write('e2e-plus.txt');
 
+  // From « … » of the agent's header: its menu, « Ouvrir un terminal » in its worktree.
   await page.locator('.card').first().click();
-  await page.getByRole('button', { name: 'Terminal', exact: true }).click();
+  await page.getByRole('button', { name: 'Actions de l’agent' }).click();
+  await page.getByRole('menuitem', { name: 'Ouvrir un terminal' }).click();
   await write('e2e-header.txt');
 });
 

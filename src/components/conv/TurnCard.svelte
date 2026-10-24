@@ -11,6 +11,7 @@
   import type { FileEdit } from '../../lib/tools';
   import type { Agent, EngineId, TurnItem } from '../../lib/types';
   import { tip } from '../../lib/tip';
+  import Icon from '../Icon.svelte';
 
   // `edits`: the files this turn edited, recapped once the agent is done. `latest`: the conversation's
   // latest turn (notices may follow it). `marked`: the conversation went from one harness to another, each turn says its own.
@@ -76,21 +77,21 @@
 </script>
 
 {#if signIn}
-  <div class="card signin" data-testid="turn-sign-in">
-    <div class="title warn">
-      <span class="dot" style="width:8px;height:8px;background:var(--warn-ink)"></span>{t('conv.turn.signInTitle')}
-    </div>
+  <!-- Stopped by a sign-in Claude Code could not refresh (ESC-162): an amber card, as the quota's. -->
+  <div class="card limit" data-testid="turn-sign-in">
+    <div class="lt"><Icon name="user" size={14} />{t('conv.turn.signInTitle')}</div>
     <p class="say">{t('conv.turn.signIn', { account: signInName })}</p>
     {#if item.error}<pre class="err">{item.error}</pre>{/if}
-    <div class="resume">
-      <button class="btn small" onclick={() => (app.modal = { kind: 'account', accountId: signIn.account })}
+    <div class="row-btns">
+      <button class="btn primary" onclick={() => (app.modal = { kind: 'account', accountId: signIn.account })}
         >{t('conv.turn.signInAction')}</button
       >
     </div>
   </div>
 {:else if item.isError && !item.signIn}
-  <div class="card error">
-    <div class="title"><span class="dot" style="width:8px;height:8px;background:var(--del)"></span>{t('conv.turn.failed')}</div>
+  <!-- Stopped by the quota (an amber card, with where it goes on), or failed (a red one). -->
+  <div class="card error" class:limit={stopped}>
+    <div class="lt"><Icon name={stopped ? 'clock' : 'close'} size={14} />{t('conv.turn.failed')}</div>
     {#if resumeFailed}
       <!-- The sentence closes with its own period: an error that ends with one does not make two. -->
       <pre class="err">{t('accounts.resume.failed', {
@@ -98,36 +99,44 @@
           error: item.error?.trimEnd().replace(/\.+$/, '') || '—',
         })}</pre>
       {#if before?.active}
-        <div class="resume">
-          <button class="btn small" onclick={() => app.run(api.backToPreviousAccount(agent.id))}
+        <div class="row-btns">
+          <button class="btn" onclick={() => app.run(api.backToPreviousAccount(agent.id))}
             >{t('accounts.resume.back', { account: accountName(before) })}</button
           >
         </div>
       {/if}
     {:else if item.error}<pre class="err">{item.error}</pre>{/if}
     {#if (latest && agent.resumeAt) || targets.length || engines.length}
-      <div class="resume">
+      <div class="row-btns">
         {#if latest && agent.resumeAt}
-          <span>{t('conv.turn.resumeAt', { when: fWhen(agent.resumeAt, app.now) })}</span>
-          <button class="btn small" onclick={() => app.run(api.cancelResume(agent.id))}>{t('conv.turn.cancelResume')}</button>
+          <span class="when">{t('conv.turn.resumeAt', { when: fWhen(agent.resumeAt, app.now) })}</span>
+          <button class="btn" onclick={() => app.run(api.cancelResume(agent.id))}>{t('conv.turn.cancelResume')}</button>
         {/if}
         {#if engines.length}
           <span class="pair">
-            <button class="btn small" onclick={() => continueOn(engines[0])}
+            <button class="btn primary" onclick={() => continueOn(engines[0])}
               >{t('handover.continueOn', { harness: engineName(engines[0]) })}</button
             >
             {#if engines.length > 1}
-              <button class="btn small" aria-haspopup="menu" aria-label={t('handover.another')} onclick={moreEngines}>▾</button>
+              <button class="btn primary icon" aria-haspopup="menu" aria-label={t('handover.another')} onclick={moreEngines}
+                ><Icon name="down" size={14} /></button
+              >
             {/if}
           </span>
         {/if}
         {#if targets.length}
           <span class="pair">
-            <button class="btn small" onclick={() => resumeOn(targets[0].id)}
+            <button class="btn" class:primary={!engines.length} onclick={() => resumeOn(targets[0].id)}
               >{t('accounts.resume.on', { account: accountName(targets[0]) })}</button
             >
             {#if targets.length > 1}
-              <button class="btn small" aria-haspopup="menu" aria-label={t('accounts.resume.another')} onclick={more}>▾</button>
+              <button
+                class="btn icon"
+                class:primary={!engines.length}
+                aria-haspopup="menu"
+                aria-label={t('accounts.resume.another')}
+                onclick={more}><Icon name="down" size={14} /></button
+              >
             {/if}
           </span>
         {/if}
@@ -137,18 +146,18 @@
   </div>
 {:else if big}
   <div class="card done" data-testid="turn-done">
-    <div class="title ok"><span class="check">✓</span>{t('conv.turn.done')}</div>
-    <div class="stats mono">
+    <div class="lt ok"><Icon name="check-c" size={14} />{t('conv.turn.done')}</div>
+    <div class="stats">
       <span>{fDur(item.durationMs ?? 0)}</span><span>{t('conv.turn.tokens', { tokens: fTok(item.tokens) })}</span><span
         use:tip={estimated ? t('stats.cost.estimatedHint') : undefined}>{cost}</span
       ><span>{t('conv.turn.filesEdited', { count: edits.length })}</span>{#if mark}<span>{mark}</span>{/if}
     </div>
     {#if edits.length}
-      <ul class="recap mono" aria-label={t('conv.turn.editedFiles')}>
+      <ul class="recap" aria-label={t('conv.turn.editedFiles')}>
         {#each edits as e (e.path)}
           <li>
-            <button
-              class="path link"
+            <Icon name="edit" size={14} /><button
+              class="path link mono"
               use:tip={t('common.openInEditor')}
               onclick={() =>
                 app.openEditor({
@@ -165,100 +174,89 @@
     {@render backRow()}
   </div>
 {:else}
-  <div class="sep mono">
-    <span class="line"></span>
-    {item.interrupted ? t('conv.turn.interrupted') : fDur(item.durationMs ?? 0)} · {t('conv.turn.tokens', { tokens: fTok(item.tokens) })} · {cost}{mark
-      ? ` · ${mark}`
-      : ''}
-    <span class="line"></span>
+  <div class="sep">
+    <span class="sep-text"
+      >{item.interrupted ? t('conv.turn.interrupted') : fDur(item.durationMs ?? 0)} · {t('conv.turn.tokens', { tokens: fTok(item.tokens) })} ·
+      {cost}{mark ? ` · ${mark}` : ''}</span
+    >
   </div>
   {#if back}<div class="back-alone">{@render backRow()}</div>{/if}
 {/if}
 
 {#snippet backRow()}
   {#if back}
-    <div class="resume">
-      <button class="btn small" use:tip={t('handover.backHint', { harness: engineName(back) })} onclick={() => continueOn(back!)}
-        >{t('handover.back', { harness: engineName(back) })}</button
+    <div class="row-btns">
+      <button class="btn" use:tip={t('handover.backHint', { harness: engineName(back) })} onclick={() => continueOn(back!)}
+        ><Icon name="swap" size={14} />{t('handover.back', { harness: engineName(back) })}</button
       >
     </div>
   {/if}
 {/snippet}
 
 <style>
-  .back-alone {
-    margin: 8px 0 0 34px;
-  }
+  /* A turn's end: a quiet line, or a card for what asks for a look (done, stopped, failed). */
   .card {
-    margin-left: 34px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 16px 18px;
-    border-radius: var(--r);
-    border: 1px solid var(--line2);
-    background: var(--panel);
+    display: grid;
+    gap: 10px;
+    margin: 4px 0;
+    padding: 13px 14px;
+    border-radius: 11px;
+    box-shadow: inset 0 0 0 1px var(--line);
     animation: ccFadeIn 0.2s ease-out;
   }
   .card.error {
-    border-color: color-mix(in oklch, var(--del) 55%, transparent);
+    background: oklch(from var(--del) l c h / 0.06);
+    box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.35);
   }
-  .card.signin {
-    border-color: color-mix(in oklch, var(--warn-ink) 55%, transparent);
+  /* The quota spent, the sign-in lost: amber, as what waits for the user. */
+  .card.limit {
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
   }
-  .title.warn {
-    color: var(--warn-ink);
+  .lt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+  }
+  .lt :global(.icon) {
+    color: var(--del);
+  }
+  .limit .lt :global(.icon) {
+    color: var(--wait);
+  }
+  .lt.ok :global(.icon) {
+    color: var(--add);
   }
   .say {
     margin: 0;
-    font-size: 13px;
+    color: var(--soft);
+    font-size: 12.5px;
     line-height: 1.5;
-    color: var(--text);
-  }
-  .title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    color: var(--del);
-  }
-  .title.ok {
-    color: var(--ok);
-  }
-  .check {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: var(--ok);
-    color: var(--bg);
-    font-size: 9px;
-    font-weight: 800;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
   }
   .stats {
     display: flex;
     flex-wrap: wrap;
-    gap: 22px;
-    font-size: 12px;
+    gap: 6px 18px;
     color: var(--muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
   }
   .recap {
     margin: 0;
     padding: 0;
     list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    display: grid;
+    gap: 2px;
     font-size: 12px;
   }
   .recap li {
     display: flex;
-    gap: 10px;
+    align-items: center;
+    gap: 8px;
     min-width: 0;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
   }
   .path {
     flex: 1;
@@ -266,18 +264,19 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--soft);
   }
   .link {
     border: none;
     background: none;
     padding: 0;
     font: inherit;
-    color: inherit;
+    font-family: var(--mono);
     text-align: left;
     cursor: pointer;
   }
   .link:hover {
-    color: var(--accent);
+    color: var(--p-ink);
     text-decoration: underline;
   }
   .add {
@@ -286,39 +285,57 @@
   .del {
     color: var(--del);
   }
-  .resume {
+  .row-btns {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 12px;
+    gap: 6px;
     font-size: 12.5px;
-    color: var(--text);
+  }
+  .when {
+    margin-right: 6px;
+    color: var(--soft);
   }
   .pair {
     display: inline-flex;
     gap: 2px;
+  }
+  .btn.icon {
+    width: 30px;
+    padding: 0;
+    justify-content: center;
   }
   .err {
     margin: 0;
     font-family: var(--mono);
     font-size: 12px;
     white-space: pre-wrap;
-    color: var(--muted);
+    color: var(--soft);
     max-height: 200px;
     overflow: auto;
   }
   .sep {
-    margin-left: 34px;
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 10.5px;
-    color: var(--dim);
+    color: var(--muted);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
-  .line {
+  .sep::before,
+  .sep::after {
+    content: '';
     flex: 1;
     height: 1px;
     background: var(--line);
+  }
+  .back-alone {
+    margin-top: 8px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card {
+      animation: none;
+    }
   }
 </style>

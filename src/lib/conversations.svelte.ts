@@ -1,7 +1,7 @@
 // Per-agent conversation items, kept in sync with the backend through append/patch/delta ops.
 
 import { api } from './ipc';
-import type { ConvItem, ConvOp, UserItem } from './types';
+import type { ConvItem, ConvOp, UserItem, EngineId } from './types';
 
 /** Where the reader left a conversation, to put the view back there when the agent is opened again. */
 export interface ReadingPlace {
@@ -30,6 +30,8 @@ export class Conversation {
   error = $state<string | null>(null);
   /** Messages sent while the worktree is being prepared: the backend records them once it is over, they show until then. */
   waiting = $state<UserItem[]>([]);
+  /** A message refused for want of an account of the agent's harness (ESC-128): said in a card until one is added (choice 19). */
+  noAccount = $state<{ engine: EngineId; text: string } | null>(null);
   /** Not reactive: only read when the view opens. Goes with the conversation, which goes with its agent. */
   place: ReadingPlace | null = null;
   /**

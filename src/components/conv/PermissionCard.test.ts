@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/svelte';
+import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../../lib/i18n';
@@ -102,31 +102,33 @@ describe('PermissionCard', () => {
 
   it('says who answered when a client of the MCP server did, and nothing of an author when the user did', () => {
     const answered = (over: Partial<PermissionItem>) => ({ item: item(over), agentId: 'a1', pending: false, cwd: 'C:\\code' });
-    const { unmount } = render(PermissionCard, answered({ decision: 'allow', by: 'agent-2' }));
-    expect(screen.getByText(/✓ Autorisé par agent-2 via Escouade/)).toBeInTheDocument();
+    const { container, unmount } = render(PermissionCard, answered({ decision: 'allow', by: 'agent-2' }));
+    const by = container.querySelector('.by') as HTMLElement;
+    expect(by).toHaveTextContent(/^Autorisé par agent-2 via Escouade$/);
+    expect(by.querySelector('.who b')).toHaveTextContent('agent-2');
+    expect(within(by).getByText('via Escouade')).toHaveClass('via');
+    expect(by.querySelector('[data-icon="check"]')).not.toBeNull();
     unmount();
-    const { unmount: refused } = render(
-      PermissionCard,
-      answered({ decision: 'deny', by: 'Claude (hors Escouade)', message: 'utilise npm run clean' }),
-    );
-    const line = screen.getByText(/✕ Refusé par Claude \(hors Escouade\) via Escouade/);
+    const refused = render(PermissionCard, answered({ decision: 'deny', by: 'Claude (hors Escouade)', message: 'utilise npm run clean' }));
+    const line = refused.container.querySelector('.by') as HTMLElement;
+    expect(line).toHaveTextContent(/^Refusé par Claude \(hors Escouade\) via Escouade — utilise npm run clean$/);
     expect(line).toHaveClass('denied');
-    expect(line).toHaveTextContent(/utilise npm run clean/);
-    refused();
+    expect(line.querySelector('[data-icon="close"]')).not.toBeNull();
+    refused.unmount();
     // The user's own answer, in the window: no author on the line.
     render(PermissionCard, answered({ decision: 'allow' }));
-    expect(screen.getByText(/✓ Autorisé/)).toBeInTheDocument();
+    expect(screen.getByText('Autorisé')).toBeInTheDocument();
     expect(screen.queryByText(/via Escouade/)).not.toBeInTheDocument();
   });
 
   it('says in English who answered through the MCP server', () => {
     setLang('en');
     const answered = (over: Partial<PermissionItem>) => ({ item: item(over), agentId: 'a1', pending: false, cwd: 'C:\\code' });
-    const { unmount } = render(PermissionCard, answered({ decision: 'allow', by: 'agent-2' }));
-    expect(screen.getByText(/✓ Allowed by agent-2 through Escouade/)).toBeInTheDocument();
+    const { container, unmount } = render(PermissionCard, answered({ decision: 'allow', by: 'agent-2' }));
+    expect(container.querySelector('.by')).toHaveTextContent(/^Allowed by agent-2 via Escouade$/);
     unmount();
-    render(PermissionCard, answered({ decision: 'deny', by: 'Claude (outside Escouade)' }));
-    expect(screen.getByText(/✕ Denied by Claude \(outside Escouade\) through Escouade/)).toBeInTheDocument();
+    const denied = render(PermissionCard, answered({ decision: 'deny', by: 'Claude (outside Escouade)' }));
+    expect(denied.container.querySelector('.by')).toHaveTextContent(/^Denied by Claude \(outside Escouade\) via Escouade$/);
   });
 
   it('makes the refusal its main button when Claude Code would refuse it by default', () => {
@@ -231,13 +233,14 @@ describe('PermissionCard of a tool of Escouade', () => {
   });
 
   it('sums up its decision with the tool in words and what it acted on', () => {
-    render(PermissionCard, {
+    const { container } = render(PermissionCard, {
       item: escouade({ project: 'demo', title: 'Corriger la connexion' }, { decision: 'allow' }),
       agentId: 'a1',
       pending: false,
       cwd: 'C:\\code',
     });
-    expect(screen.getByText(/Escouade · Créer un ticket/)).toHaveTextContent('Corriger la connexion');
+    expect(container.querySelector('.cmdl .badge')).toHaveTextContent('Escouade · Créer un ticket');
+    expect(container.querySelector('.cmdl')).toHaveTextContent('Corriger la connexion');
   });
 
   it('reads in English', () => {
@@ -510,10 +513,10 @@ describe('PermissionCard in English', () => {
     setLang('en');
     const answered = (over: Partial<PermissionItem>) => ({ item: item(over), agentId: 'a1', pending: false, cwd: 'C:\\code' });
     const { unmount } = render(PermissionCard, answered({ decision: 'deny', message: 'use npm run clean' }));
-    expect(screen.getByText(/✕ Denied/)).toBeInTheDocument();
+    expect(screen.getByText('Denied')).toBeInTheDocument();
     unmount();
     const { unmount: next } = render(PermissionCard, answered({ decision: 'always' }));
-    expect(screen.getByText(/✓ Always allowed/)).toBeInTheDocument();
+    expect(screen.getByText('Always allowed')).toBeInTheDocument();
     next();
     render(PermissionCard, answered({ decision: null }));
     expect(screen.getByText(/Request canceled/)).toBeInTheDocument();

@@ -13,7 +13,7 @@
     openPr,
     openPrOf,
     ownBranch,
-    prGlyph,
+    prIcon,
     prTip,
     prTone,
     prWord,
@@ -22,18 +22,17 @@
     stateWord,
   } from '../lib/prs';
   import { conversationOf, type ReadingPlace } from '../lib/conversations.svelte';
+  import { accountsOf } from '../lib/accounts';
   import { bgCount } from '../lib/bgtasks';
   import { splitEscouade } from '../lib/escouade';
   import { fDur, fInt, fNum, fTok } from '../lib/format';
-  import { modelLabel } from '../lib/models';
   import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
-  import { engineName, showsCost, speakerOf } from '../lib/engines';
+  import { capsOf, engineName, showsCost, speakerOf } from '../lib/engines';
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
   import { localCommandViews } from '../lib/localcmd';
   import { subagentInfo } from '../lib/subagents';
   import { editsByTurn } from '../lib/tools';
   import { app, type SubFocus } from '../lib/state.svelte';
-  import { SHELL_GLYPH, terminalIn } from '../lib/term-actions';
   import { canPrepare, canTest, prepareLaunch, testAgent } from '../lib/test-launch.svelte';
   import type { Agent, ConvItem, Project } from '../lib/types';
   import AgentTerminal from './AgentTerminal.svelte';
@@ -50,9 +49,10 @@
   import ToolRow from './conv/ToolRow.svelte';
   import TurnCard from './conv/TurnCard.svelte';
   import Handover from './conv/Handover.svelte';
+  import NoAccount from './conv/NoAccount.svelte';
   import UserMessage from './conv/UserMessage.svelte';
   import EngineMark from './EngineMark.svelte';
-  import StatusDot from './StatusDot.svelte';
+  import Icon from './Icon.svelte';
   import { tip } from '../lib/tip';
 
   let { agent, project }: { agent: Agent; project: Project } = $props();
@@ -72,13 +72,8 @@
         return t('conv.status.error');
     }
   }
-  const SC: Record<string, string> = {
-    running: 'var(--ok)',
-    waiting: 'var(--wait)',
-    idle: 'var(--dim)',
-    done: 'var(--ok)',
-    error: 'var(--del)',
-  };
+  /** The colour of its state in the header's pill: at work, waiting, at rest, failed. */
+  const PILL: Record<string, string> = { running: 'run', waiting: 'wait', idle: 'idle', done: 'idle', error: 'err' };
   /** How long a view put back in place is kept there while its messages are measured. */
   const SETTLE_MS = 1000;
   /** How long a message brought into view from a search stays highlighted. */
@@ -150,19 +145,29 @@
   });
   const used = $derived(spent(agent));
   // How full the context is, out of the window of the conversation's model (once a turn told it).
+  // How full the context is, out of the window of the conversation's model (once a turn told it): its window in a lighter
+  // weight after the tokens, and a thin gauge under them.
   const context = $derived.by(() => {
     const used = agent.contextTokens;
     const size = agent.contextWindow;
     const use = contextUse(agent);
-    if (!use) return { shown: used ? fTok(used) : '—', title: t('conv.header.contextNow'), full: false };
+    if (!use) return { shown: used ? fTok(used) : '—', of: '', pct: null, title: t('conv.header.contextNow'), full: false };
     const window =
       size >= 1e6 ? t('format.tokens.million', { n: fNum(size / 1e6, 2) }) : t('format.tokens.thousand', { n: Math.round(size / 1e3) });
-    return { shown: `${fTok(used)} / ${window}`, title: use.title, full: use.full };
+    return { shown: fTok(used), of: window, pct: Math.min(100, use.pct), title: use.title, full: use.full };
   });
+  // Its sandbox, which its harness's modes set (Codex), said in its header: what it means in its mode. Bypass has none.
+  const sandbox = $derived.by(() => {
+    const caps = capsOf(agent.engine);
+    if (!caps?.sandbox || agent.mode === 'bypassPermissions') return '';
+    return caps.modes.find((m) => m.id === agent.mode)?.meaning ?? t('conv.header.sandboxDefault');
+  });
+  // A message refused for want of an account of its harness: said until one is there (choice 19).
+  const noAccount = $derived(conv.noAccount && !accountsOf(conv.noAccount.engine).some((a) => a.active) ? conv.noAccount : null);
+  // « Ouvrir une PR » takes the place of the launch while the branch has commits without a pull request (choice 26).
+  const prFirst = $derived(canOpenPr(agent) && !openPrOf(agent));
   // The editor shows the agent's own checkout: its worktree, else the project's.
   const editorSource = $derived(agent.worktree ? agent.id : 'project');
-  // Its terminal is the first shell found, in its worktree: the button wears that shell's glyph.
-  const termGlyph = $derived(SHELL_GLYPH[app.shells[0]?.id ?? '']?.glyph ?? '$_');
   const openFile = (abs: string, line: number | null) =>
     app.openEditor({ projectId: project.id, source: editorSource, abs, line: line ?? undefined });
   /** Opens the conversation of the subagent `call` launched, in place of the agent's. */
@@ -516,9 +521,10 @@
     };
   }
 
-  // The first block drawn shows its avatar, even after text left out above it.
-  function prevIsText(i: number) {
-    return i > start && top[i - 1].kind === 'text';
+  /** Whether the next item drawn after the `j`-th is a tool call too: the calls of a turn are tied in one thread. */
+  function nextIsTool(j: number) {
+    for (let k = j + 1; k < drawn.length; k++) if (shows(drawn[k])) return drawn[k].kind === 'tool';
+    return false;
   }
 
   /** Items that draw nothing: an empty block of text, the calls whose question or plan has its own card. */
@@ -554,7 +560,7 @@
   {@const from = sub ? subOf(sub) : null}
   {#if sub && from}
     <div class="asks">
-      <span>↳ {t('subagents.asks', { name: from.title })}</span>
+      <Icon name="sub" size={14} /><span>{t('subagents.asks', { name: from.title })}</span>
       <button class="open-sub" data-open-sub={sub} data-open-from="asks:{request}" onclick={() => openSub(sub)}
         >{t('subagents.open')}</button
       >
@@ -565,152 +571,154 @@
 <!-- `.conv` is where the keys answering a waiting request apply (answersHere, in shortcuts.ts). -->
 <main class="conv">
   <header class="head">
-    <div class="who">
-      <div class="line1">
-        <span class="name" ondblclick={rename} role="presentation" use:tip={t('conv.header.renameHint')}>{agent.name}</span>
-        <EngineMark engine={agent.engine} />
-        <span class="st" style:color={SC[agent.status]}><StatusDot status={agent.status} size={7} />{statusLabel(agent.status)}</span>
+    <div class="h-title">
+      <div class="row">
+        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+        <h1 class="name" ondblclick={rename} use:tip={t('conv.header.renameHint')}>{agent.name}</h1>
+        <span class="state {PILL[agent.status] ?? 'err'}" data-status={agent.status}><i></i>{statusLabel(agent.status)}</span>
       </div>
-      <span class="sub mono">{project.name} / {branch || '—'}</span>
+      <div class="crumbs">
+        <EngineMark engine={agent.engine} full />
+        <span class="proj-name">{project.name}</span><span aria-hidden="true">/</span><span class="mono branch">{branch || '—'}</span>
+        <!-- Its pull requests, each opening in the browser (ESC-64), beside its branch (choice 26). -->
+        {#each prs as p (p.number)}
+          <button
+            class="prnum {prTone(p)}"
+            aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
+            use:tip={{ text: prTip(word, p), aria: false }}
+            data-pr={p.number}
+            onclick={() => openPr(p)}><Icon name={prIcon(p)} size={12} />#{p.number}</button
+          >
+        {/each}
+        <!-- Codex's sandbox, which its modes set (but Bypass, which has none): said where it matters. -->
+        {#if sandbox}
+          <span
+            class="sbx"
+            role="img"
+            aria-label={t('conv.header.sandboxLabel', { meaning: sandbox })}
+            use:tip={{ text: sandbox, aria: false }}
+            ><Icon name="lock" size={12} /><span class="sbx-l">{t('conv.header.sandbox')}</span></span
+          >
+        {/if}
+      </div>
     </div>
-    <div style="flex:1"></div>
-    <button
-      class="btn edit"
-      aria-label={t('common.editor')}
-      use:tip={t('conv.header.editorHint')}
-      onclick={() => app.openEditor({ projectId: project.id, source: editorSource })}
-    >
-      <span class="mono glyph">&lt;/&gt;</span><span class="lbl">{t('common.editor')}</span>
-    </button>
-    <!-- A terminal in the agent's worktree: one that works in the project's folder has the terminals of the sidebar. -->
-    {#if agent.worktree && !agent.archived}
-      <button
-        class="btn term"
-        aria-label={t('conv.header.terminal')}
-        use:tip={t('conv.header.terminalHint')}
-        onclick={() => terminalIn(project.id, { agentId: agent.id }, agent.name)}
-      >
-        <span class="mono glyph">{termGlyph}</span><span class="lbl">{t('conv.header.terminal')}</span>
-      </button>
-    {/if}
-    <!-- Its pull requests, each opening in the browser; « Ouvrir une PR » while none is open (ESC-64). -->
-    {#each prs as p (p.number)}
-      <button
-        class="btn pr mono {prTone(p)}"
-        aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
-        use:tip={{ text: prTip(word, p), aria: false }}
-        data-pr={p.number}
-        onclick={() => openPr(p)}><span class="glyph" aria-hidden="true">{prGlyph(p)}</span>#{p.number}</button
-      >
-    {/each}
-    {#if canOpenPr(agent) && !openPrOf(agent)}
-      <button
-        class="btn openpr"
-        aria-label={t('prs.openButton', { word })}
-        use:tip={t('prs.openHint', { word, branch: ownBranch(agent) ?? '' })}
-        onclick={() => askOpenPr(agent)}
-      >
-        <span class="mono glyph">⇡</span><span class="lbl">{t('prs.openButton', { word })}</span>
-      </button>
-    {/if}
-    {#if agent.recipe || agent.isola}
-      {#if canTest(agent)}
-        <button
-          class="btn test"
-          aria-label={`▶ ${t('conv.header.test')}`}
-          use:tip={agent.isola ? t('conv.header.testIsolaHint') : t('conv.header.testHint')}
-          onclick={() => testAgent(agent, project)}
-        >
-          <span class="glyph">▶</span><span class="lbl">{t('conv.header.test')}</span>
-        </button>
-      {/if}
-    {:else if canPrepare(agent)}
-      <button
-        class="btn test"
-        aria-label={t('conv.header.prepare')}
-        use:tip={t('conv.header.prepareHint')}
-        onclick={() => prepareLaunch(agent)}
-      >
-        <span class="glyph">▷</span><span class="lbl">{t('conv.header.prepare')}</span>
-      </button>
-    {/if}
-    <!-- « Vue Claude Code »: never for a ticket's agent, which its board drives over the stream. -->
-    {#if canSwitchView(agent)}
-      <button
-        class="btn view"
-        class:on={harnessView}
-        aria-pressed={harnessView}
-        aria-label={harnessView ? t('conv.header.toRich') : t('conv.header.toTerminal', { engine: engineName(agent.engine) })}
-        use:tip={harnessView ? t('conv.header.toRichHint') : t('conv.header.toTerminalHint', { engine: engineName(agent.engine) })}
-        onclick={() => switchView(agent)}
-      >
-        <span class="mono glyph">{harnessView ? '◧' : '>_'}</span><span class="lbl"
-          >{harnessView ? t('conv.header.toRich') : t('conv.header.toTerminal', { engine: engineName(agent.engine) })}</span
-        >
-      </button>
-    {/if}
-    <div class="metrics">
-      <span class="model mono">{modelLabel(agent.model, app.models)}</span>
-      <div class="m" use:tip={context.title}>
-        <span class="k">{t('conv.header.context')}</span><span class="v mono" class:full={context.full}>{context.shown}</span>
+    <dl class="figures">
+      <div class="fig" use:tip={context.title}>
+        <dt>{t('conv.header.context')}</dt>
+        <dd class:full={context.full}>
+          {context.shown}{#if context.of}{' '}<small>/ {context.of}</small>{/if}
+        </dd>
+        {#if context.pct !== null}<div class="ctx-meter" class:full={context.full}><i style:width="{context.pct}%"></i></div>{/if}
       </div>
-      <div class="m opt"><span class="k">{t('conv.header.tokens')}</span><span class="v mono">{fTok(used.tokens)}</span></div>
+      <div class="fig opt-fig">
+        <dt>{t('conv.header.tokens')}</dt>
+        <dd>{fTok(used.tokens)}</dd>
+      </div>
       {#if showsCost(agent)}
-        <div class="m opt2" use:tip={used.estimated ? estimateHint(used) : undefined}>
-          <span class="k">{t('common.cost')}</span><span class="v mono">{fSpentUsd(used)}</span>
+        <div class="fig" use:tip={used.estimated ? estimateHint(used) : undefined}>
+          <dt>{t('common.cost')}</dt>
+          <dd>
+            {fSpentUsd(used)}{#if used.estimated}<small class="est">{t('stats.cost.estimated')}</small>{/if}
+          </dd>
         </div>
       {/if}
       {#if app.split}
-        <div class="m opt2"><span class="k">{t('common.files')}</span><span class="v mono">{files}</span></div>
+        <div class="fig opt-fig">
+          <dt>{t('common.files')}</dt>
+          <dd>{files}</dd>
+        </div>
       {:else}
         <button
-          class="m files opt2"
+          class="fig files opt-fig"
           class:open={app.filesOpen}
+          aria-pressed={app.filesOpen}
           use:tip={t('conv.header.filesHint')}
           onclick={() => (app.filesOpen = !app.filesOpen)}
         >
-          <span class="k">{t('common.files')} ▸</span><span class="v mono">{files}</span>
+          <dt>{t('common.files')}</dt>
+          <dd>{files}</dd>
         </button>
       {/if}
-      <div class="m opt"><span class="k">{t('conv.header.duration')}</span><span class="v mono">{duration}</span></div>
-    </div>
-    <div class="segmented small layout" role="group" aria-label={t('conv.header.layout', { key: keyLabel('Ctrl+Shift+L') })}>
-      <button
-        class:on={!app.split}
-        aria-pressed={!app.split}
-        aria-label={t('conv.header.layoutClassic')}
-        use:tip={t('conv.header.layoutClassic')}
-        onclick={() => app.split && app.toggleLayout()}
-      >
-        <svg width="16" height="12" viewBox="0 0 16 12" aria-hidden="true"
-          ><rect x="0.5" y="0.5" width="15" height="11" rx="1.5" fill="none" stroke="currentColor" /><rect
-            x="11"
-            y="1"
-            width="4"
-            height="10"
-            fill="currentColor"
-            opacity="0.45"
-          /></svg
+      <div class="fig opt-fig2">
+        <dt>{t('conv.header.duration')}</dt>
+        <dd>{duration}</dd>
+      </div>
+    </dl>
+    <div class="actions">
+      <!-- One place for a button (choice 26): « Ouvrir une PR » while the branch has commits without one, the launch then
+           in « … »; else the launch, prepared or tested. -->
+      {#if prFirst}
+        <button
+          class="btn openpr"
+          aria-label={t('prs.openButton', { word })}
+          use:tip={t('prs.openHint', { word, branch: ownBranch(agent) ?? '' })}
+          onclick={() => askOpenPr(agent)}
         >
-      </button>
-      <button
-        class:on={app.split}
-        aria-pressed={app.split}
-        aria-label={t('conv.header.layoutSplit')}
-        use:tip={t('conv.header.layoutSplit')}
-        onclick={() => !app.split && app.toggleLayout()}
-      >
-        <svg width="16" height="12" viewBox="0 0 16 12" aria-hidden="true"
-          ><rect x="0.5" y="0.5" width="15" height="11" rx="1.5" fill="none" stroke="currentColor" /><rect
-            x="8"
-            y="1"
-            width="7"
-            height="10"
-            fill="currentColor"
-            opacity="0.45"
-          /></svg
+          <Icon name="pr" size={14} /><span class="lbl">{t('prs.openButton', { word })}</span>
+        </button>
+      {:else if agent.recipe || agent.isola}
+        {#if canTest(agent)}
+          <button
+            class="btn test"
+            aria-label={t('conv.header.test')}
+            use:tip={agent.isola ? t('conv.header.testIsolaHint') : t('conv.header.testHint')}
+            onclick={() => testAgent(agent, project)}
+          >
+            <Icon name="play" size={14} /><span class="lbl">{t('conv.header.test')}</span>
+          </button>
+        {/if}
+      {:else if canPrepare(agent)}
+        <button
+          class="btn test"
+          aria-label={t('conv.header.prepare')}
+          use:tip={t('conv.header.prepareHint')}
+          onclick={() => prepareLaunch(agent)}
         >
-      </button>
+          <Icon name="play" size={14} /><span class="lbl">{t('conv.header.prepare')}</span>
+        </button>
+      {/if}
+      <!-- « Escouade | <harness> »: never for a ticket's agent, which its board drives over the stream. The view shown is
+           named, the other one an icon. -->
+      {#if canSwitchView(agent)}
+        <div class="vseg" role="group" aria-label={t('conv.header.view')}>
+          <button
+            aria-pressed={!harnessView}
+            aria-label={t('conv.header.toRich')}
+            use:tip={harnessView ? t('conv.header.toRichHint') : undefined}
+            onclick={() => harnessView && switchView(agent)}
+            ><Icon name="agents" size={14} /><span class="lbl">{t('conv.header.rich')}</span></button
+          >
+          <button
+            aria-pressed={harnessView}
+            aria-label={t('conv.header.toTerminal', { engine: engineName(agent.engine) })}
+            use:tip={harnessView ? undefined : t('conv.header.toTerminalHint', { engine: engineName(agent.engine) })}
+            onclick={() => !harnessView && switchView(agent)}
+            ><Icon name="term" size={14} /><span class="lbl">{engineName(agent.engine)}</span></button
+          >
+        </div>
+      {/if}
+      <!-- The agent's menu, the one of its card's right click (the sidebar draws it). -->
+      <button
+        class="btn icon more"
+        aria-haspopup="menu"
+        aria-label={t('conv.header.more')}
+        use:tip={t('conv.header.more')}
+        onclick={(e) => app.askAgentMenu(agent.id, e.currentTarget)}><Icon name="more" size={14} /></button
+      >
+      <div class="layout-seg" role="group" aria-label={t('conv.header.layout', { key: keyLabel('Ctrl+Shift+L') })}>
+        <button
+          aria-pressed={!app.split}
+          aria-label={t('conv.header.layoutClassic')}
+          use:tip={t('conv.header.layoutClassic')}
+          onclick={() => app.split && app.toggleLayout()}><Icon name="lay-1" size={14} /></button
+        >
+        <button
+          aria-pressed={app.split}
+          aria-label={t('conv.header.layoutSplit')}
+          use:tip={t('conv.header.layoutSplit')}
+          onclick={() => !app.split && app.toggleLayout()}><Icon name="lay-2" size={14} /></button
+        >
+      </div>
     </div>
   </header>
 
@@ -762,7 +770,7 @@
           {@const i = start + j}
           {#if shows(item)}
             <!-- The block of an item, found by it (reveal). -->
-            <div class="item" class:found={found === item.id} data-item={item.id}>
+            <div class="item" class:found={found === item.id} class:tool-item={item.kind === 'tool'} data-item={item.id}>
               {#if item.kind === 'user'}
                 {@const injected = injectedSource(item)}
                 {@const command = commands.get(item.id)}
@@ -783,7 +791,6 @@
                 <EventMessage source={item.source} text={item.text} label={labels.get(item.from ?? '')} />
               {:else if item.kind === 'text'}
                 <div class="assistant">
-                  {#if !prevIsText(i)}<span class="avatar">C</span>{:else}<span class="avatar ghost"></span>{/if}
                   <div class="blocks">
                     {#each splitEscouade(item.streaming ? withoutPassage(item.text) : item.text) as seg, si (si)}
                       {#if seg.kind === 'report'}
@@ -795,7 +802,7 @@
                     {#if item.spoken}
                       <!-- The passage the agent wrote to be read aloud in a voice conversation (ESC-97). -->
                       <blockquote class="spoken" data-spoken>
-                        <span class="spoken-label">🔊 {t('voice.conversation.read')}</span>
+                        <span class="aloud"><Icon name="sound" size={14} />{t('voice.conversation.read')}</span>
                         {item.spoken}
                       </blockquote>
                     {/if}
@@ -804,7 +811,14 @@
               {:else if item.kind === 'thinking'}
                 <Thinking {item} />
               {:else if item.kind === 'tool'}
-                <ToolRow {item} cwd={agent.cwd} childrenOf={(id) => children.get(id) ?? []} onOpenFile={openFile} onOpenSub={openSub} />
+                <ToolRow
+                  {item}
+                  cwd={agent.cwd}
+                  linked={nextIsTool(j)}
+                  childrenOf={(id) => children.get(id) ?? []}
+                  onOpenFile={openFile}
+                  onOpenSub={openSub}
+                />
               {:else if item.kind === 'question'}
                 {@render asks(item.sub, item.id)}
                 <QuestionCard {item} agentId={agent.id} pending={agent.pending.includes(item.id)} current={agent.pending[0] === item.id} />
@@ -837,9 +851,14 @@
         {#each conv.waiting as item (item.id)}
           <UserMessage {item} waiting engine={agent.engine} />
         {/each}
+        {#if noAccount}
+          <NoAccount {agent} engine={noAccount.engine} text={noAccount.text} />
+        {/if}
         {#if running}
           <div class="working">
-            <span class="dots"><span></span><span></span><span></span></span>{t('conv.working', { engine: speakerOf(agent.engine) })}
+            <span class="spark"><Icon name="spark" size={14} /></span><span class="shimmer"
+              >{t('conv.working', { engine: speakerOf(agent.engine) })}</span
+            >
           </div>
         {/if}
         {#if agent.setup}
@@ -858,7 +877,7 @@
     </div>
 
     {#if showJump}
-      <button class="jump" onclick={toBottom}>↓ {t('conv.newMessages')}</button>
+      <button class="jump" onclick={toBottom}><Icon name="pull" size={14} />{t('conv.newMessages')}</button>
     {/if}
 
     {#if agent.archived}
@@ -877,172 +896,333 @@
 </main>
 
 <style>
+  /* `conv`: the container its header and its composer fold by (container queries), as the preview's. */
   .conv {
     position: relative;
     flex: 1;
     min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
+    container: conv / inline-size;
   }
   .head {
-    container-type: inline-size;
-    height: 60px;
     flex: none;
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 0 24px;
+    gap: 16px;
+    min-height: 60px;
+    padding: 0 14px 0 22px;
     border-bottom: 1px solid var(--line);
   }
-  .who {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
+  .h-title {
+    display: grid;
+    gap: 2px;
     min-width: 0;
-    white-space: nowrap;
+    margin-right: auto;
   }
-  .line1 {
+  .h-title .row {
     display: flex;
     align-items: center;
     gap: 10px;
+    min-width: 0;
   }
   .name {
-    font-size: 15px;
-    font-weight: 700;
+    min-width: 0;
+    margin: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 15px;
+    font-weight: 620;
+    letter-spacing: -0.015em;
   }
-  .st {
+  .state {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 20px;
+    padding: 0 8px 0 7px;
+    border-radius: 10px;
+    background: oklch(from var(--run) l c h / 0.1);
+    color: var(--run);
+    font-size: 11.5px;
+    font-weight: 550;
+    white-space: nowrap;
+  }
+  .state i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .state.wait {
+    background: oklch(from var(--wait) l c h / 0.1);
+    color: var(--wait);
+  }
+  .state.idle {
+    background: rgba(var(--fg-rgb), 0.05);
+    color: var(--muted);
+  }
+  .state.err {
+    background: oklch(from var(--del) l c h / 0.1);
+    color: var(--del);
+  }
+  .crumbs {
     display: flex;
     align-items: center;
     gap: 6px;
+    overflow: hidden;
+    white-space: nowrap;
+    color: var(--muted);
     font-size: 12px;
   }
-  .sub {
-    font-size: 11px;
-    color: var(--dim);
+  .crumbs :global(.mark) {
+    margin-right: 2px;
+  }
+  .proj-name {
+    flex: none;
+  }
+  .branch {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .edit,
-  .term,
-  .test,
-  .view {
-    height: 28px;
-    display: flex;
+  /* A pull request's number beside the branch: the icon of its state coloured by what to look at first (ESC-64). */
+  .prnum {
+    flex: none;
+    display: inline-flex;
     align-items: center;
-    gap: 7px;
-    padding: 0 11px;
-    font-size: 12px;
-    font-weight: 600;
-    flex: none;
-  }
-  .edit .glyph,
-  .term .glyph,
-  .test .glyph,
-  .view .glyph {
-    font-size: 11px;
-    color: var(--accent);
-  }
-  .metrics {
-    display: flex;
-    align-items: center;
-    gap: 22px;
-    flex: none;
-    white-space: nowrap;
-  }
-  .model {
-    font-size: 11px;
-    padding: 4px 8px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line2);
-  }
-  .m {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .k {
-    font-size: 10.5px;
-    color: var(--dim);
-  }
-  .v {
-    font-size: 12.5px;
-  }
-  .v.full {
-    color: var(--wait);
-  }
-  .files {
-    align-items: flex-start;
-    padding: 4px 8px;
-    margin: -4px -8px;
-    border: 1px solid transparent;
-    border-radius: var(--r-sm);
-    background: transparent;
-    cursor: pointer;
-    text-align: left;
-  }
-  .files:hover {
-    border-color: var(--line2);
-  }
-  .files.open {
-    background: var(--elev);
-    border-color: var(--line2);
-  }
-  .layout {
-    flex: none;
-  }
-  /* Half-width conversation (split layout): the agent's card in the sidebar shows these too. */
-  @container (max-width: 680px) {
-    .opt {
-      display: none;
-    }
-    .edit .lbl,
-    .term .lbl,
-    .test .lbl,
-    .view .lbl,
-    .openpr .lbl {
-      display: none;
-    }
-  }
-  /* A pull request's number: its glyph colored by what to look at first (ESC-64). */
-  .pr {
     gap: 5px;
+    height: 20px;
+    padding: 0 6px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--soft);
+    font-family: var(--mono);
     font-size: 11.5px;
+    cursor: pointer;
   }
-  .pr.ok .glyph {
-    color: var(--ok);
+  .prnum:hover {
+    background: var(--hover);
   }
-  .pr.fail .glyph {
+  .prnum.ok :global(.icon) {
+    color: var(--run);
+  }
+  .prnum.fail :global(.icon) {
     color: var(--del);
   }
-  .pr.wait .glyph {
+  .prnum.wait :global(.icon) {
     color: var(--wait);
   }
-  .pr.merged .glyph {
-    color: var(--info);
+  .prnum.merged :global(.icon) {
+    color: var(--syn-k);
   }
-  .pr.dim {
-    color: var(--dim);
+  .prnum.dim {
+    color: var(--muted);
   }
-  @container (max-width: 440px) {
-    .opt2 {
+  .sbx {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 18px;
+    margin-left: 4px;
+    padding: 0 7px;
+    border-radius: 5px;
+    background: rgba(var(--fg-rgb), 0.045);
+    color: var(--soft);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: help;
+  }
+  .sbx :global(.icon) {
+    color: var(--muted);
+  }
+  /* The figures: a label over each value. The margin of a list, as the preview keeps it, makes the header 69 px. */
+  .figures {
+    flex: none;
+    display: flex;
+    gap: 20px;
+    margin: 1em 0;
+    padding-right: 6px;
+  }
+  .fig {
+    display: grid;
+    gap: 1px;
+    text-align: left;
+  }
+  .fig dt {
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 500;
+  }
+  .fig dd {
+    margin: 0;
+    font-size: 12.5px;
+    font-weight: 550;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .fig dd small {
+    color: var(--muted);
+    font-size: inherit;
+    font-weight: 450;
+  }
+  .fig dd .est {
+    margin-left: 3px;
+  }
+  .fig dd.full {
+    color: var(--wait);
+  }
+  .ctx-meter {
+    width: 100%;
+    height: 2px;
+    margin-top: 3px;
+    border-radius: 2px;
+    background: rgba(var(--fg-rgb), 0.1);
+  }
+  .ctx-meter i {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    background: var(--soft);
+  }
+  .ctx-meter.full i {
+    background: var(--wait);
+  }
+  /* « Fichiers », which opens the files beside the conversation. */
+  .fig.files {
+    margin: -4px -8px;
+    padding: 4px 8px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .fig.files:hover {
+    background: var(--hover);
+  }
+  .fig.files.open {
+    background: rgba(var(--fg-rgb), 0.06);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+  }
+  .actions {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .actions .btn {
+    height: 30px;
+  }
+  .btn.icon {
+    width: 30px;
+    padding: 0;
+    justify-content: center;
+  }
+  .vseg {
+    display: inline-flex;
+    padding: 2px;
+    border-radius: 8px;
+    background: rgba(var(--fg-rgb), 0.04);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .vseg button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 10px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 550;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .vseg button:hover {
+    color: var(--text);
+  }
+  .vseg button[aria-pressed='true'] {
+    background: rgba(var(--fg-rgb), 0.09);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text);
+  }
+  .vseg button[aria-pressed='false'] .lbl {
+    display: none;
+  }
+  .layout-seg {
+    display: inline-flex;
+    padding: 2px;
+    border-radius: 8px;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+  }
+  .layout-seg button {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .layout-seg button[aria-pressed='true'] {
+    background: rgba(var(--fg-rgb), 0.08);
+    color: var(--text);
+  }
+  /* The header folds as the conversation narrows (the split layout, a small window): the lesser figures go, then the
+     labels of its buttons, then the figures. */
+  @container conv (max-width: 1000px) {
+    .figures .opt-fig,
+    .vseg .lbl {
+      display: none;
+    }
+    .sbx {
+      gap: 0;
+    }
+    .sbx-l {
       display: none;
     }
   }
-  .layout button {
-    display: flex;
-    align-items: center;
-    padding: 0 7px;
+  @container conv (max-width: 760px) {
+    .head .btn .lbl,
+    .figures .opt-fig2 {
+      display: none;
+    }
+    .head .btn:has(.lbl) {
+      width: 30px;
+      padding: 0;
+      justify-content: center;
+    }
+    .figures {
+      gap: 14px;
+    }
+  }
+  @container conv (max-width: 580px) {
+    .figures {
+      display: none;
+    }
   }
   /* The plan banner above shrinks before the messages go under 160 px. */
   .scroll {
     flex: 1 0 160px;
     min-height: 160px;
     overflow: auto;
+    scrollbar-gutter: stable;
   }
   .scroll:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--p-ink);
     outline-offset: -2px;
   }
   /* Read by screen readers only. */
@@ -1055,20 +1235,21 @@
   }
   /* Above the items drawn: the slice before them. */
   .older {
-    align-self: center;
+    justify-self: center;
     height: 28px;
     padding: 0 12px;
     font-size: 12px;
     font-weight: 500;
     color: var(--muted);
   }
+  /* The thread: one column of 780 px that shrinks with the panel. */
   .msgs {
-    max-width: 780px;
-    margin: 0 auto;
-    padding: 28px 28px 24px;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 18px;
+    width: min(780px, 100% - 64px);
+    margin: 0 auto;
+    padding: 28px 0 24px;
   }
   .msgs > :global(*) {
     content-visibility: auto;
@@ -1081,27 +1262,23 @@
     min-width: 0;
     border-radius: var(--r);
   }
+  /* The calls of a turn in one thread, not a box each. */
+  .item.tool-item + .item.tool-item {
+    margin-top: -18px;
+  }
   .item.found {
     animation: found 2s ease-out forwards;
   }
   @keyframes found {
     0%,
     70% {
-      background: color-mix(in oklch, var(--accent) 9%, transparent);
+      background: color-mix(in oklch, var(--p) 9%, transparent);
       outline: 2px solid var(--accent-soft);
       outline-offset: 6px;
     }
     100% {
       background: transparent;
       outline: 2px solid transparent;
-      outline-offset: 6px;
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .item.found {
-      animation: none;
-      background: color-mix(in oklch, var(--accent) 9%, transparent);
-      outline: 2px solid var(--accent-soft);
       outline-offset: 6px;
     }
   }
@@ -1135,121 +1312,140 @@
     justify-content: space-between;
     gap: 12px;
     padding: 12px 14px;
-    border-radius: var(--r);
-    border: 1px solid color-mix(in oklch, var(--del) 50%, transparent);
+    border-radius: 11px;
+    box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.45);
     font-size: 12.5px;
     color: var(--muted);
   }
   .assistant {
-    display: flex;
-    gap: 12px;
     min-width: 0;
-  }
-  .spoken {
-    margin: 0;
-    padding: 8px 12px;
-    border-left: 3px solid var(--accent);
-    border-radius: 0 var(--r) var(--r) 0;
-    background: color-mix(in oklch, var(--accent) 8%, transparent);
-    font-size: 13.5px;
-    line-height: 1.55;
-  }
-  .spoken-label {
-    display: block;
-    margin-bottom: 2px;
-    font-size: 11px;
-    color: var(--muted);
   }
   .blocks {
-    flex: 1;
+    display: grid;
+    gap: 10px;
     min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
   }
-  .avatar {
-    width: 22px;
-    height: 22px;
-    flex: none;
-    margin-top: 1px;
-    border-radius: var(--r-sm);
-    background: var(--accent);
-    color: var(--accent-ink);
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 700;
+  /* What the agent wrote to be read aloud in a voice conversation (ESC-97). */
+  .spoken {
+    margin: 0;
+    padding: 2px 0 2px 12px;
+    border-left: 1px solid var(--line-3);
+    color: var(--text-ai);
+    font-size: 13.5px;
+    line-height: 1.62;
+  }
+  .aloud {
     display: flex;
     align-items: center;
-    justify-content: center;
-  }
-  .avatar.ghost {
-    background: transparent;
-  }
-  .working {
-    margin-left: 34px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 12.5px;
+    gap: 5px;
     color: var(--muted);
+    font-size: 11.5px;
+  }
+  /* « Claude travaille… »: a spark that turns, a reflection that runs over the words. */
+  .working {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+  .spark {
+    display: flex;
+    color: var(--p-ink);
+    animation: spin 3.2s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .shimmer {
+    background: linear-gradient(90deg, var(--muted) 0 40%, var(--text) 50%, var(--muted) 60% 100%);
+    background-size: 250% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 2.4s linear infinite;
+  }
+  @keyframes shimmer {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: -50% 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spark {
+      animation: none;
+    }
+    .shimmer {
+      animation: none;
+      background: none;
+      color: var(--muted);
+    }
+    .item.found {
+      animation: none;
+      background: color-mix(in oklch, var(--p) 9%, transparent);
+      outline: 2px solid var(--accent-soft);
+      outline-offset: 6px;
+    }
   }
   .later {
-    margin: 0 0 0 34px;
+    margin: 0;
     font-size: 12.5px;
     color: var(--muted);
-  }
-  .dots {
-    display: inline-flex;
-    gap: 3px;
-  }
-  .dots span {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--accent);
-    animation: ccBlink 1.2s infinite;
-  }
-  .dots span:nth-child(2) {
-    animation-delay: 0.15s;
-  }
-  .dots span:nth-child(3) {
-    animation-delay: 0.3s;
   }
   .jump {
     position: absolute;
     left: 50%;
     bottom: 150px;
     transform: translateX(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     height: 30px;
-    padding: 0 14px;
-    border-radius: 99px;
-    border: 1px solid var(--line2);
-    background: var(--elev);
+    padding: 0 12px 0 10px;
+    border: none;
+    border-radius: 15px;
+    background: var(--raise-2);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 12px 32px -8px rgba(0, 0, 0, calc(0.7 * var(--shade)));
+    color: var(--soft);
     font-size: 12px;
+    font-weight: 550;
     cursor: pointer;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
     z-index: 5;
   }
+  .jump:hover {
+    color: var(--text);
+  }
+  /* A band above the composer: archived, stopped, Escouade's tools at the next start. */
   .banner {
-    max-width: 780px;
-    width: calc(100% - 56px);
-    margin: 0 auto 10px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 10px 14px;
-    border-radius: var(--r);
-    border: 1px solid var(--line2);
-    background: var(--panel);
+    width: min(780px, 100% - 64px);
+    margin: 0 auto 8px;
+    padding: 8px 10px 8px 12px;
+    border-radius: 10px;
+    background: rgba(var(--fg-rgb), 0.035);
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--soft);
     font-size: 12.5px;
-    color: var(--muted);
+  }
+  .banner .btn {
+    flex: none;
+    height: 28px;
   }
   .banner.err {
-    border-color: color-mix(in oklch, var(--del) 50%, transparent);
+    background: oklch(from var(--del) l c h / 0.07);
+    box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.35);
   }
   .banner.next {
-    border-color: color-mix(in oklch, var(--accent) 45%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 40%, transparent);
   }
   /* Above the terminal of the Claude Code view rather than above the composer. */
   .banner.top {
@@ -1265,14 +1461,12 @@
     color: var(--text);
     font-weight: 600;
   }
-  .next .btn {
-    flex-shrink: 0;
-  }
+  /* Above a request a subagent made: which one, and the way to its conversation. */
   .asks {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin: 0 0 6px 34px;
+    gap: 8px;
+    margin: 0 0 6px;
     font-size: 12px;
     color: var(--muted);
   }
@@ -1281,7 +1475,7 @@
     background: none;
     padding: 0;
     font: inherit;
-    color: var(--accent);
+    color: var(--p-ink);
     cursor: pointer;
   }
   .open-sub:hover {

@@ -6,11 +6,14 @@
   import { keyLabel } from '../lib/platform';
   import { draftIfAny } from '../lib/question-answers.svelte';
   import { app } from '../lib/state.svelte';
+  import { tip } from '../lib/tip';
+  import EngineMark from './EngineMark.svelte';
+  import Icon from './Icon.svelte';
 
   // The voice conversation over the whole window (ESC-97, « A · Orbe » chosen on preview, design/voice-conversation):
-  // an orb in the middle whose edge and halo follow the sound (the agent's voice as played while it speaks, the
-  // microphone while it listens), an arc turning around it while Whisper transcribes and the agent works; subtitles at
-  // the bottom, one or two lines, who speaks named soberly. Escape or « Arrêter » ends the conversation. The animation
+  // an orb in the middle, in the project's colour, that swells with the sound (the agent's voice as played while it
+  // speaks, the microphone while it listens) and breathes while Whisper transcribes and the agent works; captions at
+  // the bottom, one or two lines, who speaks named soberly (2.0 design). Escape or « Arrêter » ends the conversation. The animation
   // runs only while this panel is there (requestAnimationFrame, stopped when it goes).
   const agent = $derived(conversation.agentId ? app.agents[conversation.agentId] : undefined);
   const project = $derived(agent ? app.projects.find((p) => p.id === agent.projectId) : undefined);
@@ -36,20 +39,7 @@
   const understood = $derived(conversation.understood);
   const ticked = $derived(ask ? (draftIfAny(ask.itemId)?.picks[ask.question] ?? []) : []);
 
-  let canvas = $state<HTMLCanvasElement>();
-
-  /** The tint of each state: amber while the agent speaks, a soft red while it listens, blue while it thinks. */
-  const WARM = [232, 148, 92];
-  const RED = [228, 112, 98];
-  const COOL = [120, 170, 235];
-  const DIM = [168, 160, 149];
-
-  function tintOf(p: ConvPhase): number[] {
-    if (p === 'speaking' || p === 'question') return WARM;
-    if (p === 'listening' || p === 'hearing') return RED;
-    if (p === 'paused' || p === 'starting') return DIM;
-    return COOL;
-  }
+  let orb = $state<HTMLDivElement>();
 
   /** What the orb follows now: the voice played while the agent speaks, the microphone while it listens. */
   function target(): number {
@@ -61,90 +51,19 @@
 
   const thinking = (p: ConvPhase) => p === 'transcribing' || p === 'working' || p === 'starting';
 
+  // The orb swells with the sound, quickly up and slower down: a voice, not a flicker. Still with prefers-reduced-motion.
   onMount(() => {
-    const ctx = canvas!.getContext('2d');
-    if (!ctx) return;
     const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     let frame = 0;
     let level = 0;
-    let lift = conversation.ask ? 1 : 0;
-    let tint = tintOf(conversation.phase);
-    const rgba = (c: number[], a: number) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
-
-    function size() {
-      const dpr = window.devicePixelRatio || 1;
-      canvas!.width = canvas!.clientWidth * dpr;
-      canvas!.height = canvas!.clientHeight * dpr;
-      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-    size();
-    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(size) : null;
-    observer?.observe(canvas!);
-
-    function draw(ms: number) {
-      const t = ms / 1000;
-      const p = conversation.phase;
-      // Toward the level and the tint of now, quickly up and slower down: a voice, not a flicker.
-      const goal = target();
+    function draw() {
+      const goal = still ? 0 : target();
       level += (goal - level) * (goal > level ? 0.45 : 0.18);
-      const want = tintOf(p);
-      tint = tint.map((v, i) => v + (want[i] - v) * 0.08);
-      const w = canvas!.clientWidth;
-      const h = canvas!.clientHeight;
-      ctx!.clearRect(0, 0, w, h);
-      // A question asked: the orb goes up, smaller, its choices under it.
-      lift += ((conversation.ask ? 1 : 0) - lift) * (still ? 1 : 0.12);
-      const cx = w / 2;
-      const cy = (h / 2 - 40) * (1 - lift) + h * 0.22 * lift;
-      const base = Math.min(92, Math.max(56, Math.min(w, h) * 0.11)) * (1 - 0.3 * lift);
-      const r0 = base + level * base * 0.3 + (thinking(p) && !still ? 3 * Math.sin(t * 1.6) : 0);
-      // The halo, wider with the sound.
-      const halo = ctx!.createRadialGradient(cx, cy, r0 * 0.2, cx, cy, r0 * 2.6);
-      halo.addColorStop(0, rgba(tint, 0.2 + level * 0.22));
-      halo.addColorStop(1, rgba(tint, 0));
-      ctx!.fillStyle = halo;
-      ctx!.beginPath();
-      ctx!.arc(cx, cy, r0 * 2.6, 0, Math.PI * 2);
-      ctx!.fill();
-      // The body: its edge breathes with the sound.
-      ctx!.beginPath();
-      for (let i = 0; i <= 96; i++) {
-        const a = (i / 96) * Math.PI * 2;
-        const k = still ? 1 : 1 + (0.04 + level * 0.1) * Math.sin(a * 3 + t * 1.7) + (0.025 + level * 0.07) * Math.sin(a * 5 - t * 2.3);
-        const x = cx + Math.cos(a) * r0 * k;
-        const y = cy + Math.sin(a) * r0 * k;
-        if (i) ctx!.lineTo(x, y);
-        else ctx!.moveTo(x, y);
-      }
-      const body = ctx!.createRadialGradient(cx - r0 * 0.35, cy - r0 * 0.45, r0 * 0.1, cx, cy, r0 * 1.1);
-      body.addColorStop(0, 'rgba(255,236,214,0.95)');
-      body.addColorStop(0.35, rgba(tint, 0.95));
-      body.addColorStop(
-        1,
-        rgba(
-          tint.map((v) => v * 0.35),
-          1,
-        ),
-      );
-      ctx!.fillStyle = body;
-      ctx!.fill();
-      // Whisper transcribes, the agent works: an arc turns around it.
-      if (thinking(p)) {
-        ctx!.strokeStyle = 'rgba(255,236,214,0.3)';
-        ctx!.lineWidth = 2;
-        ctx!.beginPath();
-        const s = still ? 0 : t * 2;
-        ctx!.arc(cx, cy, r0 + 26, s, s + 1.2);
-        ctx!.stroke();
-      }
+      orb?.style.setProperty('--lvl', level.toFixed(3));
       frame = requestAnimationFrame(draw);
     }
     frame = requestAnimationFrame(draw);
-
-    return () => {
-      cancelAnimationFrame(frame);
-      observer?.disconnect();
-    };
+    return () => cancelAnimationFrame(frame);
   });
 
   // Escape ends it, before anything else of the window takes the key; while a question is asked, the key of a
@@ -175,6 +94,7 @@
 <div
   class="overlay"
   class:asking={!!ask}
+  class:thinking={thinking(phase)}
   role="dialog"
   aria-modal="true"
   aria-label={t('voice.conversation.overlay.label', { name })}
@@ -182,351 +102,347 @@
   data-conversation-phase={phase}
 >
   <div class="top">
-    <span class="dot"></span>
-    <span class="who">{name}</span>
+    <Icon name="wave" size={14} />
+    <b class="who">{name}</b>
     {#if project}<span class="muted">· {project.name}</span>{/if}
     <span class="muted">· {t('voice.conversation.overlay.context')}</span>
+    <EngineMark engine={agent?.engine} />
     <span class="quit"><kbd>{keyLabel('Esc')}</kbd> {t('voice.conversation.overlay.quit')}</span>
   </div>
-  <canvas bind:this={canvas} aria-hidden="true"></canvas>
-  <div class="state" role="status" aria-live="polite">
-    {said}
+  <div class="mid">
+    <!-- The orb, in the project's colour: it swells with the sound (the agent's voice as played, the microphone while it
+         listens), and breathes while Whisper transcribes and the agent works. -->
+    <div class="orb" bind:this={orb} aria-hidden="true"></div>
+    <div class="state" role="status" aria-live="polite">
+      {#if thinking(phase) || phase === 'speaking' || phase === 'question'}<span class="dots3" aria-hidden="true"
+          ><i></i><i></i><i></i></span
+        >{/if}
+      {said}
+    </div>
   </div>
-  {#if ask}
-    <section class="ask" aria-label={t('voice.conversation.overlay.choices')} data-conversation-ask={ask.index}>
-      <div class="meta">
-        {#if ask.total > 1}<span data-step>{t('voice.conversation.overlay.step', { n: ask.index + 1, total: ask.total })}</span>{/if}
-        {#if ask.multi}<span>{t('voice.conversation.overlay.several')}</span>{/if}
-      </div>
-      <p class="question">{ask.question}</p>
-      {#if ask.options.length}
-        <ol class="choices" class:two={ask.options.length > 3}>
-          {#each ask.options as o, i (i)}
-            {@const on = ticked.includes(o.label)}
-            <li>
-              <button
-                class="choice"
-                class:on
-                class:lit={!!understood?.picks.includes(o.label)}
-                aria-pressed={ask.multi ? on : undefined}
-                aria-keyshortcuts={i < 9 ? String(i + 1) : undefined}
-                onclick={() => conversation.choose(i)}
-              >
-                <span class="rank" aria-hidden="true">{i + 1}</span>
-                <span class="body">
+  <div class="caps">
+    <div class="subs" aria-live="polite">
+      {#if subtitle}
+        <!-- Written as it is said (ESC-136): one subtitle, its text growing, its end shown. -->
+        {#key subtitle.live ? 'live' : subtitle}
+          <div class="sub" class:user={subtitle.who === 'user'} data-subtitle={subtitle.who} data-live={subtitle.live ? '' : undefined}>
+            <span class="speaker">{subtitle.who === 'user' ? t('voice.conversation.overlay.you') : name}</span>
+            <p class="line">{subtitle.live ? tail(subtitle.text) : subtitle.text}</p>
+          </div>
+        {/key}
+      {/if}
+    </div>
+    {#if ask}
+      <section class="ask" aria-label={t('voice.conversation.overlay.choices')} data-conversation-ask={ask.index}>
+        <div class="meta">
+          {#if ask.total > 1}<span data-step>{t('voice.conversation.overlay.step', { n: ask.index + 1, total: ask.total })}</span>{/if}
+          {#if ask.multi}<span>{t('voice.conversation.overlay.several')}</span>{/if}
+        </div>
+        <p class="question">{ask.question}</p>
+        {#if ask.options.length}
+          <ol class="choices">
+            {#each ask.options as o, i (i)}
+              {@const on = ticked.includes(o.label)}
+              <li>
+                <button
+                  class="choice"
+                  class:on
+                  class:lit={!!understood?.picks.includes(o.label)}
+                  aria-pressed={ask.multi ? on : undefined}
+                  aria-keyshortcuts={i < 9 ? String(i + 1) : undefined}
+                  use:tip={o.description}
+                  onclick={() => conversation.choose(i)}
+                >
+                  <kbd class="rank" aria-hidden="true">{i + 1}</kbd>
                   <span class="label">{o.label}</span>
                   {#if o.description}<span class="desc">{o.description}</span>{/if}
-                </span>
-              </button>
-            </li>
-          {/each}
-        </ol>
-      {/if}
-      {#if understood?.text}
-        <p class="yours" data-understood>{t('voice.conversation.overlay.yourAnswer', { text: understood.text })}</p>
-      {:else if conversation.missed}
-        <p class="missed" role="alert">{t('voice.conversation.overlay.missed')}</p>
-      {:else if ask.free}
-        <p class="other">{t('voice.conversation.overlay.other')}</p>
-      {/if}
-      {#if ask.multi}
-        <button class="pill validate" onclick={() => conversation.validate()}>
-          {t('voice.conversation.overlay.validate')} <kbd>{keyLabel('Enter')}</kbd>
-        </button>
-      {/if}
-    </section>
-  {/if}
-  <div class="subs" aria-live="polite">
-    {#if subtitle}
-      <!-- Written as it is said (ESC-136): one subtitle, its text growing, its end shown. -->
-      {#key subtitle.live ? 'live' : subtitle}
-        <div class="sub" data-subtitle={subtitle.who} data-live={subtitle.live ? '' : undefined}>
-          <span class="speaker">{subtitle.who === 'user' ? t('voice.conversation.overlay.you') : name}</span>
-          <p class="line" class:user={subtitle.who === 'user'}>{subtitle.live ? tail(subtitle.text) : subtitle.text}</p>
-        </div>
-      {/key}
+                </button>
+              </li>
+            {/each}
+          </ol>
+        {/if}
+        {#if understood?.text}
+          <p class="yours" data-understood>{t('voice.conversation.overlay.yourAnswer', { text: understood.text })}</p>
+        {:else if conversation.missed}
+          <p class="missed" role="alert">{t('voice.conversation.overlay.missed')}</p>
+        {:else if ask.free}
+          <p class="other">{t('voice.conversation.overlay.other')}</p>
+        {/if}
+        {#if ask.multi}
+          <button class="btn primary validate" onclick={() => conversation.validate()}>
+            {t('voice.conversation.overlay.validate')}<kbd aria-hidden="true"><Icon name="enter" size={12} /></kbd>
+          </button>
+        {/if}
+      </section>
     {/if}
   </div>
   <div class="bar">
     {#if phase === 'paused'}
-      <button class="pill" onclick={() => conversation.resume()}>{t('voice.conversation.resume')}</button>
+      <button class="btn" onclick={() => conversation.resume()}><Icon name="play" size={14} />{t('voice.conversation.resume')}</button>
     {/if}
-    <button class="pill stop" onclick={() => conversation.stop()}
-      ><span class="sq" aria-hidden="true"></span>{t('voice.conversation.stop')}</button
+    <button class="btn danger stop" onclick={() => conversation.stop()}><Icon name="stop" size={14} />{t('voice.conversation.stop')}</button
     >
+    <span class="hint">{t('voice.conversation.hint')}</span>
   </div>
 </div>
 
 <style>
+  /* The whole window, in the project's colour (direction A of the 2.0 design): the orb, its state, the captions. */
   .overlay {
     position: fixed;
     inset: 0;
     z-index: 900;
-    background: radial-gradient(120% 90% at 50% 42%, rgba(27, 25, 23, 0.9), rgba(14, 12, 11, 0.98));
-    backdrop-filter: blur(6px);
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    background:
+      radial-gradient(700px 520px at 50% 40%, color-mix(in oklch, var(--p) 16%, transparent), transparent 70%),
+      color-mix(in oklch, var(--p) 6%, var(--vo-base));
     color: var(--text);
-    animation: in 0.18s ease-out;
+    animation: in 0.3s ease-out;
   }
   @keyframes in {
     from {
       opacity: 0;
     }
   }
-  canvas {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-  }
   .top {
-    position: absolute;
-    top: 18px;
-    left: 24px;
-    right: 24px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 12.5px;
+    gap: 10px;
+    padding: 18px 22px;
     color: var(--muted);
-    z-index: 1;
-  }
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--accent);
+    font-size: 13px;
   }
   .who {
     color: var(--text);
     font-weight: 600;
   }
-  .muted {
-    color: var(--muted);
-  }
   .quit {
     margin-left: auto;
-    color: var(--dim);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
   }
-  kbd {
-    font: 11px var(--mono);
-    padding: 1px 6px;
-    border: 1px solid var(--line2);
-    border-radius: 5px;
-    color: var(--muted);
+  .mid {
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 26px;
+    min-height: 0;
+  }
+  .orb {
+    --lvl: 0;
+    position: relative;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 38% 32%, color-mix(in oklch, var(--p) 55%, white) 0, transparent 46%),
+      radial-gradient(circle at 60% 70%, color-mix(in oklch, var(--p) 80%, black), transparent 60%),
+      color-mix(in oklch, var(--p) 70%, var(--orb-base));
+    box-shadow:
+      0 0 0 1px rgba(var(--fg-rgb), 0.08),
+      0 0 calc(80px + var(--lvl) * 60px) 10px color-mix(in oklch, var(--p) 30%, transparent);
+    transform: scale(calc(1 + var(--lvl) * 0.12));
+  }
+  .orb::after {
+    content: '';
+    position: absolute;
+    inset: -18px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 40%, transparent);
+  }
+  .thinking .orb::after {
+    animation: breathe 3.2s var(--ease) infinite;
+  }
+  @keyframes breathe {
+    50% {
+      transform: scale(1.04);
+    }
+  }
+  /* A question asked: the orb smaller, its choices under the captions. */
+  .asking .orb {
+    width: 120px;
+    height: 120px;
   }
   .state {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: calc(50% + 110px);
-    text-align: center;
-    color: var(--muted);
-    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--soft);
+    font-size: 15px;
+    font-weight: 550;
   }
-  .subs {
-    position: absolute;
-    left: 50%;
-    bottom: 96px;
-    transform: translateX(-50%);
-    width: min(860px, 84%);
-    text-align: center;
+  .dots3 {
+    display: inline-flex;
+    gap: 3px;
+  }
+  .dots3 i {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--run);
+    animation: ccBlink 1.2s infinite;
+  }
+  .dots3 i:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+  .dots3 i:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+  .caps {
+    display: grid;
+    gap: 10px;
+    width: min(720px, 100% - 64px);
+    margin: 0 auto 18px;
+    font-size: 15px;
+    line-height: 1.55;
   }
   .sub {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
     animation: in 0.2s ease-out;
   }
   .speaker {
-    display: block;
-    margin-bottom: 6px;
-    font-size: 11px;
+    flex: none;
+    color: var(--muted);
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--dim);
   }
   /* One or two lines at a time: a longer sentence keeps its end, the part being heard. */
   .line {
     margin: 0;
-    font-size: 22px;
-    line-height: 1.42;
-    text-wrap: balance;
-    text-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
+    color: var(--text);
+    text-wrap: pretty;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  .line.user {
-    color: color-mix(in oklch, var(--text) 78%, var(--muted));
-  }
-  .bar {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 28px;
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-  }
-  .pill {
-    height: 36px;
-    padding: 0 18px;
-    border-radius: 18px;
-    border: 1px solid var(--line2);
-    background: rgba(42, 39, 36, 0.8);
-    color: var(--text);
-    font: 600 13px var(--ui);
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-  }
-  .pill.stop {
-    background: var(--text);
-    color: #1b1512;
-    border-color: transparent;
-  }
-  .sq {
-    width: 9px;
-    height: 9px;
-    border-radius: 2px;
-    background: currentColor;
-  }
-  /* A question asked: the orb up, the state under it, then the question and its choices. */
-  .asking .state {
-    top: calc(22% + 78px);
+  .sub.user .line {
+    color: var(--muted);
   }
   .ask {
-    position: absolute;
-    left: 50%;
-    top: calc(22% + 112px);
-    bottom: 196px;
-    transform: translateX(-50%);
-    width: min(680px, 86%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    max-height: 40vh;
     overflow-y: auto;
     animation: in 0.2s ease-out;
   }
   .meta {
     display: flex;
     gap: 10px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--dim);
+    color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 550;
   }
   .meta span + span::before {
     content: '·';
     margin-right: 10px;
+    color: var(--sep);
   }
   .question {
     margin: 0;
-    font-size: 19px;
-    line-height: 1.4;
+    font-size: 16px;
     text-align: center;
     text-wrap: balance;
   }
   .choices {
     list-style: none;
-    margin: 4px 0 0;
+    margin: 0;
     padding: 0;
-    width: 100%;
-    display: grid;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 8px;
   }
-  .choices.two {
-    grid-template-columns: 1fr 1fr;
-  }
   .choice {
-    width: 100%;
-    min-height: 46px;
-    padding: 9px 14px;
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 12px;
-    text-align: left;
-    border-radius: 12px;
-    border: 1px solid var(--line2);
-    background: rgba(42, 39, 36, 0.62);
+    gap: 8px;
+    min-height: 32px;
+    padding: 0 12px 0 6px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(var(--fg-rgb), 0.04);
+    box-shadow: inset 0 0 0 1px var(--line-2);
     color: var(--text);
-    font: 13.5px var(--ui);
+    font: inherit;
+    font-size: 14px;
+    text-align: left;
     cursor: pointer;
-    transition:
-      border-color 0.15s,
-      background 0.15s,
-      box-shadow 0.2s;
   }
   .choice:hover {
-    border-color: rgba(232, 148, 92, 0.6);
+    background: rgba(var(--fg-rgb), 0.08);
+    box-shadow: inset 0 0 0 1px var(--line-3);
   }
   .choice:focus-visible {
-    outline: 2px solid rgba(232, 148, 92, 0.8);
+    outline: 2px solid var(--p-ink);
     outline-offset: 2px;
   }
-  .rank {
-    flex: none;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    font: 600 12px var(--mono);
-    color: var(--muted);
-    border: 1px solid var(--line2);
-  }
-  .body {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
   .label {
-    font-weight: 600;
+    font-weight: 550;
   }
   .desc {
-    font-size: 12px;
-    color: var(--muted);
+    max-width: 220px;
     overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .choice.on {
-    border-color: rgb(232, 148, 92);
-    background: rgba(232, 148, 92, 0.14);
+  /* Ticked, or understood a moment before the next question: in the project's colour. */
+  .choice.on,
+  .choice.lit {
+    background: color-mix(in oklch, var(--p) 16%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 60%, transparent);
   }
   .choice.on .rank,
   .choice.lit .rank {
-    background: rgb(232, 148, 92);
     border-color: transparent;
-    color: #1b1512;
-  }
-  /* What was understood: lit a moment before the next question. */
-  .choice.lit {
-    border-color: rgb(232, 148, 92);
-    background: rgba(232, 148, 92, 0.24);
-    box-shadow: 0 0 0 4px rgba(232, 148, 92, 0.16);
+    background: var(--p-ink);
+    color: var(--on-primary);
   }
   .other,
   .yours,
   .missed {
-    margin: 2px 0 0;
-    font-size: 13px;
+    margin: 0;
     color: var(--muted);
+    font-size: 13px;
     text-align: center;
   }
   .yours {
+    padding: 6px 12px;
+    border-radius: 9px;
+    background: color-mix(in oklch, var(--p) 14%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 50%, transparent);
     color: var(--text);
-    padding: 6px 14px;
-    border-radius: 12px;
-    background: rgba(232, 148, 92, 0.18);
-    border: 1px solid rgb(232, 148, 92);
   }
   .missed {
-    color: rgb(228, 112, 98);
+    color: var(--del);
+  }
+  .bar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 0 22px 30px;
+  }
+  .bar .btn {
+    height: 36px;
+    padding: 0 14px;
+  }
+  .stop :global(.icon) {
+    color: var(--del);
+  }
+  .hint {
+    color: var(--muted);
+    font-size: 12px;
   }
   @media (prefers-reduced-motion: reduce) {
     .overlay,
@@ -534,8 +450,9 @@
     .ask {
       animation: none;
     }
-    .choice {
-      transition: none;
+    .thinking .orb::after,
+    .dots3 i {
+      animation: none;
     }
   }
 </style>

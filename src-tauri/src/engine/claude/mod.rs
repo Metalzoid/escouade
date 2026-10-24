@@ -136,6 +136,7 @@ pub fn caps() -> EngineCaps {
         background_tasks: true,
         todo_tools: true,
         default_refusal: true,
+        sandbox: false,
     }
 }
 

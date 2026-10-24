@@ -7,9 +7,6 @@ export default defineZone('conv', {
   header: {
     renameTitle: 'Rename the agent',
     renameHint: 'Double-click to rename',
-    editorHint: 'Browse and edit the files of this agent',
-    terminal: 'Terminal',
-    terminalHint: 'Open a terminal in the agent’s worktree',
     test: 'Test',
     testIsolaHint: 'Launch the isola services of this worktree and open the feature in the browser',
     testHint: 'Launch the worktree of this agent and open the feature in the browser',
@@ -27,6 +24,16 @@ export default defineZone('conv', {
     toTerminalHint: 'Run the agent in {engine}’s own interface, in a terminal',
     toRich: 'Escouade view',
     toRichHint: 'Back to Escouade’s conversation (the session goes on)',
+    view: 'Agent view',
+    rich: 'Escouade',
+    more: 'Agent actions',
+    sandbox: 'Sandbox',
+    sandboxLabel: 'Sandbox. {meaning}',
+    sandboxDefault: 'Its commands run in a sandbox.',
+  },
+
+  noAccount: {
+    body: 'This agent won’t start until a {harness} account is added: the one already signed in on this machine, or a new one. Your message stays in the field.',
   },
 
   terminal: {
@@ -94,7 +101,7 @@ export default defineZone('conv', {
     queuedHint: '{engine} takes it into account at its next step',
     remote: 'from claude.ai',
     remoteHint: 'Sent from claude.ai or the Claude app (remote control)',
-    saidAloud: 'said aloud',
+    saidAloud: 'Said aloud',
   },
 
   event: {

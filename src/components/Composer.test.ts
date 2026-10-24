@@ -618,6 +618,27 @@ describe('Composer', () => {
   });
 });
 
+describe('Composer: a message sent while the one before is still on its way', () => {
+  it('sends it once the one before is taken, rather than drop it in silence', async () => {
+    const a = agent({ id: `q${Math.random()}`, status: 'idle' });
+    resetApp({ agents: [a] });
+    let release!: () => void;
+    const first = new Promise<void>((r) => (release = r));
+    let n = 0;
+    const backend = fakeBackend({ get_conversation: () => [], send_message: () => (n++ === 0 ? first : null) });
+    render(Composer, { agent: app.agents[a.id] });
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    await userEvent.type(textarea, 'un{Enter}');
+    await userEvent.type(textarea, 'deux{Enter}');
+    // Gone from the field at once, as the first one: it waits for its turn, not for the user.
+    expect(textarea).toHaveValue('');
+    expect(backend.called('send_message').map((c) => c.args.text)).toEqual(['un']);
+    release();
+    await waitFor(() => expect(backend.called('send_message').map((c) => c.args.text)).toEqual(['un', 'deux']));
+    expect(app.toasts).toEqual([]);
+  });
+});
+
 describe('Composer in a narrow column (split layout)', () => {
   const Real = globalThis.ResizeObserver;
   beforeEach(() => {
@@ -648,8 +669,9 @@ describe('Composer in a narrow column (split layout)', () => {
   it('shrinks the stop button to its icon while Claude works', () => {
     setup({ status: 'running' });
     const stop = screen.getByRole('button', { name: 'Stop' });
-    expect(stop).toHaveTextContent('■');
+    expect(stop.querySelector('[data-icon="stop"]')).not.toBeNull();
     expect(stop).not.toHaveTextContent('Stop');
+    expect(stop).toHaveClass('icon');
     // Claude takes a message sent during a turn at its next step: it is sent, not queued.
     expect(screen.getByRole('button', { name: 'Envoyer' })).toBeInTheDocument();
   });
@@ -956,7 +978,7 @@ describe('Composer: files attached by their path', () => {
       expect(backend.called('attach_open').map((c) => c.args.name)).toEqual(['b.zip']);
       // Only the original file has its mark.
       expect(screen.getAllByRole('img', originMark)).toHaveLength(1);
-      expect(screen.getByText('a.zip').closest('.file')).toContainElement(screen.getByRole('img', originMark));
+      expect(screen.getByText('a.zip').closest('.att')).toContainElement(screen.getByRole('img', originMark));
     });
 
     it('is never erased when its chip is taken away', async () => {
@@ -1109,13 +1131,17 @@ describe('Composer of an agent on another harness', () => {
     expect(screen.getByRole('button', { name: /^Mode/ })).toBeInTheDocument();
   });
 
-  it('offers only the modes its harness takes, with what they mean there', async () => {
+  it('keeps the five modes in their places, those its harness lacks greyed with why, the others with what they mean there (choice 17)', async () => {
     bare({ mode: 'default' });
     await userEvent.click(screen.getByRole('button', { name: /^Mode/ }));
-    const modes = screen.getAllByRole('menuitemradio').map((m) => m.textContent ?? '');
-    expect(modes).toHaveLength(2);
-    expect(modes.some((m) => /Auto/.test(m))).toBe(false);
+    const modes = screen.getAllByRole('menuitemradio');
+    expect(modes.map((m) => m.querySelector('.ml b, b')?.textContent ?? m.textContent)).toHaveLength(5);
+    const auto = screen.getByRole('menuitemradio', { name: /Auto/ });
+    expect(auto).toBeDisabled();
+    expect(auto).toHaveTextContent('Harness nu n’a pas de mode Auto : rien ne décide à ta place.');
+    expect(screen.getByRole('menuitemradio', { name: /Édits auto/ })).toHaveTextContent('Harness nu n’a pas de mode Édits auto.');
     expect(screen.getByRole('menuitemradio', { name: /Plan/ })).toHaveTextContent('Lecture seule, dans un bac à sable');
+    expect(screen.getByRole('menuitemradio', { name: /Plan/ })).toBeEnabled();
   });
 
   it('suggests no / command when its harness offers none', async () => {

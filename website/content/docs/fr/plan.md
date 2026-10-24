@@ -79,7 +79,7 @@ Un clic suffit, sur l’un de ces éléments :
 - la ligne du sous-agent dans la barre latérale ;
 - la pile de points du bandeau « Plan » : d’un clic pour un seul sous-agent qui tourne, par un menu de tous ceux qui tournent pour plusieurs (qu’ils travaillent sur une tâche ou non) ;
 - le `↳ nom` d’une tâche ;
-- le bouton ↗ à droite de la ligne de son appel (l’outil `Agent`), dans la conversation de l’agent ;
+- le bouton au bout de la ligne de son appel (l’outil `Agent`), dans la conversation de l’agent ;
 - « Ouvrir sa conversation », au-dessus d’une demande de permission ou d’une question qu’il a posée.
 
 En haut, un fil d’Ariane « agent › sous-agent » dit où tu es. Pour un sous-agent lancé par un autre, il montre toute la chaîne, et chaque maillon ouvre le sous-agent qu’il nomme. Un clic sur le nom de l’agent, ou `Échap`, te ramène à sa conversation, et le focus retourne là où tu avais cliqué (pour la pile de points du bandeau, sur son bouton, même si tu as choisi le sous-agent dans son menu) ; un clic sur la carte de l’agent dans la barre latérale y ramène aussi. `Échap` ne fait rien tant qu’un champ contient du texte que tu as tapé : un brouillon ne se perd pas pour une touche.
@@ -114,7 +114,7 @@ Claude peut aussi lister les sous-agents d’un agent, lire leur rapport, arrêt
 
 La conversation d’un sous-agent fini se lit encore. Escouade garde avec la conversation de l’agent la consigne, le rapport et le bilan de chaque sous-agent (état, tokens, outils, durée). La consigne et le rapport sont coupés à 16 000 octets, et le texte coupé se termine par « … ». Quand un sous-agent finit sans rendre de rapport en forme, son dernier message sert de rapport. Le rapport d’un sous-agent au premier plan est le résultat de son appel, coupé à 8 000 octets.
 
-Sa conversation se lit donc après un redémarrage d’Escouade, et même quand la barre n’a plus sa ligne (au-delà de 30 sous-agents, ou quand le plan est reparti de zéro) : le bouton ↗ de la ligne de son appel, dans la conversation de l’agent, l’ouvre toujours. Un sous-agent qui tournait quand Escouade s’est fermé est dit « Interrompu ».
+Sa conversation se lit donc après un redémarrage d’Escouade, et même quand la barre n’a plus sa ligne (au-delà de 30 sous-agents, ou quand le plan est reparti de zéro) : le bouton de la ligne de son appel, dans la conversation de l’agent, l’ouvre toujours. Un sous-agent qui tournait quand Escouade s’est fermé est dit « Interrompu ».
 
 ## Les tâches de fond
 

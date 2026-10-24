@@ -205,6 +205,8 @@ test('a question is answered from the list, the conversation open staying where 
   await page.keyboard.press('Control+N');
   await expect(side.locator('.agent')).toHaveCount(2);
   await expect(side.locator('.agent').first()).toHaveClass(/waiting/);
+  // Ctrl+N opens the new agent: read once it is the one open.
+  await expect(side.locator('.agent[aria-current="true"]')).not.toHaveAttribute('data-agent', asker!);
   const open = await side.locator('.agent[aria-current="true"]').getAttribute('data-agent');
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'waiting.app.png') });
   await asking.getByRole('button', { name: '2 SQLite' }).click();
