@@ -62,7 +62,8 @@ test('uncommitted changes show up beside the project’s name, in the files pane
   await addProject(page, app.repo);
   fs.writeFileSync(path.join(app.repo, 'src', 'app.ts'), 'const a = 2;\nconst b = 3;\n');
   await expect(page.locator('header .delta')).toHaveText('Δ 1');
-  await page.getByRole('button', { name: /Fichiers/ }).click();
+  // Ctrl+Maj+B: the header puts « Fichiers » away in a narrow column (the runner's 1024 px screen), « … » then has it.
+  await page.keyboard.press('Control+Shift+B');
   await page.getByRole('button', { name: 'Tout le projet' }).click();
   await expect(page.locator('aside.git-side')).toContainText('app.ts');
   // The row's own button, not its `</>` editor button (whose name also holds the file name).
@@ -78,7 +79,8 @@ test('a changed file is reverted or deleted from its context menu', async ({ app
   await addProject(page, app.repo);
   fs.writeFileSync(path.join(app.repo, 'src', 'app.ts'), 'const a = 2;\n');
   fs.writeFileSync(path.join(app.repo, 'notes.md'), 'brouillon\n');
-  await page.getByRole('button', { name: /Fichiers/ }).click();
+  // Ctrl+Maj+B: the header puts « Fichiers » away in a narrow column (the runner's 1024 px screen), « … » then has it.
+  await page.keyboard.press('Control+Shift+B');
   await page.getByRole('button', { name: 'Tout le projet' }).click();
   const panel = page.locator('aside.git-side');
   // The row's own button, not its `</>` editor button (whose name also holds the file name).
@@ -860,7 +862,8 @@ test('a file of an agent’s worktree opens in the editor from the uncommitted f
   // The folder is there before git has checked its files out: its file is waited for.
   await expect.poll(() => fs.existsSync(path.join(wt, 'src', 'app.ts'))).toBe(true);
   fs.writeFileSync(path.join(wt, 'src', 'app.ts'), 'const a = 42;\n');
-  await page.getByRole('button', { name: /Fichiers/ }).click();
+  // Ctrl+Maj+B: the header puts « Fichiers » away in a narrow column (the runner's 1024 px screen), « … » then has it.
+  await page.keyboard.press('Control+Shift+B');
   // The row's editor button shows on hover.
   await page.locator('.filerow').filter({ hasText: 'app.ts' }).hover();
   await page.getByRole('button', { name: 'Ouvrir app.ts dans l’éditeur' }).click();

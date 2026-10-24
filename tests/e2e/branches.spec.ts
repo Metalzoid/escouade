@@ -28,7 +28,8 @@ test('a branch is created from the status bar, the folder switched to it, and th
   expect(git(app.repo, 'rev-parse', 'feat/e2e')).toBe(git(app.repo, 'rev-parse', 'main'));
 
   // The graph (« Historique » of the side panel) labels the commit with the current branch, and keeps main as another.
-  await page.getByRole('button', { name: /Fichiers/ }).click();
+  // Ctrl+Maj+B: the header puts « Fichiers » away in a narrow column (the runner's 1024 px screen), « … » then has it.
+  await page.keyboard.press('Control+Shift+B');
   await page.getByRole('tab', { name: /Historique/ }).click();
   const graph = page.locator('.graph');
   await expect(graph.locator('.ref.head')).toHaveText('feat/e2e');
