@@ -1,15 +1,17 @@
 # Réglages : Harness
 
-L’onglet « Harness » (« Claude Code » jusqu’à la 1.7) liste les harness des agents, avec leur exécutable et leur version, et règle la vue des nouveaux agents, la vie des processus, les pièces jointes, le remote control et le serveur qui laisse Claude piloter Escouade.
+L’onglet « Harness » (« Claude Code » jusqu’à la 1.7) liste les harness des agents, avec leur état, leur exécutable et leur version, et règle ce qui vaut pour tous : la vue des nouveaux agents, la vie des processus, les pièces jointes et le remote control.
+
+Le serveur qui laisse Claude piloter Escouade a son onglet, « Serveur MCP », dans le groupe « Système » des réglages (voir plus bas) ; ce qui se passe quand un quota est épuisé est dans l’onglet [« Comptes »](settings-accounts).
 
 ## Chaque harness
 
-Un groupe par harness, sous son nom :
+Un groupe par harness, sous son nom, avec à côté son état et sa version : « Prêt · 2.1.301 » en vert ; « Aucun compte · … » en ambre quand aucun compte de ce harness n’est connecté ; « Trop ancienne · … » ou « Non prise en charge · … » en rouge ; « Introuvable » en rouge. Puis :
 
 | Ligne | Ce qu’elle dit |
 |---|---|
 | « Chemin de l’exécutable » | Le programme du harness (voir ci-dessous pour Claude Code). |
-| « Version » | La version trouvée, seule : une version plus ancienne que celles testées est refusée, avec sa raison et la commande qui la met à jour ; une plus récente est utilisée, sans avertissement. Quand aucun compte de ce harness n’est connecté, la ligne ajoute « Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes. » |
+| Sous le chemin | La version trouvée est seule : une version plus ancienne que celles testées est refusée, avec sa raison et la commande qui la met à jour ; une plus récente est utilisée, sans avertissement. Quand aucun compte de ce harness n’est connecté, une ligne dit « Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes. » |
 | « Modèles » (OpenCode) | Les modèles des fournisseurs connectés à OpenCode, avec une recherche : les favoris d’abord, puis un groupe par fournisseur. L’étoile d’un modèle en fait un favori, qui vient en premier dans le menu des modèles de ses agents. |
 | « Installation » | Pour un harness introuvable : la commande qui l’installe (Claude Code : `irm https://claude.ai/install.ps1 \| iex` sous Windows, `curl -fsSL https://claude.ai/install.sh \| bash` sous macOS et Linux). Pour Claude Code, la ligne dit aussi si une installation par npm a été interrompue, avec la commande qui la répare (voir le [dépannage](troubleshooting)). |
 
@@ -95,14 +97,13 @@ Les demandes d’autorisation et leur traitement sont décrits dans [la conversa
 > [!NOTE]
 > Avec Haiku, le choix de l’effort est grisé dans le champ de message de l’agent (« Haiku ne gère pas l’effort »), comme le mode « Auto » (« indisponible avec ce modèle ») quand le Claude Code du compte de l’agent dit que son Haiku ne le prend pas : c’est Haiku 4.5, que Claude Code fait tourner jusqu’à la 2.1.292 ; depuis la 2.1.293, c’est Haiku 5.5, qui le prend.
 
-## Processus
+## Tous les harness
+
+Le modèle, l’effort et le mode des nouveaux agents se règlent compte par compte, dans l’onglet [« Comptes »](settings-accounts).
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
 | « Reprise automatique après la limite d’usage » | « continue » est envoyé à l’agent une fois le quota réinitialisé. | Activé |
-| « Reprendre sur un autre compte un agent de ticket arrêté par la limite » | Sinon il attend la remise à zéro de son compte. Absent tant qu’il n’y a qu’un compte. | Désactivé |
-| « Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés » | L’agent passe seul sur le harness de secours suivant de son projet, et le pilote auto le suit pour les tickets ; sinon il attend la remise à zéro. Le harness quitté n’est pas repris avant sa remise à zéro, et l’agent n’y revient jamais seul. Absent tant qu’un seul harness est trouvé. | Désactivé |
-| « Modèle de passation · <harness> » | Le modèle d’un agent qui passe sur ce harness. Un par harness, affiché avec le réglage précédent. | Le meilleur |
 | « Vue des nouveaux agents » | « Escouade » : un nouvel agent tourne dans la conversation d’Escouade. « Terminal du harness » : il tourne dans l’interface de son harness elle-même, dans un terminal (la vue Claude Code). Affiché tant qu’un harness a une vue terminal ; les agents d’un harness qui n’en a pas restent dans la vue d’Escouade. | Escouade |
 | « Les agents tiennent une liste de tâches » | Les agents reçoivent l’outil de liste de tâches de Claude Code. | Activé |
 | « Arrêter les processus des agents inactifs après » (minutes, 0 = jamais) | Le processus Claude d’un agent inactif est arrêté après ce délai. | 30 |
@@ -113,7 +114,7 @@ Quand un agent s’arrête sur la limite d’usage, Escouade prévoit de lui éc
 
 ### Reprise sur un autre compte
 
-Avec plusieurs comptes, un agent de ticket arrêté par la limite repart tout seul, avec sa session, sur le compte que choisirait Escouade, quand un autre est utilisable, au lieu d’attendre la remise à zéro de son compte. Voir [les comptes](accounts) et l’onglet [« Comptes »](settings-accounts).
+Le réglage « Reprendre sur un autre compte un agent de ticket arrêté par la limite » est dans l’onglet [« Comptes »](settings-accounts), groupe « Quand un quota est épuisé », avec « Continuer sur le harness suivant… », l’ordre des harness et les modèles de passation. Avec plusieurs comptes, un agent de ticket arrêté par la limite repart tout seul, avec sa session, sur le compte que choisirait Escouade, quand un autre est utilisable, au lieu d’attendre la remise à zéro de son compte. Voir [les comptes](accounts) et l’onglet [« Comptes »](settings-accounts).
 
 ### Vue Claude Code
 
@@ -143,7 +144,7 @@ Un champ de nombre vidé vaut 0. La taille maximale vaut pour tous les fichiers 
 
 ## Remote control
 
-Ce groupe rend les agents de tous les projets accessibles depuis claude.ai et l’app Claude, sans activer le [remote control](remote-control) agent par agent.
+Ce réglage, dans le groupe de Claude Code (« Claude Code seulement : les autres harness n’ont pas de remote control. »), rend les agents de tous les projets accessibles depuis claude.ai et l’app Claude, sans activer le [remote control](remote-control) agent par agent.
 
 ### Remote control pour tous les agents
 
@@ -157,7 +158,7 @@ Pour un agent en [vue Claude Code](claude-code-view), le changement vaut au proc
 
 ## Serveur MCP
 
-Ce groupe laisse les agents d’Escouade, et chaque harness installé lancé hors d’Escouade (Claude Code, Codex, OpenCode, Copilot CLI, dans un terminal ou leur app), lire tes projets, tes agents et tes tickets, et créer des tickets ou lancer des agents, par le [serveur MCP](mcp) d’Escouade.
+L’onglet « Serveur MCP » (groupe « Système » des réglages) laisse les agents d’Escouade, et chaque harness installé lancé hors d’Escouade (Claude Code, Codex, OpenCode, Copilot CLI, dans un terminal ou leur app), lire tes projets, tes agents et tes tickets, et créer des tickets ou lancer des agents, par le [serveur MCP](mcp) d’Escouade.
 
 ### Les agents peuvent piloter Escouade
 
@@ -177,4 +178,4 @@ Interrupteur allumé, la liste dessous donne chaque déclaration :
 
 ## Activité MCP
 
-Le groupe « Activité MCP » liste ce que le serveur a reçu et répondu, les appels les plus récents en tête. Chaque ligne donne l’heure, qui a appelé (le nom d’un agent, « Claude (hors Escouade) » ou, pour une requête refusée avant de savoir qui l’envoie, « Client inconnu »), l’outil, le résultat (« Fait », « Refusé » ou « Erreur »), puis ce qui a été demandé et, pour un refus ou une erreur, pourquoi. Pour un `set_board` réussi, la ligne dit aussi ce qui a changé, champ par champ, avant et après (« model: opus → sonnet · effort: (défaut) → medium »), ou « Aucun changement ». Les 200 derniers appels sont gardés en mémoire, pas enregistrés. Le bouton « Effacer » vide la liste ; sans appel, elle dit « Aucun appel pour l’instant. ».
+Le groupe « Activité MCP » de l’onglet « Serveur MCP » liste ce que le serveur a reçu et répondu, les appels les plus récents en tête. Chaque ligne donne l’heure, qui a appelé (le nom d’un agent, « Claude (hors Escouade) » ou, pour une requête refusée avant de savoir qui l’envoie, « Client inconnu »), l’outil, le résultat (« Fait », « Refusé » ou « Erreur »), puis ce qui a été demandé et, pour un refus ou une erreur, pourquoi. Pour un `set_board` réussi, la ligne dit aussi ce qui a changé, champ par champ, avant et après (« model: opus → sonnet · effort: (défaut) → medium »), ou « Aucun changement ». Les 200 derniers appels sont gardés en mémoire, pas enregistrés. Le bouton « Effacer » vide la liste ; sans appel, elle dit « Aucun appel pour l’instant. ».

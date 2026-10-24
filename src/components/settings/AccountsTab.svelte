@@ -10,21 +10,25 @@
     engineOfAccount,
     engineOrder,
     isPrincipal,
+    metersShown,
     PRINCIPAL,
     privateSharing,
     projectsWithoutAccount,
   } from '../../lib/accounts';
-  import { capsOf, defaultModelOf, effortsOf, engineName, modelsOf, modesOf } from '../../lib/engines';
+  import { capsOf, defaultModelOf, effortsOf, engineName, modelsOf, modesOf, offered } from '../../lib/engines';
   import { EFFORTS, MODES } from '../../lib/models';
   import { fList, fPct, tildify } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
+  import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import type { Account, AccountStatus, ClosedProject, EngineId } from '../../lib/types';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
   import Switch from './Switch.svelte';
+  import Icon from '../Icon.svelte';
+  import QuotaMeter from '../QuotaMeter.svelte';
   import { tip } from '../../lib/tip';
 
   // The accounts, a group per harness in « Ordre des harness ». Each change goes to the backend at once (`account_*`,
@@ -32,6 +36,20 @@
   // « Annuler » could not take back.
 
   const accounts = $derived(app.settings.accounts ?? []);
+  /** « Quand un quota est épuisé » is in the draft, saved by « Enregistrer » with the other settings. */
+  const draft = $derived(settingsForm.settings);
+  /** The harnesses found: going on on the next one asks for two. */
+  const found = $derived(offered());
+  /** An account's meters, as its quota was last read. */
+  const metersOf = (a: Account) => metersShown(app.usage.accounts.find((u) => u.id === a.id) ?? null, engineOfAccount(a));
+
+  /** « Modèle de passation » of a harness; empty, its best. */
+  function setHandoverModel(engine: EngineId, model: string) {
+    const models = { ...(draft.handoverModels ?? {}) };
+    if (model) models[engine] = model;
+    else delete models[engine];
+    draft.handoverModels = models;
+  }
   /** Every harness installed, an empty one with « Aucun compte » (ESC-128), and those with accounts. */
   const groups = $derived(accountsTabEngines().map((engine) => ({ engine, list: accounts.filter((a) => engineOfAccount(a) === engine) })));
   /** How many accounts of each harness are active: its last one stays on. */
@@ -228,19 +246,33 @@
   };
 </script>
 
+<!-- Always there, empty while every project has an account: a screen reader hears it fill. (Above the groups: between two, it would part their hairline.) -->
+<p class="orphans" class:on={orphans.length > 0} role="status">{orphansText}</p>
+<span id="accounts-last-active" hidden>{t('accounts.tab.lastActive')}</span>
 {#each groups as g, gi (g.engine)}
   {@const harness = engineName(g.engine)}
   {@const list = g.list}
-  <Group title={t('accounts.tab.group', { harness })} note={gi === 0 ? t('accounts.tab.order') : undefined} plain>
+  <Group
+    title={t('accounts.tab.group', { harness })}
+    note={gi === 0 ? t('accounts.tab.order') : undefined}
+    data-engine={g.engine}
+    aria-label={t('accounts.tab.group', { harness })}
+  >
+    {#snippet action()}
+      <!-- An empty harness asks for its first account louder (choice 19 of the 2.0 design). -->
+      <button
+        class="btn"
+        class:primary={!list.length}
+        aria-label={t('accounts.tab.addTo', { harness })}
+        onclick={() => addAccount(g.engine)}
+        ><Icon name="plus" size={14} />{list.length ? t('accounts.tab.add') : t('accounts.tab.addTo', { harness })}</button
+      >
+    {/snippet}
     {#if !list.length}
       <!-- A harness installed without an account (ESC-128): nothing starts on it until one is added. -->
-      <div class="list empty" role="group" aria-label={t('accounts.tab.group', { harness })}>
-        <div class="line">
-          <span class="none">{t('accounts.tab.none')}</span>
-          <div style="flex:1"></div>
-          <button class="btn" onclick={() => addAccount(g.engine)}>{t('accounts.tab.addTo', { harness })}</button>
-        </div>
-        <p class="k hint">{t('accounts.tab.noneHint', { harness })}</p>
+      <div class="acct none-acct" role="group" aria-label={t('accounts.tab.group', { harness })}>
+        <div class="l1"><span class="nm none">{t('accounts.tab.none')}</span></div>
+        <p class="hint">{t('accounts.tab.noneHint', { harness })}</p>
       </div>
     {:else}
       <ul class="list" aria-label={t('accounts.tab.group', { harness })}>
@@ -253,22 +285,26 @@
           {@const closedOnes = closedReserved(a)}
           {@const defaults = defaultsOf(a)}
           {@const sharing = privateSharing(a)}
+          {@const meters = a.active && !noQuota(g.engine) ? metersOf(a) : []}
           <li class="acct" aria-label={name}>
-            <div class="line">
+            <div class="l1">
               <input
-                class="field name"
+                class="nm"
+                size={Math.max(4, name.length + 1)}
                 aria-label={t('accounts.tab.name')}
                 spellcheck="false"
                 value={name}
                 onkeydown={blurOnEnter}
                 onblur={(e) => commit(a, e.currentTarget, 'name')}
               />
-              {#if isPrincipal(a)}<span class="machine">{t('accounts.tab.machine')}</span>{/if}
-              <span class="state" class:on={a.active && status?.connected} class:off={!a.active}>
-                <span class="dot" aria-hidden="true"></span>{stateOf(a, status)}
+              <span class="stt" class:on={a.active && status?.connected} class:off={!a.active}>
+                <i aria-hidden="true"></i><span>{stateOf(a, status)}</span>
               </span>
-              <div style="flex:1"></div>
-              <span class="k" aria-hidden="true">{t('accounts.tab.active')}</span>
+              <span class="quota">
+                {#each meters as m (m.minutes ?? 'credits')}
+                  <QuotaMeter minutes={m.minutes} usage={m.usage} now={app.now} />
+                {/each}
+              </span>
               <button
                 class="switch"
                 class:on={a.active}
@@ -276,25 +312,28 @@
                 aria-checked={a.active}
                 aria-label={t('accounts.tab.active')}
                 aria-describedby={last ? 'accounts-last-active' : undefined}
-                use:tip={last ? t('accounts.tab.lastActive') : undefined}
+                use:tip={last ? t('accounts.tab.lastActive') : t('accounts.tab.active')}
                 disabled={last}
                 onclick={() => save({ ...plain(a), active: !a.active })}
               ></button>
-              <button class="icon-btn" aria-label={t('accounts.tab.up', { name })} disabled={i === 0} onclick={() => move(a, list[i - 1])}
-                >↑</button
-              >
-              <button
-                class="icon-btn"
-                aria-label={t('accounts.tab.down', { name })}
-                disabled={i === list.length - 1}
-                onclick={() => move(a, list[i + 1])}>↓</button
-              >
+              <span class="ord">
+                <button class="icon-btn" aria-label={t('accounts.tab.up', { name })} disabled={i === 0} onclick={() => move(a, list[i - 1])}
+                  ><Icon name="up" size={14} /></button
+                >
+                <button
+                  class="icon-btn down"
+                  aria-label={t('accounts.tab.down', { name })}
+                  disabled={i === list.length - 1}
+                  onclick={() => move(a, list[i + 1])}><Icon name="up" size={14} /></button
+                >
+              </span>
             </div>
-            <div class="line">
+            <div class="l2">
               <span class="k">{t('accounts.tab.folder')}</span>
               <span class="dir mono">{tildify(a.configDir || status?.dir || '')}</span>
+              {#if isPrincipal(a)}<span class="smark machine"><Icon name="user" size={12} />{t('accounts.tab.machine')}</span>{/if}
             </div>
-            <div class="line">
+            <div class="l2">
               <label class="k" for="account-exe-{a.id}">{t('accounts.tab.executable')}</label>
               <input
                 id="account-exe-{a.id}"
@@ -305,55 +344,60 @@
                 onkeydown={blurOnEnter}
                 onblur={(e) => commit(a, e.currentTarget, 'claudePath')}
               />
-              <div style="flex:1"></div>
-              {#if status}
-                <!-- Not signed in, or out of date: to sign in. Signed in: to sign in again (another claude.ai account, say). -->
-                <button class="btn" onclick={() => (app.modal = { kind: 'account', accountId: a.id })}>
-                  {status.connected && !late ? t('accounts.tab.signInAgain') : t('accounts.tab.signIn')}
-                </button>
-              {/if}
-              <button class="btn ghost danger" onclick={() => remove(a)}>{t('accounts.tab.remove')}</button>
+              <span class="end">
+                {#if status}
+                  <!-- Not signed in, or out of date: to sign in. Signed in: to sign in again (another claude.ai account, say). -->
+                  <button class="btn" onclick={() => (app.modal = { kind: 'account', accountId: a.id })}>
+                    {status.connected && !late ? t('accounts.tab.signInAgain') : t('accounts.tab.signIn')}
+                  </button>
+                {/if}
+                <button class="btn danger" onclick={() => remove(a)}>{t('accounts.tab.remove')}</button>
+              </span>
             </div>
-            <!-- What its new agents go with, as its harness has it (ESC-128). -->
-            <div class="line wrap" role="group" aria-label={t('accounts.tab.defaults')}>
+            <!-- What its new agents go with, as its harness has it (ESC-128), always in sight (choice 18). -->
+            <div class="l2" role="group" aria-label={t('accounts.tab.defaults')}>
               <span class="k">{t('accounts.tab.defaults')}</span>
-              <label class="pick">
-                <span class="k">{t('accounts.tab.defaultModel')}</span>
-                <select class="field" value={a.defaultModel ?? ''} onchange={(e) => setDefault(a, 'defaultModel', e.currentTarget.value)}>
+              <span class="picks">
+                <select
+                  class="field"
+                  aria-label={t('accounts.tab.defaultModel')}
+                  value={a.defaultModel ?? ''}
+                  onchange={(e) => setDefault(a, 'defaultModel', e.currentTarget.value)}
+                >
                   <option value="">{defaults.harnessLabel}</option>
                   {#each defaults.models as m (m.id)}<option value={m.id}>{m.label}</option>{/each}
                   {#if defaults.kept}<option value={defaults.kept}>{defaults.kept}</option>{/if}
                 </select>
-              </label>
-              {#if defaults.efforts.length}
-                <label class="pick">
-                  <span class="k">{t('accounts.tab.defaultEffort')}</span>
+                {#if defaults.efforts.length}
                   <select
                     class="field"
+                    aria-label={t('accounts.tab.defaultEffort')}
                     value={a.defaultEffort ?? ''}
                     onchange={(e) => setDefault(a, 'defaultEffort', e.currentTarget.value)}
                   >
                     <option value="">{t('accounts.tab.harnessDefault')}</option>
                     {#each defaults.efforts as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
                   </select>
-                </label>
-              {/if}
-              {#if defaults.modes.length}
-                <label class="pick">
-                  <span class="k">{t('accounts.tab.defaultMode')}</span>
-                  <select class="field" value={a.defaultMode ?? ''} onchange={(e) => setDefault(a, 'defaultMode', e.currentTarget.value)}>
+                {/if}
+                {#if defaults.modes.length}
+                  <select
+                    class="field"
+                    aria-label={t('accounts.tab.defaultMode')}
+                    value={a.defaultMode ?? ''}
+                    onchange={(e) => setDefault(a, 'defaultMode', e.currentTarget.value)}
+                  >
                     <option value="">{t('accounts.tab.harnessDefault')}</option>
                     {#each defaults.modes as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
                   </select>
-                </label>
-              {/if}
+                {/if}
+              </span>
             </div>
             {#if noQuota(g.engine)}
-              <div class="line">
+              <div class="l2">
                 <label class="k" for="account-budget-{a.id}">{t('accounts.tab.budget')}</label>
                 <input
                   id="account-budget-{a.id}"
-                  class="field mono budget"
+                  class="field budget"
                   type="text"
                   inputmode="decimal"
                   spellcheck="false"
@@ -363,31 +407,41 @@
                   onkeydown={blurOnEnter}
                   onblur={(e) => commitBudget(a, e.currentTarget)}
                 />
-                <span class="k hint" id="account-budget-hint-{a.id}">{t('accounts.tab.budgetHint')}</span>
+                <span class="hint" id="account-budget-hint-{a.id}">{t('accounts.tab.budgetHint')}</span>
               </div>
             {/if}
             {#if app.projects.length || closedOnes.length}
-              <div class="line wrap" role="group" aria-label={t('accounts.tab.reserved')}>
+              <div class="l2" role="group" aria-label={t('accounts.tab.reserved')}>
                 <span class="k" use:tip={t('accounts.tab.reservedHint')}>{t('accounts.tab.reserved')}</span>
-                {#each app.projects as p (p.id)}
-                  <label class="chip">
-                    <input type="checkbox" checked={reserved.includes(p.id)} onchange={(e) => reserve(a, p.id, e.currentTarget.checked)} />
-                    {p.name}
-                  </label>
-                {/each}
-                <!-- Closed, but their history is kept and so is the reservation: it goes only when they are unticked or erased. -->
-                {#each closedOnes as c (c.id)}
-                  <label class="chip">
-                    <input type="checkbox" checked={reserved.includes(c.id)} onchange={(e) => reserve(a, c.id, e.currentTarget.checked)} />
-                    {t('accounts.tab.closedProject', { name: c.name })}
-                  </label>
-                {/each}
-                {#if !reserved.length}<span class="k">· {t('accounts.tab.reservedAll')}</span>{/if}
+                <span class="chips">
+                  {#each app.projects as p (p.id)}
+                    <label class="chip-t">
+                      <input
+                        type="checkbox"
+                        checked={reserved.includes(p.id)}
+                        onchange={(e) => reserve(a, p.id, e.currentTarget.checked)}
+                      />
+                      <i style:background={p.color} aria-hidden="true"></i>{p.name}
+                    </label>
+                  {/each}
+                  <!-- Closed, but their history is kept and so is the reservation: it goes only when they are unticked or erased. -->
+                  {#each closedOnes as c (c.id)}
+                    <label class="chip-t">
+                      <input
+                        type="checkbox"
+                        checked={reserved.includes(c.id)}
+                        onchange={(e) => reserve(a, c.id, e.currentTarget.checked)}
+                      />
+                      {t('accounts.tab.closedProject', { name: c.name })}
+                    </label>
+                  {/each}
+                  {#if !reserved.length}<span class="hint">{t('accounts.tab.reservedAll')}</span>{/if}
+                </span>
               </div>
             {/if}
             <!-- A private project still goes to it, shared (ESC-141): reserved to that project alone, it is no longer. -->
             {#if sharing.length}
-              <div class="line wrap">
+              <div class="l2 sharing-row">
                 <p class="sharing">
                   {t('accounts.private.sharing', {
                     count: sharing.length,
@@ -413,207 +467,295 @@
     {/if}
   </Group>
 {/each}
-<!-- Always there, empty while every project has an account: a screen reader hears it fill. -->
-<p class="orphans" class:on={orphans.length > 0} role="status">{orphansText}</p>
-<span id="accounts-last-active" hidden>{t('accounts.tab.lastActive')}</span>
-<div>
-  <button class="btn" onclick={() => (app.modal = { kind: 'account' })}>{t('accounts.tab.add')}</button>
-</div>
-{#if order.length > 1}
-  <Group title={t('accounts.engineOrder.label')} note={t('accounts.engineOrder.desc')} plain>
-    <ol class="list" aria-label={t('accounts.engineOrder.label')}>
-      {#each order as e, i (e)}
-        {@const name = engineName(e)}
-        <li class="acct line">
-          <span class="rank" aria-hidden="true">{i + 1}</span>
-          <span class="engine">{name}</span>
-          <div style="flex:1"></div>
-          <button class="icon-btn" aria-label={t('accounts.engineOrder.up', { name })} disabled={i === 0} onclick={() => moveEngine(i, -1)}
-            >↑</button
-          >
-          <button
-            class="icon-btn"
-            aria-label={t('accounts.engineOrder.down', { name })}
-            disabled={i === order.length - 1}
-            onclick={() => moveEngine(i, 1)}>↓</button
-          >
-        </li>
-      {/each}
-    </ol>
-  </Group>
-{/if}
-<Group title={t('accounts.quotas.title')}>
+<!-- Where an agent goes at the limit, in one place (choice 2 of the 2.0 design), « Changer de compte à » first (choice 20). -->
+<Group title={t('accounts.quotas.limitTitle')} note={t('accounts.quotas.limitNote')} anchor="limit">
   <Row label={t('accounts.quotas.switchAt')} desc={t('accounts.quotas.switchAtDesc')}>
-    <Chips
-      label={t('accounts.quotas.switchAt')}
-      options={switchChoices}
-      mono
-      bind:value={() => app.settings.switchAt ?? 100, setSwitchAt}
-    />
+    <Chips label={t('accounts.quotas.switchAt')} options={switchChoices} bind:value={() => app.settings.switchAt ?? 100, setSwitchAt} />
   </Row>
+  <!-- With a single account there is nothing to go on on. -->
+  {#if accounts.length > 1}
+    <Row label={t('accounts.switchOnLimit.label')} desc={t('accounts.switchOnLimit.desc')}>
+      <Switch label={t('accounts.switchOnLimit.label')} bind:on={draft.switchOnLimit} />
+    </Row>
+  {/if}
+  <!-- Going on on another harness (ESC-88): only with two harnesses found. -->
+  {#if found.length > 1}
+    <Row label={t('handover.settings.onLimit')} desc={t('handover.settings.onLimitDesc')}>
+      <Switch label={t('handover.settings.onLimit')} bind:on={draft.handoverOnLimit} />
+    </Row>
+  {/if}
+  {#if order.length > 1}
+    <Row label={t('accounts.engineOrder.label')} desc={t('accounts.engineOrder.desc')} wide>
+      <ol class="order" aria-label={t('accounts.engineOrder.label')}>
+        {#each order as e, i (e)}
+          {@const name = engineName(e)}
+          <li>
+            <span class="rank" aria-hidden="true">{i + 1}</span>
+            <span class="engine">{name}</span>
+            <button
+              class="icon-btn"
+              aria-label={t('accounts.engineOrder.up', { name })}
+              disabled={i === 0}
+              onclick={() => moveEngine(i, -1)}><Icon name="up" size={14} /></button
+            >
+            <button
+              class="icon-btn down"
+              aria-label={t('accounts.engineOrder.down', { name })}
+              disabled={i === order.length - 1}
+              onclick={() => moveEngine(i, 1)}><Icon name="up" size={14} /></button
+            >
+          </li>
+        {/each}
+      </ol>
+    </Row>
+  {/if}
+  {#if found.length > 1}
+    {#each found.filter((e) => e.models.length) as e (e.id)}
+      <Row label={t('handover.settings.model', { harness: e.name })} desc={t('handover.settings.modelDesc')}>
+        <select
+          class="field"
+          aria-label={t('handover.settings.model', { harness: e.name })}
+          value={draft.handoverModels?.[e.id] ?? ''}
+          onchange={(ev) => setHandoverModel(e.id, ev.currentTarget.value)}
+        >
+          <option value="">{t('handover.settings.best', { model: e.models[0].label })}</option>
+          {#each e.models as m (m.id)}<option value={m.id}>{m.label}</option>{/each}
+        </select>
+      </Row>
+    {/each}
+  {/if}
+</Group>
+<Group title={t('accounts.quotas.title')}>
   <Row label={t('accounts.quotas.projection')} desc={t('accounts.quotas.projectionDesc')}>
     <Switch label={t('accounts.quotas.projection')} bind:on={() => app.settings.quotaProjection !== false, setProjection} />
   </Row>
 </Group>
 
 <style>
-  .sharing {
-    flex: 1;
-    margin: 0;
-    font-size: 12px;
-    color: var(--wait);
-  }
+  /* An account's card (`.acct` of the 2.0 design): its name, its sign-in, its quota and its switch on the first line; its
+     folder, executable, new agents, budget and projects under it, each after its key. */
   .list {
-    margin: 0;
+    margin: 6px 0 0;
     padding: 0;
     list-style: none;
-    display: flex;
-    flex-direction: column;
-    border-radius: var(--r);
-    border: 1px solid var(--line);
-    background: var(--bg);
   }
   .acct {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 12px 16px;
+    display: grid;
+    gap: 10px;
+    padding: 16px 0;
   }
-  .acct:not(:first-child) {
-    border-top: 1px solid var(--line);
+  .acct + .acct {
+    border-top: 1px solid rgba(var(--fg-rgb), 0.05);
   }
-  .line {
+  .l1,
+  .l2 {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     min-width: 0;
   }
-  .wrap {
-    flex-wrap: wrap;
-    gap: 6px 12px;
-  }
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 12px;
-    color: var(--muted);
-    cursor: pointer;
-  }
-  .name {
-    width: 200px;
-    height: 30px;
-    padding: 0 10px;
-    background: var(--panel);
-    font-size: 13px;
+  .nm {
+    flex: 0 1 auto;
+    min-width: 60px;
+    max-width: 220px;
+    height: 26px;
+    margin: 0 -6px;
+    padding: 0 6px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text);
+    font-size: 13.5px;
     font-weight: 600;
+    outline: none;
+    text-overflow: ellipsis;
   }
-  .state {
-    display: flex;
+  .nm:hover {
+    box-shadow: inset 0 0 0 1px var(--line-2);
+  }
+  .nm:focus {
+    background: var(--well);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--p) 60%, transparent),
+      0 0 0 3px color-mix(in oklch, var(--p) 14%, transparent);
+  }
+  .nm.none {
+    width: auto;
+    margin: 0;
+    padding: 0;
+    color: var(--muted);
+  }
+  .stt {
+    display: inline-flex;
     align-items: center;
     gap: 6px;
     min-width: 0;
-    font-size: 12px;
     color: var(--muted);
-  }
-  .dot {
-    width: 7px;
-    height: 7px;
-    flex: none;
-    border-radius: 50%;
-    background: var(--wait);
-  }
-  .state.on .dot {
-    background: var(--add);
-  }
-  .state.off .dot {
-    background: var(--dim);
-  }
-  .k {
-    flex: none;
     font-size: 12px;
-    color: var(--dim);
   }
-  .dir {
-    min-width: 0;
-    font-size: 11.5px;
-    color: var(--muted);
+  .stt span {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .stt i {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--wait);
+  }
+  .stt.on i {
+    background: var(--run);
+  }
+  .stt.off i {
+    background: var(--dim);
+  }
+  .quota {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+  }
+  .ord {
+    display: inline-flex;
+    flex: none;
+  }
+  .icon-btn.down :global(.icon) {
+    transform: rotate(180deg);
+  }
+  .k {
+    flex: none;
+    width: 90px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .dir {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--soft);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .smark {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 5px;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 5px;
+    background: rgba(var(--fg-rgb), 0.06);
+    color: var(--soft);
+    font-size: 11.5px;
+    font-weight: 550;
+  }
   .exe {
     width: 300px;
-    max-width: 45%;
-    height: 28px;
-    padding: 0 10px;
-    background: var(--panel);
+    min-width: 0;
+    flex: 0 1 auto;
     font-size: 12px;
   }
-  .empty {
-    padding: 12px 16px;
-    gap: 6px;
-  }
-  .none {
-    font-size: 13px;
-    color: var(--muted);
-  }
-  .machine {
-    flex: none;
-    font-size: 11px;
-    color: var(--dim);
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    padding: 1px 8px;
-  }
-  .pick {
+  .end {
     display: inline-flex;
-    align-items: center;
-    gap: 6px;
+    flex: none;
+    gap: 8px;
+    margin-left: auto;
   }
-  .pick select {
-    height: 28px;
-    padding: 0 8px;
-    background: var(--panel);
-    font-size: 12px;
-    max-width: 220px;
+  .picks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+  }
+  .picks select {
+    max-width: 260px;
   }
   .budget {
-    width: 90px;
+    width: 64px;
     flex: none;
-    height: 28px;
-    padding: 0 10px;
-    background: var(--panel);
-    font-size: 12px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
   }
   .hint {
     min-width: 0;
-    white-space: normal;
-    line-height: 1.4;
-  }
-  .btn {
-    height: 28px;
+    margin: 0;
+    color: var(--muted);
     font-size: 12px;
+    line-height: 1.45;
   }
-  .icon-btn:disabled {
-    opacity: 0.35;
-    background: transparent;
-    cursor: default;
+  .none-acct .hint {
+    font-size: 12.5px;
   }
-  /* As `Switch` has it: the last account active stays on. */
+  /* « Réservé aux projets »: a chip per project, pressed when reserved; the box stays for the keyboard and the readers. */
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .chip-t {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 9px 0 7px;
+    border-radius: 6px;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 550;
+    cursor: pointer;
+  }
+  .chip-t input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .chip-t i {
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+  }
+  .chip-t:has(input:checked) {
+    background: rgba(var(--fg-rgb), 0.07);
+    color: var(--text);
+  }
+  .chip-t:has(input:focus-visible) {
+    outline: 2px solid var(--p-ink);
+    outline-offset: 1px;
+  }
   .switch:disabled {
     opacity: 0.4;
     cursor: default;
   }
+  .sharing-row {
+    flex-wrap: wrap;
+  }
+  .sharing {
+    flex: 1;
+    margin: 0;
+    color: var(--warn-ink);
+    font-size: 12px;
+  }
   .late,
   .refused {
     margin: 0;
-    font-size: 11.5px;
+    font-size: 12px;
     line-height: 1.45;
   }
   .late,
   .orphans {
-    color: var(--wait);
+    color: var(--warn-ink);
   }
   .orphans {
     margin: 0;
@@ -621,23 +763,48 @@
     line-height: 1.45;
   }
   .orphans.on {
-    margin-top: 8px;
+    margin-top: 16px;
   }
   .refused {
     color: var(--del);
   }
-  .rank {
-    width: 16px;
+  /* « Ordre des harness »: each harness in its place, moved by its arrows. */
+  .order {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .order li {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 0 2px 0 9px;
+    border-radius: 7px;
+    box-shadow: inset 0 0 0 1px var(--line-2);
     font-size: 12px;
-    color: var(--dim);
+    font-weight: 550;
+  }
+  .rank {
+    color: var(--muted);
     font-variant-numeric: tabular-nums;
   }
-  .engine {
-    font-size: 13px;
-    font-weight: 600;
+  .order .icon-btn {
+    width: 22px;
+    height: 22px;
   }
-  li.line {
-    flex-direction: row;
-    padding: 8px 16px;
+  /* A narrow window: the card's lines wrap, the quota under the name. */
+  @container settings (max-width: 620px) {
+    .l1,
+    .l2 {
+      flex-wrap: wrap;
+    }
+    .end,
+    .quota {
+      margin-left: 0;
+    }
   }
 </style>

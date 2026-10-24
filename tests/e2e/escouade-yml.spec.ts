@@ -87,19 +87,19 @@ test('a repository’s .escouade.yml sets the project up, its commands waiting f
   // What was left out is said with its line.
   await expect(settings.getByText(/Ligne 13 : clé inconnue : board\.unknown_thing/)).toBeVisible();
   // The settings it set are marked, those of the Kanban too.
-  const perAgent = settings.locator('.row', { hasText: 'Un worktree par agent' });
+  const perAgent = settings.locator('.sr', { hasText: 'Un worktree par agent' });
   await expect(perAgent.getByText('Défini par .escouade.yml')).toBeVisible();
   // Its worktrees at once (ESC-156), as the file says.
-  const atFirst = settings.locator('.row', { hasText: 'Créer le worktree au premier message' });
+  const atFirst = settings.locator('.sr', { hasText: 'Créer le worktree au premier message' });
   await expect(atFirst.getByText('Défini par .escouade.yml')).toBeVisible();
   await expect(atFirst.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
   const pending = settings.getByRole('region', { name: 'Commandes en attente de ton accord' });
   await expect(pending.getByText(`node -e "require('fs').writeFileSync('setup-ran.txt', 'yes')"`)).toBeVisible();
   await pending.getByRole('button', { name: 'Faire confiance à ces commandes' }).click();
   await expect(pending).toBeHidden();
-  await expect(settings.locator('.row', { hasText: 'Un worktree par agent' }).getByText('Défini par .escouade.yml')).toBeVisible();
+  await expect(settings.locator('.sr', { hasText: 'Un worktree par agent' }).getByText('Défini par .escouade.yml')).toBeVisible();
   await settings.getByRole('tab', { name: 'Kanban' }).click();
-  await expect(settings.locator('.row', { hasText: 'Relancer les tests avant' }).getByText('Défini par .escouade.yml')).toBeVisible();
+  await expect(settings.locator('.sr', { hasText: 'Relancer les tests avant' }).getByText('Défini par .escouade.yml')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(settings).toBeHidden();
   await expect(page.getByText(/attendent ton accord : elles ne tournent pas encore/)).toBeHidden();

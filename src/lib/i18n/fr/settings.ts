@@ -5,26 +5,30 @@ export default {
   // The tabs of the window: their name and what they set (under the title, in the header).
   tabs: {
     app: { label: 'Application', desc: 'Thème, zoom, langue de l’interface et textes rédigés' },
-    claude: { label: 'Harness', desc: 'Exécutables, versions et serveur MCP' },
+    claude: { label: 'Harness', desc: 'Exécutables et versions de chaque harness, et ce qui vaut pour tous' },
     accounts: {
       label: 'Comptes',
-      desc: 'Les comptes de chaque harness sur lesquels partent les agents, et leurs quotas, enregistrés à chaque changement',
+      desc: 'Les comptes de chaque harness, les réglages de leurs nouveaux agents, et ce qui se passe à la limite',
     },
+    mcp: { label: 'Serveur MCP', desc: 'Ce que Claude et les agents peuvent faire dans Escouade, et ce qu’ils ont fait' },
     notifications: { label: 'Notifications', desc: 'Alertes visuelles et sonores' },
     projects: { label: 'Projets', desc: 'Réglages propres à chaque projet' },
     board: { label: 'Kanban', desc: 'Pilote auto et tickets validés' },
-    integrations: { label: 'Intégrations', desc: 'Jira, Trello, GitHub Issues, Linear et hébergeurs de code' },
+    integrations: { label: 'Intégrations', desc: 'Hébergeurs de code, Jira, Trello, GitHub Issues et Linear' },
     terminals: { label: 'Terminaux', desc: 'Shells disponibles dans les terminaux intégrés' },
     network: {
       label: 'Réseau',
       desc: 'Proxy HTTP(S) et certificats TLS pour Claude Code, les intégrations et les mises à jour',
     },
-    voice: { label: 'Voix', desc: 'Dictée des messages : micro, modèle de transcription, langue et raccourci' },
+    voice: { label: 'Voix', desc: 'Dictée et conversation vocale, sur ta machine ou en ligne' },
     about: { label: 'À propos', desc: 'Version et données locales' },
   },
 
   // The window itself.
   modal: {
+    // The headings of the tabs, after the general ones.
+    groupProject: 'Par projet',
+    groupSystem: 'Système',
     changed: 'Modifié, pas encore enregistré',
     saved: 'Réglages enregistrés',
     noProject: 'Aucun projet ouvert.',
@@ -63,6 +67,8 @@ export default {
     shellNotFound: '{name} (introuvable)',
     subfolder: 'Sous-dossier',
     addCommand: '+ Ajouter une commande',
+    /** In Réglages › Projets › Lancement, after the icon « + ». */
+    addLaunch: 'Ajouter une commande',
   },
 
   // The « Application » tab.
@@ -122,7 +128,18 @@ export default {
     /** A harness not found on this machine. */
     states: {
       absent: 'Introuvable',
+      /** Beside its name, before its version (2.0 design): « Prêt · 2.1.301 ». */
+      ready: 'Prêt',
+      notConnected: 'Aucun compte',
+      tooOld: 'Trop ancienne',
+      unsupported: 'Non prise en charge',
     },
+    /** The group of what holds for every harness, after each one's. */
+    allHarnesses: 'Tous les harness',
+    allHarnessesNote:
+      'Le modèle, l’effort et le mode des nouveaux agents se règlent compte par compte, dans Réglages › Comptes, où chaque compte se connecte.',
+    /** Under « Remote control pour tous les agents », in the group of the harness that has it. */
+    remoteOnly: '{harness} seulement : les autres harness n’ont pas de remote control.',
     install: 'Installation',
     installDesc: 'Introuvable sur ce poste : installe-le avec cette commande, puis indique son chemin ici s’il n’est pas dans le PATH.',
     executable: 'Exécutable',
@@ -214,7 +231,7 @@ export default {
     soundOn: 'Son activé',
     soundOnDesc: 'Question d’un agent, fin de tour',
     soundTest: 'Tester le son',
-    soundTestButton: '▶ Tester',
+    soundTestButton: 'Tester le son',
   },
 
   // The « Terminaux » tab.
@@ -248,6 +265,9 @@ export default {
 
   // The « À propos » tab.
   about: {
+    /** A download of an update that failed, kept in sight while it lasts. */
+    updateTrouble: 'Mise à jour {version}',
+    updateTroubleDesc: 'Téléchargement impossible : {error}',
     credits: 'Crédits et licences',
     creditsDesc: 'Piper, eSpeak NG, ONNX Runtime, whisper.cpp, et la licence et le crédit de chaque voix',
     creditsOpen: 'Ouvrir',
@@ -279,6 +299,7 @@ export default {
     identity: 'Identité',
     nameLabel: 'Nom du projet',
     engine: 'Harness par défaut',
+    colorDesc: 'Elle teinte toute la fenêtre quand le projet est ouvert.',
     engineDesc: 'Celui des nouveaux agents et des tickets du projet, sauf s’ils en choisissent un autre.',
     colorN: 'Couleur {n}',
     /** The group of the remote control of the project’s agents, after its identity. */
@@ -324,7 +345,7 @@ export default {
       branch: 'Une branche…',
     },
     /** The chip of the branch named, `{branch}`: it opens the picker again. */
-    worktreeBaseBranch: '⎇ {branch} ▾',
+    worktreeBaseBranch: '{branch}',
     worktreeBaseChoose: 'Branche de départ : {branch}. Choisir une autre branche',
     /** What each choice means, under the chips. `{branch}`: the board’s target or the branch named. */
     worktreeBaseHeadAt: 'Ils partent de la branche sur laquelle est le dossier du projet au moment de leur création.',
@@ -362,6 +383,8 @@ export default {
       "Variables disponibles : ESCOUADE_PROJECT_DIR (le projet), ESCOUADE_WORKTREE_DIR, ESCOUADE_BRANCH, et les ports réservés d'un ticket (ESCOUADE_PORT_BASE, ESCOUADE_PORT_END). Un échec est signalé dans la conversation de l'agent.",
     fill: 'Remplir automatiquement',
     fillButton: '✦ Remplir automatiquement',
+    /** The same, after its icon (2.0 design). */
+    fillAuto: 'Remplir automatiquement',
     filling: 'Claude lit le projet…',
     fillWorktreesDesc:
       "Claude lit le projet (manifestes, lockfiles, README…) sans rien modifier et propose les commandes. Relis-les avant d'enregistrer.",
@@ -437,6 +460,10 @@ export default {
 
   // The commands run in a project's worktrees (their setup, their teardown), in order.
   steps: {
+    /** The keys that move a command, as the system writes Alt (`alt`: « Alt+ », or macOS's sign). */
+    upKeys: '{alt}↑',
+    downKeys: '{alt}↓',
+    altMac: '⌥',
     setup: {
       group: 'Commande de préparation {n}',
       add: 'Ajouter une commande de préparation',

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '../Icon.svelte';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { fList } from '../../lib/format';
   import { forgeBadge } from '../../lib/forges';
@@ -113,10 +114,20 @@
 
 {#snippet badge(kind: string | null)}
   {@const b = forgeBadge(kind)}
-  <span class="badge" style:background={b.color} style:color={b.ink} aria-hidden="true">{b.letter}</span>
+  <span class="badge" aria-hidden="true">{b.letter}</span>
 {/snippet}
 
-<Group title={t('integrations.forges.title')} note={t('integrations.forges.note')}>
+<Group title={t('integrations.forges.title')} note={t('integrations.forges.note')} anchor="forges">
+  {#snippet action()}
+    {#if view?.accounts.length}
+      <button class="btn" disabled={checking || !!form} onclick={recheck}
+        >{checking ? t('integrations.forges.checking') : t('integrations.forges.recheck')}</button
+      >
+    {/if}
+    <button class="btn" disabled={!!form} onclick={() => open()}
+      ><Icon name="plus" size={14} />{t('integrations.forges.connectEllipsis')}</button
+    >
+  {/snippet}
   {#if view && !view.accounts.length && !view.unknown.length && !form}
     <p class="empty">{t('integrations.forges.empty')}</p>
   {/if}
@@ -136,7 +147,7 @@
           <span class="d">{t('integrations.forges.projects', { count: a.projects.length, list: fList(a.projects) })}</span>
         {/if}
       </div>
-      <button class="btn small ghost" aria-label={t('integrations.forges.disconnectHost', { host: a.host })} onclick={() => disconnect(a)}
+      <button class="btn" aria-label={t('integrations.forges.disconnectHost', { host: a.host })} onclick={() => disconnect(a)}
         >{t('integrations.forges.disconnect')}</button
       >
     </div>
@@ -148,7 +159,7 @@
         <span class="l">{u.kind ? (provider(u.kind)?.name ?? u.host) : u.host} <span class="host">· {u.host}</span></span>
         <span class="d">{t('integrations.forges.noAccount', { count: u.projects.length, list: fList(u.projects) })}</span>
       </div>
-      <button class="btn small" onclick={() => openFor(u.url, u.kind)}>{t('integrations.forges.connectHost', { host: u.host })}</button>
+      <button class="btn" onclick={() => openFor(u.url, u.kind)}>{t('integrations.forges.connectHost', { host: u.host })}</button>
     </div>
   {/each}
   {#if form}
@@ -207,41 +218,37 @@
         >
       </div>
     </form>
-  {:else}
-    <div class="foot">
-      <button class="btn small" onclick={() => open()}>{t('integrations.forges.connectEllipsis')}</button>
-      {#if view?.accounts.length}
-        <button class="btn small ghost" disabled={checking} onclick={recheck}
-          >{checking ? t('integrations.forges.checking') : t('integrations.forges.recheck')}</button
-        >
-      {/if}
-    </div>
   {/if}
 </Group>
 
 <style>
   .badge {
-    min-width: 28px;
-    height: 28px;
-    padding: 0 3px;
+    min-width: 24px;
+    height: 24px;
+    padding: 0;
     flex: none;
-    border-radius: 7px;
+    border-radius: 6px;
+    background: rgba(var(--fg-rgb), 0.07);
+    color: var(--text);
     font-size: 11px;
-    font-weight: 800;
+    font-weight: 700;
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
+  /* An instance a line (`.forge` of the 2.0 design): green connected, amber missing rights, red expired. */
   .acct {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 12px 16px;
+    gap: 12px;
+    padding: 12px 0;
   }
-  .acct:not(:first-child),
-  .connect,
-  .foot {
-    border-top: 1px solid var(--line);
+  :global(.note) + .acct {
+    margin-top: 6px;
+  }
+  .acct + .acct,
+  .connect {
+    border-top: 1px solid rgba(var(--fg-rgb), 0.05);
   }
   .txt {
     flex: 1;
@@ -251,7 +258,6 @@
     gap: 3px;
   }
   .l {
-    font-size: 13px;
     font-weight: 600;
   }
   .host {
@@ -262,15 +268,15 @@
   }
   .d {
     margin: 0;
-    font-size: 11.5px;
-    color: var(--dim);
+    font-size: 12px;
+    color: var(--muted);
     overflow-wrap: anywhere;
   }
   .d.on {
-    color: var(--muted);
+    color: var(--add);
   }
   .d.warn {
-    color: var(--wait);
+    color: var(--warn-ink);
   }
   .d.bad {
     color: var(--del);
@@ -285,21 +291,16 @@
     padding: 0 14px;
   }
   .empty {
-    margin: 0;
-    padding: 14px 16px;
+    margin: 8px 0 0;
+    padding: 0;
     font-size: 12.5px;
     color: var(--muted);
-  }
-  .foot {
-    display: flex;
-    gap: 8px;
-    padding: 12px 16px;
   }
   .connect {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 14px 16px 14px 58px;
+    padding: 14px 0 14px 36px;
   }
   .connect label {
     display: flex;
@@ -314,22 +315,18 @@
   }
   .connect em {
     font-style: normal;
-    color: var(--dim);
+    color: var(--muted);
   }
   .connect .field {
     flex: 1;
     min-width: 0;
-    height: 32px;
-    padding: 0 10px;
-    background: var(--panel);
-    font-size: 12.5px;
   }
   .link {
     align-self: flex-start;
     padding: 0;
     border: none;
     background: none;
-    color: var(--accent);
+    color: var(--p-ink);
     font: inherit;
     font-size: 12px;
     cursor: pointer;

@@ -4,22 +4,25 @@ import { defineZone } from '../types';
 export default defineZone('settings', {
   tabs: {
     app: { label: 'Application', desc: 'Theme, zoom, languages and written texts' },
-    claude: { label: 'Harness', desc: 'Executables, versions and the MCP server' },
-    accounts: { label: 'Accounts', desc: 'Each harness’s accounts that agents start on, and their quotas, saved as you change them' },
+    claude: { label: 'Harness', desc: 'Each harness’s executables and versions, and what holds for them all' },
+    accounts: { label: 'Accounts', desc: 'Each harness’s accounts, their new agents’ settings, and what happens at the limit' },
+    mcp: { label: 'MCP server', desc: 'What Claude and the agents can do in Escouade, and what they did' },
     notifications: { label: 'Notifications', desc: 'Visual and sound alerts' },
     projects: { label: 'Projects', desc: 'Settings specific to each project' },
     board: { label: 'Kanban', desc: 'Autopilot and approved tickets' },
-    integrations: { label: 'Integrations', desc: 'Jira, Trello, GitHub Issues, Linear, and code hosts' },
+    integrations: { label: 'Integrations', desc: 'Code hosts, Jira, Trello, GitHub Issues, and Linear' },
     terminals: { label: 'Terminals', desc: 'Shells available in the built-in terminals' },
     network: {
       label: 'Network',
       desc: 'HTTP(S) proxy and TLS certificates for Claude Code, integrations, and updates',
     },
-    voice: { label: 'Voice', desc: 'Dictating messages: microphone, transcription model, language and shortcut' },
+    voice: { label: 'Voice', desc: 'Dictation and voice conversation, on your machine or online' },
     about: { label: 'About', desc: 'Version and local data' },
   },
 
   modal: {
+    groupProject: 'Per project',
+    groupSystem: 'System',
     changed: 'Modified, not saved yet',
     saved: 'Settings saved',
     noProject: 'No project open.',
@@ -52,6 +55,7 @@ export default defineZone('settings', {
     shellNotFound: '{name} (not found)',
     subfolder: 'Subfolder',
     addCommand: '+ Add a command',
+    addLaunch: 'Add a command',
   },
 
   app: {
@@ -99,7 +103,14 @@ export default defineZone('settings', {
     },
     states: {
       absent: 'Not found',
+      ready: 'Ready',
+      notConnected: 'No account',
+      tooOld: 'Too old',
+      unsupported: 'Not supported',
     },
+    allHarnesses: 'All harnesses',
+    allHarnessesNote: 'New agents’ model, effort and mode are set account by account, in Settings › Accounts, where each account signs in.',
+    remoteOnly: '{harness} only: the other harnesses have no remote control.',
     install: 'Installation',
     installDesc: 'Not found on this machine: install it with this command, then set its path here if it isn’t on the PATH.',
     executable: 'Executable',
@@ -186,7 +197,7 @@ export default defineZone('settings', {
     soundOn: 'Sound on',
     soundOnDesc: 'When an agent asks a question or a turn ends',
     soundTest: 'Test the sound',
-    soundTestButton: '▶ Test',
+    soundTestButton: 'Test the sound',
   },
 
   terminals: {
@@ -217,6 +228,8 @@ export default defineZone('settings', {
   },
 
   about: {
+    updateTrouble: 'Update {version}',
+    updateTroubleDesc: 'Download failed: {error}',
     credits: 'Credits and licenses',
     creditsDesc: 'Piper, eSpeak NG, ONNX Runtime, whisper.cpp, and the license and credit of each voice',
     creditsOpen: 'Open',
@@ -246,6 +259,7 @@ export default defineZone('settings', {
     identity: 'Identity',
     nameLabel: 'Project name',
     engine: 'Default harness',
+    colorDesc: 'It tints the whole window while the project is open.',
     engineDesc: 'The one the project’s new agents and tickets run on, unless they choose another.',
     colorN: 'Color {n}',
     remoteTitle: 'Remote control',
@@ -284,7 +298,7 @@ export default defineZone('settings', {
       target: 'Board’s target branch',
       branch: 'A branch…',
     },
-    worktreeBaseBranch: '⎇ {branch} ▾',
+    worktreeBaseBranch: '{branch}',
     worktreeBaseChoose: 'Starting branch: {branch}. Choose another branch',
     worktreeBaseHeadAt: 'They start from the branch the project’s folder is on when they are created.',
     worktreeBaseTargetAt: 'They start from {branch}, brought up to date from the remote when it is only behind.',
@@ -318,6 +332,7 @@ export default defineZone('settings', {
       'Available variables: ESCOUADE_PROJECT_DIR (the project), ESCOUADE_WORKTREE_DIR, ESCOUADE_BRANCH, and the ports reserved for a ticket (ESCOUADE_PORT_BASE, ESCOUADE_PORT_END). A failure is reported in the agent’s conversation.',
     fill: 'Fill in automatically',
     fillButton: '✦ Fill in automatically',
+    fillAuto: 'Fill in automatically',
     filling: 'Claude is reading the project…',
     fillWorktreesDesc:
       'Claude reads the project (manifests, lockfiles, README…) without changing anything and suggests the commands. Review them before saving.',
@@ -384,6 +399,9 @@ export default defineZone('settings', {
   },
 
   steps: {
+    upKeys: '{alt}↑',
+    downKeys: '{alt}↓',
+    altMac: '⌥',
     setup: {
       group: 'Setup command {n}',
       add: 'Add a setup command',

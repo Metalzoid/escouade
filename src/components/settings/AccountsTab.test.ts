@@ -65,7 +65,7 @@ describe('AccountsTab', () => {
       screen.getByText(/^Quand la fenêtre de 5 h ou la fenêtre hebdomadaire de son compte atteint ce seuil, un agent passe/),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/« Reprendre sur un autre compte… » \(Harness\) décide\. « Pause au-delà du quota » \(Kanban\)/),
+      screen.getByText(/« Reprendre sur un autre compte… », ci-dessous, décide\. « Pause au-delà du quota » \(Kanban\)/),
     ).toBeInTheDocument();
     await userEvent.click(within(at).getByRole('button', { name: '95 %' }));
     expect(within(at).getByRole('button', { name: '95 %' })).toHaveAttribute('aria-pressed', 'true');
@@ -317,8 +317,9 @@ describe('AccountsTab', () => {
   it('opens the window that adds an account, or signs one in', async () => {
     backend();
     render(SettingsModal, { tab: 'accounts' });
-    await userEvent.click(screen.getByRole('button', { name: 'Ajouter un compte…' }));
-    expect(app.modal).toEqual({ kind: 'account' });
+    // Each harness's group has its own (2.0 design): the window opens on that harness.
+    await userEvent.click(screen.getByRole('button', { name: 'Ajouter un compte Claude Code…' }));
+    expect(app.modal).toEqual({ kind: 'account', engine: 'claude' });
     // (Rendered here by itself, the tab is still there.)
     await userEvent.click(await within(row('Pro')).findByRole('button', { name: 'Se connecter…' }));
     expect(app.modal).toEqual({ kind: 'account', accountId: 'pro' });
@@ -384,10 +385,10 @@ describe('AccountsTab', () => {
       render(SettingsModal, { tab: 'accounts' });
       await within(row('Pro')).findByRole('checkbox', { name: 'ancien (fermé)' });
       expect(within(row('Pro')).queryByText(/Tous les projets/)).not.toBeInTheDocument();
-      expect(within(row('Principal')).getByText('· Tous les projets')).toBeInTheDocument();
+      expect(within(row('Principal')).getByText('Tous les projets')).toBeInTheDocument();
       // Unticked, the last one: the account is open to every project again.
       app.settings.accounts = [PRINCIPAL, PRO];
-      await waitFor(() => expect(within(row('Pro')).getByText('· Tous les projets')).toBeInTheDocument());
+      await waitFor(() => expect(within(row('Pro')).getByText('Tous les projets')).toBeInTheDocument());
     });
 
     it('shows nothing of a project it has no name for: gone from both lists, or a file the app cannot read', async () => {
@@ -436,7 +437,7 @@ describe('AccountsTab', () => {
     expect(await within(row('Main')).findByText('Signed in · ada@atlas.dev')).toBeInTheDocument();
     expect(await within(row('Pro')).findByText('Not signed in')).toBeInTheDocument();
     expect(within(row('Pro')).getByRole('textbox', { name: 'Executable' })).toHaveAttribute('placeholder', 'The one in the settings');
-    expect(screen.getByRole('button', { name: 'Add an account…' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add a Claude Code account…' })).toBeInTheDocument();
     expect(
       screen.getByText(
         'New agents start on the first active account of their harness under the “Pause above quota” and “Switch accounts at” thresholds, in this order.',
@@ -506,7 +507,9 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
     const empty = screen.getByRole('group', { name: 'Comptes Harness nu' });
     expect(within(empty).getByText('Aucun compte')).toBeInTheDocument();
     expect(within(empty).getByText('Aucun agent ni ticket ne démarre sur Harness nu avant qu’un compte soit ajouté.')).toBeInTheDocument();
-    await userEvent.click(within(empty).getByRole('button', { name: 'Ajouter un compte Harness nu…' }));
+    await userEvent.click(
+      within(screen.getByRole('region', { name: 'Comptes Harness nu' })).getByRole('button', { name: 'Ajouter un compte Harness nu…' }),
+    );
     expect(app.modal).toEqual({ kind: 'account', engine: 'codex' });
   });
 

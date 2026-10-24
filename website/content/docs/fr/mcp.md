@@ -16,7 +16,7 @@ Le serveur tourne sur ta machine seule. Il ne sert qu’à lire et à commander 
 
 Un seul interrupteur donne le serveur aux agents d’Escouade de tous les projets, et le déclare dans chaque harness installé : Claude Code, Codex, OpenCode et Copilot CLI, lancés hors d’Escouade (un terminal, leur app).
 
-1. Ouvre Réglages › Harness. Le groupe « Serveur MCP » a l’interrupteur « Les agents peuvent piloter Escouade ».
+1. Ouvre Réglages › Serveur MCP. L’onglet a l’interrupteur « Les agents peuvent piloter Escouade ».
 2. Allume-le. Il s’enregistre tout de suite, sans « Enregistrer » : la déclaration écrit dans la config de chaque compte de chaque harness, ce qu’« Annuler » ne pourrait pas défaire.
 
 Escouade démarre alors le serveur et le déclare dans chaque compte actif de chaque harness installé, seulement les comptes ajoutés (un harness sans compte n’a la déclaration nulle part) :

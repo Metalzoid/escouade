@@ -81,8 +81,8 @@
     flex-direction: column;
     align-items: flex-end;
     gap: 4px;
-    min-width: 360px;
-    max-width: 60%;
+    width: 360px;
+    max-width: 100%;
   }
   .line {
     display: flex;
@@ -93,10 +93,6 @@
   .input {
     flex: 1;
     min-width: 0;
-    height: 32px;
-    padding: 0 10px;
-    background: var(--panel);
-    font-size: 12px;
   }
   .small {
     height: 24px;
@@ -110,9 +106,9 @@
     font-size: 11.5px;
     line-height: 1.45;
     text-align: right;
-    color: var(--dim);
+    color: var(--muted);
   }
   .warn {
-    color: var(--wait);
+    color: var(--warn-ink);
   }
 </style>

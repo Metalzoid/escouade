@@ -83,55 +83,47 @@
 {/if}
 
 <style>
+  /* A closed project (`.closed-row` of the 2.0 design): its colour, its name and what is kept, Rouvrir, Effacer. */
   .list {
-    list-style: none;
-    margin: 0;
+    margin: 8px 0 0;
     padding: 0;
+    list-style: none;
   }
   .item {
-    display: flex;
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 12px;
-    padding: 12px 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(var(--fg-rgb), 0.05);
   }
-  .item:not(:first-child) {
-    border-top: 1px solid var(--line);
+  .item:has(.off) {
+    grid-template-columns: 10px minmax(0, 1fr) auto;
   }
   .sw {
-    width: 10px;
-    height: 10px;
-    flex: none;
+    width: 8px;
+    height: 8px;
     border-radius: 3px;
   }
   .sw.off {
     background: var(--dim);
   }
   .txt {
-    flex: 1;
+    display: grid;
     min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
   }
   .name {
-    font-size: 13px;
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .path {
-    font-size: 11.5px;
+  .path,
+  .detail {
     color: var(--muted);
+    font-size: 12px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .detail {
-    font-size: 11.5px;
-    color: var(--dim);
-  }
-  .btn {
-    flex: none;
   }
 </style>

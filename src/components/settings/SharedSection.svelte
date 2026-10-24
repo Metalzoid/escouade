@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '../Icon.svelte';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { revealHidden } from '../../lib/recipe';
@@ -42,6 +43,11 @@
 </script>
 
 <Group title={t('settings.shared.title')} anchor="shared">
+  {#snippet action()}
+    <button class="btn" aria-describedby="shared-export-desc" disabled={busy} onclick={exportFile}
+      ><Icon name="file" size={14} />{t('settings.shared.export')}</button
+    >
+  {/snippet}
   <div class="state">
     {#if !file}
       <p>{t('settings.shared.none')}</p>
@@ -65,7 +71,7 @@
   </div>
   {#if file?.pending}
     <div class="pending" role="region" aria-label={t('settings.shared.pendingTitle')}>
-      <h4 class="section-label">{t('settings.shared.pendingTitle')}</h4>
+      <b class="pt">{t('settings.shared.pendingTitle')}</b>
       <p class="notice">{t('settings.shared.pendingDesc')}</p>
       {#each groups as g (g.kind)}
         <section class="part">
@@ -93,21 +99,20 @@
         </section>
       {/each}
       <div class="actions">
-        <button class="btn primary" disabled={busy} onclick={trust}>{t('settings.shared.trust')}</button>
+        <button class="btn primary" disabled={busy} onclick={trust}><Icon name="check" size={14} />{t('settings.shared.trust')}</button>
       </div>
     </div>
   {/if}
-  <Row label={t('settings.shared.export')} desc={t('settings.shared.exportDesc')} descId="shared-export-desc">
-    <button class="btn" aria-describedby="shared-export-desc" disabled={busy} onclick={exportFile}>{t('settings.shared.export')}</button>
-  </Row>
+  <p class="export" id="shared-export-desc">{t('settings.shared.exportDesc')}</p>
 </Group>
 
 <style>
   .state {
-    padding: 12px 16px;
-    font-size: 12.5px;
-    line-height: 1.5;
+    max-width: 64ch;
+    margin-top: 4px;
     color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
   }
   .state p {
     margin: 0;
@@ -123,50 +128,54 @@
   .warnings {
     margin: 4px 0 0;
     padding-left: 18px;
-    color: var(--wait);
-    font-size: 12px;
+    color: var(--warn-ink);
     overflow-wrap: anywhere;
   }
-  .pending {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 12px 16px;
-    border-top: 1px solid var(--line);
+  .export {
+    max-width: 64ch;
+    margin: 6px 0 12px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
   }
-  h4,
+  /* The commands that wait for the user's trust, read whole (`.pending` of the 2.0 design). */
+  .pending {
+    display: grid;
+    gap: 6px;
+    margin: 12px 0 10px;
+    padding: 11px 12px;
+    border-radius: 10px;
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
+  }
+  .pt {
+    font-weight: 600;
+  }
   h5 {
     margin: 0;
-  }
-  h5 {
-    font-size: 12px;
+    color: var(--muted);
+    font-size: 11.5px;
     font-weight: 600;
   }
   .notice {
     margin: 0;
-    padding: 8px 12px;
-    border-left: 2px solid var(--wait);
-    background: var(--wait-soft);
+    color: var(--soft);
     font-size: 12.5px;
     line-height: 1.5;
-    color: var(--text);
   }
   .part {
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 6px;
   }
   .steps {
-    list-style: none;
+    display: grid;
+    gap: 6px;
     margin: 0;
     padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    list-style: none;
   }
   .steps li {
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 4px;
   }
   /* Read as the shell reads it: right-to-left letters must not reorder a « ; » or a « | ». */
@@ -177,30 +186,29 @@
     direction: ltr;
   }
   .name {
-    font-size: 13px;
     font-weight: 600;
   }
   /* The whole command, as written: never cut, however long. */
   .command {
     margin: 0;
-    padding: 6px 10px;
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    background: var(--elev);
-    font-size: 11.5px;
+    padding: 6px 9px;
+    border-radius: 7px;
+    background: var(--well);
+    color: var(--code-fg);
+    font-size: 12px;
     line-height: 1.5;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
   .facts {
-    margin: 0;
     display: grid;
     grid-template-columns: max-content 1fr;
     gap: 2px 10px;
-    font-size: 11.5px;
+    margin: 0;
+    font-size: 12px;
   }
   .facts dt {
-    color: var(--dim);
+    color: var(--muted);
   }
   .facts dd {
     margin: 0;
@@ -209,11 +217,12 @@
   }
   .none {
     margin: 0;
+    color: var(--muted);
     font-size: 12px;
-    color: var(--dim);
   }
   .actions {
     display: flex;
     justify-content: flex-end;
+    margin-top: 4px;
   }
 </style>

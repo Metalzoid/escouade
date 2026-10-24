@@ -107,15 +107,6 @@
   {/each}
 </Group>
 
-<Group title={t('settings.app.language')}>
-  <Row label={t('settings.app.uiLanguage')}>
-    <Chips label={t('settings.app.uiLanguage')} options={uiOptions} bind:value={s.language} />
-  </Row>
-  <Row label={t('settings.app.claudeLanguage')} desc={t('settings.app.claudeLanguageHelp')}>
-    <Chips label={t('settings.app.claudeLanguage')} options={claudeOptions} bind:value={s.claudeLanguage} />
-  </Row>
-</Group>
-
 <!-- Only the harnesses found are offered; none found, nothing to choose. -->
 {#if writers.length}
   <Group title={t('settings.app.writing')}>
@@ -149,21 +140,28 @@
   </Group>
 {/if}
 
+<Group title={t('settings.app.language')}>
+  <Row label={t('settings.app.uiLanguage')}>
+    <Chips label={t('settings.app.uiLanguage')} options={uiOptions} bind:value={s.language} />
+  </Row>
+  <Row label={t('settings.app.claudeLanguage')} desc={t('settings.app.claudeLanguageHelp')}>
+    <Chips label={t('settings.app.claudeLanguage')} options={claudeOptions} bind:value={s.claudeLanguage} />
+  </Row>
+</Group>
+
 <style>
   .held {
-    margin: 0;
-    padding: 0 16px 12px;
-    font-size: 11.5px;
-    color: var(--wait);
+    margin: 0 0 12px;
+    font-size: 12px;
+    color: var(--warn-ink);
   }
   .select {
     width: 260px;
-    max-width: 50%;
-    flex: none;
+    max-width: 100%;
   }
   /* The common field (src/app.css), a number's width. */
   .input {
-    width: 72px;
+    width: 64px;
     flex: none;
     text-align: right;
     font-variant-numeric: tabular-nums;

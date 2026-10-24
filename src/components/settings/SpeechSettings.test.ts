@@ -83,7 +83,7 @@ describe('Réglages › Voix, the conversation', () => {
     expect(licence).toContain('Jeu de données : CC-BY 4.0');
     expect(licence).toContain('Crédit : https://datashare.is.ed.ac.uk/handle/10283/2353 (CC-BY 4.0)');
     // Downloaded: it can be listened to.
-    await userEvent.click(within(fr).getByRole('button', { name: '▶ Écouter' }));
+    await userEvent.click(within(fr).getByRole('button', { name: 'Écouter' }));
     expect(backend.called('speech_preview')[0].args).toEqual({ id: 'fr_FR-siwis-medium', speaker: undefined });
     // Another, with several speakers: its speaker is chosen too, and both are saved.
     await userEvent.selectOptions(select, 'fr_FR-mls-medium');
@@ -361,7 +361,7 @@ describe('Réglages › Voix, the conversation’s voice on line (ESC-132)', () 
     ).toEqual([expect.stringContaining('George')]);
     await userEvent.keyboard('{Escape}');
     expect(within(fr).queryByRole('listbox')).toBeNull();
-    await userEvent.click(within(fr).getByRole('button', { name: '▶ Écouter' }));
+    await userEvent.click(within(fr).getByRole('button', { name: 'Écouter' }));
     await waitFor(() =>
       expect(backend.called('speech_preview_online')[0].args).toEqual({
         service: 'elevenlabs',
@@ -392,14 +392,14 @@ describe('Réglages › Voix, the conversation’s voice on line (ESC-132)', () 
     });
     const field = within(fr).getByRole('textbox', { name: 'Voix en Français' });
     expect(field).toHaveAttribute('placeholder', 'marin');
-    expect(fr.closest('.row')).toHaveTextContent('par exemple marin, cedar, coral, alloy…');
+    expect(fr.closest('.sr')).toHaveTextContent('par exemple marin, cedar, coral, alloy…');
     expect(within(fr).getByRole('button', { name: 'Voir ses voix' })).toBeInTheDocument();
     // Empty: its default voice plays.
-    await userEvent.click(within(fr).getByRole('button', { name: '▶ Écouter' }));
+    await userEvent.click(within(fr).getByRole('button', { name: 'Écouter' }));
     await waitFor(() => expect(backend.called('speech_preview_online')[0]?.args.voiceId).toBe('marin'));
     await userEvent.type(field, 'nope');
     await userEvent.tab();
-    await userEvent.click(within(fr).getByRole('button', { name: '▶ Écouter' }));
+    await userEvent.click(within(fr).getByRole('button', { name: 'Écouter' }));
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith('La voix n’a pas pu être lue : OpenAI n’a pas lu le passage (400) : Invalid voice nope.', 'error'),
     );

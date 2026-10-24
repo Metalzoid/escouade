@@ -1,15 +1,17 @@
 # Settings: Harness
 
-The “Harness” tab (“Claude Code” up to 1.7) lists the harnesses that run the agents, with their executable and version, and sets the new agents’ view, how processes live, attachments, remote control, and the server that lets Claude drive Escouade.
+The “Harness” tab (“Claude Code” up to 1.7) lists the harnesses that run the agents, with their state, executable and version, and sets what holds for them all: the new agents’ view, how processes live, attachments and remote control.
+
+The server that lets Claude drive Escouade has its own tab, “MCP server”, in the settings’ “System” group (see below); what happens when a quota runs out is in the [“Accounts”](settings-accounts) tab.
 
 ## Each harness
 
-One group per harness, under its name:
+One group per harness, under its name, with its state and version beside it: “Ready · 2.1.301” in green; “No account · …” in amber when no account of this harness is signed in; “Too old · …” or “Not supported · …” in red; “Not found” in red. Then:
 
 | Line | What it says |
 |---|---|
 | “Executable path” | The harness’s program (see below for Claude Code). |
-| “Version” | The version found, alone: one older than the tested ones is refused, with its reason and the command that updates it; a newer one is used, without a warning. When no account of this harness is signed in, the line adds “No account signed in: add or sign in an account of this harness in the Accounts tab.” |
+| Under the path | The version found is alone: one older than the tested ones is refused, with its reason and the command that updates it; a newer one is used, without a warning. When no account of this harness is signed in, a line says “No account signed in: add or sign in an account of this harness in the Accounts tab.” |
 | “Models” (OpenCode) | The models of the providers connected to OpenCode, with a search: the favorites first, then one group per provider. A model’s star makes it a favorite, which comes first in its agents’ model menu. |
 | “Installation” | For a harness that isn’t found: the command that installs it (Claude Code: `irm https://claude.ai/install.ps1 \| iex` on Windows, `curl -fsSL https://claude.ai/install.sh \| bash` on macOS and Linux). For Claude Code, the line also says whether an npm installation was interrupted, with the command that repairs it (see [Troubleshooting](troubleshooting)). |
 
@@ -95,14 +97,13 @@ Permission requests and how to answer them are described in [the conversation](c
 > [!NOTE]
 > With Haiku, the effort choice is grayed out in the agent’s message field (“Haiku doesn’t support effort”), and so is “Auto” mode (“unavailable with this model”) when the Claude Code of the agent’s account says its Haiku lacks it: that’s Haiku 4.5, which Claude Code runs up to 2.1.292; from 2.1.293 on, it’s Haiku 5.5, which has it.
 
-## Processes
+## All harnesses
+
+New agents’ model, effort and mode are set account by account, in the [“Accounts”](settings-accounts) tab.
 
 | Setting | Effect | Default |
 |---|---|---|
 | “Auto-resume after the usage limit” | “continue” is sent to the agent once the quota has reset. | On |
-| “Resume a ticket’s agent stopped by the usage limit on another account” | Otherwise it waits for its account to reset. Absent while there is only one account. | Off |
-| “Continue on the next harness when every account of a harness is spent” | The agent moves by itself to its project’s next fallback harness, and the autopilot follows it for tickets; otherwise it waits for the reset. The harness left isn’t used again before its reset, and the agent never goes back to it by itself. Hidden while a single harness is found. | Off |
-| “Handover model · <harness>” | The model of an agent that moves to this harness. One per harness, shown with the previous setting. | The best one |
 | “New agents’ view” | “Escouade”: a new agent runs in Escouade’s conversation. “Harness terminal”: it runs in its harness’s own interface, in a terminal (the Claude Code view). Shown while a harness has a terminal view; the agents of a harness with none stay in Escouade’s view. | Escouade |
 | “Agents keep a task list” | Agents get Claude Code’s task list tool. | On |
 | “Stop idle agent processes after” (minutes, 0 = never) | The Claude process of an idle agent is stopped after this delay. | 30 |
@@ -113,7 +114,7 @@ When an agent stops on the usage limit, Escouade plans to write “continue” t
 
 ### Resume on another account
 
-With several accounts, a ticket’s agent stopped by the limit goes on by itself, with its session, on the account Escouade would pick, when another one is usable, instead of waiting for its own account to reset. See [accounts](accounts) and the [“Accounts”](settings-accounts) tab.
+The “Resume a ticket’s agent stopped by the usage limit on another account” setting is in the [“Accounts”](settings-accounts) tab, “When a quota runs out” group, with “Continue on the next harness…”, the harness order and the handover models. With several accounts, a ticket’s agent stopped by the limit goes on by itself, with its session, on the account Escouade would pick, when another one is usable, instead of waiting for its own account to reset. See [accounts](accounts) and the [“Accounts”](settings-accounts) tab.
 
 ### Claude Code view
 
@@ -143,7 +144,7 @@ An emptied number field counts as 0. The largest size applies to every file sent
 
 ## Remote control
 
-This group makes the agents of every project reachable from claude.ai and the Claude app, without turning on [remote control](remote-control) agent by agent.
+This setting, in Claude Code’s group (“Claude Code only: the other harnesses have no remote control.”), makes the agents of every project reachable from claude.ai and the Claude app, without turning on [remote control](remote-control) agent by agent.
 
 ### Remote control for all agents
 
@@ -157,7 +158,7 @@ For an agent in the [Claude Code view](claude-code-view), the change takes effec
 
 ## MCP server
 
-This group lets Escouade’s agents, and every harness installed started outside Escouade (Claude Code, Codex, OpenCode, Copilot CLI, in a terminal or their app), read your projects, agents and tickets, and create tickets or start agents, through Escouade’s [MCP server](mcp).
+The “MCP server” tab (the settings’ “System” group) lets Escouade’s agents, and every harness installed started outside Escouade (Claude Code, Codex, OpenCode, Copilot CLI, in a terminal or their app), read your projects, agents and tickets, and create tickets or start agents, through Escouade’s [MCP server](mcp).
 
 ### Agents can drive Escouade
 
@@ -177,4 +178,4 @@ With the switch on, the list below gives each declaration:
 
 ## MCP activity
 
-This last group, “MCP activity”, lists what the server received and answered, the most recent calls first. Each line gives the time, who called (an agent’s name, “Claude (outside Escouade)”, or, for a request refused before it is known who sent it, “Unknown client”), the tool, the result (“Done”, “Refused”, or “Error”), then what was asked and, for a refusal or an error, why. For a `set_board` that succeeded, the line also says what changed, field by field, before and after (“model: opus → sonnet · effort: (default) → medium”), or “No change”. The last 200 calls are kept in memory, not saved. The “Clear” button empties the list; with no calls, it says “No calls yet.”.
+The “MCP activity” group of the “MCP server” tab lists what the server received and answered, the most recent calls first. Each line gives the time, who called (an agent’s name, “Claude (outside Escouade)”, or, for a request refused before it is known who sent it, “Unknown client”), the tool, the result (“Done”, “Refused”, or “Error”), then what was asked and, for a refusal or an error, why. For a `set_board` that succeeded, the line also says what changed, field by field, before and after (“model: opus → sonnet · effort: (default) → medium”), or “No change”. The last 200 calls are kept in memory, not saved. The “Clear” button empties the list; with no calls, it says “No calls yet.”.

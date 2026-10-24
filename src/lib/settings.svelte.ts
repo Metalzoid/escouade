@@ -4,6 +4,7 @@
 import { t } from './i18n';
 import { api } from './ipc';
 import { forgetLaunches, runsOfCommand } from './launch-actions';
+import type { IconName } from './icons';
 import { app } from './state.svelte';
 import type {
   BoardSettings,
@@ -20,22 +21,39 @@ import type {
 import { branchPrefixProblem, worktreesRootProblem } from './worktrees';
 
 export type SettingsTab =
-  'app' | 'claude' | 'accounts' | 'notifications' | 'voice' | 'projects' | 'board' | 'integrations' | 'terminals' | 'network' | 'about';
+  | 'app'
+  | 'claude'
+  | 'accounts'
+  | 'notifications'
+  | 'voice'
+  | 'projects'
+  | 'board'
+  | 'integrations'
+  | 'mcp'
+  | 'terminals'
+  | 'network'
+  | 'about';
+
+/** The three groups of the tabs (2.0 design): the general ones, « Par projet », « Système ». */
+export type SettingsGroup = 'general' | 'project' | 'system';
 
 interface TabInfo {
   id: SettingsTab;
   label: string;
-  icon: string;
+  icon: IconName;
   desc: string;
+  group: SettingsGroup;
+  /** Set project by project: the project is chosen above it. */
   scoped?: boolean;
 }
 
 /** A tab whose label and description are read where shown, so that they follow a change of language. */
-function tabInfo(id: SettingsTab, icon: string, scoped = false): TabInfo {
+function tabInfo(id: SettingsTab, icon: IconName, group: SettingsGroup = 'general'): TabInfo {
   return {
     id,
     icon,
-    ...(scoped ? { scoped } : {}),
+    group,
+    ...(group === 'project' ? { scoped: true } : {}),
     get label() {
       return t(`settings.tabs.${id}.label`);
     },
@@ -46,18 +64,20 @@ function tabInfo(id: SettingsTab, icon: string, scoped = false): TabInfo {
 }
 
 export const SETTINGS_TABS: TabInfo[] = [
-  tabInfo('app', 'Aa'),
-  tabInfo('claude', '✳'),
-  // Saved at once, each change (not part of the draft).
-  tabInfo('accounts', '◎'),
-  tabInfo('notifications', '♪'),
-  tabInfo('voice', '◖'),
-  tabInfo('projects', '▤', true),
-  tabInfo('board', '▦', true),
-  tabInfo('integrations', '⧉', true),
-  tabInfo('terminals', '$_'),
-  tabInfo('network', '⇄'),
-  tabInfo('about', 'ⓘ'),
+  tabInfo('app', 'lang'),
+  tabInfo('claude', 'spark'),
+  // The accounts are saved at once, each change (not part of the draft); « Quand un quota est épuisé » is.
+  tabInfo('accounts', 'user'),
+  tabInfo('voice', 'mic'),
+  tabInfo('notifications', 'bell'),
+  tabInfo('projects', 'folder', 'project'),
+  tabInfo('board', 'kanban', 'project'),
+  tabInfo('integrations', 'link', 'project'),
+  // The one switch is saved at once (it writes into each harness's config).
+  tabInfo('mcp', 'plug', 'system'),
+  tabInfo('terminals', 'term', 'system'),
+  tabInfo('network', 'globe', 'system'),
+  tabInfo('about', 'info', 'system'),
 ];
 
 /** The app's settings each tab sets. */
@@ -66,9 +86,6 @@ const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
   claude: [
     'claudePath',
     'autoResume',
-    'switchOnLimit',
-    'handoverOnLimit',
-    'handoverModels',
     'todoTools',
     'claudeSelfUpdate',
     'idleStopMinutes',
@@ -79,6 +96,8 @@ const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
     'attachKeepDays',
     'remoteControlAll',
   ],
+  // « Quand un quota est épuisé » (choice 2 of the 2.0 design): the rest of the tab is saved at once.
+  accounts: ['switchOnLimit', 'handoverOnLimit', 'handoverModels'],
   // What a project added starts with: shown under the project's own settings.
   projects: ['privateProjects'],
   notifications: ['sound', 'osNotifications', 'notifyFor'],

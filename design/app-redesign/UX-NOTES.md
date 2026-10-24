@@ -252,3 +252,19 @@ L'aperçu dessine l'éditeur (`#editor`) sans ce que l'app y fait de plus : les 
 - L'éditeur n'est jamais à côté du panneau latéral : il prend tout le panneau de travail (le panneau n'accompagne que la conversation), donc sa place ne dépend que de la fenêtre et de la barre des agents.
 - « Ouvrir un fichier » et « Rechercher dans les conversations » sont des fenêtres au-dessus de tout, de 680 px au plus : à 1028 px aussi, leur champ, leur portée et leurs touches tiennent, panneau ouvert ou non.
 - Il n'y a pas de recherche dans les réglages (comptes, voix, harness) : rien à reprendre dans ce lot.
+
+# Les réglages (ESC-152, lot 11b, 2026-10-24)
+
+L'app suit `#settings` et ses onglets, et les adresses du lot 0 bis (`#private`, `#private-accounts`, `#worktree-cleanup`, `#accounts-quotas`) : `tests/e2e/settings-look.spec.ts` les compare dans les deux thèmes et aux deux tailles. Les choix 2 (onglet « Serveur MCP », « Quand un quota est épuisé » dans Comptes), 13 (échec de mise à jour gardé dans À propos), 18 à 20, 27 à 29, 31, 34 et 35 y sont en place. La fenêtre des réglages est au-dessus de tout : le panneau latéral ne change pas sa largeur ; ses replis suivent la largeur de son corps (`@container settings`).
+
+**À valider par l'utilisateur** : les choix 57 et 58.
+
+## Choix
+
+57. **Une ligne de réglage garde la place de son nom** : son contrôle prend au plus 62 % du corps ; plus large (des segments nombreux), il passe à la ligne ; sous 520 px de corps, le contrôle se met sous ce qu'il règle, et les lignes d'un compte passent à la ligne sous 620 px. « Langue parlée » (neuf langues) devient un menu, comme dans l'aperçu. Raison : à 1028 px, des segments de neuf langues laissaient à leur nom une colonne d'un mot.
+58. **« Ordre des harness » en puces numérotées, chacune avec ses flèches** (« 1 Claude Code ↑ ↓ ») dans « Quand un quota est épuisé », au lieu des puces sans flèches de l'aperçu. Raison : l'aperçu ne dit pas comment l'ordre change ; les flèches de l'app 1.8 restent, au clavier comme à la souris.
+
+## Vérifié, sans retouche
+
+- À 1028, 1280 et 1440 px, en français et en anglais, chaque onglet (un projet privé compris) : rien ne déborde, rien ne se chevauche, aucun bouton, onglet ou titre ne passe sur deux lignes (`settings-look.spec.ts`, « nothing of the settings overflows »).
+- Restent pour plus tard : « Données locales » n'a pas le bouton « Ouvrir le dossier » de l'aperçu (le chemin du dossier de l'app n'est pas connu de la fenêtre) ; les comptes n'ont pas la ligne « Aujourd'hui 0,42 $ » d'OpenCode à la place des jauges (son budget a sa ligne) ; le Harness de l'aperçu montre une ligne « Coût » pour Codex que l'app n'a pas.

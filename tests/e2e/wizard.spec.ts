@@ -179,7 +179,7 @@ test('a private project with its Kanban set, made by the assistant, exports its 
   // The settings mark them as the file's from now on.
   await expect(
     settings
-      .locator('.row')
+      .locator('.sr')
       .filter({ has: page.getByRole('switch', { name: 'Projet privé' }) })
       .getByText('Défini par .escouade.yml'),
   ).toBeVisible();

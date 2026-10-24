@@ -14,6 +14,7 @@
   import OnlineModel from './OnlineModel.svelte';
   import OnlineVoiceField from './OnlineVoiceField.svelte';
   import Row from './Row.svelte';
+  import Icon from '../Icon.svelte';
 
   // Réglages › Voix, the conversation's part (ESC-97): the voice of each language among those whose licence allows it,
   // « Écouter », its download (size, progress) and its deletion, its licences and the credit it asks for; the pace, the
@@ -208,7 +209,9 @@
               <button class="btn ghost small" onclick={() => api.speechDownloadCancel(v.id)}>{t('voice.conversation.cancel')}</button>
             {:else if v.downloaded}
               <button class="btn small" disabled={!info?.available || playing !== null} onclick={() => listen(v)}
-                >{playing === v.id ? t('voice.speech.listening') : `▶ ${t('voice.speech.listen')}`}</button
+                >{#if playing !== v.id}<Icon name="play" size={14} />{/if}{playing === v.id
+                  ? t('voice.speech.listening')
+                  : t('voice.speech.listen')}</button
               >
               <button class="btn ghost small" onclick={() => remove(v)}>{t('voice.speech.delete')}</button>
             {:else}
@@ -223,7 +226,7 @@
               ? t('voice.speech.dataset', { license: v.datasetLicense })
               : t('voice.speech.datasetUnknown')}
             {#if v.attribution}<br />{t('voice.speech.attribution', { text: v.attribution })}{/if}
-            {#if v.exception}<br /><span data-speech-exception>{t('voice.speech.exception')}</span>{/if}
+            {#if v.exception}<br /><span class="exc" data-speech-exception>{t('voice.speech.exception')}</span>{/if}
           </p>
         {/if}
       </div>
@@ -232,7 +235,7 @@
   <Row label={t('voice.speech.rate')} desc={rateDesc}>
     <div class="slider">
       <input type="range" min="0.5" max="2" step="0.1" aria-label={t('voice.speech.rate')} bind:value={s.rate} />
-      <span class="meta mono">{s.rate.toFixed(1)}×</span>
+      <span class="meta mono">{t('voice.speech.rateValue', { n: s.rate.toFixed(1) })}</span>
     </div>
   </Row>
   <Row label={t('voice.speech.volume')} desc={online ? t('voice.speech.volumeDesc') : undefined}>
@@ -255,24 +258,18 @@
     flex-direction: column;
     align-items: flex-end;
     gap: 6px;
-    min-width: 360px;
-    max-width: 60%;
+    width: 360px;
+    max-width: 100%;
   }
   .input {
     width: 100%;
-    height: 32px;
-    padding: 0 10px;
-    background: var(--panel);
-    font-size: 12px;
   }
   .service {
-    width: 340px;
-    max-width: 50%;
-    flex: none;
+    width: 320px;
+    max-width: 100%;
   }
   .not-spoken {
     margin: 0;
-    max-width: 60%;
     text-align: right;
   }
   .speaker {
@@ -282,9 +279,6 @@
   }
   .small-select {
     height: 26px;
-    padding: 0 6px;
-    background: var(--panel);
-    font-size: 12px;
   }
   .actions {
     display: flex;
@@ -293,20 +287,24 @@
   }
   .licences {
     margin: 0;
-    font-size: 11.5px;
+    color: var(--muted);
+    font-size: 12px;
     line-height: 1.45;
-    color: var(--dim);
     text-align: right;
     overflow-wrap: anywhere;
   }
+  /* Fuze's exception to the rule of the licences, said in amber (lot 0 of the 2.0 design). */
+  .exc {
+    color: var(--warn-ink);
+  }
   .meta {
-    font-size: 11.5px;
-    color: var(--dim);
+    color: var(--muted);
+    font-size: 12px;
   }
   .small {
-    height: 24px;
-    padding: 0 8px;
-    font-size: 11.5px;
+    height: 26px;
+    padding: 0 9px;
+    font-size: 12px;
   }
   .slider {
     display: flex;
@@ -315,5 +313,12 @@
   }
   .slider input {
     width: 200px;
+    max-width: 100%;
+    accent-color: color-mix(in oklch, var(--p) 75%, black);
+  }
+  .slider .meta {
+    min-width: 40px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
   }
 </style>

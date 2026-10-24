@@ -15,6 +15,7 @@
   import Row from './Row.svelte';
   import SpeechSettings from './SpeechSettings.svelte';
   import { tip } from '../../lib/tip';
+  import Icon from '../Icon.svelte';
 
   // « Voix »: the microphone, who transcribes (Whisper and its model, downloaded or deleted at once; or a service on
   // line, its key kept in the keychain at once), the language spoken and the shortcut, saved with the other settings.
@@ -33,7 +34,7 @@
   });
 
   const LANGS = ['fr', 'en', 'de', 'es', 'it', 'pt', 'nl'] as const;
-  const languageOptions = $derived([
+  const languageOptions: { value: string; label: string; lang?: string }[] = $derived([
     { value: 'ui', label: t('voice.settings.languageUi') },
     { value: 'auto', label: t('voice.settings.languageAuto') },
     ...LANGS.map((l) => ({ value: l, label: t(`voice.languages.${l}`), lang: l })),
@@ -99,28 +100,9 @@
   $effect(() => () => (dictation.recording = false));
 </script>
 
-<Group title={t('voice.settings.microphone')}>
-  <Row label={t('voice.settings.device')} desc={info && !info.devices.length ? t('voice.settings.noDevice') : undefined}>
-    <select class="field input" aria-label={t('voice.settings.device')} bind:value={v.device}>
-      <option value=""
-        >{systemDevice ? t('voice.settings.deviceSystemNamed', { name: systemDevice.name }) : t('voice.settings.deviceSystem')}</option
-      >
-      {#each info?.devices ?? [] as d (d.id)}
-        <option value={d.id}>{d.name}</option>
-      {/each}
-      {#if v.device && info && !info.devices.some((d) => d.id === v.device)}
-        <option value={v.device}>{v.device}</option>
-      {/if}
-    </select>
-  </Row>
-</Group>
-
-<Group
-  title={t('voice.settings.transcription')}
-  note={online
-    ? t(live ? 'voice.settings.onlineNoteLive' : 'voice.settings.onlineNote', { service: service.label, host: service.host })
-    : t('voice.settings.transcriptionNote')}
->
+<!-- « Transcription » (choice 34 of the 2.0 design): local or online first, what goes online said under it, then the
+     microphone, the shortcut, the language and Whisper's models. -->
+<Group title={t('voice.settings.transcription')}>
   <Row label={t('voice.settings.engine')} desc={t('voice.settings.engineDesc')}>
     <Chips
       label={t('voice.settings.engine')}
@@ -131,6 +113,11 @@
       bind:value={v.transcription}
     />
   </Row>
+  <p class="vnote">
+    {online
+      ? t(live ? 'voice.settings.onlineNoteLive' : 'voice.settings.onlineNote', { service: service.label, host: service.host })
+      : t('voice.settings.transcriptionNote')}
+  </p>
   {#if online}
     <Row label={t('voice.settings.service')} desc={t('voice.settings.serviceDesc', { service: service.label })}>
       <select class="field input" aria-label={t('voice.settings.service')} bind:value={v.onlineService}>
@@ -150,142 +137,186 @@
         label={t('voice.settings.live')}
         desc={`${t('voice.settings.liveDesc', { service: service.label, model: liveModel })} ${t('voice.settings.livePrice', { service: service.label })}`}
       >
-        <label class="live">
-          <input type="checkbox" data-voice-live checked={live} onchange={(e) => setLive(e.currentTarget.checked)} />
-          <span>{t('voice.settings.live')}</span>
-        </label>
+        <input
+          class="switch"
+          type="checkbox"
+          role="switch"
+          data-voice-live
+          aria-label={t('voice.settings.live')}
+          checked={live}
+          onchange={(e) => setLive(e.currentTarget.checked)}
+        />
       </Row>
     {/if}
     <OnlineKey {service} />
-  {:else}
-    <Row label={t('voice.settings.model')} desc={t('voice.settings.modelDesc')}>
-      <div class="models" role="radiogroup" aria-label={t('voice.settings.model')}>
-        {#each info?.models ?? [] as m (m.id)}
-          {@const on = v.model === m.id}
-          <div class="model" class:on>
-            <label class="pick">
-              <input type="radio" name="voice-model" value={m.id} checked={on} onchange={() => (v.model = m.id)} />
-              <span class="name mono">{m.id}</span>
-              <span class="meta">{fBytes(m.size)} · {t('voice.settings.modelSpeed', { speed: m.speed, quality: m.quality })}</span>
-            </label>
-            {#if progress && progress.model === m.id}
-              <span class="meta mono">{Math.round((progress.done / Math.max(1, progress.total)) * 100)} %</span>
-              <button class="btn ghost small" onclick={() => dictation.cancel()}>{t('voice.panel.cancel')}</button>
-            {:else if m.downloaded}
-              <span class="ok">{t('voice.settings.downloaded')}</span>
-              <button
-                class="btn ghost small"
-                use:tip={t('voice.settings.deleteTitle', { model: m.id, size: fBytes(m.size) })}
-                onclick={() => remove(m.id)}>{t('voice.settings.delete')}</button
-              >
-            {:else}
-              <button class="btn small" disabled={!!busy || dictation.phase !== 'idle'} onclick={() => download(m.id)}
-                >{t('voice.settings.download')}</button
-              >
-            {/if}
-          </div>
-        {/each}
-      </div>
-    </Row>
   {/if}
-  <Row label={t('voice.settings.language')} desc={t('voice.settings.languageDesc')}>
-    <Chips label={t('voice.settings.language')} options={languageOptions} bind:value={v.language} />
-  </Row>
-</Group>
-
-<Group title={t('voice.settings.use')}>
-  <Row label={t('voice.settings.shortcut')} desc={t('voice.settings.shortcutDesc')}>
-    <div class="keys">
-      {#if recording}
-        <!-- svelte-ignore a11y_autofocus -->
-        <button class="btn recording" autofocus onkeydown={record} onblur={stopRecording}>{t('voice.settings.recording')}</button>
-        <span class="meta">{t('voice.settings.recordingHint')}</span>
-      {:else}
-        <kbd class="mono">{shortcutLabel(v.shortcut || DEFAULT_SHORTCUT)}</kbd>
-        <button class="btn" onclick={startRecording}>{t('voice.settings.change')}</button>
-        {#if v.shortcut !== DEFAULT_SHORTCUT}
-          <button class="btn ghost" onclick={() => (v.shortcut = DEFAULT_SHORTCUT)}>{t('voice.settings.restore')}</button>
-        {/if}
+  <Row label={t('voice.settings.device')} desc={info && !info.devices.length ? t('voice.settings.noDevice') : undefined}>
+    <select class="field input" aria-label={t('voice.settings.device')} bind:value={v.device}>
+      <option value=""
+        >{systemDevice ? t('voice.settings.deviceSystemNamed', { name: systemDevice.name }) : t('voice.settings.deviceSystem')}</option
+      >
+      {#each info?.devices ?? [] as d (d.id)}
+        <option value={d.id}>{d.name}</option>
+      {/each}
+      {#if v.device && info && !info.devices.some((d) => d.id === v.device)}
+        <option value={v.device}>{v.device}</option>
       {/if}
-    </div>
+    </select>
   </Row>
+  <Row label={t('voice.settings.shortcut')} desc={t('voice.settings.shortcutDesc')}>
+    {#if recording}
+      <!-- svelte-ignore a11y_autofocus -->
+      <button class="btn recording" autofocus onkeydown={record} onblur={stopRecording}>{t('voice.settings.recording')}</button>
+      <span class="meta">{t('voice.settings.recordingHint')}</span>
+    {:else}
+      <kbd class="key">{shortcutLabel(v.shortcut || DEFAULT_SHORTCUT)}</kbd>
+      <button class="btn" onclick={startRecording}>{t('voice.settings.change')}</button>
+      {#if v.shortcut !== DEFAULT_SHORTCUT}
+        <button class="btn ghost" onclick={() => (v.shortcut = DEFAULT_SHORTCUT)}>{t('voice.settings.restore')}</button>
+      {/if}
+    {/if}
+  </Row>
+  <Row label={t('voice.settings.language')} desc={t('voice.settings.languageDesc')}>
+    <!-- Nine of them: a menu, as the preview has it. Each language named in itself. -->
+    <select class="field" aria-label={t('voice.settings.language')} bind:value={v.language}>
+      {#each languageOptions as o (o.value)}<option value={o.value} lang={o.lang}>{o.label}</option>{/each}
+    </select>
+  </Row>
+  {#if !online}
+    <p class="vnote">{t('voice.settings.modelDesc')}</p>
+    <div class="models model-list" role="radiogroup" aria-label={t('voice.settings.model')}>
+      {#each info?.models ?? [] as m (m.id)}
+        {@const on = v.model === m.id}
+        <div class="model mrow" class:on>
+          <label class="pick">
+            <input class="rd" type="radio" name="voice-model" value={m.id} checked={on} onchange={() => (v.model = m.id)} />
+            <span class="mn"
+              ><b>{m.id}</b><span>{fBytes(m.size)} · {t('voice.settings.modelSpeed', { speed: m.speed, quality: m.quality })}</span></span
+            >
+          </label>
+          {#if progress && progress.model === m.id}
+            {@const pct = Math.round((progress.done / Math.max(1, progress.total)) * 100)}
+            <span class="dl"><span class="gauge"><span class="fill" style:width="{pct}%"></span></span>{pct} %</span>
+            <button class="btn" onclick={() => dictation.cancel()}>{t('voice.panel.cancel')}</button>
+          {:else if m.downloaded}
+            <span class="ok"><Icon name="check" size={14} />{t('voice.settings.downloaded')}</span>
+            <button
+              class="btn"
+              use:tip={t('voice.settings.deleteTitle', { model: m.id, size: fBytes(m.size) })}
+              onclick={() => remove(m.id)}>{t('voice.settings.delete')}</button
+            >
+          {:else}
+            <span></span>
+            <button class="btn" disabled={!!busy || dictation.phase !== 'idle'} onclick={() => download(m.id)}
+              >{t('voice.settings.download')}</button
+            >
+          {/if}
+        </div>
+      {/each}
+    </div>
+  {/if}
 </Group>
 
 <SpeechSettings />
 
 <style>
-  .live {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
+  .vnote {
+    max-width: 64ch;
+    margin: 0 0 6px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
   }
   .input {
-    width: 340px;
-    max-width: 50%;
-    flex: none;
-    height: 32px;
-    padding: 0 10px;
-    background: var(--panel);
-    font-size: 12px;
+    width: 320px;
+    max-width: 100%;
   }
-  .models {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 360px;
+  /* A switch that is a box (the e2e tick it): drawn as the others. */
+  input.switch {
+    appearance: none;
+    margin: 0;
   }
-  .model {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 8px;
-    border-radius: var(--r-sm);
-    border: 1px solid transparent;
+  input.switch:checked {
+    background: color-mix(in oklch, var(--p) 75%, black);
   }
-  .model.on {
-    border-color: var(--line2);
-    background: var(--panel);
-  }
-  .pick {
-    flex: 1;
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    cursor: pointer;
-    min-width: 0;
-  }
-  .name {
-    font-size: 12.5px;
+  input.switch:checked::after {
+    left: 16px;
   }
   .meta {
-    font-size: 11.5px;
-    color: var(--dim);
+    color: var(--muted);
+    font-size: 12px;
   }
-  .ok {
-    font-size: 11.5px;
-    color: var(--add);
-  }
-  .small {
-    height: 24px;
+  .key {
+    height: 26px;
     padding: 0 8px;
-    font-size: 11.5px;
-  }
-  .keys {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
-  kbd {
-    padding: 3px 8px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line2);
-    background: var(--panel);
     font-size: 12px;
   }
   .recording {
-    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--p-ink);
+  }
+  /* Whisper's models, a line each under a hairline (`.model-list` of the 2.0 design). */
+  .model-list {
+    display: grid;
+    margin-top: 6px;
+    border-top: 1px solid rgba(var(--fg-rgb), 0.05);
+  }
+  .mrow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(var(--fg-rgb), 0.05);
+  }
+  .pick {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    cursor: pointer;
+  }
+  .rd {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin: 0 1px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1.5px var(--ring);
+    appearance: none;
+    cursor: pointer;
+  }
+  .rd:checked {
+    box-shadow: inset 0 0 0 5px color-mix(in oklch, var(--p) 75%, white);
+  }
+  .mn {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+  }
+  .mn b {
+    font-weight: 550;
+  }
+  .mn span {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .ok {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--add);
+    font-size: 12px;
+  }
+  .dl {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 150px;
+    color: var(--muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .dl .gauge {
+    flex: 1;
   }
 </style>

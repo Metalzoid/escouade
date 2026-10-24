@@ -78,7 +78,7 @@
     max-height: 240px;
     overflow-y: auto;
     border: 1px solid var(--line);
-    border-radius: var(--r-sm);
+    border-radius: 7px;
   }
   li {
     display: flex;
@@ -95,7 +95,7 @@
     display: flex;
     align-items: center;
     border: none;
-    border-radius: var(--r-sm);
+    border-radius: 7px;
     background: transparent;
     color: color-mix(in oklch, var(--dim) 70%, transparent);
     cursor: pointer;
@@ -115,21 +115,21 @@
     padding-top: 6px;
     font-size: 11px;
     font-weight: 600;
-    color: var(--dim);
+    color: var(--muted);
   }
   .name {
     font-weight: 600;
   }
   .provider,
   .id {
-    color: var(--dim);
+    color: var(--muted);
   }
   .id {
     margin-left: auto;
     font-size: 11px;
   }
   .empty {
-    color: var(--dim);
+    color: var(--muted);
     font-size: 12.5px;
     margin: 0;
   }

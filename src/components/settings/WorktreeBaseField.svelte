@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '../Icon.svelte';
   import { t } from '../../lib/i18n';
   import type { WorktreeBase } from '../../lib/types';
   import BranchPicker from '../branches/BranchPicker.svelte';
@@ -55,7 +56,10 @@
       aria-label={named ? t('settings.project.worktreeBaseChoose', { branch: named }) : undefined}
       bind:this={branchButton}
       onclick={chooseBranch}
-      >{named ? t('settings.project.worktreeBaseBranch', { branch: named }) : t('settings.project.worktreeBases.branch')}</button
+      >{#if named}<Icon name="branch" size={14} />{t('settings.project.worktreeBaseBranch', { branch: named })}<Icon
+          name="down"
+          size={14}
+        />{:else}{t('settings.project.worktreeBases.branch')}{/if}</button
     >
   </div>
   {#if value.kind === 'branch' && !projectId}
@@ -91,8 +95,8 @@
     gap: 6px;
   }
   .chips {
+    flex-wrap: wrap;
     max-width: 100%;
-    overflow-x: auto;
   }
   .chip.mono {
     font-family: var(--mono);
@@ -100,14 +104,13 @@
   }
   select {
     min-width: 200px;
-    height: 30px;
     font-size: 12px;
   }
   .at {
     margin: 0;
-    font-size: 11.5px;
+    font-size: 12px;
     line-height: 1.45;
-    color: var(--dim);
+    color: var(--muted);
     overflow-wrap: anywhere;
   }
 </style>

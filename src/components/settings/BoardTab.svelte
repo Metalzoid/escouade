@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '../Icon.svelte';
   import { newAgentDefaults } from '../../lib/accounts';
   import { commitPreview } from '../../lib/board';
   import { fPct } from '../../lib/format';
@@ -47,11 +48,11 @@
 </script>
 
 <Group title={t('boardSettings.tab.actionsTitle')} plain>
-  <div class="actions" role="radiogroup" aria-label={t('boardSettings.tab.actionsTitle')}>
+  <div class="w-radios actions" role="radiogroup" aria-label={t('boardSettings.tab.actionsTitle')}>
     {#each actions as a (a.id)}
-      <button class="action" class:on={b.action === a.id} role="radio" aria-checked={b.action === a.id} onclick={() => (b.action = a.id)}>
-        <span class="ring"><span class="dot"></span></span>
-        <span class="txt"><span class="l">{a.label}</span><span class="d">{a.desc}</span></span>
+      <button class="w-radio" role="radio" aria-checked={b.action === a.id} onclick={() => (b.action = a.id)}>
+        <span class="dot" aria-hidden="true"></span>
+        <span><b>{a.label}</b><span class="d">{a.desc}</span></span>
       </button>
     {/each}
   </div>
@@ -61,25 +62,24 @@
       <div class="line">
         <span class="k">{t('boardSettings.tab.targetBranch')}</span>
         <button
-          class="chip mono on"
+          class="pick mono"
           aria-haspopup="dialog"
           aria-label={t('boardSettings.tab.targetBranchChoose', { branch: target })}
           bind:this={targetButton}
-          onclick={() => (choosing = true)}>⎇ {target} ▾</button
+          onclick={() => (choosing = true)}><Icon name="branch" size={14} />{target}<Icon name="down" size={14} /></button
         >
       </div>
       <SharedMark keys="board.target_branch" />
       {#if b.action === 'merge'}
         <div class="line">
           <span class="k">{t('boardSettings.tab.strategy')}</span>
-          {#each strategies as st (st.value)}
-            <button
-              class="chip"
-              class:on={b.strategy === st.value}
-              aria-pressed={b.strategy === st.value}
-              onclick={() => (b.strategy = st.value)}>{st.label}</button
-            >
-          {/each}
+          <span class="segmented" role="group" aria-label={t('boardSettings.tab.strategy')}>
+            {#each strategies as st (st.value)}
+              <button class:on={b.strategy === st.value} aria-pressed={b.strategy === st.value} onclick={() => (b.strategy = st.value)}
+                >{st.label}</button
+              >
+            {/each}
+          </span>
         </div>
         <SharedMark keys="board.merge_strategy" />
       {:else}
@@ -172,120 +172,56 @@
 </Group>
 
 <style>
+  /* What validating a ticket does: the radios of the windows (`.w-radio`, src/app.css, lot 11a). */
   .actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    margin-top: 10px;
   }
-  .action {
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-    padding: 12px;
-    border-radius: var(--r);
-    border: 1px solid var(--line2);
-    background: transparent;
-    color: var(--text);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-  .action.on {
-    border-color: var(--accent);
-    background: var(--elev);
-  }
-  .ring {
-    width: 14px;
-    height: 14px;
-    flex: none;
-    margin-top: 2px;
-    border-radius: 50%;
-    border: 1.5px solid var(--line2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .action.on .ring {
-    border-color: var(--accent);
-  }
-  .action.on .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--accent);
-  }
-  .txt {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    flex: 1;
-    min-width: 0;
-  }
-  .l {
-    font-size: 13px;
-    font-weight: 600;
-  }
-  .d {
-    font-size: 11.5px;
-    line-height: 1.45;
-    color: var(--muted);
-    text-wrap: pretty;
-  }
+  /* The branch and the strategy of the action chosen, under it. */
   .box {
     display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 14px 16px;
-    border-radius: var(--r);
-    background: var(--bg);
-    border: 1px solid var(--line);
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 18px;
+    margin: 6px 0 8px 28px;
   }
   .line {
-    display: flex;
+    display: inline-flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    flex-wrap: wrap;
   }
   .k {
-    width: 110px;
-    font-size: 12px;
     color: var(--muted);
+    font-size: 12px;
   }
-  .chip {
-    height: 28px;
-    padding: 0 11px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
+  .pick {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 9px 0 11px;
+    border: none;
+    border-radius: 8px;
     background: transparent;
-    color: var(--muted);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text);
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 550;
     cursor: pointer;
   }
-  .chip.mono {
-    font-family: var(--mono);
-    font-size: 11.5px;
+  .pick:hover {
+    box-shadow: inset 0 0 0 1px var(--line-3);
   }
-  .chip.on {
-    border-color: var(--accent);
-    background: var(--elev2);
-    color: var(--text);
+  .pick :global(.icon) {
+    color: var(--muted);
   }
   .input {
     width: 220px;
-    max-width: 50%;
+    max-width: 100%;
     flex: none;
-    height: 32px;
-    padding: 0 10px;
-    background: var(--panel);
-    font-size: 12px;
   }
   .select {
     width: 240px;
-    max-width: 50%;
-    flex: none;
-    height: 32px;
-    background: var(--panel);
-    font-size: 12px;
+    max-width: 100%;
   }
 </style>

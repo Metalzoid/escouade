@@ -106,7 +106,7 @@ describe('the « Application » tab', () => {
         within(panel())
           .getAllByRole('heading')
           .map((h) => h.textContent),
-      ).toEqual(['Affichage', 'Langue', 'Textes rédigés']);
+      ).toEqual(['Affichage', 'Textes rédigés', 'Langue']);
       expect(choices(ZOOM)).toEqual(['90 %', '100 %', '110 %', '125 %', '150 %']);
       expect(choice(ZOOM, '100 %')).toHaveAttribute('aria-pressed', 'true');
       expect(panel()).toHaveTextContent('Aussi au clavier : Ctrl+= pour agrandir, Ctrl+- pour réduire, Ctrl+0 pour revenir à 100 %.');

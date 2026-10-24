@@ -107,6 +107,8 @@ export default {
     enable: 'Importer les tickets étiquetés',
     enableDesc: "Les tickets ouverts des sources liées qui portent l'étiquette arrivent dans « À faire »",
     label: 'Étiquette',
+    /** A column mapped to a label of the service rather than to one of its states. */
+    labelState: 'Étiquette « {name} »',
     labelHint: 'label Jira, étiquette Trello, GitHub ou Linear',
     every: 'Vérifier toutes les',
     minutes: '{n} min',

@@ -145,7 +145,8 @@
     return chosen && !known.some((x) => x.id === chosen.id) ? [...known, chosen] : known;
   }
 
-  const stateLabel = (st: ExternalState) => (st.id.startsWith('label:') ? `◆ ${st.name}` : st.name);
+  const stateLabel = (st: ExternalState) =>
+    st.id.startsWith('label:') ? t('integrations.autoImport.labelState', { name: st.name }) : st.name;
 
   const open = (url: string) => app.run(openUrl(url));
 
@@ -154,10 +155,11 @@
 </script>
 
 {#snippet badge(id: Service, small = false)}
-  <span class="badge" class:small style:background={SERVICES[id].color} style:color={SERVICES[id].ink} aria-hidden="true"
-    >{SERVICES[id].letter}</span
-  >
+  <span class="badge" class:small aria-hidden="true">{SERVICES[id].letter}</span>
 {/snippet}
+
+<!-- The code hosts first (choice 27 of the 2.0 design): they serve every agent's pull requests. -->
+<ForgesSection />
 
 <Group title={t('integrations.accounts.title')} note={t('integrations.accounts.note')}>
   {#each SERVICE_IDS as id (id)}
@@ -178,9 +180,9 @@
         {/if}
       </div>
       {#if a?.connected}
-        <button class="btn small ghost" onclick={() => disconnect(id)}>{t('integrations.accounts.disconnect')}</button>
+        <button class="btn" onclick={() => disconnect(id)}>{t('integrations.accounts.disconnect')}</button>
       {:else if !form}
-        <button class="btn small" onclick={() => (forms[id] = blank())}>{t('integrations.accounts.connectEllipsis')}</button>
+        <button class="btn" onclick={() => (forms[id] = blank())}>{t('integrations.accounts.connectEllipsis')}</button>
       {/if}
     </div>
     {#if form && !a?.connected}
@@ -275,8 +277,6 @@
     {/if}
   {/each}
 </Group>
-
-<ForgesSection />
 
 <Group title={t('integrations.sources.title', { project: draft.name.trim() || project.name })}>
   {#if !connected.length}
@@ -379,13 +379,15 @@
 
 <style>
   .badge {
-    min-width: 28px;
-    height: 28px;
-    padding: 0 3px;
+    min-width: 24px;
+    height: 24px;
+    padding: 0;
     flex: none;
-    border-radius: 7px;
-    font-size: 12px;
-    font-weight: 800;
+    border-radius: 6px;
+    background: rgba(var(--fg-rgb), 0.07);
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 700;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -399,12 +401,16 @@
   .acct {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 12px 16px;
+    gap: 12px;
+    padding: 11px 0;
   }
-  .acct:not(:first-child),
-  .src:not(:first-child) {
-    border-top: 1px solid var(--line);
+  :global(.note) + .acct {
+    margin-top: 6px;
+  }
+  .acct + .acct,
+  .connect + .acct,
+  .src + .src {
+    border-top: 1px solid rgba(var(--fg-rgb), 0.05);
   }
   .txt {
     flex: 1;
@@ -414,19 +420,18 @@
     gap: 3px;
   }
   .l {
-    font-size: 13px;
     font-weight: 600;
   }
   .d {
-    font-size: 11.5px;
-    color: var(--dim);
+    font-size: 12px;
+    color: var(--muted);
     overflow-wrap: anywhere;
   }
   .d.on {
-    color: var(--muted);
+    color: var(--soft);
   }
   .d.warn {
-    color: var(--wait);
+    color: var(--warn-ink);
   }
   .small {
     height: 30px;
@@ -437,7 +442,7 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 4px 16px 14px 58px;
+    padding: 4px 0 14px 36px;
   }
   .connect label {
     display: flex;
@@ -452,15 +457,11 @@
   }
   .connect em {
     font-style: normal;
-    color: var(--dim);
+    color: var(--muted);
   }
   .connect .field {
     flex: 1;
     min-width: 0;
-    height: 32px;
-    padding: 0 10px;
-    background: var(--panel);
-    font-size: 12.5px;
   }
   .links {
     display: flex;
@@ -471,7 +472,7 @@
     padding: 0;
     border: none;
     background: none;
-    color: var(--accent);
+    color: var(--p-ink);
     font: inherit;
     font-size: 12px;
     cursor: pointer;
@@ -480,7 +481,7 @@
     color: var(--text);
   }
   .link:disabled {
-    color: var(--dim);
+    color: var(--muted);
     cursor: default;
   }
   .actions {
@@ -496,8 +497,8 @@
     overflow-wrap: anywhere;
   }
   .empty {
-    margin: 0;
-    padding: 14px 16px;
+    margin: 8px 0 0;
+    padding: 0;
     font-size: 12.5px;
     color: var(--muted);
   }
@@ -505,7 +506,7 @@
     display: flex;
     align-items: flex-start;
     gap: 14px;
-    padding: 12px 16px;
+    padding: 12px 0;
   }
   .who {
     width: 150px;
@@ -524,12 +525,9 @@
   }
   .k {
     font-size: 11px;
-    color: var(--dim);
+    color: var(--muted);
   }
   .select {
-    height: 30px;
-    padding: 0 8px;
-    background: var(--panel);
     font-size: 12px;
   }
   .map {
@@ -541,10 +539,10 @@
     grid-template-columns: 130px repeat(var(--n), minmax(0, 1fr)) 80px;
     align-items: center;
     gap: 12px;
-    padding: 9px 16px;
+    padding: 9px 0;
   }
   .mrow:not(:first-child) {
-    border-top: 1px solid var(--line);
+    border-top: 1px solid rgba(var(--fg-rgb), 0.05);
   }
   .mrow.head {
     font-size: 11.5px;

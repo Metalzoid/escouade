@@ -110,7 +110,7 @@ async function commands(page: Page, list: { name: string; command: string; dir?:
   await page.getByRole('button', { name: 'Configurer', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   for (const [i, c] of list.entries()) {
-    await dialog.getByRole('button', { name: '+ Ajouter une commande' }).click();
+    await dialog.getByRole('button', { name: 'Ajouter une commande', exact: true }).click();
     const cfg = dialog.getByRole('group', { name: `Commande ${i + 1}` });
     await cfg.getByLabel('Nom').fill(c.name);
     await cfg.getByLabel('Commande').fill(c.command);
@@ -562,7 +562,7 @@ test.describe('in English', () => {
     await addProject(page, app.repo, { lang: 'en' });
     await page.getByRole('button', { name: 'Configure', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Settings' });
-    await dialog.getByRole('button', { name: '+ Add a command' }).click();
+    await dialog.getByRole('button', { name: 'Add a command', exact: true }).click();
     const cfg = dialog.getByRole('group', { name: 'Command 1' });
     await cfg.getByLabel('Name').fill('Front');
     await cfg.getByLabel('Command').fill('Start-Sleep 600');

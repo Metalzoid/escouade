@@ -5,13 +5,14 @@
   import { app } from '../../lib/state.svelte';
   import type { WorktreeStep } from '../../lib/types';
   import { tip } from '../../lib/tip';
+  import Icon from '../Icon.svelte';
 
   // The commands a project runs in its worktrees (their setup, or their teardown, `kind`), in order: shell, command
   // line, folder of the worktree.
   let { steps = $bindable(), kind, onadd }: { steps: WorktreeStep[]; kind: 'setup' | 'teardown'; onadd: () => void } = $props();
 
   /** Alt as the system writes it in a shortcut. */
-  const ALT = IS_MAC ? '⌥' : 'Alt+';
+  const ALT = IS_MAC ? t('settings.steps.altMac') : 'Alt+';
 
   /**
    * Moves step `i` one place up (-1) or down (1). The focus stays on what had it in the step, which moves with it
@@ -45,13 +46,7 @@
     <!-- The keys come from the step's fields and buttons, which keep their own. -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div class="step" role="group" aria-label={t(`settings.steps.${kind}.group`, { n: i + 1 })} onkeydown={(e) => onKeydown(e, i)}>
-      <span class="n mono" aria-hidden="true">{i + 1}</span>
-      <select class="field" aria-label={t('settings.fields.shell')} bind:value={s.shell}>
-        {#each app.shells as sh (sh.id)}<option value={sh.id}>{sh.label}</option>{/each}
-        {#if !app.shells.some((sh) => sh.id === s.shell)}<option value={s.shell}
-            >{t('settings.fields.shellNotFound', { name: s.shell || t('settings.fields.shell') })}</option
-          >{/if}
-      </select>
+      <span class="n" aria-hidden="true">{i + 1}</span>
       <input
         class="field mono cmd"
         aria-label={t('common.command')}
@@ -67,93 +62,111 @@
         spellcheck="false"
         bind:value={s.cwd}
       />
-      <button
-        class="icon up"
-        use:tip={t('settings.steps.up', { keys: `${ALT}↑` })}
-        aria-label={t('settings.steps.upN', { n: i + 1 })}
-        aria-keyshortcuts="Alt+ArrowUp"
-        disabled={i === 0}
-        onclick={() => move(i, -1)}>↑</button
-      >
-      <button
-        class="icon down"
-        use:tip={t('settings.steps.down', { keys: `${ALT}↓` })}
-        aria-label={t('settings.steps.downN', { n: i + 1 })}
-        aria-keyshortcuts="Alt+ArrowDown"
-        disabled={i === steps.length - 1}
-        onclick={() => move(i, 1)}>↓</button
-      >
-      <button
-        class="icon del"
-        use:tip={t('common.delete')}
-        aria-label={t('settings.steps.deleteN', { n: i + 1 })}
-        onclick={() => steps.splice(i, 1)}>×</button
-      >
+      <select class="field" aria-label={t('settings.fields.shell')} bind:value={s.shell}>
+        {#each app.shells as sh (sh.id)}<option value={sh.id}>{sh.label}</option>{/each}
+        {#if !app.shells.some((sh) => sh.id === s.shell)}<option value={s.shell}
+            >{t('settings.fields.shellNotFound', { name: s.shell || t('settings.fields.shell') })}</option
+          >{/if}
+      </select>
+      <span class="acts">
+        <button
+          class="icon-btn up"
+          use:tip={t('settings.steps.up', { keys: t('settings.steps.upKeys', { alt: ALT }) })}
+          aria-label={t('settings.steps.upN', { n: i + 1 })}
+          aria-keyshortcuts="Alt+ArrowUp"
+          disabled={i === 0}
+          onclick={() => move(i, -1)}><Icon name="up" size={14} /></button
+        >
+        <button
+          class="icon-btn down"
+          use:tip={t('settings.steps.down', { keys: t('settings.steps.downKeys', { alt: ALT }) })}
+          aria-label={t('settings.steps.downN', { n: i + 1 })}
+          aria-keyshortcuts="Alt+ArrowDown"
+          disabled={i === steps.length - 1}
+          onclick={() => move(i, 1)}><Icon name="up" size={14} /></button
+        >
+        <button
+          class="icon-btn del"
+          use:tip={t('common.delete')}
+          aria-label={t('settings.steps.deleteN', { n: i + 1 })}
+          onclick={() => steps.splice(i, 1)}><Icon name="trash" size={14} /></button
+        >
+      </span>
     </div>
+  {:else}
+    <p class="empty">{t('settings.project.noCommands')}</p>
   {/each}
   <div>
-    <button class="btn" aria-label={t(`settings.steps.${kind}.add`)} onclick={onadd}>{t('settings.fields.addCommand')}</button>
+    <button class="add-line" aria-label={t(`settings.steps.${kind}.add`)} onclick={onadd}
+      ><Icon name="plus" size={14} />{t(`settings.steps.${kind}.add`)}</button
+    >
   </div>
 </div>
 
 <style>
+  /* A worktree's commands on a grid (`.cmd-row.steps-row` of the 2.0 design): rank, command, folder, shell, arrows. */
   .steps {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    display: grid;
+    gap: 6px;
+    margin-top: 4px;
   }
   .step {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) 130px 140px auto;
     align-items: center;
     gap: 8px;
   }
+  .step .field {
+    width: 100%;
+    min-width: 0;
+  }
   .n {
-    width: 16px;
-    font-size: 11px;
     color: var(--dim);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
     text-align: right;
   }
-  .field {
-    height: 32px;
-    background: var(--panel);
+  .acts {
+    display: inline-flex;
+  }
+  .down :global(.icon) {
+    transform: rotate(180deg);
+  }
+  .del:hover:not(:disabled) {
+    color: var(--del);
+  }
+  .empty {
+    margin: 4px 0 0;
+    color: var(--muted);
     font-size: 12.5px;
   }
-  select.field {
-    width: 150px;
-  }
-  .cmd {
-    flex: 1;
-    min-width: 180px;
-  }
-  .dir {
-    width: 130px;
-  }
-  .icon {
-    width: 32px;
-    height: 32px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
+  .add-line {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 28px;
+    margin-top: 2px;
+    padding: 0 8px;
+    border: none;
+    border-radius: 7px;
     background: transparent;
     color: var(--muted);
-    font-size: 15px;
+    font-size: 12.5px;
+    font-weight: 550;
     cursor: pointer;
   }
-  .up,
-  .down {
-    font-size: 13px;
-  }
-  .up:hover:not(:disabled),
-  .down:hover:not(:disabled) {
-    border-color: var(--text);
+  .add-line:hover {
+    background: var(--hover);
     color: var(--text);
   }
-  .icon:disabled {
-    opacity: 0.35;
-    cursor: default;
-  }
-  .del:hover {
-    border-color: var(--del);
-    color: var(--del);
+  /* Narrow: the shell and the arrows under the command. */
+  @container settings (max-width: 560px) {
+    .step {
+      grid-template-columns: 22px minmax(0, 1fr) 110px;
+    }
+    .step select,
+    .acts {
+      grid-column: 2 / span 1;
+    }
   }
 </style>

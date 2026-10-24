@@ -1,49 +1,77 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
-  // A titled box of settings rows (or, `plain`, what is laid out by itself), with a note under it; `anchor`:
-  // what the modal scrolls to when opened on it.
+  // A group of settings under its title, a hairline above the next (`.sg` of the 2.0 design): its note under the title,
+  // then its rows. Beside the title, `state` (a harness's, « Prêt · 2.1.301 ») and `action` (« Ajouter un compte… », on
+  // the right); other attributes go to the section. `anchor`: what the modal scrolls to when opened on it. `plain` is kept for the callers that laid out
+  // their own box: there is none any more.
   let {
     title,
     note,
-    plain = false,
+    plain: _plain = false,
     anchor,
+    state,
+    action,
     children,
-  }: { title: string; note?: string; plain?: boolean; anchor?: string; children: Snippet } = $props();
+    ...rest
+  }: {
+    title?: string;
+    note?: string;
+    plain?: boolean;
+    anchor?: string;
+    state?: Snippet;
+    action?: Snippet;
+    children: Snippet;
+    [attr: string]: unknown;
+  } = $props();
 </script>
 
-<section class="group" data-anchor={anchor}>
-  <h3>{title}</h3>
-  {#if plain}{@render children()}{:else}<div class="box">{@render children()}</div>{/if}
+<section class="sg" data-anchor={anchor} {...rest}>
+  {#if state || action}
+    <div class="hg">
+      <h2>{title}</h2>
+      {#if state}{@render state()}{/if}
+      {#if action}<span class="act">{@render action()}</span>{/if}
+    </div>
+  {:else if title}
+    <h2>{title}</h2>
+  {/if}
   {#if note}<p class="note">{note}</p>{/if}
+  {@render children()}
 </section>
 
 <style>
-  .group {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+  .sg {
+    padding: 20px 0 4px;
   }
-  h3 {
+  :global(.sg) + .sg {
+    border-top: 1px solid var(--line);
+  }
+  h2 {
     margin: 0;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--dim);
+    font-size: 13px;
+    font-weight: 620;
   }
-  .box {
+  .hg {
     display: flex;
-    flex-direction: column;
-    border-radius: var(--r);
-    border: 1px solid var(--line);
-    background: var(--bg);
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .hg h2 {
+    flex: none;
+  }
+  .act {
+    display: inline-flex;
+    gap: 8px;
+    margin-left: auto;
   }
   .note {
-    margin: 0;
-    font-size: 11.5px;
+    max-width: 64ch;
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 12px;
     line-height: 1.5;
-    color: var(--dim);
     text-wrap: pretty;
   }
 </style>

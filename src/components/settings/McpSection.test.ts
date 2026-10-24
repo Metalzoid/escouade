@@ -74,11 +74,11 @@ describe('McpSection', () => {
     app.settings = { ...SETTINGS, accounts: [PRINCIPAL, PRO] };
   });
 
-  it('is the « Serveur MCP » group of the « Harness » tab, off by default, with its help and its note', async () => {
+  it('is the tab « Serveur MCP » of « Système » (choice 2 of the 2.0 design), off by default, with its help and its note', async () => {
     backend();
-    app.modal = { kind: 'settings', tab: 'claude' };
-    render(SettingsModal, { tab: 'claude' });
-    expect(screen.getByRole('tab', { name: 'Harness' })).toHaveAttribute('aria-selected', 'true');
+    app.modal = { kind: 'settings', tab: 'mcp' };
+    render(SettingsModal, { tab: 'mcp' });
+    expect(screen.getByRole('tab', { name: 'Serveur MCP' })).toHaveAttribute('aria-selected', 'true');
     expect(await screen.findByRole('heading', { name: 'Serveur MCP' })).toBeInTheDocument();
     expect(switchEl()).toHaveAttribute('aria-checked', 'false');
     // One switch: none of a harness of its own (ESC-119).
@@ -103,14 +103,14 @@ describe('McpSection', () => {
 
   it('turns on at once, not through the modal’s draft, and says what it declares as the backend tells it', async () => {
     const be = backend();
-    app.modal = { kind: 'settings', tab: 'claude' };
-    render(SettingsModal, { tab: 'claude' });
+    app.modal = { kind: 'settings', tab: 'mcp' };
+    render(SettingsModal, { tab: 'mcp' });
     await userEvent.click(switchEl());
     expect(be.called('mcp_set_enabled').map((c) => c.args)).toEqual([{ enabled: true }]);
     await waitFor(() => expect(switchEl()).toHaveAttribute('aria-checked', 'true'));
     expect(app.settings.mcpEnabled).toBe(true);
     // Saved already: the tab is not a change left for « Enregistrer ».
-    expect(screen.getByRole('tab', { name: 'Harness' })).not.toHaveClass('changed');
+    expect(screen.getByRole('tab', { name: 'Serveur MCP' })).not.toHaveClass('changed');
     // Not told yet.
     expect(screen.getByRole('status')).toHaveTextContent('Déclaration dans les harness installés…');
     mcp.take({ type: 'mcpStatus', status: RUNNING });
@@ -311,7 +311,8 @@ describe('McpSection', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy the command' })).toBeInTheDocument();
     expect(screen.getByText('Run it by hand in PowerShell:')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'MCP server' })).toBeInTheDocument();
+    // Its title is the tab's (« MCP server »): the group is named by it.
+    expect(screen.getByRole('region', { name: 'MCP server' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'MCP activity' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument();
     expect(await screen.findByText('Refused')).toBeInTheDocument();

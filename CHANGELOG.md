@@ -20,6 +20,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - La vue d’ensemble et les statistiques sont redessinées : les agents qui attendent ta réponse en tête, à qui tu réponds sur place, puis ceux de chaque projet, et « Attend » pour un agent dont le tour est fini mais pas le travail. Les statistiques montrent quatre chiffres, les tokens de chaque jour en colonnes avec leur détail au survol, et le coût par projet, par modèle et par harness, lisibles dans les deux thèmes.
 - Dans la vue Codex ou Copilot CLI, une bande ambre dit quand le harness demande s’il peut faire confiance au dossier de l’agent ; la vue OpenCode rappelle qu’Escouade garde le fil de la conversation.
 - Les fenêtres sont redessinées : l’assistant « Nouveau projet » et son rail d’étapes, « Ajouter un compte » avec les harness en segments et la connexion dans un cadre, « Ouvrir une PR » qui dit les fichiers non commités laissés de côté, et les nouveautés d’une mise à jour. Les boutons dessinent leur icône, et les menus ont les entrées de l’aperçu.
+- Les réglages sont redessinés : leurs onglets en trois groupes, dont un nouvel onglet « Serveur MCP », chaque harness avec son état et sa version, chaque compte en fiche avec son quota et les réglages de ses nouveaux agents, et tout ce qui se passe à la limite d’un quota réuni dans Comptes. Une mise à jour qui ne se télécharge pas reste dite dans À propos, avec « Télécharger dans le navigateur ».
 
 ### Corrections
 

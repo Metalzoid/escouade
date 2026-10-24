@@ -36,6 +36,7 @@ async function download(update: FoundUpdate, manual: boolean) {
     // A newer one found meanwhile, or this one withdrawn: not this one's to say.
     if (!ready || latest !== update || !app.update) return;
     app.update = { ...app.update, ready: true };
+    app.updateTrouble = null;
     // The backend restarts no more by itself for it: the user tries again, or not.
     if (app.failedUpdate === update.version) app.tellFailedUpdate(update.version);
   } catch (e) {
@@ -43,6 +44,8 @@ async function download(update: FoundUpdate, manual: boolean) {
     // Downloaded again at the next check.
     forget();
     if (e instanceof UpdateTrouble) {
+      // Said in Réglages › À propos while it lasts (choice 13 of the 2.0 design), told now when the backend says so.
+      app.updateTrouble = { version: update.version, message: e.message, page: e.page };
       if (e.show) tellDownloadFailed(e);
     } else if (manual) {
       // The call itself broke: only the user who asked hears of it.

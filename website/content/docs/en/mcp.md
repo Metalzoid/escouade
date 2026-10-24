@@ -16,7 +16,7 @@ The server runs on your machine alone. It only serves to read and to give orders
 
 One switch gives the server to Escouade’s agents in every project, and declares it in every harness installed: Claude Code, Codex, OpenCode and Copilot CLI, started outside Escouade (a terminal, their app).
 
-1. Open Settings › Harness. The “MCP server” group has the “Agents can drive Escouade” switch.
+1. Open Settings › MCP server. The tab has the “Agents can drive Escouade” switch.
 2. Turn it on. It saves right away, without “Save”: the declaration writes into the config of each account of each harness, which “Cancel” could not undo.
 
 Escouade then starts the server and declares it in each active account of each harness installed, only the accounts added (a harness without one has it declared nowhere):

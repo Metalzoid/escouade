@@ -239,7 +239,7 @@ No back and forth: an agent that moved to an account only leaves it once that on
 
 When Claude refuses a turn because the account’s quota is used up, the agent stops. The turn’s error card, the agent’s card in the sidebar (“Resumes at 3:00 PM”) and the Kanban give the time of the automatic resume.
 
-By default, Escouade sends “continue” to the agent about thirty seconds after the quota resets, when it knows when that is. This is the “Auto-resume after the usage limit” setting (Settings › Harness, “Processes” group). The card’s “Cancel auto-resume” button cancels it for that agent.
+By default, Escouade sends “continue” to the agent about thirty seconds after the quota resets, when it knows when that is. This is the “Auto-resume after the usage limit” setting (Settings › Harness, “All harnesses” group). The card’s “Cancel auto-resume” button cancels it for that agent.
 
 ### Resume on another account
 
@@ -262,7 +262,7 @@ If the turn that follows fails on the new account, the card says “Resuming on 
 
 ### By itself, for ticket agents
 
-The “Resume a ticket’s agent stopped by the usage limit on another account” setting (Settings › Harness, “Processes” group, visible with several accounts) does the same without you. It is off by default; its description reads: “Otherwise it waits for its account to reset”.
+The “Resume a ticket’s agent stopped by the usage limit on another account” setting (Settings › Accounts, “When a quota runs out” group, visible with several accounts) does the same without you. It is off by default; its description reads: “Otherwise it waits for its account to reset”.
 
 When on, the agent of a ticket stopped by the limit moves by itself to another account when one fits: the project’s preferred account, otherwise the first one in the list. That account must be signed in, under the threshold, held back by no pause after a usage limit, with no agent waiting for its own reset, and on the same side of WSL as the agent. If there is none, or if the move fails (the conversation then says “Couldn’t resume on another account: …”), the agent waits for its account to reset, as before.
 
@@ -272,7 +272,7 @@ The account left receives no new ticket until it resets (30 minutes when the res
 
 When no account of the agent’s harness serving its project can take it any more (limit reached, or past “Pause past quota”), the card offers “Continue on Codex”: the project’s next harness. A project goes first to its default harness, then to the others in the “Harness order” (Settings › Accounts), only those with an active account serving it: an account “Reserved to projects” serves only the ones it ticks. The ▾ button (“Continue on another harness”) opens the menu of the next ones. With no fallback harness, the agent waits for the reset, as before.
 
-A session doesn’t move from one harness to another: this is a handover. The agent keeps its conversation, its worktree and its branch; a new process of the target harness starts on the account its rule picks, with that harness’s “Handover model” (its best one by default, Settings › Harness) and the same mode, or the closest one that never allows more. Its first message is a handover file Escouade writes from the conversation, without asking anything of the harness it left: the original request and the later messages, the agent’s latest messages, its progress and the tasks of its plan, the changed files (`git status`, `git diff --stat`, the branch’s commits), the last turn if it was cut and where, a question or a permission left unanswered. A ticket keeps its protocol through the added instructions. The file is bounded by the target model’s context window; the conversation folds it under “Handover file”.
+A session doesn’t move from one harness to another: this is a handover. The agent keeps its conversation, its worktree and its branch; a new process of the target harness starts on the account its rule picks, with that harness’s “Handover model” (its best one by default, Settings › Accounts) and the same mode, or the closest one that never allows more. Its first message is a handover file Escouade writes from the conversation, without asking anything of the harness it left: the original request and the later messages, the agent’s latest messages, its progress and the tasks of its plan, the changed files (`git status`, `git diff --stat`, the branch’s commits), the last turn if it was cut and where, a question or a permission left unanswered. A ticket keeps its protocol through the added instructions. The file is bounded by the target model’s context window; the conversation folds it under “Handover file”.
 
 The conversation marks it: “Continued on Codex · Claude Code quota spent until 6:00 PM”, then each turn says the harness that ran it, and keeps its statistics and its cost.
 
@@ -282,7 +282,7 @@ An agent in a terminal view (Claude Code view, Codex view…) switches too: the 
 
 The harness left is set aside until its reset. After that, the card and the menu offer “Go back to Claude Code”: a handover the other way. The agent never goes back by itself.
 
-The setting “Continue on the next harness when every account of a harness is spent” (Settings › Harness, “Processes” group, shown with two harnesses) does it without you. It is off by default. When on, the agent stopped by the limit moves by itself to the first fallback harness with an account to take it, never to the one it left; the autopilot follows its ticket on the new harness.
+The setting “Continue on the next harness when every account of a harness is spent” (Settings › Accounts, “When a quota runs out” group, shown with two harnesses) does it without you. It is off by default. When on, the agent stopped by the limit moves by itself to the first fallback harness with an account to take it, never to the one it left; the autopilot follows its ticket on the new harness.
 
 ## Disable or remove an account
 

@@ -41,7 +41,7 @@ test('Claude drives Escouade: a ticket created through MCP arrives in the Kanban
   await addProject(page, app.repo, { firstAgent: false });
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Harness' }).click();
+  await dialog.getByRole('tab', { name: 'Serveur MCP' }).click();
   await expect(dialog.getByRole('heading', { name: 'Serveur MCP' })).toBeVisible();
   // Off to begin with: nothing declared anywhere.
   await expect(dialog.getByRole('switch', { name: SWITCH })).toHaveAttribute('aria-checked', 'false');
@@ -113,7 +113,7 @@ test('turning Claude’s control of Escouade off takes it out of Claude Code and
   await addProject(page, app.repo, { firstAgent: false });
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Harness' }).click();
+  await dialog.getByRole('tab', { name: 'Serveur MCP' }).click();
   await dialog.getByRole('switch', { name: SWITCH }).click();
   await expect(row(dialog, 'Claude · compte Principal')).toContainText('Déclaré');
   const before = declared(app)!;
@@ -166,7 +166,7 @@ test('the one switch reaches agents already running: their conversation says so,
   // On: the settings count the agent already running, which gets the tools at its next start.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Harness' }).click();
+  await dialog.getByRole('tab', { name: 'Serveur MCP' }).click();
   await dialog.getByRole('switch', { name: SWITCH }).click();
   await expect(row(dialog, 'Claude · compte Principal')).toContainText('Déclaré');
   await expect(
@@ -324,7 +324,7 @@ test.describe('« Les agents peuvent piloter Escouade » in every harness instal
     await addProject(page, app.repo, { firstAgent: false });
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await dialog.getByRole('tab', { name: 'Harness' }).click();
+    await dialog.getByRole('tab', { name: 'Serveur MCP' }).click();
     // One switch, no harness of its own; the token in plain text, said beside it.
     await expect(dialog.getByRole('switch', { name: /piloter Escouade/ })).toHaveCount(1);
     await expect(

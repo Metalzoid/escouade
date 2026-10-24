@@ -253,11 +253,15 @@ export default {
   // The « Quotas » group, at the end of the « Comptes » tab: how the status bar shows them, for every account.
   quotas: {
     title: 'Quotas',
+    /** Where an agent goes at the limit, gathered in « Comptes » (choice 2 of the 2.0 design). */
+    limitTitle: 'Quand un quota est épuisé',
+    limitNote:
+      'Les nouveaux agents partent sur le premier compte actif de leur harness sous les seuils « Pause au-delà du quota » et « Changer de compte à ». Ce qui suit dit où va un agent qui les atteint.',
     /** « Changer de compte à » (ESC-148): its choices are percentages, and « À la limite ». */
     switchAt: 'Changer de compte à',
     switchAtLimit: 'À la limite',
     switchAtDesc:
-      'Quand la fenêtre de 5 h ou la fenêtre hebdomadaire de son compte atteint ce seuil, un agent passe sur un autre compte de son harness à la fin de son tour, et les nouveaux agents y partent. « À la limite » : rien ne bouge avant, puis « Reprendre sur un autre compte… » (Harness) décide. « Pause au-delà du quota » (Kanban) retient en plus les tickets quand tous les comptes l’ont passée.',
+      'Quand la fenêtre de 5 h ou la fenêtre hebdomadaire de son compte atteint ce seuil, un agent passe sur un autre compte de son harness à la fin de son tour, et les nouveaux agents y partent. « À la limite » : rien ne bouge avant, puis « Reprendre sur un autre compte… », ci-dessous, décide. « Pause au-delà du quota » (Kanban) retient en plus les tickets quand tous les comptes l’ont passée.',
     projection: 'Projection des quotas',
     projectionDesc:
       'Dans la barre d’état, après chaque quota, où il en sera à sa remise à zéro au rythme actuel (« → 64 % ») : vert, orange au-delà de 80 %, rouge au-delà de 100 %. Pour un harness sans quota, le coût du jour projeté à minuit, rapporté au budget.',

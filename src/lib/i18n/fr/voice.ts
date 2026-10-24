@@ -197,6 +197,8 @@ export default {
     exception:
       'Proposée par exception à la règle des licences, décidée par Escouade le 17 octobre 2026 : son modèle ne déclare aucune licence et son jeu de données, sous CC BY 4.0, a été généré par une voix de synthèse (ElevenLabs v4).',
     rate: 'Vitesse',
+    /** Beside its slider: « 1.1× ». */
+    rateValue: '{n}×',
     rateDesc: '1 : le rythme de la voix ; plus haut, elle lit plus vite.',
     volume: 'Volume',
     silence: 'Délai avant l’envoi',

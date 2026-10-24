@@ -3,6 +3,7 @@
   import { api } from '../../lib/ipc';
   import { onlineVoice } from '../../lib/online-voice.svelte';
   import { app } from '../../lib/state.svelte';
+  import Icon from '../Icon.svelte';
   import Row from './Row.svelte';
 
   // The key of a service on line, kept in the keychain at once (never shown back): one by service, the dictation's
@@ -49,9 +50,9 @@
 >
   <div class="keys" data-online-key={service.id}>
     {#if has && !replacing}
-      <span class="ok">{t('voice.settings.keySaved')}</span>
-      <button class="btn ghost" onclick={() => (replacing = true)}>{t('voice.settings.keyReplace')}</button>
-      <button class="btn ghost" onclick={remove}>{t('voice.settings.keyDelete')}</button>
+      <span class="ok"><Icon name="check" size={14} />{t('voice.settings.keySaved')}</span>
+      <button class="btn" onclick={() => (replacing = true)}>{t('voice.settings.keyReplace')}</button>
+      <button class="btn" onclick={remove}>{t('voice.settings.keyDelete')}</button>
     {:else}
       <input
         class="field input mono"
@@ -78,15 +79,14 @@
   }
   .input {
     width: 340px;
-    max-width: 50%;
+    max-width: 100%;
     flex: none;
-    height: 32px;
-    padding: 0 10px;
-    background: var(--panel);
-    font-size: 12px;
   }
   .ok {
-    font-size: 11.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     color: var(--add);
+    font-size: 12px;
   }
 </style>

@@ -72,7 +72,7 @@ describe('ProjectTab', () => {
     expect(screen.queryByRole('dialog', { name: 'Branche de départ' })).toBeNull();
     const named = chip('Branche de départ : origin/hotfix. Choisir une autre branche');
     expect(named).toHaveAttribute('aria-pressed', 'true');
-    expect(named).toHaveTextContent('⎇ origin/hotfix ▾');
+    expect(named).toHaveTextContent('origin/hotfix');
     expect(screen.getByText(/^Ils partent de origin\/hotfix,/)).toBeInTheDocument();
     await save();
     expect(backend.called('update_project')[0].args.project).toMatchObject({
@@ -378,8 +378,10 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
     expect(backend.called('save_settings')).toHaveLength(0);
   });
 
-  it('says, harness by harness, whether its files are kept by a guard or a barrier (ESC-140)', () => {
+  it('says, harness by harness, whether its files are kept by a guard or a barrier, for a private project only (ESC-140, choice 28)', async () => {
     render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    expect(screen.queryByRole('list', { name: 'Ses fichiers' })).toBeNull();
+    await userEvent.click(screen.getByRole('switch', { name: 'Projet privé' }));
     const list = screen.getByRole('list', { name: 'Ses fichiers' });
     const rows = within(list).getAllByRole('listitem');
     expect(rows).toHaveLength(4);

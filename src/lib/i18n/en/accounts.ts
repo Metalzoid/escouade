@@ -207,10 +207,13 @@ export default defineZone('accounts', {
 
   quotas: {
     title: 'Quotas',
+    limitTitle: 'When a quota runs out',
+    limitNote:
+      'New agents start on the first active account of their harness under the thresholds “Pause above quota” and “Switch accounts at”. What follows says where an agent that reaches them goes.',
     switchAt: 'Switch accounts at',
     switchAtLimit: 'At the limit',
     switchAtDesc:
-      'When the 5-hour or weekly window of its account reaches this threshold, an agent goes on on another account of its harness at the end of its turn, and new agents go there. “At the limit”: nothing moves before it, then “Resume a ticket’s agent stopped by the usage limit on another account” (Harness) decides. “Pause above quota” (Kanban) also holds the tickets back once every account has passed it.',
+      'When the 5-hour or weekly window of its account reaches this threshold, an agent goes on on another account of its harness at the end of its turn, and new agents go there. “At the limit”: nothing moves before it, then “Resume a ticket’s agent stopped by the usage limit on another account”, below, decides. “Pause above quota” (Kanban) also holds the tickets back once every account has passed it.',
     projection: 'Quota projection',
     projectionDesc:
       'In the status bar, after each quota, where it will stand at its reset at the current pace (“→ 64%”): green, amber past 80%, red past 100%. For a harness without a quota, the day’s cost projected to midnight, against its budget.',

@@ -12,9 +12,11 @@
   import NewProjects from '../settings/NewProjects.svelte';
   import PrivateMark from '../PrivateMark.svelte';
   import IntegrationsTab from '../settings/IntegrationsTab.svelte';
+  import McpSection from '../settings/McpSection.svelte';
   import ProjectTab from '../settings/ProjectTab.svelte';
   import VoiceTab from '../settings/VoiceTab.svelte';
   import { tip } from '../../lib/tip';
+  import Icon from '../Icon.svelte';
 
   // All the settings, the app's and each project's, in one place: a tab at a time, saved together.
   let {
@@ -82,16 +84,20 @@
   onmousedown={(e) => (downOnOverlay = e.target === e.currentTarget)}
   onclick={(e) => downOnOverlay && e.target === e.currentTarget && close()}
 >
-  <div class="modal" use:trapFocus role="dialog" tabindex="-1" aria-modal="true" aria-label={t('common.settings')}>
-    <nav>
-      <span class="title">{t('common.settings')}</span>
+  <div class="settings" use:trapFocus role="dialog" tabindex="-1" aria-modal="true" aria-label={t('common.settings')}>
+    <nav class="s-nav">
+      <span class="s-nav-h" aria-hidden="true">{t('common.settings')}</span>
       <div class="tabs" role="tablist" aria-orientation="vertical" aria-label={t('common.settings')}>
         {#each SETTINGS_TABS as entry, i (entry.id)}
           {@const on = entry.id === current.id}
           {@const changed = settingsForm.changed(entry.id)}
+          {#if i > 0 && entry.group !== SETTINGS_TABS[i - 1].group}
+            <span class="s-group" role="presentation"
+              >{entry.group === 'project' ? t('settings.modal.groupProject') : t('settings.modal.groupSystem')}</span
+            >
+          {/if}
           <button
-            class="tab"
-            class:on
+            class="s-tab"
             class:changed
             aria-describedby={changed ? 'settings-changed' : undefined}
             role="tab"
@@ -102,43 +108,37 @@
             onclick={() => (settingsForm.tab = entry.id)}
             onkeydown={(e) => onTabKey(e, i)}
           >
-            <span class="ic" aria-hidden="true">{entry.icon}</span>{entry.label}
-            <span class="mark" use:tip={t('settings.modal.changed')} aria-hidden="true"></span>
+            <Icon name={entry.icon} /><span class="lbl">{entry.label}</span>
+            <span class="chg" use:tip={t('settings.modal.changed')} aria-hidden="true"></span>
           </button>
         {/each}
       </div>
       <span id="settings-changed" hidden>{t('settings.modal.changed')}</span>
-      <div style="flex:1"></div>
-      <span class="version mono">Escouade {app.version}</span>
+      <span class="s-ver">Escouade {app.version}</span>
     </nav>
-    <div class="main">
-      <div class="head">
+    <div class="s-main">
+      <div class="s-head">
         <div class="hd">
-          <span class="t">{current.label}</span>
-          <span class="desc">{current.desc}</span>
+          <h1>{current.label}</h1>
+          <p>{current.desc}</p>
         </div>
-        <div style="flex:1"></div>
-        <button class="icon-btn" style="width:28px;height:28px;font-size:16px" onclick={close} aria-label={t('common.close')}>×</button>
+        <button class="icon-btn close" onclick={close} aria-label={t('common.close')}><Icon name="close" size={14} /></button>
       </div>
       {#if current.scoped && app.projects.length}
-        <div class="scope">
+        <div class="s-scope">
           <span class="k">{t('common.project')}</span>
           <div class="projects" role="group" aria-label={t('common.project')}>
             {#each app.projects as p (p.id)}
               {@const d = settingsForm.projects[p.id]}
-              <button
-                class="proj"
-                class:on={p.id === settingsForm.projectId}
-                aria-pressed={p.id === settingsForm.projectId}
-                onclick={() => (settingsForm.projectId = p.id)}
-                ><span class="sw" style:background={d?.color ?? p.color}></span>{d?.name.trim() ||
-                  p.name}{#if d?.private ?? p.private}<PrivateMark />{/if}</button
+              <button class="proj-pill" aria-pressed={p.id === settingsForm.projectId} onclick={() => (settingsForm.projectId = p.id)}
+                ><i style:background={d?.color ?? p.color}></i><span class="pn">{d?.name.trim() || p.name}</span
+                >{#if d?.private ?? p.private}<PrivateMark />{/if}</button
               >
             {/each}
           </div>
         </div>
       {/if}
-      <div class="body" bind:this={body} role="tabpanel" id="settings-panel" aria-labelledby="settings-tab-{current.id}">
+      <div class="s-body" bind:this={body} role="tabpanel" id="settings-panel" aria-labelledby="settings-tab-{current.id}">
         {#if current.id === 'projects' || current.id === 'board' || current.id === 'integrations'}
           {#if project && draft}
             {#if current.id === 'projects'}
@@ -159,14 +159,15 @@
           <AccountsTab />
         {:else if current.id === 'voice'}
           <VoiceTab />
+        {:else if current.id === 'mcp'}
+          <McpSection />
         {:else}
           <AppTab tab={current.id} />
         {/if}
       </div>
-      <div class="foot">
+      <div class="s-foot">
         {#if settingsForm.problem}<span class="problem">{settingsForm.problem}</span>{/if}
-        <div style="flex:1"></div>
-        <button class="btn ghost" onclick={close}>{t('common.cancel')}</button>
+        <button class="btn cancel" onclick={close}>{t('common.cancel')}</button>
         <button class="btn primary" disabled={settingsForm.busy || !!settingsForm.problem} onclick={save}>{t('common.save')}</button>
       </div>
     </div>
@@ -174,204 +175,276 @@
 </div>
 
 <style>
+  /* The window of the 2.0 design (#settings): the tabs in three groups on a darker side, the tab's title, the project
+     by pills, the settings in rows under hairlines (settings/Group, settings/Row), « Annuler » and « Enregistrer ». */
   .overlay {
     position: fixed;
     inset: 0;
     z-index: 50;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(12, 10, 8, 0.6);
-    backdrop-filter: blur(3px);
-    animation: fade 0.12s ease-out;
+    display: grid;
+    place-items: center;
+    background: var(--scrim);
+    animation: fade 0.2s ease-out;
   }
   @keyframes fade {
     from {
       opacity: 0;
     }
   }
-  .modal {
-    width: 900px;
-    max-width: calc(100vw - 40px);
-    height: 640px;
-    max-height: calc(100vh - 60px);
-    display: flex;
-    background: var(--panel);
-    border: 1px solid var(--line2);
-    border-radius: 14px;
-    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
-    overflow: hidden;
-    animation: ccFadeIn 0.15s ease-out;
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.985);
+    }
   }
-  nav {
-    width: 210px;
-    flex: none;
+  .settings {
+    display: grid;
+    grid-template-columns: 224px minmax(0, 1fr);
+    width: min(980px, 100vw - 48px);
+    height: min(700px, 100vh - 64px);
+    overflow: hidden;
+    border-radius: 14px;
+    background: var(--raise);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 24px 64px -12px rgba(0, 0, 0, calc(0.75 * var(--shade)));
+    animation: rise 0.35s var(--ease);
+  }
+  .s-nav {
     display: flex;
     flex-direction: column;
-    padding: 20px 10px 16px;
-    background: var(--bg);
+    min-height: 0;
+    padding: 16px 10px 14px;
     border-right: 1px solid var(--line);
+    background: rgba(0, 0, 0, calc(0.2 * var(--shade)));
+    overflow: auto;
   }
-  .title {
-    padding: 0 10px 14px;
-    font-size: 17px;
-    font-weight: 700;
+  .s-nav-h {
+    padding: 2px 10px 10px;
+    font-size: 15px;
+    font-weight: 640;
+    letter-spacing: -0.01em;
   }
   .tabs {
     display: flex;
     flex-direction: column;
-    gap: 2px;
   }
-  .tab {
-    height: 34px;
-    flex: none;
+  .s-group {
+    padding: 14px 10px 4px;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+  .s-tab {
     display: flex;
+    flex: none;
     align-items: center;
     gap: 10px;
+    width: 100%;
+    height: 32px;
     padding: 0 10px;
     border: none;
-    border-radius: var(--r-sm);
+    border-radius: 8px;
     background: transparent;
-    color: var(--muted);
-    font: inherit;
+    color: var(--soft);
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 500;
     text-align: left;
     cursor: pointer;
   }
-  .tab:hover {
-    background: var(--elev);
+  .s-tab :global(.icon) {
+    color: var(--muted);
   }
-  .tab.on {
-    background: var(--elev2);
+  .s-tab .lbl {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .s-tab:focus-visible {
+    outline-offset: -2px;
+  }
+  .s-tab:hover {
+    background: var(--hover);
     color: var(--text);
   }
-  .ic {
-    width: 18px;
-    text-align: center;
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--dim);
+  .s-tab[aria-selected='true'] {
+    background: rgba(var(--fg-rgb), 0.07);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text);
   }
-  .tab.on .ic {
-    color: var(--accent);
+  .s-tab[aria-selected='true'] :global(.icon) {
+    color: var(--text);
   }
-  .mark {
-    display: none;
+  .chg {
+    flex: none;
     width: 6px;
     height: 6px;
     margin-left: auto;
     border-radius: 50%;
-    background: var(--accent);
+    background: var(--p-ink);
+    visibility: hidden;
   }
-  .tab.changed .mark {
-    display: block;
+  .s-tab.changed .chg {
+    visibility: visible;
   }
-  .version {
-    padding: 0 10px;
-    font-size: 10.5px;
-    color: var(--dim);
+  .s-ver {
+    margin-top: auto;
+    padding: 12px 10px 0;
+    color: var(--muted);
+    font-size: 11.5px;
   }
-  .main {
-    flex: 1;
-    min-width: 0;
+  .s-main {
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    min-height: 0;
   }
-  .head {
-    flex: none;
+  .s-head {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
-    padding: 20px 18px 14px 28px;
-    border-bottom: 1px solid var(--line);
+    gap: 12px;
+    padding: 20px 14px 14px 28px;
   }
   .hd {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .t {
-    font-size: 18px;
-    font-weight: 700;
-  }
-  .desc {
-    font-size: 12.5px;
-    color: var(--muted);
-  }
-  .scope {
-    flex: none;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 28px;
-    border-bottom: 1px solid var(--line);
-  }
-  .k {
-    font-size: 12px;
-    color: var(--dim);
-  }
-  .projects {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
     min-width: 0;
   }
-  .proj {
-    height: 28px;
-    max-width: 220px;
+  .s-head h1 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 640;
+    letter-spacing: -0.02em;
+  }
+  .s-head p {
+    margin: 3px 0 0;
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+  .s-head .close {
+    width: 30px;
+    height: 30px;
+    margin-left: auto;
+    padding: 0;
+    border-radius: 6px;
+  }
+  .s-scope {
     display: flex;
     align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 0 28px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .s-scope .k {
+    flex: none;
+    margin-right: 6px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  /* Many projects: they scroll sideways, on one line. */
+  .projects {
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .proj-pill {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
     gap: 7px;
-    padding: 0 11px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
+    max-width: 220px;
+    height: 28px;
+    padding: 0 11px 0 9px;
+    border: none;
+    border-radius: 8px;
     background: transparent;
     color: var(--muted);
-    font: inherit;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 550;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     cursor: pointer;
   }
-  .proj.on {
-    border-color: var(--accent);
-    background: var(--elev2);
+  .proj-pill i {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 2.5px;
+  }
+  .proj-pill .pn {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .proj-pill:focus-visible {
+    outline-offset: -2px;
+  }
+  .proj-pill:hover {
+    background: var(--hover);
     color: var(--text);
   }
-  .sw {
-    width: 9px;
-    height: 9px;
-    flex: none;
-    border-radius: 3px;
+  .proj-pill[aria-pressed='true'] {
+    background: rgba(var(--fg-rgb), 0.07);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text);
   }
-  .body {
+  .s-body {
     flex: 1;
     min-height: 0;
+    padding: 0 28px 28px;
     overflow: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 26px;
-    padding: 22px 28px 28px;
+    container: settings / inline-size;
   }
   .none {
-    margin: 0;
+    margin: 20px 0 0;
     font-size: 12.5px;
-    color: var(--dim);
+    color: var(--muted);
   }
-  .foot {
-    flex: none;
+  .s-foot {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 14px 18px 16px 28px;
+    padding: 12px 16px 12px 28px;
     border-top: 1px solid var(--line);
   }
   .problem {
     min-width: 0;
-    font-size: 12px;
     color: var(--del);
+    font-size: 12.5px;
+  }
+  .s-foot .cancel {
+    margin-left: auto;
+  }
+  /* The menus of the settings, as the preview's `.select`: a ring on the window, not a well. */
+  /* A path, a command: the mono of the 2.0 design is a size smaller. */
+  .s-body :global(.field.mono) {
+    font-size: 12px;
+  }
+  .s-body :global(select.field) {
+    height: 30px;
+    max-width: 100%;
+    padding: 0 6px 0 9px;
+    border-radius: 8px;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 550;
+    cursor: pointer;
+  }
+  .s-body :global(select.field:hover) {
+    box-shadow: inset 0 0 0 1px var(--line-3);
+  }
+  .s-body :global(select.field option) {
+    background: var(--raise-2);
+    color: var(--text);
+  }
+  /* Still with prefers-reduced-motion: it is there at once. */
+  @media (prefers-reduced-motion: reduce) {
+    .overlay,
+    .settings {
+      animation: none;
+    }
   }
 </style>

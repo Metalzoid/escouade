@@ -513,19 +513,26 @@ describe('settingsForm', () => {
     flushSync();
     expect(names()).toEqual([
       'Application / Theme, zoom, languages and written texts',
-      'Harness / Executables, versions and the MCP server',
-      'Accounts / Each harness’s accounts that agents start on, and their quotas, saved as you change them',
+      'Harness / Each harness’s executables and versions, and what holds for them all',
+      'Accounts / Each harness’s accounts, their new agents’ settings, and what happens at the limit',
+      'Voice / Dictation and voice conversation, on your machine or online',
       'Notifications / Visual and sound alerts',
-      'Voice / Dictating messages: microphone, transcription model, language and shortcut',
       'Projects / Settings specific to each project',
       'Kanban / Autopilot and approved tickets',
-      'Integrations / Jira, Trello, GitHub Issues, Linear, and code hosts',
+      'Integrations / Code hosts, Jira, Trello, GitHub Issues, and Linear',
+      'MCP server / What Claude and the agents can do in Escouade, and what they did',
       'Terminals / Shells available in the built-in terminals',
       'Network / HTTP(S) proxy and TLS certificates for Claude Code, integrations, and updates',
       'About / Version and local data',
     ]);
     // Those set for one project only.
     expect(SETTINGS_TABS.filter((x) => x.scoped).map((x) => x.id)).toEqual(['projects', 'board', 'integrations']);
+    // In three groups (2.0 design): the general ones, « Par projet », « Système ».
+    expect(SETTINGS_TABS.map((x) => x.group)).toEqual([
+      ...Array(5).fill('general'),
+      ...Array(3).fill('project'),
+      ...Array(4).fill('system'),
+    ]);
   });
 
   it('tells in English what Claude suggested, in the singular and the plural of what it proposed and what was left out', async () => {

@@ -75,20 +75,28 @@ describe('SettingsModal', () => {
         .getAllByRole('tab')
         .map((t) => t.textContent?.trim()),
     ).toEqual([
-      'AaApplication',
-      '✳Harness',
-      '◎Comptes',
-      '♪Notifications',
-      '◖Voix',
-      '▤Projets',
-      '▦Kanban',
-      '⧉Intégrations',
-      '$_Terminaux',
-      '⇄Réseau',
-      'ⓘÀ propos',
+      'Application',
+      'Harness',
+      'Comptes',
+      'Voix',
+      'Notifications',
+      'Projets',
+      'Kanban',
+      'Intégrations',
+      'Serveur MCP',
+      'Terminaux',
+      'Réseau',
+      'À propos',
     ]);
+    // An icon each, drawn (2.0 design), and the three groups: the general tabs, « Par projet », « Système ».
+    expect(
+      within(dialog)
+        .getAllByRole('tab')
+        .map((t) => t.querySelector('svg')?.dataset.icon),
+    ).toEqual(['lang', 'spark', 'user', 'mic', 'bell', 'folder', 'kanban', 'link', 'plug', 'term', 'globe', 'info']);
+    expect([...dialog.querySelectorAll('.s-group')].map((g) => g.textContent)).toEqual(['Par projet', 'Système']);
     expect(tab('Harness')).toHaveAttribute('aria-selected', 'true');
-    expect(within(dialog).getByText('Exécutables, versions et serveur MCP')).toBeInTheDocument();
+    expect(within(dialog).getByText('Exécutables et versions de chaque harness, et ce qui vaut pour tous')).toBeInTheDocument();
     expect(within(panel()).getByRole('textbox', { name: /Chemin de l'exécutable/ })).toBeInTheDocument();
     expect(within(dialog).getByText('Escouade 1.3.1')).toBeInTheDocument();
 
@@ -148,21 +156,22 @@ describe('SettingsModal', () => {
     await userEvent.click(tab('Notifications'));
     const group = within(panel()).getByRole('heading', { name: 'Me prévenir pour' }).closest('section')!;
     const labels = ['Questions et autorisations', 'Tâches terminées', 'Erreurs', 'Tickets (prêt à tester, bloqué)'];
+    // Ticked, as the preview has them.
     expect(
       within(group)
-        .getAllByRole('switch')
-        .map((s) => s.getAttribute('aria-label')),
+        .getAllByRole('checkbox')
+        .map((s) => s.closest('label')!.textContent!.trim()),
     ).toEqual(labels);
-    for (const label of labels) expect(within(group).getByRole('switch', { name: label })).toHaveAttribute('aria-checked', 'true');
+    for (const label of labels) expect(within(group).getByRole('checkbox', { name: label })).toBeChecked();
     expect(tab('Notifications')).not.toHaveClass('changed');
     // Off, a type is silent outside the window; what blinks or flashes still does.
     expect(group).toHaveTextContent(
       /Désactivé : ni notification système ni carillon pour ce type ; l’onglet, la carte et (la barre des tâches|le Dock) signalent toujours l’agent\./,
     );
 
-    await userEvent.click(within(group).getByRole('switch', { name: 'Tâches terminées' }));
-    expect(within(group).getByRole('switch', { name: 'Tâches terminées' })).toHaveAttribute('aria-checked', 'false');
-    expect(within(group).getByRole('switch', { name: 'Erreurs' })).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(within(group).getByRole('checkbox', { name: 'Tâches terminées' }));
+    expect(within(group).getByRole('checkbox', { name: 'Tâches terminées' })).not.toBeChecked();
+    expect(within(group).getByRole('checkbox', { name: 'Erreurs' })).toBeChecked();
     expect(tab('Notifications')).toHaveClass('changed');
     await save();
     expect(backend.called('save_settings')[0].args.settings.notifyFor).toEqual({
@@ -193,7 +202,7 @@ describe('SettingsModal', () => {
   it('opens new agents in Escouade or in their harness’s terminal (ESC-34)', async () => {
     const backend = backendSaving();
     render(SettingsModal);
-    const view = group('Processus').getByRole('group', { name: 'Vue des nouveaux agents' });
+    const view = group('Tous les harness').getByRole('group', { name: 'Vue des nouveaux agents' });
     const escouade = within(view).getByRole('button', { name: 'Escouade' });
     const harness = within(view).getByRole('button', { name: 'Terminal du harness' });
     expect(escouade).toHaveAttribute('aria-pressed', 'true');
@@ -211,7 +220,7 @@ describe('SettingsModal', () => {
   it('lets the agents keep a task list, from the group of the processes, on by default', async () => {
     const backend = backendSaving();
     render(SettingsModal);
-    const processes = group('Processus');
+    const processes = group('Tous les harness');
     const todo = processes.getByRole('switch', { name: 'Les agents tiennent une liste de tâches' });
     expect(todo).toHaveAttribute('aria-checked', 'true');
     // Next to the other settings of the processes, with its help.
@@ -304,17 +313,15 @@ describe('SettingsModal', () => {
   it('makes every agent reachable by remote control from its own group, beside the MCP switch, off until the user switches it on', async () => {
     const backend = backendSaving();
     render(SettingsModal);
-    const remote = group('Remote control');
+    const remote = group('Claude Code');
     const all = remote.getByRole('switch', { name: 'Remote control pour tous les agents' });
+    expect(remote.getByText('Claude Code seulement : les autres harness n’ont pas de remote control.')).toBeInTheDocument();
     expect(all).toHaveAttribute('aria-checked', 'false');
     expect(remote.getByText(/^Chaque agent de chaque projet, existant ou nouveau \(agents des tickets compris\)/)).toHaveTextContent(
       'Chaque agent de chaque projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le process claude de chacun, qui reste lancé. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part : clic droit, « Désactiver le remote control ».',
     );
-    // Right before the MCP server’s switch, not after its activity log, which can be long.
-    const headings = within(panel())
-      .getAllByRole('heading')
-      .map((h) => h.textContent);
-    expect(headings.slice(-3)).toEqual(['Remote control', 'Serveur MCP', 'Activité MCP']);
+    // The MCP server has a tab of its own (choice 2 of the 2.0 design).
+    expect(within(panel()).queryByRole('heading', { name: 'Activité MCP' })).toBeNull();
     expect(tab('Harness')).not.toHaveClass('changed');
     await userEvent.click(all);
     expect(all).toHaveAttribute('aria-checked', 'true');
@@ -343,13 +350,15 @@ describe('SettingsModal', () => {
       { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true },
       { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true },
     ];
-    render(SettingsModal);
-    const move = screen.getByRole('switch', { name: 'Reprendre sur un autre compte un agent de ticket arrêté par la limite' });
+    render(SettingsModal, { tab: 'accounts' });
+    const move = group('Quand un quota est épuisé').getByRole('switch', {
+      name: 'Reprendre sur un autre compte un agent de ticket arrêté par la limite',
+    });
     // Off by default (not verified with a second real account), beside the automatic resume it is the alternative to.
     expect(move).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByText('Sinon il attend la remise à zéro de son compte')).toBeInTheDocument();
     await userEvent.click(move);
-    expect(tab('Harness')).toHaveClass('changed');
+    expect(tab('Comptes')).toHaveClass('changed');
     await save();
     expect(backend.called('save_settings')[0].args.settings).toMatchObject({ switchOnLimit: true });
   });
@@ -358,6 +367,8 @@ describe('SettingsModal', () => {
     backendSaving();
     render(SettingsModal);
     expect(screen.getByRole('switch', { name: 'Reprise automatique après la limite d’usage' })).toBeInTheDocument();
+    cleanup();
+    render(SettingsModal, { tab: 'accounts' });
     expect(screen.queryByRole('switch', { name: /Reprendre sur un autre compte/ })).not.toBeInTheDocument();
   });
 
@@ -365,14 +376,14 @@ describe('SettingsModal', () => {
     const backend = backendSaving();
     app.engines = [CLAUDE_ENGINE, { ...BARE_ENGINE, name: 'Codex' }];
     app.enginesFound = ['claude', 'codex'];
-    render(SettingsModal);
+    render(SettingsModal, { tab: 'accounts' });
     const next = screen.getByRole('switch', { name: 'Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés' });
     expect(next).toHaveAttribute('aria-checked', 'false');
     await userEvent.click(next);
     // Codex's best model by default; another one chosen.
-    const codex = screen.getByRole('group', { name: 'Modèle de passation · Codex' });
-    expect(within(codex).getByRole('button', { name: 'Le meilleur (GPT-5.5)' })).toHaveAttribute('aria-pressed', 'true');
-    await userEvent.click(within(codex).getByRole('button', { name: 'GPT-5.5 mini' }));
+    const codex = screen.getByRole('combobox', { name: 'Modèle de passation · Codex' }) as HTMLSelectElement;
+    expect(codex.selectedOptions[0].text).toBe('Le meilleur (GPT-5.5)');
+    await userEvent.selectOptions(codex, 'gpt-5.5-mini');
     await save();
     expect(backend.called('save_settings')[0].args.settings).toMatchObject({
       handoverOnLimit: true,
@@ -382,7 +393,7 @@ describe('SettingsModal', () => {
 
   it('has no such switch with a single harness', () => {
     backendSaving();
-    render(SettingsModal);
+    render(SettingsModal, { tab: 'accounts' });
     expect(screen.queryByRole('switch', { name: /Continuer sur le harness suivant/ })).not.toBeInTheDocument();
   });
 
@@ -578,7 +589,7 @@ describe('SettingsModal', () => {
     expect(within(front).getByLabelText('Shell')).toHaveValue('pwsh');
     expect(within(front).getByLabelText(/Sous-dossier/)).toHaveValue('web');
 
-    await userEvent.click(screen.getByRole('button', { name: '+ Ajouter une commande' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Ajouter une commande' }));
     const api = screen.getByRole('group', { name: 'Commande 2' });
     // A new command runs with the first detected shell, in the project's folder.
     expect(within(api).getByLabelText('Shell')).toHaveValue('pwsh');
@@ -652,7 +663,7 @@ describe('SettingsModal', () => {
         .map((b) => b.textContent),
     ).toEqual(['Automatique', 'Principal', 'Pro']);
     expect(within(choice).getByRole('button', { name: 'Automatique' })).toHaveAttribute('aria-pressed', 'true');
-    expect(choice.closest('.row')).toHaveTextContent('Le compte sur lequel partent les nouveaux agents et les tickets de ce projet.');
+    expect(choice.closest('.sr')).toHaveTextContent('Le compte sur lequel partent les nouveaux agents et les tickets de ce projet.');
     await userEvent.click(within(choice).getByRole('button', { name: 'Pro' }));
     expect(within(choice).getByRole('button', { name: 'Pro' })).toHaveAttribute('aria-pressed', 'true');
     await save();
@@ -689,7 +700,7 @@ describe('SettingsModal', () => {
         .getAllByRole('button')
         .map((b) => b.textContent),
     ).toEqual(['Automatic', 'Main', 'Pro']);
-    expect(choice.closest('.row')).toHaveTextContent('The account this project’s new agents and tickets go to.');
+    expect(choice.closest('.sr')).toHaveTextContent('The account this project’s new agents and tickets go to.');
   });
 
   it('saves the files copied into new worktrees', async () => {
@@ -713,10 +724,10 @@ describe('SettingsModal', () => {
     expect(within(down).getByLabelText('Shell')).toHaveValue('pwsh');
     await userEvent.type(within(down).getByLabelText('Commande'), 'docker compose down');
     const worktrees = group('Worktrees');
-    await userEvent.click(worktrees.getByRole('button', { name: '✦ Remplir automatiquement' }));
+    await userEvent.click(worktrees.getByRole('button', { name: 'Remplir automatiquement' }));
     expect(worktrees.getByRole('button', { name: 'Claude lit le projet…' })).toBeDisabled();
     // The launch commands have their own button, which keeps its label.
-    expect(group('Lancement').getByRole('button', { name: '✦ Remplir automatiquement' })).toBeEnabled();
+    expect(group('Lancement').getByRole('button', { name: 'Remplir automatiquement' })).toBeEnabled();
     expect(backend.called('suggest_worktree_steps')[0].args).toEqual({ projectId: 'p1' });
     expect(backend.called('suggest_run_commands')).toHaveLength(0);
     // Longer than its field: its end would only be seen by scrolling it, and it runs by itself in each new worktree.
@@ -754,7 +765,7 @@ describe('SettingsModal', () => {
     expect(within(setup).getByLabelText('Sous-dossier')).toHaveValue('web');
     // The suggestion replaces both lists, and the launch commands stay.
     expect(screen.queryByRole('group', { name: 'Commande de démontage 1' })).toBeNull();
-    expect(worktrees.getByRole('button', { name: '✦ Remplir automatiquement' })).toBeEnabled();
+    expect(worktrees.getByRole('button', { name: 'Remplir automatiquement' })).toBeEnabled();
     expect(screen.getByDisplayValue('Front')).toBeInTheDocument();
     await save();
     expect(backend.called('update_project')[0].args.project).toMatchObject({
@@ -772,7 +783,7 @@ describe('SettingsModal', () => {
       suggest_worktree_steps: () => ({ setup: [{ id: 's1', command: 'npm ci', shell: 'bash', cwd: '' }], teardown: [], refused: 0 }),
     });
     render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    await userEvent.click(group('Worktrees').getByRole('button', { name: '✦ Remplir automatiquement' }));
+    await userEvent.click(group('Worktrees').getByRole('button', { name: 'Remplir automatiquement' }));
     const proposal = await group('Worktrees').findByRole('region', { name: 'Commandes de worktree proposées' });
     // The reading's button was given up: the proposal takes the focus, to be read from the keyboard.
     expect(proposal).toHaveFocus();
@@ -784,7 +795,7 @@ describe('SettingsModal', () => {
     const back = within(worktrees.getByRole('region', { name: 'Commandes de worktree proposées' }));
     expect(back.getByText('npm ci')).toBeInTheDocument();
     await userEvent.click(back.getByRole('button', { name: 'Ignorer' }));
-    expect(worktrees.getByRole('button', { name: '✦ Remplir automatiquement' })).toHaveFocus();
+    expect(worktrees.getByRole('button', { name: 'Remplir automatiquement' })).toHaveFocus();
     expect(worktrees.queryByRole('region', { name: 'Commandes de worktree proposées' })).toBeNull();
     expect(screen.queryByRole('group', { name: 'Commande de préparation 1' })).toBeNull();
     expect(tab('Projets')).not.toHaveClass('changed');
@@ -844,10 +855,10 @@ describe('SettingsModal', () => {
     ).toBeInTheDocument();
     // Not before it is asked for.
     expect(backend.called('suggest_run_commands')).toHaveLength(0);
-    await userEvent.click(launch.getByRole('button', { name: '✦ Remplir automatiquement' }));
+    await userEvent.click(launch.getByRole('button', { name: 'Remplir automatiquement' }));
     expect(launch.getByRole('button', { name: 'Claude lit le projet…' })).toBeDisabled();
     // The worktrees' button is another reading: it stays available.
-    expect(group('Worktrees').getByRole('button', { name: '✦ Remplir automatiquement' })).toBeEnabled();
+    expect(group('Worktrees').getByRole('button', { name: 'Remplir automatiquement' })).toBeEnabled();
     expect(backend.called('suggest_run_commands')[0].args).toEqual({ projectId: 'p1' });
     expect(backend.called('suggest_worktree_steps')).toHaveLength(0);
     answer({
@@ -882,7 +893,7 @@ describe('SettingsModal', () => {
     const second = screen.getByRole('group', { name: 'Commande 2' });
     expect(within(second).getByLabelText('Sous-dossier', { exact: false })).toHaveValue('web');
     expect(screen.queryByRole('group', { name: 'Commande 3' })).toBeNull();
-    expect(launch.getByRole('button', { name: '✦ Remplir automatiquement' })).toBeEnabled();
+    expect(launch.getByRole('button', { name: 'Remplir automatiquement' })).toBeEnabled();
     expect(tab('Projets')).toHaveClass('changed');
     await save();
     expect(backend.called('update_project')[0].args.project.runCommands).toEqual([
@@ -902,7 +913,7 @@ describe('SettingsModal', () => {
       }),
     });
     render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    await userEvent.click(group('Lancement').getByRole('button', { name: '✦ Remplir automatiquement' }));
+    await userEvent.click(group('Lancement').getByRole('button', { name: 'Remplir automatiquement' }));
     const proposal = within(await screen.findByRole('region', { name: 'Commandes de lancement proposées' }));
     expect(proposal.getByText('We⟨U+200B⟩b')).toBeInTheDocument();
     expect(proposal.getByText('npm⟨U+202E⟩ run dev')).toBeInTheDocument();
@@ -918,8 +929,8 @@ describe('SettingsModal', () => {
       suggest_run_commands: () => ({ commands: [{ id: 's2', name: 'API', command: 'cargo run', shell: 'pwsh', cwd: '' }], refused: 0 }),
     });
     render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    await userEvent.click(group('Worktrees').getByRole('button', { name: '✦ Remplir automatiquement' }));
-    await userEvent.click(group('Lancement').getByRole('button', { name: '✦ Remplir automatiquement' }));
+    await userEvent.click(group('Worktrees').getByRole('button', { name: 'Remplir automatiquement' }));
+    await userEvent.click(group('Lancement').getByRole('button', { name: 'Remplir automatiquement' }));
     const proposals = [
       await screen.findByRole('region', { name: 'Commandes de worktree proposées' }),
       await screen.findByRole('region', { name: 'Commandes de lancement proposées' }),
@@ -944,7 +955,7 @@ describe('SettingsModal', () => {
   it('tells the two « ✦ Remplir automatiquement » buttons apart by the text of their own row', () => {
     backendSaving();
     render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    const button = { name: '✦ Remplir automatiquement' };
+    const button = { name: 'Remplir automatiquement' };
     expect(group('Worktrees').getByRole('button', button)).toHaveAccessibleDescription(/lockfiles.*propose les commandes\. Relis-les/);
     expect(group('Lancement').getByRole('button', button)).toHaveAccessibleDescription(/docker-compose.*commandes à lancer\. Relis-les/);
   });
@@ -952,10 +963,10 @@ describe('SettingsModal', () => {
   it('keeps the launch commands when Claude proposes none readable, and says so', async () => {
     backendSaving({ suggest_run_commands: () => Promise.reject("Claude n'a pas proposé de commandes lisibles.") });
     render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    await userEvent.click(group('Lancement').getByRole('button', { name: '✦ Remplir automatiquement' }));
+    await userEvent.click(group('Lancement').getByRole('button', { name: 'Remplir automatiquement' }));
     await expect.poll(() => app.toasts.at(-1)).toMatchObject({ text: "Claude n'a pas proposé de commandes lisibles.", kind: 'error' });
     expect(screen.getByDisplayValue('Front')).toBeInTheDocument();
-    expect(group('Lancement').getByRole('button', { name: '✦ Remplir automatiquement' })).toBeEnabled();
+    expect(group('Lancement').getByRole('button', { name: 'Remplir automatiquement' })).toBeEnabled();
   });
 
   it('reads the project at once when it is opened to propose the launch commands, but not when it comes back', async () => {
@@ -1218,7 +1229,7 @@ describe('SettingsModal in English', () => {
     setLang('fr');
     render(SettingsModal);
     expect(screen.getByRole('dialog', { name: 'Réglages' })).toBeInTheDocument();
-    expect(screen.getByText('Exécutables, versions et serveur MCP')).toBeInTheDocument();
+    expect(screen.getByText('Exécutables et versions de chaque harness, et ce qui vaut pour tous')).toBeInTheDocument();
     setLang('en');
     flushSync();
     const dialog = screen.getByRole('dialog', { name: 'Settings' });
@@ -1227,19 +1238,21 @@ describe('SettingsModal in English', () => {
         .getAllByRole('tab')
         .map((x) => x.textContent?.trim()),
     ).toEqual([
-      'AaApplication',
-      '✳Harness',
-      '◎Accounts',
-      '♪Notifications',
-      '◖Voice',
-      '▤Projects',
-      '▦Kanban',
-      '⧉Integrations',
-      '$_Terminals',
-      '⇄Network',
-      'ⓘAbout',
+      'Application',
+      'Harness',
+      'Accounts',
+      'Voice',
+      'Notifications',
+      'Projects',
+      'Kanban',
+      'Integrations',
+      'MCP server',
+      'Terminals',
+      'Network',
+      'About',
     ]);
-    expect(within(dialog).getByText('Executables, versions and the MCP server')).toBeInTheDocument();
+    expect([...dialog.querySelectorAll('.s-group')].map((g) => g.textContent)).toEqual(['Per project', 'System']);
+    expect(within(dialog).getByText('Each harness’s executables and versions, and what holds for them all')).toBeInTheDocument();
     expect(within(dialog).getByText('Escouade 1.3.1')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Save' })).toBeInTheDocument();
@@ -1264,14 +1277,15 @@ describe('SettingsModal in English', () => {
     expect(help).toHaveTextContent(/if they keep a list, Escouade shows their progress in the “Plan” banner/);
     expect(help).toHaveTextContent(/the model does not have to use it/);
     expect(help).not.toHaveTextContent(/so Escouade can show/);
-    expect(screen.getByRole('heading', { name: 'Processes' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'All harnesses' })).toBeInTheDocument();
   });
 
   it('names the remote control setting for all agents in English', async () => {
     const backend = backendSaving();
     render(SettingsModal);
-    const remote = group('Remote control');
+    const remote = group('Claude Code');
     const all = remote.getByRole('switch', { name: 'Remote control for all agents' });
+    expect(remote.getByText('Claude Code only: the other harnesses have no remote control.')).toBeInTheDocument();
     expect(all).toHaveAttribute('aria-checked', 'false');
     expect(remote.getByText(/^Every agent of every project/)).toHaveTextContent(
       'Every agent of every project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts each one’s claude process right away, and it stays running. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart: right-click, “Turn off remote control”.',
@@ -1346,7 +1360,8 @@ describe('SettingsModal in English', () => {
       { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true },
       { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true },
     ];
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { tab: 'accounts' });
+    expect(group('When a quota runs out').getByRole('heading', { name: 'When a quota runs out' })).toBeInTheDocument();
     expect(
       screen.getByRole('switch', { name: 'Resume a ticket’s agent stopped by the usage limit on another account' }),
     ).toBeInTheDocument();
@@ -1364,14 +1379,14 @@ describe('SettingsModal in English', () => {
     ).toEqual(['Notify me about', 'Channels', 'Sound']);
     expect(
       group('Notify me about')
-        .getAllByRole('switch')
-        .map((s) => s.getAttribute('aria-label')),
+        .getAllByRole('checkbox')
+        .map((s) => s.closest('label')!.textContent!.trim()),
     ).toEqual(['Questions and permissions', 'Finished tasks', 'Errors', 'Tickets (ready to review, blocked)']);
     expect(panel()).toHaveTextContent(
       /Off: no system notification or chime for this type; the tab, the card, and the (taskbar|Dock) still flag the agent\./,
     );
     expect(panel()).toHaveTextContent(/(Windows|macOS) notifications when the app is not in the foreground/);
-    expect(screen.getByRole('button', { name: '▶ Test' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Test the sound' })).toBeInTheDocument();
 
     await userEvent.click(tab('Terminals'));
     expect(panel()).toHaveTextContent('Detected: PowerShell 7, Git Bash');
@@ -1396,20 +1411,11 @@ describe('SettingsModal in English', () => {
     render(SettingsModal, { tab: 'projects', projectId: 'p1' });
     expect(
       within(panel())
-        .getAllByRole('heading', { level: 3 })
+        .getAllByRole('heading', { level: 2 })
         .map((h) => h.textContent),
-    ).toEqual([
-      '.escouade.yml',
-      'Identity',
-      'Remote control',
-      'Privacy',
-      'Git',
-      'Worktrees',
-      'Launch',
-      'Setup assistant',
-      'Danger zone',
-      'New projects',
-    ]);
+    ).toEqual(['Identity', 'Remote control', 'Privacy', 'Git', 'Worktrees', 'Launch', '.escouade.yml', 'Danger zone', 'New projects']);
+    // The assistant is a row of the identity (2.0 design).
+    expect(screen.getByRole('button', { name: 'Open the assistant…' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Project name' })).toHaveValue('demo-api');
     expect(screen.getByRole('button', { name: 'Color 4' })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'One worktree per agent' })).toBeInTheDocument();
@@ -1429,8 +1435,8 @@ describe('SettingsModal in English', () => {
     const launch = group('Launch');
     expect(launch.getByText('Command 1', { selector: 'legend' })).toBeInTheDocument();
     expect(launch.getByLabelText(/^Subfolder/)).toHaveValue('web');
-    expect(launch.getByText('(blank = project folder)')).toBeInTheDocument();
-    await userEvent.click(launch.getByRole('button', { name: '✦ Fill in automatically' }));
+    expect(launch.getByLabelText('Subfolder (blank = project folder)')).toHaveValue('web');
+    await userEvent.click(launch.getByRole('button', { name: 'Fill in automatically' }));
     // A plural, and what was left out said in the singular and the plural of the count.
     await expect
       .poll(() => app.toasts.at(-1)?.text)
@@ -1705,5 +1711,26 @@ describe('SettingsModal, the « Harness » tab (ESC-29)', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Sign in…' })).toBeNull();
     expect(within(screen.getByRole('region', { name: 'Harness nu' })).getByText('Found: C:\bin\codex.exe')).toBeInTheDocument();
+  });
+});
+
+describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
+  beforeEach(() => resetApp());
+
+  it('keeps a download of an update that failed while it lasts, with the way through the browser', async () => {
+    fakeBackend();
+    render(SettingsModal, { tab: 'about' });
+    expect(screen.queryByText(/^Mise à jour /)).toBeNull();
+    cleanup();
+    app.updateTrouble = { version: '1.9.0', message: 'le proxy a refusé le fichier (403)', page: 'https://example.com/v1.9.0' };
+    render(SettingsModal, { tab: 'about' });
+    expect(screen.getByText('Mise à jour 1.9.0')).toBeInTheDocument();
+    expect(screen.getByText('Téléchargement impossible : le proxy a refusé le fichier (403)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Télécharger dans le navigateur' })).toBeInTheDocument();
+    cleanup();
+    app.updateTrouble = { version: '1.9.0', message: 'délai dépassé', page: null };
+    render(SettingsModal, { tab: 'about' });
+    expect(screen.getByText('Téléchargement impossible : délai dépassé')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Télécharger dans le navigateur' })).toBeNull();
   });
 });

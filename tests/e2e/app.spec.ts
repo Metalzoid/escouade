@@ -640,12 +640,12 @@ test('launch commands run in their own terminals, with their status live', async
   await page.getByRole('button', { name: 'Configurer', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   await expect(dialog.getByRole('tab', { name: 'Projets' })).toHaveAttribute('aria-selected', 'true');
-  await dialog.getByRole('button', { name: '+ Ajouter une commande' }).click();
+  await dialog.getByRole('button', { name: 'Ajouter une commande', exact: true }).click();
   const serveurCfg = dialog.getByRole('group', { name: 'Commande 1' });
   await serveurCfg.getByLabel('Nom').fill('Serveur');
   await serveurCfg.getByLabel('Commande').fill('Set-Content serveur.txt ok; Start-Sleep 600');
   await serveurCfg.getByLabel(/Sous-dossier/).fill('web');
-  await dialog.getByRole('button', { name: '+ Ajouter une commande' }).click();
+  await dialog.getByRole('button', { name: 'Ajouter une commande', exact: true }).click();
   const buildCfg = dialog.getByRole('group', { name: 'Commande 2' });
   await buildCfg.getByLabel('Nom').fill('Build');
   await buildCfg.getByLabel('Commande').fill('exit 2');
@@ -694,12 +694,12 @@ test('a launch command runs in the worktree of an agent, with its ports, and sto
 
   await page.getByRole('button', { name: 'Configurer', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('button', { name: '+ Ajouter une commande' }).click();
+  await dialog.getByRole('button', { name: 'Ajouter une commande', exact: true }).click();
   const serveurCfg = dialog.getByRole('group', { name: 'Commande 1' });
   await serveurCfg.getByLabel('Nom').fill('Serveur');
   await serveurCfg.getByLabel('Commande').fill('Set-Content serveur.txt "port=$env:ESCOUADE_PORT_BASE"; Start-Sleep 600');
   await serveurCfg.getByLabel(/Sous-dossier/).fill('src');
-  await dialog.getByRole('button', { name: '+ Ajouter une commande' }).click();
+  await dialog.getByRole('button', { name: 'Ajouter une commande', exact: true }).click();
   const docsCfg = dialog.getByRole('group', { name: 'Commande 2' });
   await docsCfg.getByLabel('Nom').fill('Docs');
   await docsCfg.getByLabel('Commande').fill('Start-Sleep 600');

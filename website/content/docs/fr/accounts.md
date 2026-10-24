@@ -239,7 +239,7 @@ Pas de va-et-vient : un agent passé sur un compte ne le quitte que quand celui-
 
 Quand Claude refuse un tour parce que le quota du compte est épuisé, l’agent s’arrête. La carte d’erreur du tour, la carte de l’agent dans la barre latérale (« Reprise à 15:00 ») et le Kanban donnent l’heure de la reprise automatique.
 
-Par défaut, Escouade envoie « continue » à l’agent une trentaine de secondes après la remise à zéro du quota, quand elle en connaît l’heure. C’est le réglage « Reprise automatique après la limite d’usage » (Réglages › Harness, groupe « Processus »). Le bouton « Annuler la reprise » de la carte l’annule pour cet agent.
+Par défaut, Escouade envoie « continue » à l’agent une trentaine de secondes après la remise à zéro du quota, quand elle en connaît l’heure. C’est le réglage « Reprise automatique après la limite d’usage » (Réglages › Harness, groupe « Tous les harness »). Le bouton « Annuler la reprise » de la carte l’annule pour cet agent.
 
 ### Reprendre sur un autre compte
 
@@ -262,7 +262,7 @@ Si le tour qui suit échoue sur le nouveau compte, la carte écrit « La repris
 
 ### Tout seul, pour les agents de ticket
 
-Le réglage « Reprendre sur un autre compte un agent de ticket arrêté par la limite » (Réglages › Harness, groupe « Processus », visible avec plusieurs comptes) fait la même chose sans toi. Il est désactivé par défaut ; sa description dit : « Sinon il attend la remise à zéro de son compte ».
+Le réglage « Reprendre sur un autre compte un agent de ticket arrêté par la limite » (Réglages › Comptes, groupe « Quand un quota est épuisé », visible avec plusieurs comptes) fait la même chose sans toi. Il est désactivé par défaut ; sa description dit : « Sinon il attend la remise à zéro de son compte ».
 
 Activé, l’agent d’un ticket arrêté par la limite passe de lui-même sur un autre compte quand l’un convient : le compte préféré du projet, sinon le premier de la liste. Il faut que ce compte soit connecté, sous le seuil, qu’aucune pause après une limite d’usage ne le retienne, qu’aucun agent n’y attende sa propre remise à zéro, et qu’il soit du même côté de WSL que l’agent. S’il n’y en a pas, ou si le déplacement échoue (la conversation écrit alors « Reprise sur un autre compte impossible : … »), l’agent attend la remise à zéro de son compte, comme avant.
 
@@ -272,7 +272,7 @@ Le compte quitté ne reçoit plus de nouveau ticket jusqu’à sa remise à zér
 
 Quand plus aucun compte du harness de l’agent qui sert son projet ne peut le prendre (limite atteinte, ou au-delà de « Pause au-delà du quota »), la carte propose « Continuer sur Codex » : le harness suivant du projet. Un projet passe d’abord par son harness par défaut, puis par les autres dans l’« Ordre des harness » (Réglages › Comptes), seulement ceux qui ont un compte actif qui le sert : un compte « Réservé aux projets » ne sert que ceux qu’il coche. Le bouton ▾ (« Continuer sur un autre harness ») ouvre le menu des suivants. Sans harness de secours, l’agent attend la remise à zéro, comme avant.
 
-Une session ne passe pas d’un harness à l’autre : c’est une passation. L’agent garde sa conversation, son worktree et sa branche ; un nouveau processus du harness cible démarre sur le compte que choisit sa règle, avec le « Modèle de passation » de ce harness (son meilleur par défaut, Réglages › Harness) et le même mode, ou le plus proche qui n’autorise jamais plus. Son premier message est un dossier de passation écrit par Escouade depuis la conversation, sans rien demander au harness quitté : la demande d’origine et les messages suivants, les derniers messages de l’agent, son avancement et les tâches de son plan, les fichiers modifiés (`git status`, `git diff --stat`, les commits de la branche), le dernier tour s’il a été coupé et où, une question ou une permission restée sans réponse. Un ticket garde son protocole par les consignes ajoutées. Le dossier est borné à la fenêtre de contexte du modèle cible ; il est replié dans la conversation sous « Dossier de passation ».
+Une session ne passe pas d’un harness à l’autre : c’est une passation. L’agent garde sa conversation, son worktree et sa branche ; un nouveau processus du harness cible démarre sur le compte que choisit sa règle, avec le « Modèle de passation » de ce harness (son meilleur par défaut, Réglages › Comptes) et le même mode, ou le plus proche qui n’autorise jamais plus. Son premier message est un dossier de passation écrit par Escouade depuis la conversation, sans rien demander au harness quitté : la demande d’origine et les messages suivants, les derniers messages de l’agent, son avancement et les tâches de son plan, les fichiers modifiés (`git status`, `git diff --stat`, les commits de la branche), le dernier tour s’il a été coupé et où, une question ou une permission restée sans réponse. Un ticket garde son protocole par les consignes ajoutées. Le dossier est borné à la fenêtre de contexte du modèle cible ; il est replié dans la conversation sous « Dossier de passation ».
 
 La conversation le marque : « Suite sur Codex · quota Claude Code épuisé jusqu’à 18:00 », puis chaque tour dit le harness qui l’a fait, et ses statistiques et son coût lui restent.
 
@@ -282,7 +282,7 @@ Un agent en vue terminal (Vue Claude Code, Vue Codex…) en change aussi : le do
 
 Le harness quitté est mis de côté jusqu’à sa remise à zéro. Ensuite, la carte et le menu proposent « Revenir sur Claude Code » : une passation dans l’autre sens. L’agent n’y revient jamais seul.
 
-Le réglage « Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés » (Réglages › Harness, groupe « Processus », visible avec deux harness) le fait sans toi. Il est désactivé par défaut. Activé, l’agent arrêté par la limite passe seul sur le premier harness de secours qui a un compte pour le prendre, jamais sur celui qu’il a quitté ; le pilote auto suit son ticket sur le nouveau harness.
+Le réglage « Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés » (Réglages › Comptes, groupe « Quand un quota est épuisé », visible avec deux harness) le fait sans toi. Il est désactivé par défaut. Activé, l’agent arrêté par la limite passe seul sur le premier harness de secours qui a un compte pour le prendre, jamais sur celui qu’il a quitté ; le pilote auto suit son ticket sur le nouveau harness.
 
 ## Désactiver ou supprimer un compte
 

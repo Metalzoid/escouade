@@ -329,7 +329,7 @@ test('« Ajouter un compte » reads as the preview, then its sign-in in a well',
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
   await settings.getByRole('tab', { name: 'Comptes' }).click();
-  await settings.getByRole('button', { name: 'Ajouter un compte…' }).first().click();
+  await settings.getByRole('button', { name: 'Ajouter un compte Claude Code…' }).click();
   const dialog = page.getByRole('dialog', { name: /^Ajouter un compte/ });
   await expect(dialog.getByRole('radio', { name: /Un nouveau compte/ })).toBeChecked();
   await compare(page, 'account-codex', async (preview, where) => {
@@ -588,7 +588,7 @@ test.describe('in English', () => {
     await page.getByRole('button', { name: 'Settings (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Settings' });
     await settings.getByRole('tab', { name: 'Accounts' }).click();
-    await settings.getByRole('button', { name: 'Add an account…' }).first().click();
+    await settings.getByRole('button', { name: 'Add a Claude Code account…' }).click();
     const account = page.getByRole('dialog', { name: /^Add a/ });
     for (const size of SIZES) {
       await page.setViewportSize(size);

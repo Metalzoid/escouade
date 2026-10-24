@@ -321,6 +321,8 @@ class AppState {
   restartAt = $state<number | null>(null);
   /** A version that did not install at the last try: told of once it is downloaded again. */
   failedUpdate = $state<string | null>(null);
+  /** The last download of an update that failed, until one goes through: Réglages › À propos says it (choice 13). */
+  updateTrouble = $state<{ version: string; message: string; page: string | null } | null>(null);
   focusComposer = $state(0);
   /** The card of the agents' list to give the focus to (Ctrl+J), `n` counting the asks: the sidebar focuses it. */
   cardFocus = $state<{ id: string; n: number }>({ id: '', n: 0 });

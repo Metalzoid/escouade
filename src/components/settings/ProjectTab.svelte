@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '../Icon.svelte';
   import { openPath } from '@tauri-apps/plugin-opener';
   import { tick, type Snippet } from 'svelte';
   import { t } from '../../lib/i18n';
@@ -210,30 +211,9 @@
   </ul>
 {/snippet}
 
-<!-- Its .escouade.yml first: its commands may wait for the user to read them. -->
-<SharedSection {project} />
-
 <Group title={t('settings.project.identity')}>
-  <Row label={t('common.name')}>
+  <Row label={t('settings.project.nameLabel')}>
     <input class="field input" aria-label={t('settings.project.nameLabel')} spellcheck="false" bind:value={draft.name} />
-  </Row>
-  <Row label={t('common.folder')}>
-    <span class="path mono" use:tip={{ text: project.path, cut: true }}>{project.path}</span>
-    <button class="btn" onclick={() => openPath(project.path).catch((err) => app.toast(String(err), 'error'))}>{t('common.open')}</button>
-  </Row>
-  <Row label={t('common.color')}>
-    <div class="colors" role="group" aria-label={t('common.color')}>
-      {#each PROJECT_COLORS as c, i (c)}
-        <button
-          class="swatch"
-          aria-label={t('settings.project.colorN', { n: i + 1 })}
-          aria-pressed={draft.color === c}
-          style:background={c}
-          style:box-shadow={draft.color === c ? '0 0 0 2px var(--bg), 0 0 0 4px var(--text)' : 'none'}
-          onclick={() => (draft.color = c)}
-        ></button>
-      {/each}
-    </div>
   </Row>
   <!-- From two harnesses found on: the one of its new agents and tickets (none chosen: Claude Code). -->
   {#if choosesEngine()}
@@ -250,74 +230,105 @@
       <Chips label={t('accounts.project.label')} options={ACCOUNTS} bind:value={draft.account} />
     </Row>
   {/if}
+  <Row label={t('wizard.reopen.label')} desc={t('wizard.reopen.desc')}>
+    <!-- The assistant takes the place of these settings: it saves what it sets itself. -->
+    <button class="btn" onclick={() => (app.modal = { kind: 'newProject', projectId: project.id })}>{t('wizard.reopen.button')}</button>
+  </Row>
+  <Row label={t('common.folder')}>
+    {#snippet extra()}
+      <span class="more path mono" use:tip={{ text: project.path, cut: true }}>{project.path}</span>
+    {/snippet}
+    <button class="btn" onclick={() => openPath(project.path).catch((err) => app.toast(String(err), 'error'))}
+      ><Icon name="folder" size={14} />{t('common.open')}</button
+    >
+  </Row>
+  <Row label={t('common.color')} desc={t('settings.project.colorDesc')}>
+    <div class="swatches" role="group" aria-label={t('common.color')}>
+      {#each PROJECT_COLORS as c, i (c)}
+        <button
+          class="swatch"
+          aria-label={t('settings.project.colorN', { n: i + 1 })}
+          aria-pressed={draft.color === c}
+          style:--c={c}
+          onclick={() => (draft.color = c)}
+        ></button>
+      {/each}
+    </div>
+  </Row>
 </Group>
 
 <!-- Only while a harness has Remote Control. -->
 {#if anyCan('remoteControl')}
   <Group title={t('settings.project.remoteTitle')}>
     <Row label={t('settings.project.remote')} desc={t('settings.project.remoteDesc')}>
-      <div class="remote">
-        <!-- The setting for all agents covers every project: the switch shows it, the project’s own value stays as it is. -->
-        <Switch
-          label={t('settings.project.remote')}
-          disabled={coveredByAll}
-          describedby={coveredByAll ? 'remote-covered' : undefined}
-          bind:on={() => coveredByAll || draft.remoteControl, (v) => (draft.remoteControl = v)}
-        />
-        {#if coveredByAll}<p class="why" id="remote-covered">{t('settings.project.remoteGlobal')}</p>{/if}
-      </div>
+      {#snippet extra()}
+        {#if coveredByAll}<span class="more" id="remote-covered">{t('settings.project.remoteGlobal')}</span>{/if}
+      {/snippet}
+      <!-- The setting for all agents covers every project: the switch shows it, the project’s own value stays as it is. -->
+      <Switch
+        label={t('settings.project.remote')}
+        disabled={coveredByAll}
+        describedby={coveredByAll ? 'remote-covered' : undefined}
+        bind:on={() => coveredByAll || draft.remoteControl, (v) => (draft.remoteControl = v)}
+      />
     </Row>
   </Group>
 {/if}
 
-<!-- « Projet privé »: what the agents of the other projects see of it through the MCP server, what keeps its files
-     from them, harness by harness (a guard or a barrier, said as it is), then, for a private one, its accounts. -->
-<Group title={t('settings.project.privateTitle')}>
+<!-- « Projet privé »: what the agents of the other projects see of it through the MCP server; for a private one only
+     (choice 28 of the 2.0 design), what keeps its files from them harness by harness, then its accounts. -->
+<Group title={t('settings.project.privateTitle')} anchor="private">
   <Row label={t('settings.project.private')} desc={t('settings.project.privateDesc')} shared="private">
     <Switch label={t('settings.project.private')} bind:on={draft.private} />
   </Row>
-  <Row label={t('settings.project.fenceTitle')} desc={t('settings.project.fenceDesc')} wide>
+  {#if draft.private}
+    {@const harness = engineName(privateEngine)}
+    <div class="sub-h"><b>{t('settings.project.fenceTitle')}</b><span>{t('settings.project.fenceDesc')}</span></div>
     <ul class="fence" aria-label={t('settings.project.fenceTitle')}>
       {#each FENCE as f (f.id)}
         <li>
           <span class="engine">{f.name}</span>
-          <span class="kind" class:barrier={f.kind === 'barrier'}>{t(`settings.project.fenceKind.${f.kind}`)}</span>
+          <span class="kind smark" class:barrier={f.kind === 'barrier'}
+            ><Icon name={f.kind === 'barrier' ? 'lock' : 'shield'} size={12} /><span>{t(`settings.project.fenceKind.${f.kind}`)}</span
+            ></span
+          >
           <span class="how">{t(`settings.project.fenceHow.${f.id}`)}</span>
         </li>
       {/each}
     </ul>
-    <p class="at">{t('settings.project.fenceNote')}</p>
-  </Row>
-  {#if draft.private}
-    {@const harness = engineName(privateEngine)}
+    <p class="note">{t('settings.project.fenceNote')}</p>
     <!-- Its accounts (ESC-141): reserved to it alone, or still shared, with what to do about it. -->
-    <Row label={t('accounts.tab.list')} wide>
-      <div class="private-accounts">
-        {#if ownAccounts.length}
-          <p class="said ok" role="status">
-            {t('accounts.private.own', { count: ownAccounts.length, names: quotedNames(ownAccounts), harness })}
-            {#if ownAccounts.some(isPrincipal)}{t('accounts.private.machineToo', { harness })}{/if}
-          </p>
-        {/if}
-        {#if sharedAccounts.length}
-          <p class="said warn" role="status">
-            {t('accounts.private.shared', { count: sharedAccounts.length, names: quotedNames(sharedAccounts), harness })}
-          </p>
-        {/if}
-        {#if sharedAccounts.length || !ownAccounts.length}
-          <div class="actions start">
-            <button class="btn" onclick={() => (app.modal = { kind: 'account', engine: privateEngine, reserveFor: project.id })}>
-              {t('accounts.private.add')}
+    <div class="sub-h" data-anchor="private-accounts"><b>{t('accounts.tab.list')}</b></div>
+    <div class="private-accounts">
+      {#if ownAccounts.length}
+        <p class="acct-note" role="status">
+          <Icon name="check-c" size={14} /><span class="grow"
+            >{t('accounts.private.own', { count: ownAccounts.length, names: quotedNames(ownAccounts), harness })}
+            {#if ownAccounts.some(isPrincipal)}{t('accounts.private.machineToo', { harness })}{/if}</span
+          >
+        </p>
+      {/if}
+      {#if sharedAccounts.length || !ownAccounts.length}
+        <div class="acct-note warn">
+          <Icon name="shield" size={14} />
+          <span class="grow" role="status"
+            >{#if sharedAccounts.length}{t('accounts.private.shared', {
+                count: sharedAccounts.length,
+                names: quotedNames(sharedAccounts),
+                harness,
+              })}{/if}</span
+          >
+          {#each sharedAccounts as a (a.id)}
+            <button class="btn" use:tip={t('accounts.private.reserveTitle')} onclick={() => reserveHere(a)}>
+              {t('accounts.private.reserve', { name: accountName(a) })}
             </button>
-            {#each sharedAccounts as a (a.id)}
-              <button class="btn ghost" use:tip={t('accounts.private.reserveTitle')} onclick={() => reserveHere(a)}>
-                {t('accounts.private.reserve', { name: accountName(a) })}
-              </button>
-            {/each}
-          </div>
-        {/if}
-      </div>
-    </Row>
+          {/each}
+          <button class="btn" onclick={() => (app.modal = { kind: 'account', engine: privateEngine, reserveFor: project.id })}>
+            {t('accounts.private.add')}
+          </button>
+        </div>
+      {/if}
+    </div>
     <Row label={t('accounts.private.sharedOnLimit')} desc={t('accounts.private.sharedOnLimitDesc')}>
       <Switch label={t('accounts.private.sharedOnLimit')} bind:on={draft.sharedOnLimit} />
     </Row>
@@ -384,6 +395,14 @@
 </Group>
 
 <Group title={t('settings.project.worktrees')} anchor="worktrees" note={t('settings.project.worktreesNote')}>
+  <div class="sub-h">
+    <b>{t('settings.project.setupTitle')}</b><span>{t('settings.project.setupDesc')}</span><SharedMark keys="worktrees.setup" />
+  </div>
+  <StepList bind:steps={draft.worktreeSetup} kind="setup" onadd={() => settingsForm.addStep('setup')} />
+  <div class="sub-h">
+    <b>{t('settings.project.teardownTitle')}</b><span>{t('settings.project.teardownDesc')}</span><SharedMark keys="worktrees.teardown" />
+  </div>
+  <StepList bind:steps={draft.worktreeTeardown} kind="teardown" onadd={() => settingsForm.addStep('teardown')} />
   <Row label={t('settings.project.fill')} desc={t('settings.project.fillWorktreesDesc')} descId="worktrees-suggest-desc">
     <!-- Two buttons of this tab read the same: what each row says of itself tells them apart. -->
     <button
@@ -393,7 +412,9 @@
       bind:this={suggestButton}
       onclick={() => ask(() => settingsForm.suggest(project.id), suggestButton, 'worktrees-proposal')}
     >
-      {settingsForm.suggesting[project.id] ? t('settings.project.filling') : t('settings.project.fillButton')}
+      <Icon name="sparkle" size={14} />{settingsForm.suggesting[project.id]
+        ? t('settings.project.filling')
+        : t('settings.project.fillAuto')}
     </button>
   </Row>
   {#if proposal}
@@ -406,12 +427,6 @@
       () => settle(() => delete settingsForm.proposal[project.id], suggestButton),
     )}
   {/if}
-  <Row label={t('settings.project.setupTitle')} desc={t('settings.project.setupDesc')} wide shared="worktrees.setup">
-    <StepList bind:steps={draft.worktreeSetup} kind="setup" onadd={() => settingsForm.addStep('setup')} />
-  </Row>
-  <Row label={t('settings.project.teardownTitle')} desc={t('settings.project.teardownDesc')} wide shared="worktrees.teardown">
-    <StepList bind:steps={draft.worktreeTeardown} kind="teardown" onadd={() => settingsForm.addStep('teardown')} />
-  </Row>
   <Row label={t('settings.project.leftovers')} desc={t('settings.project.leftoversDesc')} descId="worktrees-leftovers-desc">
     <button class="btn" aria-describedby="worktrees-leftovers-desc" disabled={cleaning} onclick={cleanLeftovers}>
       {cleaning ? t('settings.project.leftoversRunning') : t('settings.project.leftoversButton')}
@@ -430,7 +445,7 @@
       {#if report.kept.length}
         <ul>
           {#each report.kept as k (k.agentId)}
-            <li><span class="name">{k.name}</span> · {k.reason}</li>
+            <li><span class="name mono">{k.name}</span> · {k.reason}</li>
           {/each}
         </ul>
       {/if}
@@ -439,81 +454,82 @@
 </Group>
 
 <Group title={t('settings.project.launch')} anchor="launch" note={t('settings.project.launchNote')}>
-  <div class="fill">
-    <div class="shared"><SharedMark keys="launch" /></div>
-    <Row label={t('settings.project.fill')} desc={t('settings.project.fillLaunchDesc')} descId="launch-suggest-desc">
-      <button
-        class="btn suggest"
-        aria-describedby="launch-suggest-desc"
-        disabled={settingsForm.suggestingLaunch[project.id]}
-        bind:this={launchButton}
-        onclick={() => ask(() => settingsForm.suggestLaunch(project.id), launchButton, 'launch-proposal')}
-      >
-        {settingsForm.suggestingLaunch[project.id] ? t('settings.project.filling') : t('settings.project.fillButton')}
-      </button>
-    </Row>
-    {#if launchProposal}
-      {@render proposed(
-        'launch-proposal',
-        t('settings.project.proposedLaunch'),
-        t('settings.project.proposedLaunchNote'),
-        proposedLaunch,
-        () => settle(() => settingsForm.takeLaunchProposal(project.id), launchButton),
-        () => settle(() => delete settingsForm.launchProposal[project.id], launchButton),
-      )}
-    {/if}
-  </div>
-  {#each draft.runCommands as c, i (c.id)}
-    <fieldset class="cmd">
-      <legend class="sr">{t('settings.project.commandN', { n: i + 1 })}</legend>
-      <div class="line">
-        <label class="f grow"
-          ><span>{t('common.name')}</span><input
-            class="field"
-            bind:value={c.name}
-            placeholder={t('settings.project.namePlaceholder')}
-          /></label
-        >
-        <label class="f"
-          ><span>{t('settings.fields.shell')}</span>
-          <select class="field" bind:value={c.shell}>
-            {#each app.shells as s (s.id)}<option value={s.id}>{s.label}</option>{/each}
-            {#if !app.shells.some((s) => s.id === c.shell)}<option value={c.shell}
-                >{t('settings.fields.shellNotFound', { name: c.shell })}</option
-              >{/if}
-          </select>
-        </label>
-        <button class="del" use:tip={t('common.delete')} aria-label={t('common.delete')} onclick={() => draft.runCommands.splice(i, 1)}
-          >×</button
-        >
+  <SharedMark keys="launch" />
+  <!-- The launch commands on a grid (2.0 design): name, command, folder, shell. -->
+  <div class="cmds">
+    {#if draft.runCommands.length}
+      <div class="cmd-row cmd-head" aria-hidden="true">
+        <span>{t('common.name')}</span><span>{t('common.command')}</span><span>{t('settings.fields.subfolder')}</span><span
+          >{t('settings.fields.shell')}</span
+        ><span></span>
       </div>
-      <label class="f"
-        ><span>{t('common.command')}</span><input
+    {/if}
+    {#each draft.runCommands as c, i (c.id)}
+      <fieldset class="cmd-row">
+        <legend class="sr">{t('settings.project.commandN', { n: i + 1 })}</legend>
+        <input class="field" aria-label={t('common.name')} bind:value={c.name} placeholder={t('settings.project.namePlaceholder')} />
+        <input
           class="field mono"
+          aria-label={t('common.command')}
           bind:value={c.command}
           placeholder={t('settings.project.commandPlaceholder')}
-        /></label
-      >
-      <label class="f"
-        ><span>{t('settings.fields.subfolder')} <em>{t('settings.project.subfolderHint')}</em></span><input
+        />
+        <input
           class="field mono"
+          aria-label="{t('settings.fields.subfolder')} {t('settings.project.subfolderHint')}"
+          use:tip={t('settings.project.subfolderHint')}
           bind:value={c.cwd}
           placeholder={t('settings.project.subfolderPlaceholder')}
-        /></label
-      >
-    </fieldset>
-  {:else}
-    <div class="empty">{t('settings.project.noCommandsYet')}</div>
-  {/each}
-  <div class="add"><button class="btn" onclick={() => settingsForm.addCommand()}>{t('settings.fields.addCommand')}</button></div>
+        />
+        <select class="field" aria-label={t('settings.fields.shell')} bind:value={c.shell}>
+          {#each app.shells as s (s.id)}<option value={s.id}>{s.label}</option>{/each}
+          {#if !app.shells.some((s) => s.id === c.shell)}<option value={c.shell}
+              >{t('settings.fields.shellNotFound', { name: c.shell })}</option
+            >{/if}
+        </select>
+        <button
+          class="icon-btn del"
+          use:tip={t('common.delete')}
+          aria-label={t('common.delete')}
+          onclick={() => draft.runCommands.splice(i, 1)}><Icon name="trash" size={14} /></button
+        >
+      </fieldset>
+    {:else}
+      <p class="empty">{t('settings.project.noCommandsYet')}</p>
+    {/each}
+  </div>
+  <div class="launch-acts">
+    <button class="add-line" onclick={() => settingsForm.addCommand()}
+      ><Icon name="plus" size={14} />{t('settings.fields.addLaunch')}</button
+    >
+    <button
+      class="btn suggest"
+      aria-describedby="launch-suggest-desc"
+      use:tip={t('settings.project.fillLaunchDesc')}
+      disabled={settingsForm.suggestingLaunch[project.id]}
+      bind:this={launchButton}
+      onclick={() => ask(() => settingsForm.suggestLaunch(project.id), launchButton, 'launch-proposal')}
+    >
+      <Icon name="sparkle" size={14} />{settingsForm.suggestingLaunch[project.id]
+        ? t('settings.project.filling')
+        : t('settings.project.fillAuto')}
+    </button>
+    <span id="launch-suggest-desc" hidden>{t('settings.project.fillLaunchDesc')}</span>
+  </div>
+  {#if launchProposal}
+    {@render proposed(
+      'launch-proposal',
+      t('settings.project.proposedLaunch'),
+      t('settings.project.proposedLaunchNote'),
+      proposedLaunch,
+      () => settle(() => settingsForm.takeLaunchProposal(project.id), launchButton),
+      () => settle(() => delete settingsForm.launchProposal[project.id], launchButton),
+    )}
+  {/if}
 </Group>
 
-<Group title={t('wizard.reopen.label')}>
-  <Row label={t('wizard.reopen.label')} desc={t('wizard.reopen.desc')}>
-    <!-- The assistant takes the place of these settings: it saves what it sets itself. -->
-    <button class="btn" onclick={() => (app.modal = { kind: 'newProject', projectId: project.id })}>{t('wizard.reopen.button')}</button>
-  </Row>
-</Group>
+<!-- Its .escouade.yml after what it sets (2.0 design, #sg-yml): its commands that wait are also said on the Kanban. -->
+<SharedSection {project} />
 
 <Group title={t('settings.project.danger')}>
   <Row label={t('settings.project.close')} desc={t('settings.project.closeDesc')}>
@@ -523,145 +539,204 @@
 
 <style>
   .input {
-    flex: 1;
-    min-width: 0;
-    max-width: 340px;
-    height: 32px;
-    padding: 0 10px;
-    background: var(--panel);
-    font-weight: 600;
+    width: 220px;
+    max-width: 100%;
   }
   .setting {
-    font-weight: 400;
-    font-size: 12.5px;
+    width: 320px;
   }
   .setting[aria-invalid='true'] {
-    border-color: var(--del);
+    box-shadow: inset 0 0 0 1px var(--del);
   }
   .at,
   .error {
     margin: 0;
-    font-size: 11.5px;
+    font-size: 12px;
     line-height: 1.45;
     overflow-wrap: anywhere;
   }
   .at {
-    color: var(--dim);
+    color: var(--muted);
   }
   .error {
     color: var(--del);
   }
   .path {
-    flex: 1;
-    min-width: 0;
-    font-size: 12px;
-    color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .colors {
+  /* The colours: a ring of the colour around the one chosen (2.0 design). */
+  .swatches {
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-end;
-    gap: 9px;
-    max-width: 60%;
+    gap: 8px;
   }
   .swatch {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
     border: none;
     border-radius: 7px;
-    padding: 0;
+    background: var(--c);
     cursor: pointer;
+    transition: transform 0.15s var(--ease);
   }
+  .swatch:hover {
+    transform: scale(1.1);
+  }
+  .swatch[aria-pressed='true'] {
+    box-shadow:
+      0 0 0 2px var(--raise),
+      0 0 0 4px var(--c);
+  }
+  /* A title inside a group, its explanation beside it. */
+  .sub-h {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    margin-top: 18px;
+  }
+  .sub-h b {
+    font-weight: 600;
+  }
+  .sub-h span {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .note {
+    max-width: 64ch;
+    margin: 8px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  /* « Ses fichiers », harness by harness (choice 28): « Garde-fou » neutral, « Barrière » green. */
   .fence {
-    margin: 0;
+    display: grid;
+    margin: 10px 0 12px;
     padding: 0;
     list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .private-accounts {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    border-radius: 10px;
+    box-shadow: inset 0 0 0 1px var(--line);
   }
   .fence li {
     display: grid;
-    grid-template-columns: 96px 84px 1fr;
+    grid-template-columns: 110px 92px minmax(0, 1fr);
     align-items: baseline;
     gap: 10px;
-    font-size: 12px;
-    line-height: 1.45;
+    padding: 9px 12px;
+    font-size: 12.5px;
+  }
+  .fence li + li {
+    border-top: 1px solid var(--line);
   }
   .engine {
-    font-weight: 600;
+    font-weight: 560;
   }
-  .kind {
+  .smark {
+    display: inline-flex;
+    align-items: center;
     justify-self: start;
-    padding: 1px 7px;
-    border: 1px solid var(--line);
-    border-radius: 999px;
+    gap: 5px;
+    width: fit-content;
+    height: 19px;
+    padding: 0 6px;
+    border-radius: 5px;
+    background: rgba(var(--fg-rgb), 0.05);
+    color: var(--soft);
     font-size: 11px;
+    font-weight: 550;
+    white-space: nowrap;
+  }
+  .smark > :global(.icon) {
     color: var(--muted);
   }
-  .kind.barrier {
-    color: var(--text);
-    border-color: var(--accent);
+  .smark.barrier {
+    background: oklch(from var(--run) l c h / 0.1);
+    color: var(--run);
+  }
+  .smark.barrier > :global(.icon) {
+    color: currentColor;
   }
   .how {
     color: var(--muted);
+    line-height: 1.45;
     text-wrap: pretty;
   }
-  .said {
+  .private-accounts {
+    display: grid;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .acct-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 8px;
     margin: 0;
-    font-size: 12px;
-    line-height: 1.5;
+    padding: 9px 11px;
+    border-radius: 9px;
+    background: rgba(var(--fg-rgb), 0.03);
+    color: var(--soft);
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+  .acct-note > :global(.icon) {
+    flex: none;
+    margin-top: 2px;
     color: var(--muted);
   }
-  .said.ok {
-    color: var(--ok);
+  .acct-note.warn {
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
   }
-  .said.warn {
+  .acct-note .btn {
+    flex: none;
+    height: 26px;
+  }
+  .acct-note.warn > :global(.icon) {
     color: var(--wait);
   }
-  .actions.start {
-    justify-content: flex-start;
-    flex-wrap: wrap;
+  .grow {
+    flex: 1;
+    min-width: 200px;
   }
-  .remote {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 6px;
-    flex-shrink: 0;
-  }
-  .why {
-    margin: 0;
-    max-width: 230px;
-    font-size: 11.5px;
-    line-height: 1.45;
-    text-align: right;
-    color: var(--muted);
-    text-wrap: pretty;
+  .acct-note.warn .grow {
+    flex-basis: calc(100% - 30px);
   }
   .copy {
-    height: auto;
+    width: 320px;
+    max-width: 100%;
     resize: vertical;
-    padding: 8px 10px;
-    background: var(--panel);
     font-size: 12px;
   }
-  .cmd {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+  /* The launch commands on a grid. */
+  .cmds {
+    display: grid;
+    gap: 6px;
+    margin-top: 12px;
+  }
+  .cmd-row {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr) 120px 128px 28px;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
     margin: 0;
-    padding: 14px 16px;
+    padding: 0;
     border: none;
-    border-bottom: 1px solid var(--line);
+  }
+  .cmd-row .field {
+    width: 100%;
+    min-width: 0;
+  }
+  .cmd-head {
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 550;
   }
   .sr {
     position: absolute;
@@ -670,50 +745,49 @@
     overflow: hidden;
     clip: rect(0 0 0 0);
   }
-  .line {
-    display: flex;
-    align-items: flex-end;
-    gap: 10px;
-  }
-  .f {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    font-size: 12px;
-    color: var(--muted);
-  }
-  .grow {
-    flex: 1;
-  }
-  em {
-    color: var(--dim);
-    font-style: normal;
-  }
-  .cmd .field {
-    height: 32px;
-    background: var(--panel);
-    font-size: 12.5px;
-  }
-  select.field {
-    min-width: 170px;
-  }
-  .del {
-    width: 32px;
-    height: 32px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: transparent;
-    color: var(--muted);
-    font-size: 15px;
-    cursor: pointer;
-  }
-  .del:hover {
-    border-color: var(--del);
+  .del:hover:not(:disabled) {
     color: var(--del);
   }
-  .leftovers {
-    font-size: 12px;
+  .launch-acts {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0 12px;
+  }
+  .launch-acts .suggest {
+    margin-left: auto;
+  }
+  .add-line {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 28px;
+    padding: 0 8px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
     color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 550;
+    cursor: pointer;
+  }
+  .add-line:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+  .suggest {
+    flex-shrink: 0;
+  }
+  .suggest :global(.icon) {
+    color: var(--p-ink);
+  }
+  .leftovers {
+    margin: -4px 0 12px;
+    padding: 9px 12px;
+    border-radius: 9px;
+    background: rgba(var(--fg-rgb), 0.03);
+    color: var(--soft);
+    font-size: 12.5px;
     line-height: 1.5;
   }
   .leftovers p,
@@ -722,45 +796,31 @@
   }
   .leftovers ul {
     padding-left: 18px;
-  }
-  .leftovers .name {
-    color: var(--text);
-    font-weight: 600;
+    color: var(--muted);
   }
   .empty {
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--line);
-    font-size: 12px;
-    color: var(--dim);
-  }
-  .add {
-    padding: 12px 16px;
-  }
-  .suggest {
-    flex-shrink: 0;
-  }
-  .shared:not(:empty) {
-    padding: 10px 16px 0;
-  }
-  /* Its row stands apart from the commands below, whose boxes have no border above. */
-  .fill {
-    border-bottom: 1px solid var(--line);
+    margin: 0;
+    color: var(--muted);
+    font-size: 12.5px;
   }
   .proposal {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    padding: 12px 16px;
-    border-top: 1px solid var(--line);
+    margin: 4px 0 12px;
+    padding: 12px;
+    border-radius: 10px;
+    background: rgba(var(--fg-rgb), 0.03);
+    box-shadow: inset 0 0 0 1px var(--line-2);
   }
   .notice {
     margin: 0;
     padding: 8px 12px;
-    border-left: 2px solid var(--wait);
+    border-radius: 7px;
     background: var(--wait-soft);
+    color: var(--text);
     font-size: 12.5px;
     line-height: 1.5;
-    color: var(--text);
   }
   .part {
     display: flex;
@@ -772,16 +832,16 @@
   }
   .none {
     margin: 0;
+    color: var(--muted);
     font-size: 12px;
-    color: var(--dim);
   }
   .steps {
-    list-style: none;
-    margin: 0;
-    padding: 0;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
   .steps li {
     display: flex;
@@ -796,30 +856,29 @@
     direction: ltr;
   }
   .name {
-    font-size: 13px;
     font-weight: 600;
   }
   /* The whole command, as written: never cut, never scrolled out of sight, however long. */
   .command {
     margin: 0;
     padding: 6px 10px;
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    background: var(--elev);
-    font-size: 11.5px;
+    border-radius: 7px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--line);
+    font-size: 12px;
     line-height: 1.5;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
   .facts {
-    margin: 0;
     display: grid;
     grid-template-columns: max-content 1fr;
     gap: 2px 10px;
-    font-size: 11.5px;
+    margin: 0;
+    font-size: 12px;
   }
   .facts dt {
-    color: var(--dim);
+    color: var(--muted);
   }
   .facts dd {
     margin: 0;
@@ -830,5 +889,24 @@
     display: flex;
     justify-content: flex-end;
     gap: 8px;
+  }
+  /* Narrow: the folder and the shell of a launch under its command. */
+  @container settings (max-width: 600px) {
+    .cmd-row {
+      grid-template-columns: 110px minmax(0, 1fr) 28px;
+    }
+    .cmd-head {
+      display: none;
+    }
+    .cmd-row .field:nth-of-type(3),
+    .cmd-row select {
+      grid-column: 2 / span 1;
+    }
+    .fence li {
+      grid-template-columns: 90px minmax(0, 1fr);
+    }
+    .fence .how {
+      grid-column: 1 / -1;
+    }
   }
 </style>

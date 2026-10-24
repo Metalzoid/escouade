@@ -341,6 +341,27 @@ describe('the troubles the backend reports', () => {
     await expect.poll(() => server.opened).toEqual([PAGE]);
   });
 
+  it('keeps a download that failed for Réglages › À propos while it lasts, gone once a download goes through (choice 13)', async () => {
+    const failed = release('1.6.0', { held: true });
+    server.check.mockResolvedValueOnce(failed);
+    await checkForUpdate();
+    failed.finish(trouble('le proxy a refusé le fichier (403)', { page: PAGE }));
+    await expect.poll(() => app.updateTrouble).toEqual({ version: '1.6.0', message: 'le proxy a refusé le fichier (403)', page: PAGE });
+    // Another failure, kept quiet by the backend: still failing, still said there.
+    const again = release('1.6.0', { held: true });
+    server.check.mockResolvedValueOnce(again);
+    await checkForUpdate();
+    again.finish(trouble('délai dépassé', { show: false }));
+    await expect.poll(() => app.updateTrouble?.message).toBe('délai dépassé');
+    expect(app.updateTrouble?.page).toBeNull();
+    // Through at last.
+    const ok = release('1.6.0');
+    server.check.mockResolvedValueOnce(ok);
+    await checkForUpdate();
+    await expect.poll(() => app.update?.ready).toBe(true);
+    expect(app.updateTrouble).toBeNull();
+  });
+
   it('shows the cause of a download that failed without a button when there is no page to open', async () => {
     const failed = release('1.6.0', { held: true });
     server.check.mockResolvedValueOnce(failed);

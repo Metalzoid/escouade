@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '../Icon.svelte';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
@@ -145,7 +146,7 @@
         />
       {/if}
       <button class="btn small" disabled={playing} onclick={listen}
-        >{playing ? t('voice.speech.listening') : `▶ ${t('voice.speech.listen')}`}</button
+        >{#if !playing}<Icon name="play" size={14} />{/if}{playing ? t('voice.speech.listening') : t('voice.speech.listen')}</button
       >
     </div>
     <button class="link" onclick={() => openUrl(catalog.voicesUrl).catch((e) => app.toast(String(e), 'error'))}
@@ -160,8 +161,8 @@
     flex-direction: column;
     align-items: flex-end;
     gap: 4px;
-    min-width: 360px;
-    max-width: 60%;
+    width: 360px;
+    max-width: 100%;
   }
   .line {
     display: flex;
@@ -178,10 +179,6 @@
     width: 100%;
     flex: 1;
     min-width: 0;
-    height: 32px;
-    padding: 0 10px;
-    background: var(--panel);
-    font-size: 12px;
   }
   .list {
     position: absolute;
@@ -194,16 +191,16 @@
     margin: 0;
     padding: 4px;
     list-style: none;
-    background: var(--panel);
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
+    background: var(--well);
+    border: 1px solid var(--line-2);
+    border-radius: 7px;
   }
   .list li {
     display: flex;
     align-items: baseline;
     gap: 8px;
     padding: 5px 8px;
-    border-radius: var(--r-sm);
+    border-radius: 7px;
     font-size: 12px;
     cursor: pointer;
   }
@@ -211,13 +208,13 @@
     background: var(--line);
   }
   .list .none {
-    color: var(--dim);
+    color: var(--muted);
     cursor: default;
   }
   .note {
     margin-left: auto;
     font-size: 11px;
-    color: var(--dim);
+    color: var(--muted);
     text-align: right;
   }
   .own {
@@ -235,7 +232,7 @@
     border: 0;
     background: none;
     font-size: 11.5px;
-    color: var(--dim);
+    color: var(--muted);
     text-decoration: underline;
     cursor: pointer;
   }

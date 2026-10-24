@@ -184,7 +184,7 @@ describe('Réglages › Voix', () => {
   it('« Transcription en temps réel », ticked by default, kept by service, shown only for a service that offers it (ESC-136)', async () => {
     app.settings.voice = { ...app.settings.voice, transcription: 'online', onlineService: 'elevenlabs' };
     const backend = open({ voice_online_keys: () => [], voice_online_catalog: ({ service }) => catalog(service) });
-    const box = (await screen.findByRole('checkbox', { name: 'Transcription en temps réel' })) as HTMLInputElement;
+    const box = (await screen.findByRole('switch', { name: 'Transcription en temps réel' })) as HTMLInputElement;
     expect(box.checked).toBe(true);
     expect(screen.getByText(/Le texte s’écrit pendant que tu parles/)).toHaveTextContent('« scribe_v2_realtime »');
     expect(screen.getByText(/En temps réel, ElevenLabs facture la minute plus cher/)).toBeInTheDocument();
@@ -196,11 +196,11 @@ describe('Réglages › Voix', () => {
     expect(screen.getByText(/le son de chaque dictée \(un fichier WAV\), une fois que tu la finis/)).toBeInTheDocument();
     // Deepgram streams with the model chosen; Groq offers none: no box.
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Service' }), 'deepgram');
-    const dg = (await screen.findByRole('checkbox', { name: 'Transcription en temps réel' })) as HTMLInputElement;
+    const dg = (await screen.findByRole('switch', { name: 'Transcription en temps réel' })) as HTMLInputElement;
     expect(dg.checked).toBe(true);
     expect(screen.getByText(/Le texte s’écrit pendant que tu parles/)).toHaveTextContent('« nova-3 »');
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Service' }), 'groq');
-    await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Transcription en temps réel' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('switch', { name: 'Transcription en temps réel' })).toBeNull());
     await save();
     expect(backend.called('save_settings')[0].args.settings.voice.onlineLive).toEqual({ elevenlabs: false });
   });
@@ -267,10 +267,10 @@ describe('Réglages › Voix', () => {
 
   it('sets the language spoken: the interface’s by default, automatic detection, or one named in itself', async () => {
     const backend = open();
-    const group = await screen.findByRole('group', { name: 'Langue parlée' });
-    expect(within(group).getByRole('button', { name: 'Celle de l’interface' })).toHaveAttribute('aria-pressed', 'true');
-    expect(within(group).getByRole('button', { name: 'Español' })).toHaveAttribute('lang', 'es');
-    await userEvent.click(within(group).getByRole('button', { name: 'Détection automatique' }));
+    const menu = (await screen.findByRole('combobox', { name: 'Langue parlée' })) as HTMLSelectElement;
+    expect(menu.selectedOptions[0].text).toBe('Celle de l’interface');
+    expect(within(menu).getByRole('option', { name: 'Español' })).toHaveAttribute('lang', 'es');
+    await userEvent.selectOptions(menu, 'auto');
     await save();
     expect(backend.called('save_settings')[0].args.settings.voice.language).toBe('auto');
   });

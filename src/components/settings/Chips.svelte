@@ -31,11 +31,12 @@
 </div>
 
 <style>
-  /* On one line, as the preview has them: the text of the setting gives way. */
+  /* On one line, as the preview has them; in a narrow window, the segments wrap rather than overflow. */
   .chips {
-    flex: none;
-    max-width: 70%;
-    overflow-x: auto;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 100%;
   }
   .chip.mono {
     font-family: var(--mono);

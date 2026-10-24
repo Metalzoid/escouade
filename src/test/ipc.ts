@@ -395,6 +395,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.update = null;
   app.restartAt = null;
   app.failedUpdate = null;
+  app.updateTrouble = null;
   app.models = [];
   app.accounts = [];
   // French all along, as the tests (the language itself is put back by the setup).

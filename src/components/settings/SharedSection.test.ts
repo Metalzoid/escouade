@@ -35,12 +35,12 @@ function shared(file: Partial<SharedFile> | null, local: string[] = []): Project
   });
 }
 
-/** The row of a setting, by its label. */
+/** The row of a setting, by its label: a row's, or a title's inside a group (« À l'ouverture d'un worktree »). */
 const row = (label: string) =>
   screen
     .getAllByText(label)
-    .find((e) => e.classList.contains('l'))!
-    .closest('.row') as HTMLElement;
+    .find((e) => e.classList.contains('l') || e.parentElement?.classList.contains('sub-h'))!
+    .closest('.sr, .sub-h') as HTMLElement;
 
 describe('.escouade.yml in the settings (ESC-146)', () => {
   beforeEach(() => {

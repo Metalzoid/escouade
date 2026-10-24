@@ -123,6 +123,27 @@ const REDRAWN = {
     'src/components/wizard/WorktreesStep.svelte',
     'src/components/Splitter.svelte',
   ],
+  'lot 11b (ESC-152)': [
+    'src/components/modals/SettingsModal.svelte',
+    'src/components/settings/AccountsTab.svelte',
+    'src/components/settings/AppTab.svelte',
+    'src/components/settings/BoardTab.svelte',
+    'src/components/settings/ClosedProjects.svelte',
+    'src/components/settings/ForgesSection.svelte',
+    'src/components/settings/IntegrationsTab.svelte',
+    'src/components/settings/McpSection.svelte',
+    'src/components/settings/ModelFavorites.svelte',
+    'src/components/settings/NewProjects.svelte',
+    'src/components/settings/OnlineKey.svelte',
+    'src/components/settings/OnlineModel.svelte',
+    'src/components/settings/OnlineVoiceField.svelte',
+    'src/components/settings/ProjectTab.svelte',
+    'src/components/settings/SharedSection.svelte',
+    'src/components/settings/SpeechSettings.svelte',
+    'src/components/settings/StepList.svelte',
+    'src/components/settings/VoiceTab.svelte',
+    'src/components/settings/WorktreeBaseField.svelte',
+  ],
 };
 
 /**

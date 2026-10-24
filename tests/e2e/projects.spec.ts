@@ -111,7 +111,7 @@ async function projectsSettings(page: Page) {
 /** The group of the settings that lists the projects closed with their history. */
 function closedGroup(page: Page) {
   const title = page.getByRole('heading', { name: 'Projets fermés' });
-  return page.getByRole('dialog', { name: 'Réglages' }).locator('section.group').filter({ has: title });
+  return page.getByRole('dialog', { name: 'Réglages' }).locator('section.sg').filter({ has: title });
 }
 
 test('a closed project comes back with its agent, its conversation and its ticket when its folder is added again', async ({ app }) => {

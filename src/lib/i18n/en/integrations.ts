@@ -99,6 +99,7 @@ export default defineZone('integrations', {
     enable: 'Import labeled tickets',
     enableDesc: 'Open tickets from linked sources that carry the label arrive in “To do”',
     label: 'Label',
+    labelState: 'Label “{name}”',
     labelHint: 'Jira, Trello, GitHub or Linear label',
     every: 'Check every',
     minutes: '{n} min',

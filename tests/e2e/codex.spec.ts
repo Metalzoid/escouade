@@ -292,9 +292,8 @@ test.describe('a voice conversation with an agent on Codex', () => {
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
     await settings.getByRole('tab', { name: 'Comptes' }).click();
-    await settings.getByRole('button', { name: 'Ajouter un compte…' }).click();
-    const add = page.getByRole('dialog', { name: 'Ajouter un compte Claude Code' });
-    await add.getByRole('radiogroup', { name: 'Harness' }).getByRole('radio', { name: 'Codex' }).click();
+    // Codex's group has its own button (2.0 design): the window opens on Codex.
+    await settings.getByRole('button', { name: 'Ajouter un compte Codex…' }).click();
     const codex = page.getByRole('dialog', { name: 'Ajouter un compte Codex' });
     await expect(codex.getByText(/La connexion \(auth\.json\) n’est jamais copiée/)).toBeVisible();
     await codex.getByRole('textbox', { name: 'Nom' }).fill('Travail');
