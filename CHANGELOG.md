@@ -16,6 +16,11 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Corrections
 
 - Un message envoyé juste après le précédent, avant que celui-ci soit pris, n’est plus perdu : il quitte le champ et part aussitôt après.
+
+## [1.8.13] — 2026-10-24
+
+### Corrections
+
 - L’assistant « Nouveau projet » règle maintenant tout ce qu’un projet a à sa création : harness par défaut, « Projet privé » avec les comptes à lui réserver, et le Kanban complet. .escouade.yml partage aussi « Projet privé » et le modèle, l’effort et le mode des agents des tickets ; ce qui est propre à chacun (comptes, remote control, tickets en parallèle, pilote auto) reste sur sa machine.
 
 ## [1.8.12] — 2026-10-23

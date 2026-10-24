@@ -16,6 +16,11 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### Fixes
 
 - A message sent right after the one before, before that one is taken, is no longer lost: it leaves the field and goes right after it.
+
+## [1.8.13] — 2026-10-24
+
+### Fixes
+
 - The “New project” assistant now sets everything a project has at its creation: default harness, “Private project” with the accounts to reserve to it, and the whole Kanban. .escouade.yml also shares “Private project” and the model, effort and mode of the ticket agents; what belongs to each person (accounts, remote control, tickets in parallel, autopilot) stays on their machine.
 
 ## [1.8.12] — 2026-10-23
