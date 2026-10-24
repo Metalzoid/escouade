@@ -4,7 +4,7 @@ import { defineZone } from '../types';
 export default defineZone('stats', {
   title: 'Statistics',
   subtitle: 'Agents started from the app · {projects}, {agents}',
-  range: { day: 'Day', week: 'Week', month: 'Month' },
+  range: { label: 'Period', day: 'Day', week: 'Week', month: 'Month' },
   unit: { day: 'day', week: 'week', month: 'month' },
   span: { day: 'Last 14 days', week: 'Last 12 weeks', month: 'Last 12 months' },
   series: { input: 'Input', cache: 'Cache', output: 'Output' },
@@ -33,6 +33,8 @@ export default defineZone('stats', {
   noData: 'No data for this period.',
   closedProject: 'Closed project',
   byProject: { title: 'By project' },
+  /** A bar of « Par projet » or « Par modèle », in its tooltip. */
+  shareTip: '{tokens} tokens · {cost}',
   byModel: { title: 'By model' },
   byAgent: { title: 'By agent', tokens: 'Tokens', deleted: 'Deleted agent' },
   byTicket: {
@@ -80,6 +82,8 @@ export default defineZone('stats', {
     settingUp: 'Setting up the worktree · {step}',
     thinking: 'Thinking',
     status: { running: 'Running', waiting: 'Question', idle: 'Ready', done: 'Done', error: 'Error' },
+    /** A waiting agent whose first request is a permission. */
+    asksPermission: 'Asks for a permission',
     allow: 'Allow',
     deny: 'Deny',
     readInConversation: 'Read it in the conversation before answering.',

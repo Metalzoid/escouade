@@ -7,6 +7,11 @@ import type { Account, AccountShare, AgentShare, EngineDecl, StatsView, TicketSh
 import { BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, project, resetApp } from '../test/ipc';
 import Stats from './Stats.svelte';
 
+/** Once the period is read: the title of its chart is there. */
+const loaded = () => screen.findByText(/^Tokens (par|per) /);
+/** The text of the figures of the period, their units written apart. */
+const figures = () => document.querySelector<HTMLElement>('.kpis')?.textContent ?? '';
+
 const view = (range: string): StatsView => ({
   range,
   buckets: [
@@ -59,13 +64,16 @@ describe('Stats', () => {
   it('shows the KPIs of the period', async () => {
     fakeBackend({ stats: (a: any) => view(a.range) });
     render(Stats);
-    await screen.findAllByText('74,5 k');
-    const tokens = within(screen.getByText('Tokens').parentElement!);
-    expect(tokens.getByText('74,5 k')).toBeInTheDocument();
-    expect(tokens.getByText('14 derniers jours · +49 %')).toBeInTheDocument();
+    await loaded();
+    const tokens = screen.getByText('Tokens').parentElement!;
+    expect(tokens).toHaveTextContent('74,5 k');
+    expect(tokens).toHaveTextContent('14 derniers jours · +49 %');
+    // The unit apart from its number, as the preview writes it.
+    expect(tokens.querySelector('.vl small')).toHaveTextContent('k');
     const kpi = (label: string) => within(screen.getByText(label).parentElement!);
     expect(kpi('Coût global').getByText(/^2,00/)).toBeInTheDocument();
-    expect(kpi('Coût global').getByText(/12,40 .* depuis le 1 juin 2026/)).toBeInTheDocument();
+    // The year of the first turn only when it is not this one.
+    expect(kpi('Coût global').getByText(/12,40 .* depuis le 1 juin( 2026)?$/)).toBeInTheDocument();
     expect(kpi('Coût moyen / prompt').getByText(/^0,50/)).toBeInTheDocument();
     expect(kpi('Prompts').getByText('4')).toBeInTheDocument();
   });
@@ -73,8 +81,8 @@ describe('Stats', () => {
   it('switches range and remembers it', async () => {
     const backend = fakeBackend({ stats: (a: any) => view(a.range) });
     render(Stats);
-    await screen.findAllByText('74,5 k');
-    await userEvent.click(screen.getByRole('button', { name: 'Mois' }));
+    await loaded();
+    await userEvent.click(screen.getByRole('tab', { name: 'Mois' }));
     await waitFor(() => expect(backend.called('stats').at(-1)?.args.range).toBe('month'));
     expect(localStorage.getItem('escouade.statsRange')).toBe('month');
   });
@@ -82,7 +90,7 @@ describe('Stats', () => {
   it('offers a table view of the buckets', async () => {
     fakeBackend({ stats: (a: any) => view(a.range) });
     render(Stats);
-    await screen.findAllByText('74,5 k');
+    await loaded();
     await userEvent.click(screen.getByRole('button', { name: 'Tableau' }));
     const rows = screen.getAllByRole('row');
     expect(rows).toHaveLength(3);
@@ -96,6 +104,100 @@ describe('Stats', () => {
     expect(await screen.findByText('demo-api')).toBeInTheDocument();
     expect(screen.getByText('Projet fermé')).toBeInTheDocument();
     expect(screen.getByText('Opus 5.5')).toBeInTheDocument();
+  });
+});
+
+describe('Stats in the 2.0 design (ESC-82)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetApp({ projects: [project()] });
+  });
+
+  it('draws a stacked column per step, 2 px of the surface between its segments, the top one rounded', async () => {
+    fakeBackend({ stats: (a: any) => view(a.range) });
+    const { container } = render(Stats);
+    await loaded();
+    const chart = container.querySelector('.chart')!;
+    expect(chart.querySelector('svg')).toHaveAttribute('role', 'img');
+    const cols = chart.querySelectorAll('.col');
+    expect(cols).toHaveLength(2);
+    // Input, cache and output, from the bottom: the cache's bottom 2 px above the input's top.
+    const [input, cache] = [...cols[0].querySelectorAll<SVGElement>('.seg')];
+    const top = (el: SVGElement) => Number(el.getAttribute('y'));
+    const bottom = (el: SVGElement) => top(el) + Number(el.getAttribute('height'));
+    expect(top(input) - bottom(cache)).toBeCloseTo(2, 5);
+    expect(cols[0].querySelector('path.seg')).toBeInTheDocument();
+    // The labels of the steps, and of the axis.
+    expect(chart.querySelectorAll('text.ax.x')).toHaveLength(2);
+    expect(chart.querySelector('text.ax.x')).toHaveTextContent('26/09');
+  });
+
+  it('details a step on hover: each series, the total, the cost and the prompts', async () => {
+    fakeBackend({ stats: (a: any) => view(a.range) });
+    const { container } = render(Stats);
+    await loaded();
+    expect(container.querySelector('.tip')).toBeNull();
+    await userEvent.hover(container.querySelectorAll('.chart .col')[0]);
+    const tip = container.querySelector('.tip')!;
+    expect(tip).toHaveTextContent('26/09');
+    expect(tip).toHaveTextContent('Entrée1,0 k');
+    expect(tip).toHaveTextContent('Cache50,0 k');
+    expect(tip).toHaveTextContent('Total53,0 k');
+    expect(tip).toHaveTextContent('Prompts3');
+    expect(container.querySelectorAll('.chart .col')[0]).toHaveClass('on');
+  });
+
+  it('colours the series and the models with the palettes validated in both themes, the models past four in grey', async () => {
+    fakeBackend({
+      stats: (a: any): StatsView => ({
+        ...view(a.range),
+        byModel: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-fable-5-1', 'claude-haiku-4-5', 'gpt-5.5-codex'].map((key, i) => ({
+          key,
+          tokens: 1000 * (5 - i),
+          cost: 5 - i,
+        })),
+      }),
+    });
+    const { container } = render(Stats);
+    await loaded();
+    const legend = [...container.querySelectorAll<HTMLElement>('.legend i')].map((i) => i.style.background);
+    expect(legend).toEqual(['rgb(76, 136, 211)', 'rgb(0, 139, 122)', 'rgb(149, 85, 176)']);
+    const models = within(screen.getByRole('region', { name: 'Par modèle' }));
+    const fills = [...models.getAllByRole('listitem')].map((li) => li.querySelector<HTMLElement>('.tr i')!.style.background);
+    expect(fills.slice(0, 4)).toEqual(['rgb(202, 114, 60)', 'rgb(70, 130, 204)', 'rgb(51, 156, 109)', 'rgb(149, 85, 176)']);
+    expect(fills[4]).toMatch(/fg-rgb/);
+    // Each bar as long as its share of the first, its cost written.
+    expect(models.getAllByRole('listitem')[1].querySelector<HTMLElement>('.tr i')!.style.width).toBe('80%');
+    expect(models.getAllByRole('listitem')[0]).toHaveTextContent('5,00 $');
+  });
+
+  it('writes the tokens of a share whose harness gives no cost', async () => {
+    app.engines = [{ ...BARE_ENGINE, id: 'claude', caps: { ...BARE_ENGINE.caps, cost: 'none' } }];
+    fakeBackend({
+      stats: (a: any) => ({ ...view(a.range), byEngine: [{ engine: 'claude', tokens: 74_500, cost: 0, turns: 4, agents: 1 }] }),
+    });
+    render(Stats);
+    await loaded();
+    const projects = within(screen.getByRole('region', { name: 'Par projet' }));
+    expect(projects.getAllByRole('listitem')[0]).toHaveTextContent('60,0 k');
+  });
+
+  it('marks each harness of « Par harness » with its brand', async () => {
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    fakeBackend({
+      stats: (a: any): StatsView => ({
+        ...view(a.range),
+        byEngine: [
+          { engine: 'claude', tokens: 54_500, cost: 1.6, turns: 3, agents: 2 },
+          { engine: 'codex', tokens: 20_000, cost: 0.4, turns: 2, agents: 1 },
+        ],
+        engines: ['claude', 'codex'],
+      }),
+    });
+    render(Stats);
+    const table = await screen.findByRole('table', { name: 'Par harness' });
+    expect(within(table).getByRole('img', { name: 'Harness : Claude Code' })).toHaveTextContent('Claude Code');
+    expect(within(table).getByRole('img', { name: 'Harness : Harness nu' })).toBeInTheDocument();
   });
 });
 
@@ -228,7 +330,7 @@ describe('Stats by agent and by ticket', () => {
     });
     render(Stats);
     await screen.findByText('agent-du-jour');
-    await userEvent.click(screen.getByRole('button', { name: 'Mois' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Mois' }));
     expect(await screen.findByText('agent-du-mois')).toBeInTheDocument();
     expect(screen.queryByText('agent-du-jour')).not.toBeInTheDocument();
   });
@@ -314,7 +416,7 @@ describe('Stats by account', () => {
         .map((o) => o.textContent),
     ).toEqual(['Tous les comptes', 'Principal', 'Pro']);
     expect(select).toHaveValue('');
-    await screen.findAllByText('74,5 k');
+    await loaded();
     expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'day', account: null, engine: null });
   });
 
@@ -325,7 +427,7 @@ describe('Stats by account', () => {
     await userEvent.selectOptions(select, 'Pro');
     await waitFor(() => expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'day', account: 'pro', engine: null }));
     // The period changes, the account stays.
-    await userEvent.click(screen.getByRole('button', { name: 'Mois' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Mois' }));
     await waitFor(() => expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'month', account: 'pro', engine: null }));
     await userEvent.selectOptions(select, 'Tous les comptes');
     await waitFor(() => expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'month', account: null, engine: null }));
@@ -335,11 +437,9 @@ describe('Stats by account', () => {
     fakeBackend({ stats: filtered });
     render(Stats);
     await userEvent.selectOptions(await picker(), 'Pro');
-    await screen.findAllByText('33,3 k');
-    const kpis = within(document.querySelector<HTMLElement>('.kpis')!);
-    expect(kpis.getByText('33,3 k')).toBeInTheDocument();
+    await waitFor(() => expect(figures()).toContain('33,3 k'));
     expect(within(screen.getByText('Coût global').parentElement!).getByText(/^0,50/)).toBeInTheDocument();
-    expect(screen.queryByText('74,5 k')).not.toBeInTheDocument();
+    expect(figures()).not.toContain('74,5 k');
   });
 
   it('puts the accounts side by side in « Par compte », cost, tokens, turns and agents, whichever account is chosen', async () => {
@@ -356,7 +456,7 @@ describe('Stats by account', () => {
     ];
     expect(lines('Par compte')).toEqual(side);
     await userEvent.selectOptions(await picker(), 'Pro');
-    await screen.findAllByText('33,3 k');
+    await waitFor(() => expect(figures()).toContain('33,3 k'));
     expect(lines('Par compte')).toEqual(side);
     // The account the other views are for is marked.
     const rows = within(screen.getByRole('table', { name: 'Par compte' }))
@@ -368,7 +468,7 @@ describe('Stats by account', () => {
   it('says so when no account ran a turn in the period', async () => {
     fakeBackend({ stats: (a: any) => ({ ...together(a), byAccount: [] }) });
     render(Stats);
-    await screen.findAllByText('74,5 k');
+    await loaded();
     expect(screen.queryByRole('table', { name: 'Par compte' })).not.toBeInTheDocument();
     expect(screen.getByText('Par compte')).toBeInTheDocument();
     // The agents' section, and now the accounts', hold nothing.
@@ -379,7 +479,7 @@ describe('Stats by account', () => {
     app.settings.accounts = [MAIN];
     fakeBackend({ stats: (a: any) => ({ ...view(a.range), accounts: ['principal'], byAccount: [accountShare('principal')] }) });
     render(Stats);
-    await screen.findAllByText('74,5 k');
+    await loaded();
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
     expect(screen.queryByText('Par compte')).not.toBeInTheDocument();
     expect(screen.queryByText('Tous les comptes')).not.toBeInTheDocument();
@@ -444,7 +544,7 @@ describe('Stats by account', () => {
     });
     render(Stats);
     const select = await picker();
-    await screen.findAllByText('74,5 k');
+    await loaded();
     await userEvent.selectOptions(select, 'Pro');
     await waitFor(() => expect(backend.called('stats').at(-1)?.args.account).toBe('pro'));
     // Pro's answer is late: every account was asked for in the meantime.
@@ -452,8 +552,8 @@ describe('Stats by account', () => {
     await waitFor(() => expect(backend.called('stats').at(-1)?.args.account).toBeNull());
     answerPro(filtered({ range: 'day', account: 'pro' }));
     await new Promise((r) => setTimeout(r, 40));
-    expect(screen.queryByText('33,3 k')).not.toBeInTheDocument();
-    expect(screen.getAllByText('74,5 k').length).toBeGreaterThan(0);
+    expect(figures()).not.toContain('33,3 k');
+    expect(figures()).toContain('74,5 k');
   });
 });
 
@@ -491,16 +591,16 @@ describe('Stats in English', () => {
   it('writes the title, the periods and the figures of the period in English', async () => {
     fakeBackend({ stats: (a: any) => view(a.range) });
     render(Stats);
-    await screen.findAllByText('74.5k');
+    await loaded();
     expect(screen.getByText('Statistics')).toBeInTheDocument();
     // No agent yet: « 0 agents », the plural of English for zero.
     expect(screen.getByText('Agents started from the app · 1 project, 0 agents')).toBeInTheDocument();
-    for (const name of ['Day', 'Week', 'Month']) expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    for (const name of ['Day', 'Week', 'Month']) expect(screen.getByRole('tab', { name })).toBeInTheDocument();
     const kpi = (label: string) => within(screen.getByText(label).parentElement!);
-    expect(kpi('Tokens').getByText('Last 14 days · +49%')).toBeInTheDocument();
-    expect(kpi('Total cost').getByText('$2.00')).toBeInTheDocument();
-    expect(kpi('Total cost').getByText(/\$12\.40 since June 1, 2026/)).toBeInTheDocument();
-    expect(kpi('Average cost / prompt').getByText('$0.50')).toBeInTheDocument();
+    expect(screen.getByText('Tokens').parentElement).toHaveTextContent('Last 14 days · +49%');
+    expect(screen.getByText('Total cost').parentElement).toHaveTextContent('$2.00');
+    expect(kpi('Total cost').getByText(/\$12\.40 since June 1(, 2026)?$/)).toBeInTheDocument();
+    expect(screen.getByText('Average cost / prompt').parentElement).toHaveTextContent('$0.50');
     expect(kpi('Average cost / prompt').getByText(/≈ 18\.6k tokens \/ prompt/)).toBeInTheDocument();
     expect(kpi('Prompts').getByText('2 per day on average')).toBeInTheDocument();
   });
@@ -508,7 +608,7 @@ describe('Stats in English', () => {
   it('says when no prompt was sent in the period, in English', async () => {
     fakeBackend({ stats: (a: any) => ({ ...view(a.range), prompts: 0 }) });
     render(Stats);
-    await screen.findAllByText('74.5k');
+    await loaded();
     const kpi = within(screen.getByText('Average cost / prompt').parentElement!);
     expect(kpi.getByText('—')).toBeInTheDocument();
     expect(kpi.getByText('no prompts in this period')).toBeInTheDocument();
@@ -517,13 +617,13 @@ describe('Stats in English', () => {
   it('names the step of the period, the series and the table in English', async () => {
     fakeBackend({ stats: (a: any) => view(a.range) });
     render(Stats);
-    await screen.findAllByText('74.5k');
+    await loaded();
     expect(screen.getByText('Tokens per day')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Tokens per day, stacked input, cache and output' })).toBeInTheDocument();
     for (const series of ['Input', 'Cache', 'Output']) expect(screen.getByText(series)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Month' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Month' }));
     expect(await screen.findByText('Tokens per month')).toBeInTheDocument();
-    expect(await screen.findByText('Last 12 months · +49%')).toBeInTheDocument();
+    await waitFor(() => expect(figures()).toContain('Last 12 months · +49%'));
     await userEvent.click(screen.getByRole('button', { name: 'Table' }));
     expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual([
       'Period',
@@ -549,7 +649,7 @@ describe('Stats in English', () => {
     await screen.findByRole('table', { name: 'By agent' });
     expect(screen.getByText('By project')).toBeInTheDocument();
     expect(screen.getByText('By model')).toBeInTheDocument();
-    expect(screen.getByText('Closed project', { selector: '.sname' })).toBeInTheDocument();
+    expect(screen.getByText('Closed project', { selector: '.nm' })).toBeInTheDocument();
     expect(lines('By ticket')).toEqual([
       ['DEM-4', 'Ticket 4', '3 loops', '$2.50'],
       ['DEM-1', 'Ticket 1', '1 loop', '$0.40'],
@@ -710,7 +810,7 @@ describe('Stats by harness (ESC-30)', () => {
     // With turns of a harness that estimates, the totals are estimates too.
     const kpis = within(document.querySelector<HTMLElement>('.kpis')!);
     expect(kpis.getByText('estimé')).toBeInTheDocument();
-    expect(kpis.getByText(/≈\s2,00 \$/)).toBeInTheDocument();
+    expect(figures()).toMatch(/≈\s2,00\s\$/);
   });
 
   it('writes « — » for a harness that gives no cost', async () => {
@@ -729,7 +829,7 @@ describe('Stats by harness (ESC-30)', () => {
     app.settings.accounts = [PRINCIPAL];
     fakeBackend({ stats: (a: any) => view(a.range) });
     render(Stats);
-    await screen.findAllByText('74,5 k');
+    await loaded();
     expect(screen.queryByRole('combobox', { name: 'Harness' })).not.toBeInTheDocument();
     expect(screen.queryByRole('table', { name: 'Par harness' })).not.toBeInTheDocument();
     expect(screen.queryByText('estimé')).not.toBeInTheDocument();

@@ -265,7 +265,7 @@ test.describe('the accounts of two harnesses', () => {
     await expect(prompts).toContainText('1');
     // Codex alone: nothing it ran, nor any prompt of it.
     await harness.selectOption({ label: 'Codex' });
-    await expect(prompts.locator('.kv')).toHaveText('0');
+    await expect(prompts.locator('.vl')).toHaveText('0');
     // Its accounts alone: « Travail », the only one added (ESC-128), nothing to choose from.
     await expect(page.getByRole('combobox', { name: 'Compte' })).toHaveCount(0);
     await harness.selectOption({ label: 'Claude Code' });

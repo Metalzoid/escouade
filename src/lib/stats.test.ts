@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { setLang } from './i18n';
-import { kpis, niceMax, shown } from './stats';
+import { figureParts, kpis, modelColor, niceMax, OTHER_COLOR, shown, ticks } from './stats';
 import type { StatsView } from './types';
 
 const view = (over: Partial<StatsView>): StatsView => ({
@@ -80,5 +80,34 @@ describe('shown', () => {
   it('keeps a short list whole', () => {
     expect(shown(list.slice(0, 20), false)).toHaveLength(20);
     expect(shown([], false)).toEqual([]);
+  });
+});
+
+describe('figureParts', () => {
+  it('cuts a figure into its number and what is written around it', () => {
+    expect(figureParts('28,10 M')).toEqual({ before: '', number: '28,10', after: ' M' });
+    expect(figureParts('$42.17')).toEqual({ before: '$', number: '42.17', after: '' });
+    expect(figureParts('≈ 2,00 $')).toEqual({ before: '≈ ', number: '2,00', after: ' $' });
+    expect(figureParts('1 235')).toEqual({ before: '', number: '1 235', after: '' });
+    expect(figureParts('136')).toEqual({ before: '', number: '136', after: '' });
+  });
+
+  it('keeps whole what has no number', () => {
+    expect(figureParts('—')).toEqual({ before: '', number: '—', after: '' });
+  });
+});
+
+describe('modelColor', () => {
+  it('gives the four first models their colour of the palette, the others a grey', () => {
+    expect([0, 1, 2, 3].map(modelColor)).toEqual(['#ca723c', '#4682cc', '#339c6d', '#9555b0']);
+    expect(modelColor(4)).toBe(OTHER_COLOR);
+    expect(modelColor(9)).toBe(OTHER_COLOR);
+  });
+});
+
+describe('ticks', () => {
+  it('cuts the axis in four from 0 to its maximum', () => {
+    expect(ticks(4_000_000)).toEqual([0, 1_000_000, 2_000_000, 3_000_000, 4_000_000]);
+    expect(ticks(1)).toEqual([0, 0.25, 0.5, 0.75, 1]);
   });
 });

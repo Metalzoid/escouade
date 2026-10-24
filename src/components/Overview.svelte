@@ -9,24 +9,24 @@
   import { modelLabel } from '../lib/models';
   import { keyLabel } from '../lib/platform';
   import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
-  import { showsCost, speakerOf } from '../lib/engines';
+  import { can, showsCost, speakerOf } from '../lib/engines';
   import { app } from '../lib/state.svelte';
   import { revealHidden } from '../lib/recipe';
   import { SUMMED_UP, toolLabel } from '../lib/tools';
   import type { Agent, PendingRequest, Project } from '../lib/types';
   import EngineMark from './EngineMark.svelte';
+  import Icon from './Icon.svelte';
   import StatusDot from './StatusDot.svelte';
+  import { pendingFor, pendingLabel, pendingText } from '../lib/later';
   import { tip } from '../lib/tip';
 
   // « Vue d’ensemble » (Ctrl+Shift+A): every agent of every project in one list, the ones waiting for an answer first,
   // whose permissions are answered on the spot; a line opens its agent.
 
-  // As in the sidebar, but "Prêt" in a gray that reads on the page's background.
+  // What a turn over says in a muted grey; a failure in red.
   const SC: Record<string, string> = {
-    running: 'var(--ok)',
-    waiting: 'var(--wait)',
     idle: 'var(--muted)',
-    done: 'var(--ok)',
+    done: 'var(--muted)',
     error: 'var(--del)',
   };
   const MOVES = new Set(['ArrowDown', 'ArrowUp', 'Home', 'End']);
@@ -268,11 +268,14 @@
   {@const tag = ticketTag(app.ticketOf(a.id))}
   {@const p = asks ? app.projects.find((x) => x.id === a.projectId) : undefined}
   {@const req = asks ? requestOf(a) : undefined}
+  {@const asked = a.status === 'waiting' ? requestOf(a) : undefined}
+  {@const pending = pendingFor(a, app.agents, app.tickets, app.now, can(a, 'backgroundTasks'))}
   <!-- The keyboard opens the agent from its line (role button); the mouse, from anywhere in the row. -->
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <li
     class="row"
     class:waiting={asks}
+    class:cur={a.id === current}
     data-agent={a.id}
     aria-labelledby={`ov-a-${a.id}`}
     onclick={() => open(a)}
@@ -280,17 +283,24 @@
   >
     <div class="line" role="button" tabindex={a.id === current ? 0 : -1} onkeydown={(e) => lineKey(e, a)}>
       <span class="agent">
-        <StatusDot status={a.status} size={8} />
+        <StatusDot status={a.status} awaits={!!pending} />
         <span class="name" id={`ov-a-${a.id}`} use:tip={{ text: a.name, cut: true }}>{a.name}</span>
         <EngineMark engine={a.engine} />
         {#if p}<span class="proj"><span class="swatch" style:background={p.color}></span>{p.name}</span>{/if}
-        {#if tag}<span class="tag mono">▸ {tag}</span>{/if}
+        {#if tag}<span class="tag">{tag}</span>{/if}
       </span>
       <span class="act">
         {#if a.status === 'waiting'}
-          <span class="txt" style:color={SC.waiting}>{t('stats.overview.status.waiting')}</span>
+          <span class="txt" style:color="var(--wait)"
+            >{asked?.kind === 'permission' && asked.tool !== 'ExitPlanMode'
+              ? t('stats.overview.asksPermission')
+              : t('stats.overview.status.waiting')}</span
+          >
         {:else if a.resumeAt}
           <span class="txt" style:color="var(--wait)">{t('stats.overview.resumes', { when: fWhen(a.resumeAt, app.now) })}</span>
+        {:else if pending}
+          <!-- Its turn is over, not its work (choice 25): what goes on in its tooltip. -->
+          <span class="txt" style:color="var(--muted)" use:tip={pendingText(pending, app.now)}>{pendingLabel(pending, app.now)}</span>
         {:else if a.setup}
           <span class="dots" aria-hidden="true"><span></span><span></span><span></span></span><span class="txt" use:tip={a.setup}
             >{t('stats.overview.settingUp', { step: a.setup })}</span
@@ -303,14 +313,14 @@
           <span class="txt" style:color={SC[a.status]}>{t(`stats.overview.status.${a.status}`)}</span>
         {/if}
       </span>
-      <span class="model mono"><span class="sr">{t('common.model')}{' '}</span>{modelLabel(a.model, app.models)}</span>
+      <span class="model"><span class="sr">{t('common.model')}{' '}</span>{modelLabel(a.model, app.models)}</span>
       <span class="num" use:tip={used.estimated ? estimateHint(used) : undefined}
         ><span class="sr">{t('common.cost')}{' '}</span>{showsCost(a) ? fSpentUsd(used) : ''}</span
       >
       <span class="num ctx" class:full={ctx?.full} use:tip={ctx?.title ?? t('stats.overview.contextUnknown')}
         ><span class="sr">{t('stats.overview.context')}{' '}</span>{ctx ? fPct(ctx.pct) : '—'}</span
       >
-      <span class="num" use:tip={t('stats.overview.lastChange', { when: fWhen(a.lastActivity, app.now) })}
+      <span class="num since" use:tip={t('stats.overview.lastChange', { when: fWhen(a.lastActivity, app.now) })}
         ><span class="sr">{t('stats.overview.since')}{' '}</span>{fSince(a.lastActivity, app.now)}</span
       >
     </div>
@@ -330,7 +340,7 @@
             {@const note = notHere(req, arg)}
             <div class="what">
               <div class="cmd">
-                <span class="badge mono">{toolLabel(req.tool)}</span>
+                <span class="badge">{toolLabel(req.tool)}</span>
                 <span class="arg mono" use:measure={{ id: req.id, text: arg }}>{arg}</span>
               </div>
               {#if req.description}<span class="why">{revealHidden(req.description)}</span>{/if}
@@ -340,14 +350,14 @@
             <!-- Allowed on the spot only what is read whole here. -->
             <span class="acts">
               {#if !note}
-                <button class="opt primary" disabled={busy[a.id] || held[a.id]} onclick={(e) => decide(e, a, req, 'allow')}
+                <button class="btn primary" disabled={busy[a.id] || held[a.id]} onclick={(e) => decide(e, a, req, 'allow')}
                   >{t('stats.overview.allow')}</button
                 >
-                <button class="opt" disabled={busy[a.id] || held[a.id]} onclick={(e) => decide(e, a, req, 'deny')}
+                <button class="btn" disabled={busy[a.id] || held[a.id]} onclick={(e) => decide(e, a, req, 'deny')}
                   >{t('stats.overview.deny')}</button
                 >
               {:else}
-                <button class="opt primary" onclick={(e) => answer(e, a)}>{t('common.reply')}</button>
+                <button class="btn primary" onclick={(e) => answer(e, a)}>{t('common.reply')}</button>
               {/if}
             </span>
           {:else}
@@ -361,7 +371,7 @@
                     ? t('stats.overview.waitsInTerminal')
                     : t('stats.overview.waitsForAnswer', { engine: speakerOf(a.engine) })}
             <span class="ask" use:tip={{ text: text, cut: true }}>{text}</span>
-            <span class="acts"><button class="opt primary" onclick={(e) => answer(e, a)}>{t('common.reply')}</button></span>
+            <span class="acts"><button class="btn primary" onclick={(e) => answer(e, a)}>{t('common.reply')}</button></span>
           {/if}
         </div>
       {/key}
@@ -371,14 +381,13 @@
 
 <main class="overview" bind:this={root} onfocusin={onFocusIn} aria-labelledby="ov-title">
   <header class="head">
-    <div class="who">
-      <h1 class="t" id="ov-title">{t('common.overview')}</h1>
-      <span class="sub mono" use:tip={{ text: sub, cut: true }}>{sub}</span>
-    </div>
-    <div style="flex:1"></div>
+    <h1 id="ov-title">{t('common.overview')}</h1>
+    <span class="sub" use:tip={{ text: sub, cut: true }}>{sub}</span>
     <span class="keys" aria-hidden="true">
       {#if order.length}
-        <Rich k="stats.overview.hintChoose">{#snippet keys()}<kbd>↑</kbd><kbd>↓</kbd>{/snippet}</Rich>
+        <Rich k="stats.overview.hintChoose"
+          >{#snippet keys()}<kbd><Icon name="up" size={11} /></kbd><kbd><Icon name="down" size={11} /></kbd>{/snippet}</Rich
+        >
         <span class="sep">·</span>
         <Rich k="stats.overview.hintOpen">{#snippet key()}<kbd>{keyLabel('Enter')}</kbd>{/snippet}</Rich>
         <span class="sep">·</span>
@@ -388,12 +397,12 @@
   </header>
   <div class="scroll">
     {#if groups.length}
-      <div class="list">
+      <div class="list ov">
         <!-- Each value says what it is to assistive technologies (`.sr`): the headings are for the eyes. -->
         <div class="cols" aria-hidden="true">
-          <span>{t('common.agent')}</span><span>{t('stats.overview.activity')}</span><span>{t('common.model')}</span><span class="num"
-            >{t('common.cost')}</span
-          ><span class="num">{t('stats.overview.context')}</span><span class="num">{t('stats.overview.since')}</span>
+          <span>{t('common.agent')}</span><span>{t('stats.overview.activity')}</span><span class="model">{t('common.model')}</span><span
+            class="num">{t('common.cost')}</span
+          ><span class="num ctx">{t('stats.overview.context')}</span><span class="num since">{t('stats.overview.since')}</span>
         </div>
         {#each groups as g (g.key)}
           <section class="group" class:waiting={!g.project} aria-labelledby={`ov-${g.key}`}>
@@ -401,10 +410,10 @@
               {#if g.project}
                 <span class="swatch" style:background={g.project.color}></span>
               {:else}
-                <span class="pulse" style="width:8px;height:8px"></span>
+                <StatusDot status="waiting" />
               {/if}
               <span id={`ov-${g.key}`}>{g.project ? g.project.name : t('stats.overview.waitingGroup')}</span>
-              <span class="count">{g.agents.length}</span>
+              <span class="n">{g.agents.length}</span>
             </h2>
             <ul>
               {#each g.agents as a (a.id)}
@@ -421,220 +430,202 @@
 </main>
 
 <style>
+  /* Full frame, as the preview's `#overview`: its columns fold by its own width, not the window's. */
   .overview {
+    container: ov / inline-size;
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
   }
   .head {
-    height: 60px;
+    min-height: 64px;
     flex: none;
     display: flex;
     align-items: center;
     gap: 16px;
-    padding: 0 24px;
+    min-width: 0;
+    padding: 0 24px 0 28px;
     border-bottom: 1px solid var(--line);
     white-space: nowrap;
   }
-  .who {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    min-width: 0;
-  }
-  .t {
+  h1 {
+    flex: none;
     margin: 0;
-    font-size: 15px;
-    font-weight: 700;
+    font-size: 17px;
+    font-weight: 640;
+    letter-spacing: -0.02em;
   }
   .sub {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 11px;
-    color: var(--dim);
+    color: var(--muted);
+    font-size: 12.5px;
   }
   .keys {
     flex: none;
-    font-size: 11.5px;
-    color: var(--dim);
-  }
-  kbd {
-    font-family: var(--mono);
-    font-size: 10.5px;
-    padding: 0 4px;
-    margin-right: 2px;
-    border: 1px solid var(--line2);
-    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
     color: var(--muted);
+    font-size: 12px;
   }
-  .sep {
-    margin: 0 4px;
+  .keys kbd {
+    min-width: 20px;
+    justify-content: center;
   }
   .scroll {
     flex: 1;
     min-height: 0;
     overflow: auto;
   }
-  .list {
-    max-width: 1120px;
-    margin: 0 auto;
-    padding: 0 28px 40px;
+  .ov {
+    --cols: minmax(0, 1.25fr) minmax(0, 2fr) 104px 74px 74px 70px;
+    padding: 0 20px 24px;
   }
   /* The same columns on every line, whatever their group: values are compared down the page. */
   .cols,
   .line {
     display: grid;
-    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 96px 84px 72px 60px;
-    column-gap: 18px;
+    grid-template-columns: var(--cols);
     align-items: center;
+    gap: 16px;
   }
   .cols {
     position: sticky;
     top: 0;
     z-index: 1;
-    padding: 16px 13px 8px;
+    height: 36px;
+    padding: 0 10px;
     border-bottom: 1px solid var(--line);
-    background: var(--bg);
-    font-size: 10.5px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    background: var(--panel);
     color: var(--muted);
-  }
-  .group {
-    margin-top: 20px;
+    font-size: 11.5px;
+    font-weight: 550;
+    white-space: nowrap;
   }
   .gh {
-    margin: 0 0 6px;
     display: flex;
     align-items: center;
-    gap: 9px;
-    padding: 0 13px;
+    gap: 8px;
+    margin: 0;
+    padding: 18px 10px 6px;
     font-size: 12.5px;
-    font-weight: 700;
+    font-weight: 620;
   }
   .group.waiting .gh {
     color: var(--wait);
   }
   .swatch {
-    width: 10px;
-    height: 10px;
-    border-radius: 3px;
     flex: none;
+    width: 9px;
+    height: 9px;
+    border-radius: 3px;
   }
-  .count {
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 400;
-    color: var(--muted);
+  .n {
+    color: var(--dim);
+    font-weight: 500;
   }
   ul {
-    list-style: none;
+    display: grid;
+    gap: 2px;
     margin: 0;
     padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+    list-style: none;
   }
   .row {
-    border: 1px solid transparent;
-    border-radius: var(--r-sm);
+    border-radius: 9px;
     cursor: pointer;
   }
   .row:hover {
-    background: color-mix(in oklch, var(--elev) 55%, transparent);
+    background: var(--hover);
   }
-  /* A request waiting, in the colors of its card in the conversation. */
+  /* The line the arrows are on. */
+  .row.cur {
+    background: rgba(var(--fg-rgb), 0.055);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+  }
+  /* A request waiting, in the colours of its card in the conversation. */
   .row.waiting {
-    background: var(--wait-soft);
-    border-color: color-mix(in oklch, var(--wait) 35%, transparent);
-  }
-  .row.waiting + .row.waiting {
-    margin-top: 4px;
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
   }
   .row.waiting:hover {
-    border-color: var(--wait);
+    box-shadow: inset 0 0 0 1px var(--wait);
   }
   .line {
     min-height: 40px;
-    padding: 8px 12px;
+    padding: 0 10px;
+    font-size: 12.5px;
     outline: none;
   }
   /* The focus is on the line, the ring around its whole row: a request waiting is part of it. */
   .row:has(.line:focus-visible) {
-    outline: 2px solid var(--accent);
+    outline: 2px solid color-mix(in oklch, var(--p) 70%, transparent);
     outline-offset: -1px;
-  }
-  /* Under the agent's name (12px of padding, its dot and its gap before it), on one line. */
-  .said {
-    margin: -4px 12px 8px 29px;
-    font-size: 11.5px;
-    color: var(--muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   .agent {
     display: flex;
     align-items: center;
     gap: 9px;
     min-width: 0;
+    white-space: nowrap;
+  }
+  /* A row's dot says its state without its ring: the ring is the group's, « Attend ta réponse ». */
+  .agent :global(.state-dot::after) {
+    display: none;
   }
   .name {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 13.5px;
-    font-weight: 600;
+    font-weight: 590;
   }
   .proj {
     flex: none;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-size: 11.5px;
+    gap: 5px;
     color: var(--muted);
+    font-size: 12px;
   }
   .proj .swatch {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     border-radius: 2px;
   }
   .tag {
     flex: none;
-    font-size: 10.5px;
-    padding: 2px 7px;
-    border-radius: 3px;
-    background: var(--elev2);
-    color: var(--accent);
+    color: var(--p-ink);
+    font-size: 12px;
+    font-weight: 550;
   }
   .act {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
     min-width: 0;
-    font-size: 12.5px;
-    color: var(--muted);
+    color: var(--soft);
+    white-space: nowrap;
   }
   .txt {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .dots {
     display: inline-flex;
-    gap: 3px;
     flex: none;
+    gap: 3px;
   }
   .dots span {
     width: 4px;
     height: 4px;
     border-radius: 50%;
-    background: var(--accent);
-    animation: ccBlink 1.2s infinite;
+    background: var(--run);
+    animation: breathe 1.2s ease-in-out infinite;
   }
   .dots span:nth-child(2) {
     animation-delay: 0.15s;
@@ -642,12 +633,16 @@
   .dots span:nth-child(3) {
     animation-delay: 0.3s;
   }
+  @keyframes breathe {
+    50% {
+      opacity: 0.45;
+    }
+  }
   .model {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 11px;
     color: var(--muted);
   }
   .num {
@@ -655,41 +650,58 @@
     white-space: nowrap;
   }
   .line .num {
-    font-family: var(--mono);
-    font-size: 12px;
+    color: var(--soft);
     font-variant-numeric: tabular-nums;
   }
-  .ctx.full {
+  .line .ctx.full {
     color: var(--wait);
   }
-  /* Under the agent's name, past its status dot. */
+  /* What it reported, under its name (past its dot), quoted. */
+  .said {
+    margin: -6px 0 0;
+    padding: 0 10px 10px 27px;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .said::before {
+    content: '« ';
+  }
+  .said::after {
+    content: ' »';
+  }
+  /* The request, in a well under the agent's name. */
   .req {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 14px;
     min-width: 0;
-    padding: 0 12px 10px 29px;
+    margin: 0 10px 10px 27px;
+    padding: 10px 10px 10px 12px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, calc(0.2 * var(--shade)));
   }
   .what {
+    display: grid;
     flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
     gap: 4px;
+    min-width: 0;
   }
   .cmd {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
+    gap: 8px;
     min-width: 0;
   }
   .badge {
     flex: none;
-    padding: 2px 6px;
-    border-radius: 3px;
-    background: var(--elev2);
-    font-size: 11px;
-    font-weight: 600;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 5px;
+    background: rgba(var(--fg-rgb), 0.08);
+    font: 600 11.5px/20px var(--mono);
   }
   /*
    * The command as it runs, its lines kept, over four lines at most (one taller is answered in the conversation), in
@@ -703,17 +715,17 @@
     -webkit-line-clamp: 4;
     line-clamp: 4;
     overflow: hidden;
+    color: var(--text);
+    font: 12.5px/20px var(--mono);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     unicode-bidi: bidi-override;
     direction: ltr;
-    font-size: 12px;
-    line-height: 1.5;
   }
   .why {
+    color: var(--muted);
     font-size: 12px;
     line-height: 1.45;
-    color: var(--muted);
     text-wrap: pretty;
   }
   .why.more {
@@ -727,39 +739,21 @@
     -webkit-line-clamp: 2;
     line-clamp: 2;
     overflow: hidden;
+    color: var(--text);
     font-size: 13px;
     line-height: 1.45;
     text-wrap: pretty;
   }
-  /* One width whatever its buttons: the argument beside it wraps the same with « Répondre » as with the two others. */
+  /* Its buttons at the right, the argument beside them wrapping the same with « Répondre » as with the two others. */
   .acts {
-    flex: none;
-    width: 172px;
     display: flex;
+    flex: none;
     justify-content: flex-end;
-    gap: 8px;
+    gap: 6px;
   }
-  .opt {
+  .acts .btn {
     height: 28px;
-    padding: 0 12px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: transparent;
     font-size: 12.5px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .opt:hover:not(:disabled) {
-    border-color: var(--wait);
-  }
-  .opt.primary {
-    background: var(--wait);
-    border-color: var(--wait);
-    color: #2a1f05;
-  }
-  .opt:disabled {
-    opacity: 0.5;
-    cursor: default;
   }
   .sr {
     position: absolute;
@@ -770,14 +764,33 @@
   }
   .empty {
     padding: 90px 0 0;
-    text-align: center;
-    font-size: 13px;
     color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+  }
+  /* Narrower, as the preview under 1 240 px of window: the model goes, then the context and since when. */
+  @container ov (max-width: 1180px) {
+    .ov {
+      --cols: minmax(0, 1.2fr) minmax(0, 2fr) 74px 64px 60px;
+    }
+    .model {
+      display: none;
+    }
+  }
+  @container ov (max-width: 720px) {
+    .ov {
+      --cols: minmax(0, 1fr) minmax(0, 1fr) 64px;
+    }
+    .ctx,
+    .since {
+      display: none;
+    }
+    .keys {
+      display: none;
+    }
   }
   @media (prefers-reduced-motion: reduce) {
-    .dots span,
-    .overview :global(.pulse),
-    .overview :global(.dot) {
+    .dots span {
       animation: none;
     }
   }

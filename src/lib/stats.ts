@@ -71,3 +71,29 @@ export function niceMax(max: number): number {
   const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
   return step * mag;
 }
+
+/** The axis of the chart in four steps, from 0 to its maximum (rounded by `niceMax`). */
+export function ticks(max: number): number[] {
+  return [0, 1, 2, 3, 4].map((i) => (max * i) / 4);
+}
+
+/**
+ * The palettes of the charts, validated on the panel of both themes (docs/TODO-2.0.md, « Graphiques »): the series of the
+ * tokens, and the models by rank. Past the fourth model, a grey: a fifth colour would not tell itself from the others.
+ */
+export const SERIES_COLORS = { input: '#4c88d3', cache: '#008b7a', output: '#9555b0' } as const;
+export const MODEL_COLORS = ['#ca723c', '#4682cc', '#339c6d', '#9555b0'] as const;
+export const OTHER_COLOR = 'rgba(var(--fg-rgb), 0.3)';
+
+export function modelColor(rank: number): string {
+  return MODEL_COLORS[rank] ?? OTHER_COLOR;
+}
+
+/**
+ * A figure cut into its number and what is written around it (« 28,1 » and « M », « $ » and « 42.17 »): the header of
+ * the statistics writes the unit smaller. A figure without a number (« — ») is all number.
+ */
+export function figureParts(s: string): { before: string; number: string; after: string } {
+  const m = /^(\D*?)(\d(?:[\d.,\s]*\d)?)(\D*)$/u.exec(s);
+  return m ? { before: m[1], number: m[2], after: m[3] } : { before: '', number: s, after: '' };
+}

@@ -5,7 +5,7 @@ export default {
   title: 'Statistiques',
   subtitle: "Agents lancés depuis l'app · {projects}, {agents}",
   // The period, and the word for one step of it (« Tokens par jour »).
-  range: { day: 'Jour', week: 'Semaine', month: 'Mois' },
+  range: { label: 'Période', day: 'Jour', week: 'Semaine', month: 'Mois' },
   unit: { day: 'jour', week: 'semaine', month: 'mois' },
   span: { day: '14 derniers jours', week: '12 dernières semaines', month: '12 derniers mois' },
   series: { input: 'Entrée', cache: 'Cache', output: 'Sortie' },
@@ -34,6 +34,8 @@ export default {
   noData: 'Aucune donnée sur la période.',
   closedProject: 'Projet fermé',
   byProject: { title: 'Par projet' },
+  /** A bar of « Par projet » or « Par modèle », in its tooltip. */
+  shareTip: '{tokens} tokens · {cost}',
   byModel: { title: 'Par modèle' },
   byAgent: { title: 'Par agent', tokens: 'Tokens', deleted: 'Agent supprimé' },
   byTicket: {
@@ -88,6 +90,8 @@ export default {
     thinking: 'Réfléchit',
     // What an agent is doing, by its status.
     status: { running: 'En cours', waiting: 'Question', idle: 'Prêt', done: 'Terminé', error: 'Erreur' },
+    /** A waiting agent whose first request is a permission. */
+    asksPermission: 'Demande une autorisation',
     allow: 'Autoriser',
     deny: 'Refuser',
     readInConversation: 'À lire dans la conversation avant de répondre.',

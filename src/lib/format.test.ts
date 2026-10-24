@@ -6,6 +6,7 @@ import {
   fBytes,
   fCountdown,
   fDate,
+  fDateShort,
   fDateTime,
   fDayMonth,
   fDur,
@@ -171,6 +172,9 @@ describe('fPct, fInt, fNum, fDate, fTime, fDateTime', () => {
     expect(fPct(41.6)).toBe('42 %');
     expect(spaces(fInt(1_234_567.4))).toBe('1 234 567');
     expect(fDate(day)).toBe('2 octobre 2026');
+    // The year only when it is not this one.
+    expect(fDateShort(day, new Date(2026, 11, 31).getTime())).toBe('2 octobre');
+    expect(fDateShort(day, new Date(2027, 0, 1).getTime())).toBe('2 octobre 2026');
     expect(fTime(day)).toBe('09:30');
     expect(fDateTime(day)).toBe('2 octobre 2026 à 09:30');
   });
@@ -278,6 +282,7 @@ describe('in English', () => {
   it('writes dates and times the American way', () => {
     const day = new Date(2026, 9, 2, 9, 30).getTime();
     expect(fDate(day)).toBe('October 2, 2026');
+    expect(fDateShort(day, day)).toBe('October 2');
     expect(spaces(fTime(day))).toBe('9:30 AM');
     expect(spaces(fDateTime(day))).toBe('October 2, 2026 at 9:30 AM');
   });

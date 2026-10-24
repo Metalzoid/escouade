@@ -88,6 +88,7 @@ const REDRAWN = {
     'src/components/modals/TestLaunchModal.svelte',
     'src/components/modals/ConfirmModal.svelte',
   ],
+  'lot 10 (ESC-82)': ['src/components/Overview.svelte', 'src/components/Stats.svelte'],
 };
 
 /**

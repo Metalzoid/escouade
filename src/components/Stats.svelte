@@ -1,22 +1,38 @@
 <script lang="ts">
   import { accountEngines, accountName, engineOfAccount } from '../lib/accounts';
   import { engineName } from '../lib/engines';
+  import Rich from '../lib/i18n/Rich.svelte';
+  import EngineMark from './EngineMark.svelte';
   import { readPref, writePref } from '../lib/prefs';
-  import { fDate, fInt, fPct, fTok, fUsd } from '../lib/format';
+  import { fDateShort, fInt, fPct, fTok } from '../lib/format';
   import { locale, t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { displayModel } from '../lib/models';
   import { app } from '../lib/state.svelte';
-  import { costHint, costKindOf, fCost, kpis, niceMax, ROWS, shown, type Range } from '../lib/stats';
+  import {
+    costHint,
+    costKindOf,
+    fCost,
+    figureParts,
+    kpis,
+    modelColor,
+    niceMax,
+    ROWS,
+    SERIES_COLORS,
+    shown,
+    ticks,
+    type Range,
+  } from '../lib/stats';
   import type { Bucket, EngineId, StatsView } from '../lib/types';
   import { tip } from '../lib/tip';
 
-  // Categorical palette validated for the dark surface (dataviz validator: all checks pass).
-  const SERIES = [
-    { key: 'input', color: '#3987e5' },
-    { key: 'cache', color: '#199e70' },
-    { key: 'output', color: '#d95926' },
-  ] as const;
+  // The series of the tokens, from the bottom of a column, in the palette validated in both themes.
+  const SERIES = (['input', 'cache', 'output'] as const).map((key) => ({ key, color: SERIES_COLORS[key] }));
+  /** The chart's height, its axis' room at the left, its labels' at the bottom, as the preview's. */
+  const H = 280;
+  const LEFT = 44;
+  const BOTTOM = 26;
+  const PLOT = H - BOTTOM - 8;
   const RANGES = ['day', 'week', 'month'] as const satisfies readonly Range[];
 
   let range = $state<Range>((readPref('statsRange') as Range) || 'day');
@@ -106,23 +122,95 @@
     return b.input + b.cache + b.output;
   }
 
+  /** The chart's width, as laid out (1 100 before it is). */
+  let chartWidth = $state(0);
+  const W = $derived(chartWidth || 1100);
+  const band = $derived(view ? (W - LEFT) / Math.max(1, view.buckets.length) : 1);
+  const y = (v: number) => 8 + PLOT - (v / max) * PLOT;
+
+  /**
+   * The segments of a column, from the bottom: 2 px of the surface between two of them, the top one rounded (a path).
+   * A series at 0 draws nothing.
+   */
+  function segments(b: Bucket, i: number) {
+    const bw = Math.min(24, band * 0.5);
+    const x0 = LEFT + band * i + band / 2 - bw / 2;
+    const parts = SERIES.filter((s) => b[s.key] > 0);
+    let acc = 0;
+    return parts.map((s, k) => {
+      const yb = y(acc) - (k ? 2 : 0);
+      acc += b[s.key];
+      const yt = y(acc);
+      const h = Math.max(0, yb - yt);
+      const r = Math.min(4, h);
+      const x1 = x0 + bw;
+      const d =
+        k === parts.length - 1 ? `M${x0} ${yb}V${yt + r}Q${x0} ${yt} ${x0 + r} ${yt}H${x1 - r}Q${x1} ${yt} ${x1} ${yt + r}V${yb}Z` : null;
+      return { key: s.key, color: s.color, x: x0, y: yt, w: bw, h, d };
+    });
+  }
+
+  /** The bars of a share: as long as its part of the first, its cost written, or its tokens when no cost is known. */
+  function bars<T extends { tokens: number; cost: number }>(list: T[]) {
+    const measure = (x: T) => (costKind === 'none' ? x.tokens : x.cost);
+    const top = Math.max(...list.map(measure), Number.MIN_VALUE);
+    return list.map((x) => ({
+      item: x,
+      width: `${Math.round((measure(x) / top) * 1000) / 10}%`,
+      value: costKind === 'none' ? fTok(x.tokens) : money(x.cost),
+      title: t('stats.shareTip', { tokens: fTok(x.tokens), cost: money(x.cost) }),
+    }));
+  }
+
+  const sub = $derived(
+    t('stats.subtitle', {
+      projects: t('common.count.projects', { count: projectCount }),
+      agents: t('common.count.agents', { count: agentCount }),
+    }),
+  );
+
   /** A change of the tokens as the header says it: the sign of a rise is written (« +49 % », « -50 % »). */
   const signed = (percent: number) => `${percent >= 0 ? '+' : ''}${fPct(percent)}`;
 </script>
 
-<div class="stats">
-  <div class="inner">
-    <div class="top">
-      <div class="title">
-        <span class="h">{t('stats.title')}</span>
-        <span class="s"
-          >{t('stats.subtitle', {
-            projects: t('common.count.projects', { count: projectCount }),
-            agents: t('common.count.agents', { count: agentCount }),
-          })}</span
-        >
-      </div>
-      <div style="flex:1"></div>
+<!-- A figure of the header: its unit smaller than its number, as the preview writes it. -->
+{#snippet figure(text: string)}
+  {@const f = figureParts(text)}
+  {#if f.before}<small>{f.before}</small>{/if}{f.number}{#if f.after}<small>{f.after}</small>{/if}
+{/snippet}
+
+<!-- « Par projet », « Par modèle »: a bar per share, in its colour. -->
+{#snippet shares(
+  id: string,
+  title: string,
+  list: { key: string; tokens: number; cost: number }[],
+  name: (key: string) => string,
+  color: (key: string, i: number) => string,
+)}
+  <section aria-labelledby={id}>
+    <div class="sec-h"><h2 {id}>{title}</h2></div>
+    {#if list.length}
+      <ul class="hbars">
+        {#each bars(list) as b, i (b.item.key)}
+          {@const n = name(b.item.key)}
+          <li class="hbar" use:tip={b.title}>
+            <span class="nm">{n}</span>
+            <span class="tr"><i style:width={b.width} style:background={color(b.item.key, i)}></i></span>
+            <span class="vl">{b.value}</span>
+          </li>
+        {/each}
+      </ul>
+    {:else}
+      <p class="none">{t('stats.noData')}</p>
+    {/if}
+  </section>
+{/snippet}
+
+<main class="stats" aria-labelledby="st-title">
+  <header class="head">
+    <h1 id="st-title">{t('stats.title')}</h1>
+    <span class="sub" use:tip={{ text: sub, cut: true }}>{sub}</span>
+    <div class="tools">
       {#if severalEngines}
         <select
           class="field picker"
@@ -145,689 +233,711 @@
           {#each choices as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
         </select>
       {/if}
-      <div class="ranges">
+      <div class="segmented ranges" role="tablist" aria-label={t('stats.range.label')}>
         {#each RANGES as r (r)}
-          <button class:on={range === r} onclick={() => (range = r)}>{t(`stats.range.${r}`)}</button>
+          <button role="tab" aria-selected={range === r} onclick={() => (range = r)}>{t(`stats.range.${r}`)}</button>
         {/each}
       </div>
     </div>
+  </header>
 
-    {#if view && k}
-      <div class="kpis">
-        <div class="kpi">
-          <span class="kl">{t('stats.kpi.tokens')}</span>
-          <span class="kv mono">{fTok(view.tokens)}</span>
-          <span class="ks">{k.delta !== null ? t('stats.kpi.spanDelta', { span: k.span, delta: signed(k.delta) }) : k.span}</span>
-        </div>
-        <div class="kpi">
-          <span class="kl">{t('stats.kpi.totalCost')}</span>
-          <span class="kv mono" use:tip={costHint(costKind)}
-            >{money(view.cost)}{#if costKind === 'estimated'}<span class="est">{t('stats.cost.estimated')}</span>{/if}</span
-          >
-          <span class="ks"
-            >{costKind === 'none'
-              ? '—'
-              : view.firstTs
-                ? t('stats.kpi.costSince', { amount: money(view.costAll), date: fDate(view.firstTs) })
-                : t('stats.kpi.costAllTime', { amount: money(view.costAll) })}</span
-          >
-        </div>
-        <div class="kpi">
-          <span class="kl">{t('stats.kpi.costPerPrompt')}</span>
-          <span class="kv mono">{k.costPerPrompt !== null ? money(k.costPerPrompt) : '—'}</span>
-          <span class="ks"
-            >{k.tokensPerPrompt !== null
-              ? t('stats.kpi.tokensPerPrompt', { tokens: fTok(k.tokensPerPrompt) })
-              : t('stats.kpi.noPrompt')}</span
-          >
-        </div>
-        <div class="kpi">
-          <span class="kl">{t('stats.kpi.prompts')}</span>
-          <span class="kv mono">{fInt(view.prompts)}</span>
-          <span class="ks">{t('stats.kpi.perUnit', { n: fInt(k.promptsPerBucket), unit })}</span>
-        </div>
-      </div>
-
-      <section class="card">
-        <div class="chead">
-          <span class="ct">{t('stats.chart.title', { unit })}</span>
-          <div style="flex:1"></div>
-          {#each SERIES as s (s.key)}
-            <span class="legend"><span class="sw" style:background={s.color}></span>{t(`stats.series.${s.key}`)}</span>
-          {/each}
-          <button class="btn ghost small" onclick={() => (table = !table)}
-            >{table ? t('stats.chart.showChart') : t('stats.chart.showTable')}</button
-          >
-        </div>
-        {#if table}
-          <table class="tbl mono">
-            <thead
-              ><tr
-                ><th>{t('stats.table.period')}</th><th>{t('stats.series.input')}</th><th>{t('stats.series.cache')}</th><th
-                  >{t('stats.series.output')}</th
-                ><th>{t('stats.table.total')}</th><th>{t('common.cost')}</th><th>{t('stats.table.prompts')}</th></tr
-              ></thead
+  <div class="scroll">
+    <div class="stw">
+      {#if view && k}
+        <div class="kpis">
+          <div class="kpi">
+            <span class="lb">{t('stats.kpi.tokens')}</span>
+            <span class="vl">{@render figure(fTok(view.tokens))}</span>
+            <span class="kd"
+              >{#if k.delta !== null}<Rich k="stats.kpi.spanDelta" span={k.span}
+                  >{#snippet delta()}<span class="up">{signed(k?.delta ?? 0)}</span>{/snippet}</Rich
+                >{:else}{k.span}{/if}</span
             >
-            <tbody>
-              {#each view.buckets as b (b.start)}
-                <tr>
-                  <td>{b.label}</td><td>{fTok(b.input)}</td><td>{fTok(b.cache)}</td><td>{fTok(b.output)}</td><td>{fTok(total(b))}</td><td
-                    >{money(b.cost)}</td
-                  ><td>{b.prompts}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        {:else}
-          <div class="chart" role="img" aria-label={t('stats.chart.label', { unit })}>
-            <div class="grid">
-              <div class="gl" style="top:0"><span>{fTok(max)}</span></div>
-              <div class="gl" style="top:50%"><span>{fTok(max / 2)}</span></div>
-              <div class="gl base"><span>0</span></div>
+          </div>
+          <div class="kpi">
+            <span class="lb">{t('stats.kpi.totalCost')}</span>
+            <span class="vl" use:tip={costHint(costKind)}
+              >{@render figure(money(view.cost))}{#if costKind === 'estimated'}<span class="est">{t('stats.cost.estimated')}</span
+                >{/if}</span
+            >
+            <span class="kd"
+              >{costKind === 'none'
+                ? '—'
+                : view.firstTs
+                  ? t('stats.kpi.costSince', { amount: money(view.costAll), date: fDateShort(view.firstTs, app.now) })
+                  : t('stats.kpi.costAllTime', { amount: money(view.costAll) })}</span
+            >
+          </div>
+          <div class="kpi">
+            <span class="lb">{t('stats.kpi.costPerPrompt')}</span>
+            <span class="vl">{@render figure(k.costPerPrompt !== null ? money(k.costPerPrompt) : '—')}</span>
+            <span class="kd"
+              >{k.tokensPerPrompt !== null
+                ? t('stats.kpi.tokensPerPrompt', { tokens: fTok(k.tokensPerPrompt) })
+                : t('stats.kpi.noPrompt')}</span
+            >
+          </div>
+          <div class="kpi">
+            <span class="lb">{t('stats.kpi.prompts')}</span>
+            <span class="vl">{@render figure(fInt(view.prompts))}</span>
+            <span class="kd">{t('stats.kpi.perUnit', { n: fInt(k.promptsPerBucket), unit })}</span>
+          </div>
+        </div>
+
+        <section aria-labelledby="st-chart">
+          <div class="sec-h">
+            <h2 id="st-chart">{t('stats.chart.title', { unit })}</h2>
+            <div class="legend" aria-hidden="true">
+              {#each SERIES as s (s.key)}<span><i style:background={s.color}></i>{t(`stats.series.${s.key}`)}</span>{/each}
             </div>
-            <div class="bars">
-              {#each view.buckets as b, i (b.start)}
-                <div
-                  class="col"
-                  role="presentation"
-                  onmouseenter={() => (hover = i)}
-                  onmouseleave={() => (hover = null)}
-                  class:dim={hover !== null && hover !== i}
-                >
-                  <div class="stack" style:height="{(total(b) / max) * 100}%">
-                    {#each [...SERIES].reverse() as s (s.key)}
-                      {@const v = b[s.key]}
-                      {#if v > 0}
-                        <div class="seg" style:flex-grow={v} style:background={s.color}></div>
+            <button class="btn" onclick={() => (table = !table)}>{table ? t('stats.chart.showChart') : t('stats.chart.showTable')}</button>
+          </div>
+          {#if table}
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>{t('stats.table.period')}</th>
+                  <th class="r">{t('stats.series.input')}</th>
+                  <th class="r">{t('stats.series.cache')}</th>
+                  <th class="r">{t('stats.series.output')}</th>
+                  <th class="r">{t('stats.table.total')}</th>
+                  <th class="r">{t('common.cost')}</th>
+                  <th class="r">{t('stats.table.prompts')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each view.buckets as b (b.start)}
+                  <tr>
+                    <td class="ttl">{b.label}</td>
+                    <td class="r">{fTok(b.input)}</td>
+                    <td class="r">{fTok(b.cache)}</td>
+                    <td class="r">{fTok(b.output)}</td>
+                    <td class="r">{fTok(total(b))}</td>
+                    <td class="r">{money(b.cost)}</td>
+                    <td class="r">{b.prompts}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          {:else}
+            <div class="chart" bind:clientWidth={chartWidth}>
+              <svg viewBox="0 0 {W} {H}" role="img" aria-label={t('stats.chart.label', { unit })}>
+                {#each ticks(max) as v (v)}
+                  <line class="gl" x1={LEFT} x2={W} y1={y(v)} y2={y(v)} />
+                  <text class="ax" x={LEFT - 10} y={y(v) + 4} text-anchor="end">{v ? fTok(v) : '0'}</text>
+                {/each}
+                {#each view.buckets as b, i (b.start)}
+                  {@const cx = LEFT + band * i + band / 2}
+                  <g
+                    class="col"
+                    class:on={hover === i}
+                    role="presentation"
+                    onmouseenter={() => (hover = i)}
+                    onmouseleave={() => (hover = null)}
+                  >
+                    <rect class="col-hit" x={cx - band / 2 + 2} y="8" width={Math.max(0, band - 4)} height={PLOT} rx="6" />
+                    {#each segments(b, i) as s (s.key)}
+                      {#if s.d}
+                        <path class="seg" d={s.d} fill={s.color} />
+                      {:else}
+                        <rect class="seg" x={s.x} y={s.y} width={s.w} height={s.h} fill={s.color} />
                       {/if}
                     {/each}
-                  </div>
-                  {#if hover === i}
-                    <div class="tip" class:left={i > view.buckets.length / 2}>
-                      <div class="tt">{b.label}</div>
-                      {#each SERIES as s (s.key)}
-                        <div class="tr">
-                          <span class="sw" style:background={s.color}></span>{t(`stats.series.${s.key}`)}<span class="tv mono"
-                            >{fTok(b[s.key])}</span
-                          >
-                        </div>
-                      {/each}
-                      <div class="tr total">{t('stats.table.total')}<span class="tv mono">{fTok(total(b))}</span></div>
-                      <div class="tr">{t('common.cost')}<span class="tv mono">{money(b.cost)}</span></div>
-                      <div class="tr">{t('stats.table.prompts')}<span class="tv mono">{b.prompts}</span></div>
-                    </div>
-                  {/if}
-                </div>
-              {/each}
-            </div>
-          </div>
-          <div class="labels">
-            {#each view.buckets as b (b.start)}<span class="mono">{b.label}</span>{/each}
-          </div>
-        {/if}
-      </section>
-
-      <div class="split">
-        <section class="card">
-          <span class="ct">{t('stats.byProject.title')}</span>
-          {#each view.byProject as s (s.key)}
-            {@const p = projectOf(s.key)}
-            <div class="share">
-              <span class="sname"><span class="psw" style:background={p.color}></span>{p.name}</span>
-              <div class="track">
+                    <text class="ax x" x={cx} y={H - 6} text-anchor="middle">{b.label}</text>
+                  </g>
+                {/each}
+              </svg>
+              {#if hover !== null && view.buckets[hover]}
+                {@const b = view.buckets[hover]}
                 <div
-                  class="fill"
-                  style:width="{(s.tokens / Math.max(1, view.byProject[0].tokens)) * 100}%"
-                  style:background={p.color}
-                ></div>
+                  class="tip"
+                  style:left="{Math.max(0, Math.min(W - 190, LEFT + band * hover + band / 2 + 18))}px"
+                  style:top="{Math.max(0, y(total(b)) - 20)}px"
+                >
+                  <b>{b.label}</b>
+                  {#each SERIES as s (s.key)}
+                    <span><i style:background={s.color}></i>{t(`stats.series.${s.key}`)}<em>{fTok(b[s.key])}</em></span>
+                  {/each}
+                  <span class="tot">{t('stats.table.total')}<em>{fTok(total(b))}</em></span>
+                  <span>{t('common.cost')}<em>{money(b.cost)}</em></span>
+                  <span>{t('stats.table.prompts')}<em>{b.prompts}</em></span>
+                </div>
+              {/if}
+            </div>
+          {/if}
+        </section>
+
+        <div class="two">
+          {@render shares(
+            'st-projects',
+            t('stats.byProject.title'),
+            view.byProject,
+            (key) => projectOf(key).name,
+            (key) => projectOf(key).color,
+          )}
+          {@render shares(
+            'st-models',
+            t('stats.byModel.title'),
+            view.byModel,
+            (key) => displayModel(key),
+            (_, i) => modelColor(i),
+          )}
+        </div>
+
+        {#if severalEngines}
+          <!-- The harnesses side by side: the choice of a harness does not narrow them, it marks its own line. Each one's cost is
+               told as it gives it: an estimate is marked so, none is « — ». -->
+          <section aria-labelledby="stats-engines">
+            <div class="sec-h"><h2 id="stats-engines">{t('stats.byEngine.title')}</h2></div>
+            {#if view.byEngine.length}
+              <table class="tbl" aria-labelledby="stats-engines">
+                <thead>
+                  <tr>
+                    <th class="w-name">{t('stats.byEngine.engine')}</th>
+                    <th class="r">{t('stats.byEngine.tokens')}</th>
+                    <th class="r w-cost">{t('common.cost')}</th>
+                    <th class="r">{t('stats.byEngine.turns')}</th>
+                    <th class="r">{t('stats.byEngine.agents')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each view.byEngine as e (e.engine)}
+                    {@const kind = costKindOf([e.engine])}
+                    <tr class:on={e.engine === engineFilter} aria-current={e.engine === engineFilter ? 'true' : undefined}>
+                      <td class="ttl"><EngineMark engine={e.engine as EngineId} always full /></td>
+                      <td class="r">{fTok(e.tokens)}</td>
+                      <td class="r" use:tip={costHint(kind)}
+                        >{fCost(e.cost, kind)}{#if kind === 'estimated'}<span class="est">{t('stats.cost.estimated')}</span>{/if}</td
+                      >
+                      <td class="r">{fInt(e.turns)}</td>
+                      <td class="r">{fInt(e.agents)}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            {:else}
+              <p class="none">{t('stats.noData')}</p>
+            {/if}
+          </section>
+        {/if}
+
+        {#if several}
+          <!-- The accounts side by side: the choice above does not narrow them, it marks its own line. -->
+          <section aria-labelledby="stats-accounts">
+            <div class="sec-h"><h2 id="stats-accounts">{t('stats.byAccount.title')}</h2></div>
+            {#if view.byAccount.length}
+              <table class="tbl" aria-labelledby="stats-accounts">
+                <thead>
+                  <tr>
+                    <th class="w-name">{t('stats.byAccount.account')}</th>
+                    <th class="r">{t('stats.byAccount.tokens')}</th>
+                    <th class="r">{t('common.cost')}</th>
+                    <th class="r">{t('stats.byAccount.turns')}</th>
+                    <th class="r">{t('stats.byAccount.agents')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each view.byAccount as a (a.account)}
+                    {@const name = accountLabel(a.account)}
+                    <tr class:on={a.account === filter} aria-current={a.account === filter ? 'true' : undefined}>
+                      <td class="ttl cut" use:tip={{ text: name, cut: true }}>{name}</td>
+                      <td class="r">{fTok(a.tokens)}</td>
+                      <td class="r">{money(a.cost)}</td>
+                      <td class="r">{fInt(a.turns)}</td>
+                      <td class="r">{fInt(a.agents)}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            {:else}
+              <p class="none">{t('stats.noData')}</p>
+            {/if}
+          </section>
+        {/if}
+
+        <section aria-labelledby="stats-agents">
+          <div class="sec-h"><h2 id="stats-agents">{t('stats.byAgent.title')}</h2></div>
+          {#if view.byAgent.length}
+            <table class="tbl" aria-labelledby="stats-agents">
+              <thead>
+                <tr>
+                  <th class="w-name">{t('common.agent')}</th>
+                  <th class="w-proj">{t('common.project')}</th>
+                  <th class="r">{t('stats.byAgent.tokens')}</th>
+                  <th class="r">{t('common.cost')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each shown(view.byAgent, allAgents) as a (a.agentId)}
+                  {@const p = projectOf(a.projectId)}
+                  <tr>
+                    <td class="ttl cut" use:tip={{ text: a.name, cut: true }}>{a.name ?? t('stats.byAgent.deleted')}</td>
+                    <td class="cut"><span class="psw" style:background={p.color}></span>{p.name}</td>
+                    <td class="r">{fTok(a.tokens)}</td>
+                    <td class="r">{money(a.cost)}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+            {#if view.byAgent.length > ROWS}
+              <div class="more">
+                <button class="btn ghost" aria-expanded={allAgents} onclick={() => (allAgents = !allAgents)}
+                  >{allAgents ? t('stats.showLess') : t('stats.showAll')}</button
+                >
+                {#if !allAgents}<span class="none">{t('stats.shownOf', { shown: ROWS, total: fInt(view.byAgent.length) })}</span>{/if}
               </div>
-              <span class="stok mono">{fTok(s.tokens)}</span>
-              <span class="scost mono">{money(s.cost)}</span>
-            </div>
+            {/if}
           {:else}
-            <span class="none">{t('stats.noData')}</span>
-          {/each}
+            <p class="none">{t('stats.noData')}</p>
+          {/if}
         </section>
-        <section class="card">
-          <span class="ct">{t('stats.byModel.title')}</span>
-          {#each view.byModel as s (s.key)}
-            <div class="share">
-              <span class="sname">{displayModel(s.key)}</span>
-              <div class="track"><div class="fill" style:width="{(s.tokens / Math.max(1, view.byModel[0].tokens)) * 100}%"></div></div>
-              <span class="stok mono">{fTok(s.tokens)}</span>
-              <span class="scost mono">{money(s.cost)}</span>
-            </div>
-          {:else}
-            <span class="none">{t('stats.noData')}</span>
-          {/each}
-        </section>
-      </div>
 
-      {#if severalEngines}
-        <!-- The harnesses side by side: the choice of a harness does not narrow them, it marks its own line. Each one's cost is
-             told as it gives it: an estimate is marked so, none is « — ». -->
-        <section class="card">
-          <span class="ct" id="stats-engines">{t('stats.byEngine.title')}</span>
-          {#if view.byEngine.length}
-            <table class="list" aria-labelledby="stats-engines">
+        <section aria-labelledby="stats-tickets">
+          <div class="sec-h"><h2 id="stats-tickets">{t('stats.byTicket.title')}</h2></div>
+          {#if view.byTicket.length}
+            <table class="tbl" aria-labelledby="stats-tickets">
               <thead>
-                <tr
-                  ><th class="w-name">{t('stats.byEngine.engine')}</th><th class="num">{t('stats.byEngine.tokens')}</th><th class="num"
-                    >{t('common.cost')}</th
-                  ><th class="num">{t('stats.byEngine.turns')}</th><th class="num">{t('stats.byEngine.agents')}</th></tr
-                >
+                <tr>
+                  <th class="w-key">{t('stats.byTicket.ticket')}</th>
+                  <th>{t('stats.byTicket.name')}</th>
+                  <th class="r w-loops">{t('stats.byTicket.loops')}</th>
+                  <th class="r w-period">{t('stats.byTicket.periodCost')}</th>
+                </tr>
               </thead>
               <tbody>
-                {#each view.byEngine as e (e.engine)}
-                  {@const kind = costKindOf([e.engine])}
-                  <tr class:on={e.engine === engineFilter} aria-current={e.engine === engineFilter ? 'true' : undefined}>
-                    <td class="cut strong">{engineName(e.engine as EngineId)}</td>
-                    <td class="num mono">{fTok(e.tokens)}</td>
-                    <td class="num mono" use:tip={costHint(kind)}
-                      >{fCost(e.cost, kind)}{#if kind === 'estimated'}<span class="est">{t('stats.cost.estimated')}</span>{/if}</td
-                    >
-                    <td class="num mono">{fInt(e.turns)}</td>
-                    <td class="num mono">{fInt(e.agents)}</td>
+                {#each shown(view.byTicket, allTickets) as x (x.id)}
+                  <tr>
+                    <td class="key">{x.key}</td>
+                    <td class="ttl cut" use:tip={{ text: x.title, cut: true }}>{x.title}</td>
+                    <td class="r">{t('common.count.loops', { count: x.loops })}</td>
+                    <td class="r">{money(x.cost)}</td>
                   </tr>
                 {/each}
               </tbody>
             </table>
-          {:else}
-            <span class="none">{t('stats.noData')}</span>
-          {/if}
-        </section>
-      {/if}
-
-      {#if several}
-        <!-- The accounts side by side: the choice above does not narrow them, it marks its own line. -->
-        <section class="card">
-          <span class="ct" id="stats-accounts">{t('stats.byAccount.title')}</span>
-          {#if view.byAccount.length}
-            <table class="list" aria-labelledby="stats-accounts">
-              <thead>
-                <tr
-                  ><th class="w-name">{t('stats.byAccount.account')}</th><th class="num">{t('stats.byAccount.tokens')}</th><th class="num"
-                    >{t('common.cost')}</th
-                  ><th class="num">{t('stats.byAccount.turns')}</th><th class="num">{t('stats.byAccount.agents')}</th></tr
+            {#if view.byTicket.length > ROWS}
+              <div class="more">
+                <button class="btn ghost" aria-expanded={allTickets} onclick={() => (allTickets = !allTickets)}
+                  >{allTickets ? t('stats.showLess') : t('stats.showAll')}</button
                 >
-              </thead>
-              <tbody>
-                {#each view.byAccount as a (a.account)}
-                  {@const name = accountLabel(a.account)}
-                  <tr class:on={a.account === filter} aria-current={a.account === filter ? 'true' : undefined}>
-                    <td class="cut strong" use:tip={{ text: name, cut: true }}>{name}</td>
-                    <td class="num mono">{fTok(a.tokens)}</td>
-                    <td class="num mono">{money(a.cost)}</td>
-                    <td class="num mono">{fInt(a.turns)}</td>
-                    <td class="num mono">{fInt(a.agents)}</td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
+                {#if !allTickets}<span class="none">{t('stats.shownOf', { shown: ROWS, total: fInt(view.byTicket.length) })}</span>{/if}
+              </div>
+            {/if}
           {:else}
-            <span class="none">{t('stats.noData')}</span>
+            <p class="none">{t('stats.byTicket.none')}</p>
           {/if}
         </section>
+      {:else if error}
+        <p class="none">{t('stats.unavailable', { error })}</p>
+      {:else}
+        <p class="none">{t('common.loading')}</p>
       {/if}
-
-      <section class="card">
-        <span class="ct" id="stats-agents">{t('stats.byAgent.title')}</span>
-        {#if view.byAgent.length}
-          <table class="list" aria-labelledby="stats-agents">
-            <thead>
-              <tr
-                ><th class="w-name">{t('common.agent')}</th><th class="w-proj">{t('common.project')}</th><th class="num"
-                  >{t('stats.byAgent.tokens')}</th
-                ><th class="num">{t('common.cost')}</th></tr
-              >
-            </thead>
-            <tbody>
-              {#each shown(view.byAgent, allAgents) as a (a.agentId)}
-                {@const p = projectOf(a.projectId)}
-                <tr>
-                  <td class="cut strong" use:tip={{ text: a.name, cut: true }}>{a.name ?? t('stats.byAgent.deleted')}</td>
-                  <td class="cut"><span class="psw" style:background={p.color}></span>{p.name}</td>
-                  <td class="num mono">{fTok(a.tokens)}</td>
-                  <td class="num mono">{money(a.cost)}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-          {#if view.byAgent.length > ROWS}
-            <div class="more">
-              <button class="btn ghost small" aria-expanded={allAgents} onclick={() => (allAgents = !allAgents)}
-                >{allAgents ? t('stats.showLess') : t('stats.showAll')}</button
-              >
-              {#if !allAgents}<span class="none">{t('stats.shownOf', { shown: ROWS, total: fInt(view.byAgent.length) })}</span>{/if}
-            </div>
-          {/if}
-        {:else}
-          <span class="none">{t('stats.noData')}</span>
-        {/if}
-      </section>
-
-      <section class="card">
-        <span class="ct" id="stats-tickets">{t('stats.byTicket.title')}</span>
-        {#if view.byTicket.length}
-          <table class="list" aria-labelledby="stats-tickets">
-            <thead>
-              <tr
-                ><th class="w-key">{t('stats.byTicket.ticket')}</th><th>{t('stats.byTicket.name')}</th><th class="num w-loops"
-                  >{t('stats.byTicket.loops')}</th
-                ><th class="num w-period">{t('stats.byTicket.periodCost')}</th></tr
-              >
-            </thead>
-            <tbody>
-              {#each shown(view.byTicket, allTickets) as x (x.id)}
-                <tr>
-                  <td class="mono">{x.key}</td>
-                  <td class="cut strong" use:tip={{ text: x.title, cut: true }}>{x.title}</td>
-                  <td class="num">{t('common.count.loops', { count: x.loops })}</td>
-                  <td class="num mono">{money(x.cost)}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-          {#if view.byTicket.length > ROWS}
-            <div class="more">
-              <button class="btn ghost small" aria-expanded={allTickets} onclick={() => (allTickets = !allTickets)}
-                >{allTickets ? t('stats.showLess') : t('stats.showAll')}</button
-              >
-              {#if !allTickets}<span class="none">{t('stats.shownOf', { shown: ROWS, total: fInt(view.byTicket.length) })}</span>{/if}
-            </div>
-          {/if}
-        {:else}
-          <span class="none">{t('stats.byTicket.none')}</span>
-        {/if}
-      </section>
-    {:else if error}
-      <div class="loading">{t('stats.unavailable', { error })}</div>
-    {:else}
-      <div class="loading">{t('common.loading')}</div>
-    {/if}
+    </div>
   </div>
-</div>
+</main>
 
 <style>
+  /* Full frame, as the preview's `#stats`: its parts fold by its own width, not the window's. */
   .stats {
+    container: st / inline-size;
     flex: 1;
-    overflow: auto;
-  }
-  .inner {
-    max-width: 1180px;
-    margin: 0 auto;
-    padding: 30px 36px 40px;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 18px;
   }
-  .top {
+  .head {
+    min-height: 64px;
+    flex: none;
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     gap: 16px;
+    min-width: 0;
+    padding: 0 24px 0 28px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
   }
-  .title {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+  h1 {
+    flex: none;
+    margin: 0;
+    font-size: 17px;
+    font-weight: 640;
+    letter-spacing: -0.02em;
   }
-  .h {
-    font-size: 24px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-  }
-  .s {
+  .sub {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--muted);
     font-size: 12.5px;
-    color: var(--muted);
   }
-  .est {
-    margin-left: 6px;
-    padding: 1px 6px;
-    border-radius: var(--r-sm);
-    background: var(--elev2);
-    color: var(--muted);
-    font-family: var(--font-ui, inherit);
-    font-size: 10.5px;
-    font-weight: 500;
-    letter-spacing: 0;
-    vertical-align: middle;
+  .tools {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
   }
   .picker {
-    height: 38px;
-    max-width: 220px;
-    background: var(--panel);
-    font-size: 13px;
+    max-width: 200px;
   }
   .ranges {
-    display: flex;
-    gap: 2px;
-    padding: 3px;
-    border-radius: var(--r);
-    background: var(--panel);
-    border: 1px solid var(--line);
+    display: grid;
+    gap: 0;
+    grid-template-columns: repeat(3, 1fr);
+    width: 240px;
   }
   .ranges button {
-    height: 30px;
-    padding: 0 16px;
-    border: none;
-    border-radius: var(--r-sm);
-    background: transparent;
-    color: var(--muted);
+    padding: 0;
     font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
   }
-  .ranges button.on {
-    background: var(--elev2);
-    color: var(--text);
+  .scroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
+  .stw {
+    display: grid;
+    gap: 34px;
+    width: min(1180px, 100% - 56px);
+    margin: 0 auto;
+    padding: 24px 0 40px;
+  }
+  .stw > * {
+    min-width: 0;
   }
   .kpis {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1px var(--line);
   }
   .kpi {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 18px 18px 16px;
-    border-radius: var(--r);
-    background: var(--panel);
-    border: 1px solid var(--line);
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding: 16px 20px 15px;
   }
-  .kl {
-    font-size: 12px;
+  .kpi + .kpi {
+    border-left: 1px solid var(--line);
+  }
+  .lb {
     color: var(--muted);
+    font-size: 12px;
+    font-weight: 500;
   }
-  .kv {
+  .vl {
     font-size: 26px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
+    font-weight: 620;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+    white-space: nowrap;
   }
-  .ks {
-    font-size: 11.5px;
-    color: var(--dim);
+  .vl small {
+    color: var(--muted);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0;
   }
-  .card {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    padding: 20px 22px;
-    border-radius: var(--r);
-    background: var(--panel);
-    border: 1px solid var(--line);
+  .kd {
+    min-width: 0;
+    color: var(--muted);
+    font-size: 12px;
+    text-wrap: pretty;
   }
-  .chead {
+  .kd .up {
+    color: var(--soft);
+    font-weight: 550;
+  }
+  .est {
+    margin-left: 8px;
+    padding: 1px 6px;
+    border-radius: 5px;
+    background: rgba(var(--fg-rgb), 0.06);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 550;
+    letter-spacing: 0;
+    vertical-align: middle;
+  }
+  .sec-h {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
+    min-height: 28px;
+    margin-bottom: 14px;
   }
-  .ct {
+  h2 {
+    margin: 0;
     font-size: 14px;
-    font-weight: 700;
+    font-weight: 620;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
   }
   .legend {
     display: flex;
+    gap: 14px;
+    margin-left: auto;
+    color: var(--soft);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .legend span {
+    display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
-    color: var(--muted);
   }
-  .sw {
+  .legend i {
     width: 10px;
     height: 10px;
-    border-radius: 2px;
-    flex: none;
+    border-radius: 3px;
   }
-  .small {
-    height: 26px;
-    font-size: 11.5px;
-    padding: 0 10px;
+  .sec-h .btn {
+    height: 28px;
   }
   .chart {
     position: relative;
-    height: 240px;
-    margin-top: 4px;
-    padding-left: 56px;
   }
-  .grid {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
+  .chart svg {
+    display: block;
+    width: 100%;
+    height: 280px;
+    overflow: visible;
   }
   .gl {
-    position: absolute;
-    left: 0;
-    right: 0;
-    border-top: 1px dashed var(--line);
+    stroke: rgba(var(--fg-rgb), 0.07);
+    stroke-width: 1;
   }
-  .gl.base {
-    bottom: 0;
-    border-top: 1px solid var(--line2);
+  .ax {
+    fill: var(--muted);
+    font: 11px var(--font);
+    font-variant-numeric: tabular-nums;
   }
-  .gl span {
-    position: absolute;
-    left: 0;
-    top: -8px;
-    font-family: var(--mono);
-    font-size: 10.5px;
-    color: var(--dim);
+  .col-hit {
+    fill: transparent;
   }
-  .gl.base span {
-    top: -16px;
-  }
-  .bars {
-    position: relative;
-    height: 100%;
-    display: flex;
-    align-items: flex-end;
-    gap: 8px;
-  }
-  .col {
-    position: relative;
-    flex: 1;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    transition: opacity 0.1s;
-  }
-  .col.dim {
-    opacity: 0.55;
-  }
-  .stack {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-height: 0;
-    border-radius: 4px 4px 0 0;
-    overflow: hidden;
-  }
+  /* The column takes the pointer, not its segments. */
   .seg {
-    flex-basis: 0;
-    min-height: 1px;
+    pointer-events: none;
+  }
+  .col:hover .col-hit,
+  .col.on .col-hit {
+    fill: rgba(var(--fg-rgb), 0.04);
   }
   .tip {
     position: absolute;
-    top: 0;
-    left: calc(50% + 10px);
-    z-index: 5;
-    min-width: 180px;
+    z-index: 3;
+    display: grid;
+    gap: 4px;
+    min-width: 170px;
     padding: 10px 12px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line2);
-    background: var(--elev);
-    /* The look of the other tooltips (.tip-box of app.css), on a card that follows the bars. */
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
-    font-size: 11.5px;
-    pointer-events: none;
-  }
-  .tip.left {
-    left: auto;
-    right: calc(50% + 10px);
-  }
-  .tt {
-    font-weight: 700;
-    margin-bottom: 6px;
-  }
-  .tr {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--muted);
-    line-height: 1.7;
-  }
-  .tr.total {
-    color: var(--text);
-    border-top: 1px solid var(--line);
-    margin-top: 2px;
-    padding-top: 2px;
-  }
-  .tv {
-    margin-left: auto;
-    color: var(--text);
-  }
-  .labels {
-    display: flex;
-    gap: 8px;
-    padding-left: 56px;
-    margin-top: -6px;
-  }
-  .labels span {
-    flex: 1;
-    text-align: center;
-    font-size: 10.5px;
-    color: var(--dim);
-  }
-  .tbl {
-    width: 100%;
-    border-collapse: collapse;
+    border-radius: 10px;
+    background: var(--raise-2);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 12px 32px -8px rgba(0, 0, 0, calc(0.7 * var(--shade)));
     font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+    animation: tip-in 0.15s;
   }
-  .tbl th,
-  .tbl td {
-    padding: 6px 10px;
-    text-align: right;
-    border-bottom: 1px solid var(--line);
+  @keyframes tip-in {
+    from {
+      opacity: 0;
+    }
   }
-  .tbl th:first-child,
-  .tbl td:first-child {
-    text-align: left;
-  }
-  .tbl th {
-    color: var(--muted);
+  .tip b {
+    margin-bottom: 2px;
     font-weight: 600;
   }
-  /* The lists of agents and of tickets: names are cut, never wrapped, so that a line stays a line. */
-  .list {
+  .tip span {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--soft);
+  }
+  .tip em {
+    margin-left: auto;
+    padding-left: 14px;
+    color: var(--text);
+    font-style: normal;
+  }
+  .tip i {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+  }
+  .tip .tot {
+    margin-top: 3px;
+    padding-top: 6px;
+    border-top: 1px solid var(--line);
+  }
+  .two {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 48px;
+  }
+  .two > section {
+    min-width: 0;
+  }
+  .hbars {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .hbar {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr) 68px;
+    align-items: center;
+    gap: 14px;
+    font-size: 12.5px;
+  }
+  .hbar .nm {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--soft);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .hbar .tr {
+    height: 10px;
+  }
+  .hbar .tr i {
+    display: block;
+    height: 100%;
+    border-radius: 0 4px 4px 0;
+  }
+  .hbar .vl {
+    color: var(--text);
+    font-size: inherit;
+    font-weight: 550;
+    letter-spacing: 0;
+    line-height: inherit;
+    text-align: right;
+  }
+  .tbl {
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
     font-size: 12.5px;
   }
-  .list th,
-  .list td {
-    padding: 6px 10px;
-    text-align: left;
+  .tbl th {
+    height: 34px;
+    padding: 0 10px;
     border-bottom: 1px solid var(--line);
-  }
-  .list th {
-    font-size: 12px;
-    font-weight: 600;
     color: var(--muted);
-  }
-  .list .num {
-    width: 90px;
-    text-align: right;
-  }
-  .list .w-name {
-    width: 34%;
-  }
-  .list .w-proj {
-    width: 26%;
-  }
-  .list .w-key {
-    width: 84px;
-  }
-  .list .w-loops {
-    width: 110px;
-  }
-  .list .w-period {
-    width: 150px;
-  }
-  .list td.num {
     font-size: 11.5px;
-  }
-  .list .cut {
+    font-weight: 550;
+    text-align: left;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .tbl td {
+    height: 38px;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--line);
+    color: var(--soft);
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
-  .list .strong {
-    font-weight: 600;
+  .tbl .r {
+    text-align: right;
   }
-  /* The account the other views are for. */
-  .list tr.on .strong {
-    color: var(--accent);
+  .tbl td.key {
+    color: var(--muted);
+    font-weight: 550;
   }
-  .list .psw {
+  .tbl td.ttl {
+    color: var(--text);
+  }
+  .tbl .cut {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* The account, the harness the other views are for. */
+  .tbl tr.on td.ttl {
+    color: var(--p-ink);
+    font-weight: 590;
+  }
+  .tbl .w-name {
+    width: 34%;
+  }
+  .tbl .w-proj {
+    width: 26%;
+  }
+  .tbl .w-key {
+    width: 84px;
+  }
+  .tbl .w-loops {
+    width: 110px;
+  }
+  .tbl .w-period {
+    width: 170px;
+  }
+  .tbl .w-cost {
+    width: 130px;
+  }
+  .psw {
     display: inline-block;
+    width: 9px;
+    height: 9px;
     margin-right: 8px;
+    border-radius: 3px;
   }
   .more {
     display: flex;
     align-items: center;
     gap: 12px;
+    margin-top: 10px;
   }
-  .split {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-  }
-  .share {
-    display: grid;
-    grid-template-columns: 150px minmax(0, 1fr) 70px 70px;
-    align-items: center;
-    gap: 12px;
-    font-size: 12.5px;
-  }
-  .sname {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .psw {
-    width: 9px;
-    height: 9px;
-    border-radius: 3px;
-    flex: none;
-  }
-  .track {
-    height: 6px;
-    border-radius: 3px;
-    background: var(--elev2);
-  }
-  .fill {
-    height: 100%;
-    border-radius: 3px;
-    background: var(--accent);
-  }
-  .stok {
-    font-size: 11.5px;
+  .none {
+    margin: 0;
     color: var(--muted);
-    text-align: right;
-  }
-  .scost {
-    font-size: 11.5px;
-    text-align: right;
-  }
-  .none,
-  .loading {
-    color: var(--dim);
     font-size: 12.5px;
+  }
+  /* As the preview under 1 240 px of window: smaller figures. */
+  @container st (max-width: 1180px) {
+    .kpi .vl {
+      font-size: 22px;
+    }
+  }
+  /* Narrower: the figures two by two, the bars one above the other; then the figures one by one. */
+  @container st (max-width: 900px) {
+    .kpis {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .kpi:nth-child(3) {
+      border-left: none;
+    }
+    .kpi:nth-child(n + 3) {
+      border-top: 1px solid var(--line);
+    }
+    .two {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 34px;
+    }
+    .sub {
+      display: none;
+    }
+  }
+  @container st (max-width: 620px) {
+    .kpis {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .kpi + .kpi {
+      border-left: none;
+      border-top: 1px solid var(--line);
+    }
+    .legend {
+      display: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tip {
+      animation: none;
+    }
   }
 </style>

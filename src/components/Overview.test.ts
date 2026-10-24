@@ -116,7 +116,7 @@ describe('Overview', () => {
     app.now = NOW;
     render(Overview);
     const busy = screen.getByRole('listitem', { name: /refacto-auth/ });
-    expect(busy).toHaveTextContent('▸ DEM-1 · boucle 2/5');
+    expect(busy.querySelector('.tag')?.textContent).toBe('DEM-1 · boucle 2/5');
     expect(busy).toHaveTextContent('Lit src/db.ts');
     expect(busy).toHaveTextContent('Opus');
     expect(busy).toHaveTextContent('≈ 1,24 $');
@@ -552,7 +552,9 @@ describe('Overview in English', () => {
     });
     const { container } = render(Overview);
     expect(screen.getByText('2 projects · 6 agents · 2 running')).toBeInTheDocument();
-    expect(container.querySelector('.keys')).toHaveTextContent('↑↓ choose · Enter open · Esc back');
+    expect(container.querySelector('.keys')).toHaveTextContent('choose · Enter open · Esc back');
+    // The arrows drawn, not written.
+    expect(container.querySelectorAll('.keys kbd [data-icon]')).toHaveLength(2);
     expect(container.querySelector('.cols')).toHaveTextContent('AgentActivityModelCostContextSince');
     expect(screen.getByRole('region', { name: 'Waiting for your answer' })).toBeInTheDocument();
     const row = (name: RegExp) => screen.getByRole('listitem', { name });
@@ -565,7 +567,7 @@ describe('Overview in English', () => {
     expect(row(/lint/)).toHaveTextContent('Ready');
     expect(row(/oops/)).toHaveTextContent('Error');
     expect(row(/thinker/)).toHaveTextContent('Thinking');
-    expect(row(/api-docs/)).toHaveTextContent('Question');
+    expect(row(/api-docs/)).toHaveTextContent('Asks for a permission');
     // Said to a screen reader, apart from the value.
     expect(row(/refacto-auth/).querySelector('.model')).toHaveTextContent('Model Opus');
     expect(row(/refacto-auth/).querySelector('.ctx')?.textContent).toBe('Context 34%');
@@ -615,6 +617,56 @@ describe('Overview in English', () => {
     expect(screen.getByRole('listitem', { name: /refacto-auth/ })).toHaveTextContent(
       'Too long to read here: read it and answer in the conversation.',
     );
+  });
+});
+
+describe('Overview: a turn over with work still going on (choice 25)', () => {
+  const plan = (over: Record<string, unknown>) =>
+    ({ source: null, tasks: [], agents: [], launched: 0, workflows: [], bgTasks: [], ...over }) as never;
+
+  it('says « Attend » with an empty ring instead of « Terminé », and why in its tooltip', () => {
+    fakeBackend();
+    resetApp({
+      agents: [
+        agent({
+          id: 'a1',
+          status: 'done',
+          plan: plan({ bgTasks: [{ id: 'b1', kind: 'command', title: 'Attendre la CI', status: 'running', startedAt: 1 }] }),
+        }),
+        agent({ id: 'a2', name: 'docs-api', status: 'done', createdAt: 2 }),
+      ],
+    });
+    app.now = NOW;
+    render(Overview);
+    const waits = screen.getByRole('listitem', { name: /refacto-auth/ });
+    expect(waits.querySelector('.act')).toHaveTextContent('Attend');
+    expect(waits.querySelector('.act [data-tip]')?.getAttribute('data-tip')).toContain('1 tâche de fond en cours');
+    expect(waits.querySelector('.state-dot')).toHaveClass('awaits');
+    const done = screen.getByRole('listitem', { name: /docs-api/ });
+    expect(done.querySelector('.act')).toHaveTextContent('Terminé');
+    expect(done.querySelector('.state-dot')).not.toHaveClass('awaits');
+  });
+
+  it('says when Claude Code wakes it up, when that is all there is', () => {
+    fakeBackend();
+    resetApp({
+      agents: [
+        agent({ status: 'done', plan: plan({ wakes: [{ id: 'w', kind: 'loop', at: NOW + 42 * MIN, recurring: false, durable: false }] }) }),
+      ],
+    });
+    app.now = NOW;
+    render(Overview);
+    expect(screen.getByRole('listitem', { name: /refacto-auth/ }).querySelector('.act')).toHaveTextContent(/^Réveil /);
+  });
+
+  it('says what a waiting agent asks: a permission, or a question', () => {
+    fakeBackend();
+    resetApp({
+      agents: [asking([permission()], { id: 'a1' }), asking([question()], { id: 'a2', name: 'tests-e2e', lastActivity: 5 })],
+    });
+    render(Overview);
+    expect(screen.getByRole('listitem', { name: /refacto-auth/ }).querySelector('.act')).toHaveTextContent('Demande une autorisation');
+    expect(screen.getByRole('listitem', { name: /tests-e2e/ }).querySelector('.act')).toHaveTextContent('Question');
   });
 });
 

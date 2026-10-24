@@ -89,6 +89,12 @@ export function fDate(ts: number): string {
   return new Date(ts).toLocaleDateString(intlLocale(), { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
+/** A day and its month in words, its year only when it is not that of `now`: « 14 août », « 2 octobre 2025 ». */
+export function fDateShort(ts: number, now: number): string {
+  const year = new Date(ts).getFullYear() !== new Date(now).getFullYear();
+  return new Date(ts).toLocaleDateString(intlLocale(), { day: 'numeric', month: 'long', ...(year ? { year: 'numeric' } : {}) });
+}
+
 /** A day and its month in figures, for a date close enough to need no year: « 10/10 » (« 02/10 » in French, « 10/02 » in English). */
 export function fDayMonth(ts: number): string {
   return new Date(ts).toLocaleDateString(intlLocale(), { day: '2-digit', month: '2-digit' });
