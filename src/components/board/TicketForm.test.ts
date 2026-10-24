@@ -193,7 +193,7 @@ describe('TicketForm', () => {
       show();
       expect(screen.getByRole('dialog', { name: 'Nouveau ticket' })).toHaveAttribute('aria-modal', 'true');
       // Wide enough for long text, tall enough for the description: the dialog's own size, not the column's.
-      expect(screen.getByRole('dialog')).toHaveStyle({ width: '760px' });
+      expect(screen.getByRole('dialog').style.getPropertyValue('--w')).toBe('760px');
       expect(screen.getByRole('dialog')).toHaveClass('tall');
     });
 

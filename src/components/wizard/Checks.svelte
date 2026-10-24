@@ -2,6 +2,7 @@
   import { t } from '../../lib/i18n';
   import { CONTROL_STEP, type ControlId, type StepId } from '../../lib/wizard';
   import type { WizardForm } from '../../lib/wizard-form.svelte';
+  import Icon from '../Icon.svelte';
 
   // What would keep the way of working from working, each with its correction: those of one step (`step`), or all of
   // them (the summary, which also says when there is none).
@@ -29,82 +30,66 @@
 {#if shown.length}
   <ul class="checks">
     {#each shown as id (id)}
-      <li class="check" data-check={id}>
-        <span class="ic" aria-hidden="true">!</span>
+      <li class="ck bad" data-check={id}>
+        <Icon name="shield" size={14} />
         <div class="tx">
-          <span class="tt">{t(`wizard.checks.${id}.title`, { branch: form.config.board.target })}</span>
-          <span class="td">{t(`wizard.checks.${id}.desc`)}</span>
+          <b>{t(`wizard.checks.${id}.title`, { branch: form.config.board.target })}</b>
+          <p>{t(`wizard.checks.${id}.desc`)}</p>
         </div>
         {#if FIXES[id]}
-          <button class="btn fix" disabled={busy} onclick={() => fix(id)}>{t(FIXES[id] as 'wizard.checks.noCommit.fix')}</button>
+          <button class="btn" disabled={busy} onclick={() => fix(id)}>{t(FIXES[id] as 'wizard.checks.noCommit.fix')}</button>
         {/if}
       </li>
     {/each}
   </ul>
 {:else if !step}
-  <p class="check ok"><span class="ic" aria-hidden="true">✓</span>{t('wizard.checks.ok')}</p>
+  <p class="ck ok"><Icon name="check-c" size={14} /><b>{t('wizard.checks.ok')}</b></p>
 {/if}
 
 <style>
+  /* What would keep the way of working from working, in red with its correction; or that nothing would (the preview's
+     `.ck`). */
   .checks {
-    list-style: none;
+    display: grid;
+    gap: 8px;
     margin: 0;
     padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    list-style: none;
   }
-  .check {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin: 0;
-    padding: 10px 12px;
-    border-radius: var(--r-sm);
-    border: 1px solid color-mix(in oklch, var(--del) 45%, transparent);
-    background: var(--bg);
-  }
-  .check.ok {
-    border-color: var(--line);
-    font-weight: 600;
-    font-size: 12.5px;
-  }
-  .ic {
-    width: 20px;
-    height: 20px;
-    flex: none;
-    border-radius: 50%;
+  .ck {
     display: grid;
-    place-items: center;
-    font-size: 11px;
-    font-weight: 800;
-    background: color-mix(in oklch, var(--del) 25%, transparent);
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 10px;
+    margin: 0;
+    padding: 11px 13px;
+    border-radius: 10px;
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .ck > :global(.icon) {
+    margin-top: 2px;
+  }
+  .ck.bad {
+    background: oklch(from var(--del) l c h / 0.06);
+    box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.35);
+  }
+  .ck.bad > :global(.icon) {
     color: var(--del);
   }
-  .ok .ic {
-    background: color-mix(in oklch, var(--ok) 22%, transparent);
-    color: var(--ok);
+  .ck.ok > :global(.icon) {
+    color: var(--add);
   }
   .tx {
-    flex: 1;
     min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
   }
-  .tt {
-    font-weight: 700;
-    font-size: 12.5px;
+  b {
+    font-weight: 600;
   }
-  .td {
+  .tx p {
+    margin: 2px 0 0;
     color: var(--muted);
-    font-size: 11.5px;
-    line-height: 1.45;
+    font-size: 12px;
+    line-height: 1.5;
     text-wrap: pretty;
-  }
-  .fix {
-    height: 26px;
-    padding: 0 10px;
-    font-size: 11.5px;
   }
 </style>

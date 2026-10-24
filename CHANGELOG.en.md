@@ -18,6 +18,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Terminals and launches are redrawn: a command’s log tells its state, since when it runs, its command, its folder and the worktree it runs in, and the notification of a command that crashed has “View the log”. Terminals follow the light or dark theme at once, and the “Test” window tells who wrote the commands before they run, then each step with its time.
 - The overview and the statistics are redrawn: the agents waiting for your answer first, answered on the spot, then each project’s, and “Awaiting” for an agent whose turn is over but not its work. The statistics show four figures, each day’s tokens in columns with their detail on hover, and the cost by project, by model and by harness, readable in both themes.
 - In the Codex or Copilot CLI view, an amber band tells when the harness asks whether it may trust the agent’s folder; the OpenCode view reminds that Escouade keeps the conversation’s thread.
+- Windows are redrawn: the “New project” assistant and its rail of steps, “Add an account” with the harnesses in segments and the sign-in in a frame, “Open a PR” telling which uncommitted files are left out, and the notes of an update. Buttons draw their icon, and menus have the preview’s entries.
 
 ### Fixes
 

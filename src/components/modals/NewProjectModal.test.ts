@@ -60,7 +60,7 @@ describe('NewProjectModal', () => {
     ).toEqual(['1 Départ', '2 Worktrees', '3 Lancement', '4 Kanban', '5 Compte et commit', '6 Intégrations facultatif', '7 Récapitulatif']);
     expect(screen.getByText('Étape 1 sur 7')).toBeInTheDocument();
     // The project copied comes first, when there is one to copy; the recommended setup is chosen.
-    expect(screen.getAllByRole('radio').map((r) => r.querySelector('.ct')?.textContent)).toEqual([
+    expect(screen.getAllByRole('radio').map((r) => r.querySelector('b')?.textContent)).toEqual([
       'Copier la configuration d’un projet',
       'Configuration recommandée',
       'Partir de zéro',
@@ -396,8 +396,10 @@ describe('NewProjectModal in English', () => {
     expect(screen.getByText('Folder')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Browse…' })).toBeInTheDocument();
     expect(screen.getByText('Choose the project folder')).toBeInTheDocument();
-    expect(screen.getByText('Tab preview')).toBeInTheDocument();
-    expect(screen.getByText('new-project')).toBeInTheDocument();
+    expect(screen.getByText('Color')).toBeInTheDocument();
+    expect(
+      screen.getByText('Where the settings of new-project come from: each next step can be reviewed, and skipped.'),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Color 1' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Steps' })).toHaveTextContent(
       /Start.*Worktrees.*Launch.*Kanban.*Account and commits.*Integrations.*optional.*Summary/,

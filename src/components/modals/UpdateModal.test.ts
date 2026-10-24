@@ -21,6 +21,9 @@ async function unsaved(n: number) {
   for (let i = 0; i < n; i++) buffers.edit((await buffers.open('p1', 'project', `f${i}.ts`)).key, 'b\n');
 }
 
+/** The notice that says `text` (its subject in bold, the rest after it). */
+const noticeWith = (text: string) => screen.getByText((_, el) => !!el?.classList.contains('w-notice') && el.textContent === text);
+
 const restartButton = () => screen.getByRole('button', { name: 'Redémarrer maintenant' });
 
 describe('UpdateModal', () => {
@@ -68,7 +71,7 @@ describe('UpdateModal', () => {
     fakeBackend(files);
     await unsaved(2);
     render(UpdateModal, { version: '1.6.0', notes: NOTES });
-    expect(screen.getByText('Enregistre d’abord tes fichiers : 2 fichiers ne sont pas enregistrés.')).toBeInTheDocument();
+    expect(noticeWith('Enregistre d’abord tes fichiers : 2 fichiers ne sont pas enregistrés.')).toBeInTheDocument();
     expect(restartButton()).toBeDisabled();
   });
 
@@ -76,7 +79,7 @@ describe('UpdateModal', () => {
     fakeBackend(files);
     await unsaved(1);
     render(UpdateModal, { version: '1.6.0', notes: NOTES });
-    expect(screen.getByText('Enregistre d’abord tes fichiers : 1 fichier n’est pas enregistré.')).toBeInTheDocument();
+    expect(noticeWith('Enregistre d’abord tes fichiers : 1 fichier n’est pas enregistré.')).toBeInTheDocument();
   });
 
   it('says what a restart does to the agents at work or waiting for an answer, and stays possible', () => {
@@ -91,7 +94,7 @@ describe('UpdateModal', () => {
     fakeBackend();
     render(UpdateModal, { version: '1.6.0', notes: NOTES });
     expect(
-      screen.getByText(
+      noticeWith(
         '2 agents travaillent ou attendent ta réponse : leur tour en cours sera interrompu. Les agents de ticket reprennent d’eux-mêmes ; les autres attendent ton prochain message.',
       ),
     ).toBeInTheDocument();
@@ -103,7 +106,7 @@ describe('UpdateModal', () => {
     fakeBackend();
     render(UpdateModal, { version: '1.6.0', notes: NOTES });
     expect(
-      screen.getByText(
+      noticeWith(
         '1 agent travaille ou attend ta réponse : son tour en cours sera interrompu. S’il travaille sur un ticket, il reprend de lui-même ; sinon, il attend ton prochain message.',
       ),
     ).toBeInTheDocument();
@@ -151,11 +154,11 @@ describe('UpdateModal in English', () => {
     fakeBackend(files);
     await unsaved(1);
     const { unmount } = render(UpdateModal, { version: '1.7.0', notes: NOTES });
-    expect(screen.getByText('Save your files first: 1 file isn’t saved.')).toBeInTheDocument();
+    expect(noticeWith('Save your files first: 1 file isn’t saved.')).toBeInTheDocument();
     unmount();
     await unsaved(2);
     render(UpdateModal, { version: '1.7.0', notes: NOTES });
-    expect(screen.getByText('Save your files first: 2 files aren’t saved.')).toBeInTheDocument();
+    expect(noticeWith('Save your files first: 2 files aren’t saved.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Restart now' })).toBeDisabled();
   });
 
@@ -164,7 +167,7 @@ describe('UpdateModal in English', () => {
     fakeBackend();
     const { unmount } = render(UpdateModal, { version: '1.7.0', notes: NOTES });
     expect(
-      screen.getByText(
+      noticeWith(
         '2 agents are working or waiting for your answer: their current turn will be interrupted. Ticket agents pick up again by themselves; the others wait for your next message.',
       ),
     ).toBeInTheDocument();
@@ -172,7 +175,7 @@ describe('UpdateModal in English', () => {
     resetApp({ agents: [agent({ id: 'a1', status: 'waiting' })] });
     render(UpdateModal, { version: '1.7.0', notes: NOTES });
     expect(
-      screen.getByText(
+      noticeWith(
         '1 agent is working or waiting for your answer: its current turn will be interrupted. If it’s working on a ticket, it picks up again by itself; otherwise it waits for your next message.',
       ),
     ).toBeInTheDocument();

@@ -4,6 +4,7 @@
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import type { PrProposal } from '../../lib/types';
+  import Icon from '../Icon.svelte';
   import Modal from './Modal.svelte';
 
   // « Ouvrir une PR » on an ordinary agent's branch (ESC-64): the title and the description the model of the written
@@ -64,100 +65,126 @@
     }
   }
 
+  /** « agent · head → base », the branches in mono (the order the language gives). */
+  const scope = $derived(
+    proposal
+      ? t('prs.modal.scope', { agent: agent?.name ?? '', head: '{head}', base: '{base}' })
+          .split(/({head}|{base})/)
+          .map((part) =>
+            part === '{head}'
+              ? { mono: true, text: proposal!.head }
+              : part === '{base}'
+                ? { mono: true, text: base || proposal!.base }
+                : { mono: false, text: part },
+          )
+      : [],
+  );
+
   function close() {
     if (!opening) app.modal = null;
   }
 </script>
 
-<Modal title={t('prs.modal.title', { word, host: proposal?.host ?? '…' })} width={620} onclose={close}>
+<Modal title={t('prs.modal.title', { word, host: proposal?.host ?? '…' })} width={760} onclose={close}>
+  {#snippet lead()}<span class="lead"><Icon name="pr" /></span>{/snippet}
   {#if proposal}
-    <p class="scope mono">{t('prs.modal.scope', { agent: agent?.name ?? '', head: proposal.head, base: base || proposal.base })}</p>
+    <p class="scope">
+      {#each scope as part, i (i)}{#if part.mono}<span class="mono">{part.text}</span>{:else}{part.text}{/if}{/each}
+    </p>
   {/if}
   {#if failure}
     <p class="error" role="alert">{failure}</p>
   {:else}
-    <div class="grp">
+    <div class="w-fld">
       <label class="lab" for="pr-title">{t('prs.modal.titleLabel')}</label>
       <!-- svelte-ignore a11y_autofocus -->
       <input id="pr-title" class="field" bind:value={title} disabled={!proposal} autofocus />
     </div>
-    <div class="grp">
+    <div class="w-fld">
       <label class="lab" for="pr-body">{t('prs.modal.bodyLabel')}</label>
-      <textarea id="pr-body" class="field mono body" rows="9" bind:value={body} disabled={!proposal}></textarea>
+      <textarea id="pr-body" class="field ta" rows="7" bind:value={body} disabled={!proposal}></textarea>
     </div>
-    <div class="row">
-      <div class="grp base">
+    <div class="two">
+      <div class="w-fld">
         <label class="lab" for="pr-base">{t('prs.modal.baseLabel')}</label>
-        <input id="pr-base" class="field mono" bind:value={base} disabled={!proposal} />
+        <input id="pr-base" class="field mono base" spellcheck="false" bind:value={base} disabled={!proposal} />
       </div>
       {#if proposal?.canDraft}
-        <label class="opt"><input type="checkbox" bind:checked={draft} />{t('prs.modal.draft')}</label>
+        <label class="w-tick draft"
+          ><input type="checkbox" bind:checked={draft} /><span class="tick-box" aria-hidden="true"><Icon name="check" size={12} /></span>{t(
+            'prs.modal.draft',
+          )}</label
+        >
       {/if}
     </div>
-    <p class="note" aria-live="polite">
-      {proposing ? t('prs.modal.proposing') : proposal?.fallback ? t('prs.modal.fallback') : ''}
-    </p>
+    {#if proposing || proposal?.fallback}
+      <p class="said" aria-live="polite">{proposing ? t('prs.modal.proposing') : t('prs.modal.fallback')}</p>
+    {/if}
     {#if proposal?.uncommitted}
-      <p class="note">{t('prs.modal.uncommitted', { count: proposal.uncommitted, word })}</p>
+      <p class="w-notice"><Icon name="info" /><span>{t('prs.modal.uncommitted', { count: proposal.uncommitted, word })}</span></p>
     {/if}
     {#if refused}<p class="error" role="alert">{refused}</p>{/if}
   {/if}
   {#snippet footer()}
-    <button class="btn ghost" disabled={opening} onclick={close}>{t('common.cancel')}</button>
     {#if !failure}
-      <button class="btn" disabled={proposing || opening} onclick={propose}>{t('prs.modal.regenerate')}</button>
+      <button class="btn regen" disabled={proposing || opening} onclick={propose}
+        ><Icon name="sparkle" size={14} />{t('prs.modal.regenerate')}</button
+      >
+    {/if}
+    <button class="btn" disabled={opening} onclick={close}>{t('common.cancel')}</button>
+    {#if !failure}
       <button class="btn primary" disabled={!proposal || !title.trim() || opening || proposing} onclick={open}
-        >{opening ? t('prs.modal.opening') : t('prs.modal.submit')}</button
+        ><Icon name="push" size={14} />{opening ? t('prs.modal.opening') : t('prs.modal.submit')}</button
       >
     {/if}
   {/snippet}
 </Modal>
 
 <style>
-  .scope {
-    margin: -8px 0 0;
-    font-size: 12.5px;
+  .lead {
+    display: inline-flex;
     color: var(--muted);
+  }
+  .scope {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12.5px;
     overflow-wrap: anywhere;
   }
-  .grp {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+  .scope .mono {
+    font-size: 0.92em;
   }
-  .lab {
+  /* The description as the preview's: in a well, in mono, the colour of code. */
+  .ta {
+    min-height: 150px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    color: var(--code-fg);
+    font-family: var(--mono);
     font-size: 12px;
-    font-weight: 600;
-    color: var(--muted);
-  }
-  .body {
-    height: auto;
-    padding: 8px 12px;
+    line-height: 1.55;
     resize: vertical;
-    font-size: 12.5px;
-    line-height: 1.5;
   }
-  .row {
-    display: flex;
-    align-items: flex-end;
-    gap: 16px;
+  .two {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: end;
+    gap: 12px;
   }
   .base {
-    flex: 1;
-  }
-  .opt {
-    display: flex;
-    align-items: center;
-    gap: 8px;
     height: 32px;
-    font-size: 13px;
-    cursor: pointer;
-  }
-  .note {
-    margin: 0;
-    min-height: 1em;
     font-size: 12px;
+  }
+  .draft {
+    height: 32px;
+  }
+  .said {
+    margin: 0;
     color: var(--muted);
+    font-size: 12px;
+  }
+  .regen {
+    margin-right: auto;
   }
   .error {
     margin: 0;

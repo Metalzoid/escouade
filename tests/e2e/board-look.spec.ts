@@ -458,6 +458,8 @@ test.describe('in English', () => {
     }
     await page.getByRole('button', { name: 'New ticket' }).click();
     const dialog = page.getByRole('dialog', { name: 'New ticket' });
+    // Measured once it has risen (the windows' rise scales them a little, ESC-83).
+    await dialog.evaluate((e) => Promise.all(e.getAnimations().map((a) => a.finished)));
     for (const size of SIZES) {
       await page.setViewportSize(size);
       await expect(dialog.getByRole('group', { name: 'Harness' })).toBeVisible();

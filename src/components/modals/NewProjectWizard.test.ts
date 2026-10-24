@@ -66,6 +66,20 @@ async function typePath(path = 'C:\\code\\atlas') {
 const next = () => userEvent.click(screen.getByRole('button', { name: 'Suivant' }));
 const step = () => document.querySelector('.page')?.getAttribute('data-step');
 
+/** The project copied: the name of its chip pressed, among the projects offered. */
+const copied = () => {
+  const group = screen.getByRole('group', { name: 'Projet copié' });
+  return {
+    offered: within(group)
+      .getAllByRole('button')
+      .map((b) => b.textContent),
+    pressed: within(group)
+      .getAllByRole('button')
+      .filter((b) => b.getAttribute('aria-pressed') === 'true')
+      .map((b) => b.textContent),
+  };
+};
+
 describe('the new project’s assistant', () => {
   beforeEach(() => {
     setLang('fr');
@@ -91,7 +105,7 @@ describe('the new project’s assistant', () => {
     render(NewProjectModal);
     await typePath();
     await userEvent.click(screen.getByRole('radio', { name: /^Copier la configuration/ }));
-    expect(screen.getByRole('combobox', { name: 'Projet copié' })).toHaveValue('web');
+    expect(copied().pressed).toEqual(['web-shop']);
     // The folders of its commands are asked for.
     await waitFor(() => expect(be.called('inspect_setup').at(-1)?.args.dirs).toEqual(['api', 'web']));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
@@ -126,7 +140,7 @@ describe('the new project’s assistant', () => {
     await next();
     expect(step()).toBe('kanban');
     // develop is not in the new folder: its current branch instead.
-    expect(screen.getByRole('button', { name: '⎇ main' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^main$/ })).toHaveAttribute('aria-pressed', 'true');
     await userEvent.click(screen.getByRole('button', { name: 'Passer' }));
     await userEvent.click(screen.getByRole('button', { name: 'Passer' }));
     await userEvent.click(screen.getByRole('button', { name: 'Passer' }));
@@ -203,7 +217,7 @@ describe('the new project’s assistant', () => {
     const file = await screen.findByRole('radio', { name: /^Réglages de .escouade.yml/ });
     // Chosen by itself, first, and says what it read and that its commands will wait.
     await waitFor(() => expect(file).toHaveAttribute('aria-checked', 'true'));
-    const starts = screen.getAllByRole('radio').map((r) => r.querySelector('.ct')?.textContent);
+    const starts = screen.getAllByRole('radio').map((r) => r.querySelector('b')?.textContent);
     expect(starts.slice(0, 3)).toEqual(['Réglages de .escouade.yml', 'Copier la configuration d’un projet', 'Configuration recommandée']);
     expect(file).toHaveTextContent(
       'Réglages lus dans .escouade.yml, le fichier partagé du dépôt : 4 réglages. Ses commandes attendront ton accord une fois le projet créé.',
@@ -245,13 +259,7 @@ describe('the new project’s assistant', () => {
     const { unmount } = render(NewProjectModal);
     await typePath();
     await userEvent.click(screen.getByRole('radio', { name: /^Copier la configuration/ }));
-    const source = screen.getByRole('combobox', { name: 'Projet copié' });
-    expect(source).toHaveValue('p1');
-    expect(
-      within(source)
-        .getAllByRole('option')
-        .map((o) => o.textContent),
-    ).toEqual(['demo-api']);
+    expect(copied()).toEqual({ offered: ['demo-api'], pressed: ['demo-api'] });
     expect(screen.getByText('Un projet privé n’est pas proposé : rien d’un projet privé ne passe à un autre.')).toBeInTheDocument();
     // Nothing of it is asked for in the new folder: the folders checked are those of the project copied.
     await waitFor(() => expect(be.called('inspect_setup').length).toBeGreaterThan(0));
@@ -344,7 +352,7 @@ describe('the new project’s assistant', () => {
     await userEvent.click(screen.getByRole('button', { name: /Kanban/ }));
     expect(await screen.findByText('La branche cible develop est introuvable')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Prendre la branche courante' }));
-    expect(screen.getByRole('button', { name: '⎇ main' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^main$/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText('La branche cible develop est introuvable')).not.toBeInTheDocument();
   });
 
@@ -395,11 +403,11 @@ describe('the new project’s assistant', () => {
     await typePath();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
     await next();
-    await userEvent.click(screen.getByRole('button', { name: '✦ Remplir automatiquement' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remplir automatiquement' }));
     expect(be.called('suggest_worktree_steps_at')[0].args).toEqual({ path: 'C:\\code\\atlas' });
     expect(await screen.findByDisplayValue('pnpm i')).toBeInTheDocument();
     await next();
-    await userEvent.click(screen.getByRole('button', { name: '✦ Remplir automatiquement' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remplir automatiquement' }));
     expect(await screen.findByDisplayValue('pnpm dev')).toBeInTheDocument();
     expect(be.called('suggest_run_commands_at')[0].args).toEqual({ path: 'C:\\code\\atlas' });
   });
@@ -622,7 +630,7 @@ describe('the assistant opened again on an existing project', () => {
     });
     render(NewProjectModal);
     await userEvent.click(screen.getByRole('radio', { name: /^Copier la configuration/ }));
-    expect(screen.getByRole('combobox', { name: 'Projet copié' })).toHaveValue('web');
+    expect(copied().pressed).toEqual(['web-shop']);
     await waitFor(() => expect(be.called('inspect_setup').length).toBeGreaterThan(0));
     await next();
     expect(within(screen.getByRole('region', { name: 'Kanban' })).getByText(/branche présente/)).toBeInTheDocument();

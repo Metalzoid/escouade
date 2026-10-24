@@ -49,7 +49,7 @@ test('a project made by copying another one’s settings runs its ticket with th
   await setup.getByRole('textbox', { name: 'Commande' }).fill('git rev-parse HEAD > setup-ran.txt');
   await setup.getByRole('button', { name: 'Suivant', exact: true }).click();
   // Launch: a command in a folder the second project will not have.
-  await setup.getByRole('button', { name: '+ Ajouter une commande' }).click();
+  await setup.getByRole('button', { name: 'Ajouter une commande', exact: true }).click();
   const command = setup.getByRole('group', { name: 'Commande 1' });
   await command.getByRole('textbox', { name: 'Nom' }).fill('web');
   await command.getByRole('textbox', { name: 'Commande' }).fill('npm run dev');
@@ -59,7 +59,7 @@ test('a project made by copying another one’s settings runs its ticket with th
   await expect(command.getByText(/introuvable/)).toHaveCount(0);
   await setup.getByRole('button', { name: 'Suivant', exact: true }).click();
   // Kanban: rebase into develop, the agent resolving conflicts.
-  await setup.getByRole('button', { name: '⎇ develop' }).click();
+  await setup.getByRole('button', { name: 'develop', exact: true }).click();
   await setup.getByRole('group', { name: 'Stratégie' }).getByRole('button', { name: 'Rebase' }).click();
   await setup
     .getByRole('group', { name: 'En cas de conflit' })
@@ -87,7 +87,7 @@ test('a project made by copying another one’s settings runs its ticket with th
   await dialog.getByPlaceholder('C:\\chemin\\vers\\le\\projet').fill(atlas);
   await expect(dialog.getByText(/Dépôt git détecté/)).toBeVisible();
   await dialog.getByRole('radio', { name: /^Copier la configuration/ }).click();
-  await expect(dialog.getByRole('combobox', { name: 'Projet copié' })).toHaveValue(/.+/);
+  await expect(dialog.getByRole('group', { name: 'Projet copié' }).locator('[aria-pressed="true"]')).toHaveCount(1);
   await dialog.getByRole('button', { name: 'Suivant', exact: true }).click();
   // What is copied, by group, checked in the new folder.
   await expect(dialog.getByRole('heading', { name: /Réglages copiés · demo-api/ })).toBeVisible();
@@ -103,7 +103,7 @@ test('a project made by copying another one’s settings runs its ticket with th
   // Straight to the summary, the rest skipped: what was copied stays.
   await dialog.getByRole('button', { name: 'Passer' }).click();
   await dialog.getByRole('button', { name: 'Passer' }).click();
-  await expect(dialog.getByRole('button', { name: '⎇ main' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(dialog.getByRole('button', { name: 'main', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await dialog.getByRole('button', { name: /Récapitulatif/ }).click();
   await expect(dialog.getByText('merge rebase → branche courante')).toBeVisible();
   await dialog.getByRole('switch', { name: 'Créer un premier agent' }).click();

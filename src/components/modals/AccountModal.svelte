@@ -10,6 +10,7 @@
   import { disposeTerminal, mountTerminal, openAccountLogin } from '../../lib/terminals';
   import type { SettingsTab } from '../../lib/settings.svelte';
   import type { Account, EngineId, MachineAccount, ShareMode } from '../../lib/types';
+  import Icon from '../Icon.svelte';
   import Modal from './Modal.svelte';
 
   // « Ajouter un compte… » (ESC-128): for a harness (`engine`, else the one picked here), the machine's account (its
@@ -161,7 +162,9 @@
   }
 
   /** The harness picked changed: what it has to share, and its machine's account. */
-  function pickEngine() {
+  function pickEngine(id: EngineId) {
+    if (id === engine) return;
+    engine = id;
     loadShareable();
     loadMachine();
   }
@@ -326,15 +329,15 @@
 </script>
 
 {#snippet item(n: string)}
-  <label class="item"><input type="checkbox" name={n} bind:checked={checked[n]} /><span class="mono">{n}</span></label>
+  <label class="w-chip pick"><input type="checkbox" name={n} bind:checked={checked[n]} /><span class="mono">{n}</span></label>
 {/snippet}
 
 {#snippet actions()}
   {#if !account && kind === 'machine'}
-    <button class="btn ghost" onclick={close}>{t('common.cancel')}</button>
+    <button class="btn" onclick={close}>{t('common.cancel')}</button>
     <button class="btn primary" disabled={busy || !offersMachine} onclick={addMachine}>{t('accounts.modal.addMachine')}</button>
   {:else if !account}
-    <button class="btn ghost" onclick={close}>{t('common.cancel')}</button>
+    <button class="btn" onclick={close}>{t('common.cancel')}</button>
     <button class="btn primary" disabled={busy || !name.trim()} onclick={create}>{t('accounts.modal.create')}</button>
   {:else}
     <button class="btn primary" onclick={close}>{t('accounts.modal.done')}</button>
@@ -342,57 +345,67 @@
 {/snippet}
 
 <!-- Signing in, only its × closes it: the account stays, not signed in. -->
-<Modal {title} width={account ? 820 : 600} onclose={close} footer={!account || signedIn ? actions : undefined}>
-  {#if reservedTo}<p class="note" role="note">{t('accounts.modal.reservedTo', { name: reservedTo.name })}</p>{/if}
+<Modal {title} width={760} onclose={close} footer={!account || signedIn ? actions : undefined}>
+  {#if reservedTo}<p class="w-notice" role="note">
+      <Icon name="lock" /><span>{t('accounts.modal.reservedTo', { name: reservedTo.name })}</span>
+    </p>{/if}
   {#if !account}
-    {#if engines.length > 1}
-      <div class="field-row">
-        <label class="k" for="account-harness">{t('accounts.modal.harness')}</label>
-        <select id="account-harness" class="field name" bind:value={engine} onchange={pickEngine}>
-          {#each engines as e (e.id)}<option value={e.id}>{e.name}</option>{/each}
-        </select>
+    {#if engines.length > 1 || kind === 'new'}
+      <div class="top" class:alone={engines.length < 2 || kind !== 'new'}>
+        {#if engines.length > 1}
+          <div class="w-fld">
+            <span class="lab" id="account-harness">{t('accounts.modal.harness')}</span>
+            <div class="segmented harness" role="radiogroup" aria-labelledby="account-harness">
+              {#each engines as e (e.id)}
+                <button role="radio" aria-checked={engine === e.id} class:on={engine === e.id} onclick={() => pickEngine(e.id)}
+                  >{e.name}</button
+                >
+              {/each}
+            </div>
+          </div>
+        {/if}
+        {#if kind === 'new'}
+          <div class="w-fld">
+            <label class="lab" for="account-name">{t('accounts.modal.name')}</label>
+            <!-- svelte-ignore a11y_autofocus -->
+            <input
+              id="account-name"
+              class="field name"
+              spellcheck="false"
+              autofocus
+              placeholder={t('accounts.modal.namePlaceholder')}
+              bind:value={name}
+              onkeydown={(e) => e.key === 'Enter' && create()}
+            />
+          </div>
+        {/if}
       </div>
     {/if}
     <!-- The machine's account or a new one (ESC-128). -->
-    <div class="kinds" role="radiogroup" aria-label={t('accounts.modal.kind')}>
-      <label class="kind" class:off={!offersMachine}>
-        <input type="radio" name="account-kind" value="machine" bind:group={kind} disabled={!offersMachine} />
-        <span class="what">
-          <span class="title">{t('accounts.modal.machine')}</span>
-          <span class="hint">{machineSays(machine)}</span>
-          {#if machine?.dir}<span class="hint">{t('accounts.modal.machineHint', { path: tildify(machine.dir) })}</span>{/if}
-        </span>
-      </label>
-      <label class="kind">
-        <input type="radio" name="account-kind" value="new" bind:group={kind} />
-        <span class="what">
-          <span class="title">{t('accounts.modal.newAccount')}</span>
-          <span class="hint">{t('accounts.modal.newHint')}</span>
-        </span>
-      </label>
+    <div class="w-fld">
+      <span class="lab" id="account-kind">{t('accounts.modal.kind')}</span>
+      <div class="w-radios" role="radiogroup" aria-labelledby="account-kind">
+        <button class="w-radio" role="radio" aria-checked={kind === 'machine'} disabled={!offersMachine} onclick={() => (kind = 'machine')}>
+          <i class="dot"></i>
+          <span><b>{t('accounts.modal.machine')}</b><span class="d">{machineSays(machine)}</span></span>
+        </button>
+        <button class="w-radio" role="radio" aria-checked={kind === 'new'} onclick={() => (kind = 'new')}>
+          <i class="dot"></i>
+          <span><b>{t('accounts.modal.newAccount')}</b><span class="d">{t('accounts.modal.newHint')}</span></span>
+        </button>
+      </div>
+      {#if kind === 'machine' && machine?.dir}<span class="help">{t('accounts.modal.machineHint', { path: tildify(machine.dir) })}</span
+        >{/if}
     </div>
     {#if kind === 'new'}
-      <div class="field-row">
-        <label class="k" for="account-name">{t('accounts.modal.name')}</label>
-        <!-- svelte-ignore a11y_autofocus -->
-        <input
-          id="account-name"
-          class="field name"
-          spellcheck="false"
-          autofocus
-          placeholder={t('accounts.modal.namePlaceholder')}
-          bind:value={name}
-          onkeydown={(e) => e.key === 'Enter' && create()}
-        />
-      </div>
       {#if shareable?.length}
-        <fieldset class="share">
-          <legend>{shareLegend}</legend>
+        <fieldset class="w-fld share">
+          <legend class="lab">{shareLegend}</legend>
           {#if files.length}
             <div class="line">
               <span class="k">{t('accounts.modal.files')}</span>
               {#each files as n (n)}{@render item(n)}{/each}
-              {#if !IS_MAC && mode === 'link'}<span class="hint">{t('accounts.modal.filesCopied')}</span>{/if}
+              {#if !IS_MAC && mode === 'link'}<span class="help">{t('accounts.modal.filesCopied')}</span>{/if}
             </div>
           {/if}
           {#if folders.length}
@@ -401,29 +414,42 @@
               {#each folders as n (n)}{@render item(n)}{/each}
             </div>
           {/if}
-          <div class="line modes" role="radiogroup" aria-label={t('accounts.modal.mode')}>
-            <label class="item"><input type="radio" name="share-mode" value="link" bind:group={mode} />{t('accounts.modal.link')}</label>
-            <label class="item"><input type="radio" name="share-mode" value="copy" bind:group={mode} />{t('accounts.modal.copy')}</label>
+          <div class="line" role="radiogroup" aria-label={t('accounts.modal.mode')}>
+            <span class="k">{t('accounts.modal.mode')}</span>
+            <label class="w-chip pick"
+              ><input type="radio" name="share-mode" value="link" bind:group={mode} />{t('accounts.modal.link')}</label
+            >
+            <label class="w-chip pick"
+              ><input type="radio" name="share-mode" value="copy" bind:group={mode} />{t('accounts.modal.copy')}</label
+            >
           </div>
+          <span class="help">{t(says.never)}</span>
         </fieldset>
-      {:else if shareable}
-        <p class="note">{t(says.nothing, { name: principal })}</p>
+      {:else}
+        {#if shareable}<span class="help">{t(says.nothing, { name: principal })}</span>{/if}
+        <span class="help">{t(says.never)}</span>
       {/if}
-      <p class="note">{t(says.never)}</p>
     {/if}
   {:else}
-    <p class="said" class:ok={signedIn} role="status">
-      {#if signedIn}
-        {signedIn.email ? t('accounts.modal.connected', { email: signedIn.email }) : t('accounts.modal.connectedNoEmail')}
-      {:else}
-        {t(says.hint)}
-      {/if}
-    </p>
-    {#if termId}<div class="term" bind:this={box}></div>{/if}
+    <div class="w-fld">
+      <span class="lab">{t('accounts.modal.signIn')}</span>
+      {#if termId}<div class="term" bind:this={box}></div>{/if}
+      <p class="said" class:ok={signedIn} role="status">
+        {#if signedIn}
+          <Icon name="check-c" size={14} />{signedIn.email
+            ? t('accounts.modal.connected', { email: signedIn.email })
+            : t('accounts.modal.connectedNoEmail')}
+        {:else if !(exited && !signedIn)}
+          <span class="spin" aria-hidden="true"></span>{t(says.hint)}
+        {:else}
+          {t(says.hint)}
+        {/if}
+      </p>
+    </div>
     {#if exited && !signedIn}
       <div class="ended">
         <span class:bad={!!endedWhy}>{endedWhy ?? t('accounts.modal.ended', { harness: engineName(engine) })}</span>
-        <button class="btn" onclick={restart}>{t('accounts.modal.restart')}</button>
+        <button class="btn" onclick={restart}><Icon name="restart" size={14} />{t('accounts.modal.restart')}</button>
       </div>
     {/if}
   {/if}
@@ -431,107 +457,81 @@
 </Modal>
 
 <style>
-  .kinds {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .kind {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 10px 12px;
-    border: 1px solid var(--line);
-    border-radius: var(--r);
-    cursor: pointer;
-  }
-  .kind.off {
-    opacity: 0.6;
-    cursor: default;
-  }
-  .what {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    min-width: 0;
-  }
-  .title {
-    font-size: 13px;
-    font-weight: 600;
-  }
-  .field-row {
-    display: flex;
-    align-items: center;
+  .top {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: end;
     gap: 12px;
   }
-  .k {
-    flex: none;
-    min-width: 70px;
-    font-size: 12px;
-    color: var(--dim);
+  .top.alone {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .harness {
+    justify-self: start;
   }
   .name {
-    flex: 1;
-    height: 32px;
-    padding: 0 10px;
+    height: 34px;
     font-size: 13px;
+  }
+  .w-radios {
+    margin-top: 4px;
   }
   .share {
     margin: 0;
-    padding: 12px 14px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    border: 1px solid var(--line);
-    border-radius: var(--r);
+    padding: 0;
+    border: none;
+    gap: 8px;
   }
-  legend {
-    padding: 0 6px;
-    font-size: 12.5px;
-    font-weight: 600;
+  .share legend {
+    float: left;
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 0;
   }
   .line {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px 14px;
-  }
-  .modes {
-    padding-top: 4px;
-    border-top: 1px solid var(--line);
-  }
-  .item {
-    display: inline-flex;
-    align-items: center;
     gap: 6px;
-    font-size: 12.5px;
+  }
+  .k {
+    min-width: 64px;
+    color: var(--dim);
+    font-size: 12px;
+  }
+  /* A chip that holds its box: the box unseen over the whole chip, the chip lit when it is ticked. */
+  .pick {
+    position: relative;
+  }
+  .pick input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
     cursor: pointer;
   }
-  .hint {
-    font-size: 11.5px;
-    color: var(--muted);
+  .pick:has(input:checked) {
+    background: rgba(var(--fg-rgb), 0.07);
+    color: var(--text);
   }
-  .note {
-    margin: 0;
+  .pick:has(input:focus-visible) {
+    outline: 2px solid var(--p-ink);
+    outline-offset: 2px;
+  }
+  .help {
+    color: var(--muted);
     font-size: 11.5px;
     line-height: 1.5;
-    color: var(--dim);
   }
-  .said {
-    margin: 0;
-    font-size: 12.5px;
-    line-height: 1.5;
-    color: var(--muted);
-  }
-  .said.ok {
-    color: var(--add);
-    font-weight: 600;
-  }
+  /* The sign-in: its program in a terminal, in the well, and what is awaited under it. */
   .term {
-    height: 380px;
+    height: 300px;
     padding: 10px 6px 6px 12px;
-    border-radius: var(--r);
-    background: var(--term);
+    border-radius: 9px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--line);
     overflow: hidden;
   }
   .term :global(.xterm) {
@@ -540,11 +540,46 @@
   .term :global(.xterm-viewport) {
     background: transparent !important;
   }
+  .said {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    color: var(--soft);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .said.ok {
+    color: var(--add);
+    font-weight: 550;
+  }
+  .spin {
+    width: 12px;
+    height: 12px;
+    flex: none;
+    border-radius: 50%;
+    border: 1.5px solid var(--line-3);
+    border-top-color: var(--p-ink);
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spin {
+      animation: none;
+    }
+  }
   .ended {
     display: flex;
     align-items: center;
     gap: 10px;
     font-size: 12.5px;
+  }
+  .ended span {
+    flex: 1;
   }
   .ended .bad {
     color: var(--del);

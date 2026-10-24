@@ -29,6 +29,8 @@ export default defineZone('wizard', {
   skippedTag: 'skipped',
   optionalTag: 'optional',
   leads: {
+    /** The start's, `{name}` the project's. */
+    start: 'Where the settings of {name} come from: each next step can be reviewed, and skipped.',
     copied: 'Uncheck what you don’t want to take. What depends on the folder is checked in {name}.',
     worktrees: 'Where the agents work, and what sets up each worktree.',
     launch: 'The commands that launch the project, each in its own terminal.',
@@ -70,9 +72,9 @@ export default defineZone('wizard', {
     creating: 'Creating…',
     save: 'Save',
     saving: 'Saving…',
-    fill: '✦ Fill in automatically',
+    fill: 'Fill in automatically',
     filling: 'Claude is reading the project…',
-    addCommand: '+ Add a command',
+    addCommand: 'Add a command',
   },
   filled: {
     one: '{count} command proposed by Claude: read it before creating.',

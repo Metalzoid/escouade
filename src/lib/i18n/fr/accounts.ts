@@ -112,6 +112,8 @@ export default {
     nothingToShare: '{name} n’a ni réglages, ni CLAUDE.md, ni skills, agents, commandes, plugins, hooks ou styles de sortie à partager.',
     neverShared: 'La connexion (.credentials.json) et .claude.json ne sont jamais partagés : chaque compte a les siens.',
     create: 'Créer et se connecter',
+    /** Above the sign-in's terminal. */
+    signIn: 'Connexion',
     signInHint: 'Connecte-toi dans le terminal ci-dessous (commande /login si Claude Code ne la propose pas).',
     connected: 'Connecté au compte {email}',
     connectedNoEmail: 'Connecté',

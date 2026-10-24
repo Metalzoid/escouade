@@ -32,6 +32,8 @@ export default {
   optionalTag: 'facultatif',
   /** What each step is for, under its title. */
   leads: {
+    /** The start's, `{name}` the project's. */
+    start: 'D’où viennent les réglages de {name} : chaque étape suivante se revoit, et se passe.',
     copied: 'Décoche ce que tu ne veux pas reprendre. Ce qui dépend du dossier est vérifié dans {name}.',
     worktrees: 'Où travaillent les agents et ce qui prépare chaque worktree.',
     launch: 'Les commandes qui lancent le projet, chacune dans son terminal.',
@@ -74,9 +76,9 @@ export default {
     creating: 'Création…',
     save: 'Enregistrer',
     saving: 'Enregistrement…',
-    fill: '✦ Remplir automatiquement',
+    fill: 'Remplir automatiquement',
     filling: 'Claude lit le projet…',
-    addCommand: '+ Ajouter une commande',
+    addCommand: 'Ajouter une commande',
   },
   /** Said once Claude's commands are in the step. */
   filled: {

@@ -4,6 +4,7 @@
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import { privacyUrl } from '../../lib/telemetry';
+  import Icon from '../Icon.svelte';
   import Modal from './Modal.svelte';
 
   let busy = $state(false);
@@ -26,10 +27,11 @@
 </script>
 
 <!-- Closed without an answer: asked again at the next start. -->
-<Modal title={t('shell.telemetry.title')} width={500} onclose={() => (app.modal = null)}>
+<Modal title={t('shell.telemetry.title')} width={520} onclose={() => (app.modal = null)}>
+  {#snippet lead()}<span class="lead"><Icon name="stats" /></span>{/snippet}
   <p class="p">{t('shell.telemetry.body')}</p>
-  <p class="p">{t('shell.telemetry.detail')}</p>
-  <button class="link" onclick={more}>{t('shell.telemetry.more')}</button>
+  <p class="p detail">{t('shell.telemetry.detail')}</p>
+  <button class="link" onclick={more}><Icon name="ext" size={14} />{t('shell.telemetry.more')}</button>
   {#snippet footer()}
     <!-- Neither answer put forward: refusing looks as easy as accepting. -->
     <button class="btn" disabled={busy} onclick={() => answer(false)}>{t('shell.telemetry.no')}</button>
@@ -38,18 +40,34 @@
 </Modal>
 
 <style>
+  .lead {
+    display: inline-flex;
+    color: var(--brand);
+  }
   .p {
     margin: 0;
-    color: var(--muted);
+    color: var(--soft);
     line-height: 1.55;
   }
+  .detail {
+    color: var(--muted);
+    font-size: 12.5px;
+  }
   .link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     align-self: flex-start;
     border: none;
     background: none;
     padding: 0;
-    color: var(--accent);
+    color: var(--p-ink);
     font-size: 13px;
+    font-weight: 550;
     cursor: pointer;
+  }
+  .link:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 </style>

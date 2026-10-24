@@ -9,6 +9,7 @@
   import StepList from '../settings/StepList.svelte';
   import Switch from '../settings/Switch.svelte';
   import WorktreeBaseField from '../settings/WorktreeBaseField.svelte';
+  import Icon from '../Icon.svelte';
   import Checks from './Checks.svelte';
 
   // « Worktrees »: one per agent, their folder and branches, the files copied into them, what prepares and removes
@@ -89,9 +90,9 @@
     ></textarea>
   </Row>
   <Row label={t('settings.project.fill')} desc={t('settings.project.fillWorktreesDesc')}>
-    <button class="btn" disabled={!!form.filling} onclick={() => form.fill('worktrees')}>
-      {form.filling === 'worktrees' ? t('wizard.buttons.filling') : t('wizard.buttons.fill')}
-    </button>
+    <button class="btn" disabled={!!form.filling} onclick={() => form.fill('worktrees')}
+      ><Icon name="sparkle" size={14} />{form.filling === 'worktrees' ? t('wizard.buttons.filling') : t('wizard.buttons.fill')}</button
+    >
   </Row>
   <Row label={t('settings.project.setupTitle')} desc={t('settings.project.setupDesc')} wide>
     <StepList bind:steps={form.config.worktreeSetup} kind="setup" onadd={() => form.config.worktreeSetup.push(step())} />
@@ -102,19 +103,21 @@
 </div>
 
 <style>
+  /* The step's settings, a row each between rules (no box: the window is the box). */
   .box {
-    border: 1px solid var(--line);
-    border-radius: var(--r);
-    background: var(--bg);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .box > :global(.row) {
+    padding-inline: 0;
   }
   .input {
     width: 100%;
     height: 32px;
     font-size: 12.5px;
-    background: var(--panel);
   }
   .input[aria-invalid='true'] {
-    border-color: var(--del);
+    box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.6);
   }
   .copy {
     width: 100%;
@@ -122,7 +125,6 @@
     padding: 8px 10px;
     font-size: 12.5px;
     resize: vertical;
-    background: var(--panel);
   }
   .error {
     margin: 0;

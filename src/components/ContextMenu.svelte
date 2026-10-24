@@ -180,7 +180,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    min-height: 32px;
+    min-height: 34px;
     padding: 6px 9px;
     border: none;
     border-radius: 7px;
@@ -222,7 +222,7 @@
     gap: 1px;
   }
   .l {
-    font-weight: 500;
+    font-weight: 550;
   }
   .reason {
     color: var(--muted);

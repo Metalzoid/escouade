@@ -67,26 +67,21 @@
   {#each rows as [k, v] (k)}
     <div>
       <dt>{k}</dt>
-      <dd class="mono">{v}</dd>
+      <dd>{v}</dd>
     </div>
   {/each}
 </dl>
 {#if !form.project}
   <div class="agent">
-    <Switch label={t('wizard.summary.firstAgent')} bind:on={form.firstAgent} />
     <div class="tx">
       <span class="tt">{t('wizard.summary.firstAgent')}</span>
       <span class="td">{t('wizard.summary.firstAgentDesc')}</span>
     </div>
+    <Switch label={t('wizard.summary.firstAgent')} bind:on={form.firstAgent} />
     {#if form.firstAgent}
-      <div class="models" role="group" aria-label={t('common.model')}>
+      <div class="w-chips models" role="group" aria-label={t('common.model')}>
         {#each modelOptions(app.models) as m (m.value)}
-          <button
-            class="mbtn mono"
-            class:on={form.model === m.value}
-            aria-pressed={form.model === m.value}
-            onclick={() => (form.model = m.value)}>{m.label}</button
-          >
+          <button class="w-chip" aria-pressed={form.model === m.value} onclick={() => (form.model = m.value)}>{m.label}</button>
         {/each}
       </div>
     {/if}
@@ -94,70 +89,51 @@
 {/if}
 
 <style>
+  /* What will be set, a row each (the preview's `.sum`). */
   .sum {
-    margin: 0;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px 18px;
-    font-size: 12px;
+    grid-template-columns: 150px minmax(0, 1fr);
+    margin: 0;
+    border-top: 1px solid var(--line);
   }
   .sum div {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 5px 0;
-    border-bottom: 1px dashed var(--line);
-    min-width: 0;
+    display: contents;
+  }
+  dt,
+  dd {
+    margin: 0;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(var(--fg-rgb), 0.05);
+    font-size: 12.5px;
   }
   dt {
     color: var(--muted);
-    flex: none;
   }
   dd {
-    margin: 0;
-    font-size: 11.5px;
-    text-align: right;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    min-width: 0;
+    color: var(--soft);
+    overflow-wrap: anywhere;
   }
   .agent {
     display: flex;
-    align-items: center;
-    gap: 12px;
     flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
   }
   .tx {
     flex: 1;
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 2px;
+    min-width: 0;
   }
   .tt {
-    font-weight: 700;
-    font-size: 13px;
+    font-weight: 550;
   }
   .td {
-    font-size: 12px;
     color: var(--muted);
+    font-size: 12px;
   }
   .models {
-    display: flex;
-    gap: 6px;
-  }
-  .mbtn {
-    height: 26px;
-    padding: 0 11px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line2);
-    background: transparent;
-    color: var(--muted);
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .mbtn.on {
-    background: var(--elev2);
-    color: var(--text);
+    flex-basis: 100%;
   }
 </style>

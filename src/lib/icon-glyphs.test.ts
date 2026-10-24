@@ -3,6 +3,8 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { en } from './i18n/en';
+import { fr } from './i18n/fr';
 
 /** The components redrawn, by lot. */
 const REDRAWN = {
@@ -89,6 +91,23 @@ const REDRAWN = {
     'src/components/modals/ConfirmModal.svelte',
   ],
   'lot 10 (ESC-82)': ['src/components/Overview.svelte', 'src/components/Stats.svelte'],
+  'lot 11a (ESC-83)': [
+    'src/components/modals/Modal.svelte',
+    'src/components/modals/UpdateModal.svelte',
+    'src/components/modals/NewProjectModal.svelte',
+    'src/components/modals/AccountModal.svelte',
+    'src/components/modals/PrModal.svelte',
+    'src/components/modals/TelemetryModal.svelte',
+    'src/components/wizard/AccountStep.svelte',
+    'src/components/wizard/Checks.svelte',
+    'src/components/wizard/CopiedStep.svelte',
+    'src/components/wizard/IntegrationsStep.svelte',
+    'src/components/wizard/KanbanStep.svelte',
+    'src/components/wizard/LaunchStep.svelte',
+    'src/components/wizard/SummaryStep.svelte',
+    'src/components/wizard/WorktreesStep.svelte',
+    'src/components/Splitter.svelte',
+  ],
 };
 
 /**
@@ -118,5 +137,35 @@ describe('the icons of the redrawn components', () => {
   for (const [lot, files] of Object.entries(REDRAWN))
     it(`are drawn, not written, in ${lot}`, () => {
       expect(files.flatMap(glyphs)).toEqual([]);
+    });
+});
+
+/** The texts of a zone of a catalog, by their dotted path. */
+function texts(tree: unknown, path: string): [string, string][] {
+  if (typeof tree === 'string') return [[path, tree]];
+  if (!tree || typeof tree !== 'object') return [];
+  return Object.entries(tree).flatMap(([k, v]) => texts(v, path ? `${path}.${k}` : k));
+}
+
+describe('the texts of the windows (lot 11a, ESC-83)', () => {
+  // Their buttons draw their icon: « ✦ Remplir automatiquement » and « + Ajouter une commande » are no more. The arrow
+  // between two branches (« escouade/x → main ») is a word of the sentence, as the preview writes it.
+  const ZONES = (c: typeof fr | typeof en) => [
+    ...texts(c.wizard, 'wizard'),
+    ...texts(c.accounts.modal, 'accounts.modal'),
+    ...texts(c.prs.modal, 'prs.modal'),
+    ...texts(c.shell.update, 'shell.update'),
+    ...texts(c.shell.telemetry, 'shell.telemetry'),
+  ];
+  for (const [lang, catalog] of [
+    ['fr', fr],
+    ['en', en],
+  ] as const)
+    it(`draw no icon with a character, in ${lang}`, () => {
+      expect(
+        ZONES(catalog)
+          .filter(([, text]) => ICON_GLYPH.test(text.replace(/ → /g, ' ')) || /^[+] /.test(text))
+          .map(([path]) => path),
+      ).toEqual([]);
     });
 });

@@ -61,16 +61,18 @@
 {/if}
 
 <style>
+  /* The step's settings, a row each between rules (no box: the window is the box). */
   .box {
-    border: 1px solid var(--line);
-    border-radius: var(--r);
-    background: var(--bg);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .box > :global(.row) {
+    padding-inline: 0;
   }
   .select {
     height: 30px;
     max-width: 260px;
     font-size: 12.5px;
-    background: var(--panel);
   }
   .none {
     margin: 0;

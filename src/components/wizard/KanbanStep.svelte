@@ -8,6 +8,7 @@
   import Chips from '../settings/Chips.svelte';
   import Row from '../settings/Row.svelte';
   import Switch from '../settings/Switch.svelte';
+  import Icon from '../Icon.svelte';
   import Checks from './Checks.svelte';
 
   // « Kanban »: what validating a ticket does (action, target branch, strategy), what goes with it (tests, cleanup,
@@ -46,12 +47,12 @@
     <Row label={t('boardSettings.tab.targetBranch')}>
       <div class="branches" role="group" aria-label={t('boardSettings.tab.targetBranch')}>
         {#each branches.length ? branches : [target || t('wizard.currentBranch')] as br (br)}
-          <button class="chip mono" class:on={target === br} aria-pressed={target === br} onclick={() => (form.config.board.target = br)}
-            >⎇ {br}</button
+          <button class="w-chip mono" aria-pressed={target === br} onclick={() => (form.config.board.target = br)}
+            ><Icon name="branch" size={12} />{br}</button
           >
         {/each}
         {#if b.target && !branches.includes(b.target)}
-          <button class="chip mono bad on" aria-pressed="true">⎇ {b.target}</button>
+          <button class="w-chip mono bad" aria-pressed="true"><Icon name="branch" size={12} />{b.target}</button>
         {/if}
       </div>
     </Row>
@@ -117,10 +118,13 @@
 </div>
 
 <style>
+  /* The step's settings, a row each between rules (no box: the window is the box). */
   .box {
-    border: 1px solid var(--line);
-    border-radius: var(--r);
-    background: var(--bg);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .box > :global(.row) {
+    padding-inline: 0;
   }
   .branches {
     display: flex;
@@ -128,34 +132,13 @@
     justify-content: flex-end;
     gap: 6px;
   }
-  .chip {
-    height: 26px;
-    padding: 0 10px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line2);
-    background: transparent;
-    color: var(--muted);
-    font-size: 11.5px;
-    cursor: pointer;
-  }
-  .chip.on {
-    background: var(--elev2);
-    color: var(--text);
-    border-color: var(--accent);
-  }
-  .chip.bad {
-    border-color: var(--del);
-    color: var(--del);
-  }
   .input {
     width: 200px;
     height: 30px;
     font-size: 12.5px;
-    background: var(--panel);
   }
   .select {
     height: 30px;
     font-size: 12.5px;
-    background: var(--panel);
   }
 </style>

@@ -37,7 +37,10 @@ describe('PrModal', () => {
     expect(screen.getByText('Rédaction du titre et de la description…')).toBeInTheDocument();
     await waitFor(() => expect(title()).toHaveValue('Connexion par jeton'));
     expect(screen.getByRole('dialog', { name: 'Ouvrir une PR sur GitHub' })).toBeInTheDocument();
-    expect(screen.getByText('refacto-auth · escouade/login → main')).toBeInTheDocument();
+    // The agent, then its branch and the target in mono.
+    const scope = document.querySelector('.scope')!;
+    expect(scope).toHaveTextContent('refacto-auth · escouade/login → main');
+    expect([...scope.querySelectorAll('.mono')].map((m) => m.textContent)).toEqual(['escouade/login', 'main']);
     expect(body()).toHaveValue('- Ajoute le jeton\n- Le teste');
     expect(screen.getByRole('textbox', { name: 'Branche cible' })).toHaveValue('main');
     expect(backend.called('agent_pr_propose').map((c) => c.args)).toEqual([{ id: 'a1' }]);

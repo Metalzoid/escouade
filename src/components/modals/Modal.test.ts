@@ -27,7 +27,8 @@ describe('Modal', () => {
     render(Modal, { title: 'Nouveau ticket', width: 760, tall: true, onclose: () => {}, children: body });
     const dialog = screen.getByRole('dialog', { name: 'Nouveau ticket' });
     expect(dialog).toHaveClass('tall');
-    expect(dialog).toHaveStyle({ width: '760px' });
+    // Its width, unless the window is narrower (the preview's `min(760px, 100vw - 48px)`).
+    expect(dialog.style.getPropertyValue('--w')).toBe('760px');
   });
 
   it('closes on Escape and keeps Tab inside the dialog', async () => {

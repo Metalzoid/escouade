@@ -113,7 +113,15 @@ describe('AccountModal', () => {
     });
     render(AccountModal, {});
     expect(await screen.findByRole('dialog', { name: 'Ajouter un compte Claude Code' })).toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Harness' }), 'codex');
+    // The harnesses in segments, as the preview draws them.
+    const harness = screen.getByRole('radiogroup', { name: 'Harness' });
+    expect(
+      within(harness)
+        .getAllByRole('radio')
+        .map((r) => r.textContent),
+    ).toEqual(['Claude Code', 'Codex']);
+    await userEvent.click(within(harness).getByRole('radio', { name: 'Codex' }));
+    expect(within(harness).getByRole('radio', { name: 'Codex' })).toBeChecked();
     expect(await screen.findByRole('dialog', { name: 'Ajouter un compte Codex' })).toBeInTheDocument();
     await waitFor(() => expect(b.called('account_shareable').at(-1)?.args).toEqual({ engine: 'codex' }));
     const group = await screen.findByRole('group', { name: 'Partager avec le compte de la machine' });
@@ -242,7 +250,7 @@ describe('AccountModal', () => {
     backend();
     render(AccountModal, {});
     await screen.findByRole('group', { name: 'Partager avec Principal' });
-    expect(screen.queryByRole('combobox', { name: 'Harness' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup', { name: 'Harness' })).not.toBeInTheDocument();
   });
 
   it('makes the account with what is checked, then runs its claude until the sign-in is there', async () => {

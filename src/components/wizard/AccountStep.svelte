@@ -9,6 +9,7 @@
   import Chips from '../settings/Chips.svelte';
   import Row from '../settings/Row.svelte';
   import Switch from '../settings/Switch.svelte';
+  import Icon from '../Icon.svelte';
   import Checks from './Checks.svelte';
 
   // « Compte et commit »: the harness and the account the project's agents go to, whether it is private and the accounts
@@ -52,9 +53,10 @@
 
 <Checks {form} step="account" />
 {#if missing}
-  <div class="missing" role="status">
+  <div class="w-notice missing" role="status">
+    <Icon name="info" />
     <span>{t('wizard.account.noAccount', { harness: engineName(engine) })}</span>
-    <button class="btn" onclick={() => (adding = true)}>{t('accounts.tab.add')}</button>
+    <button class="btn" onclick={() => (adding = true)}><Icon name="plus" size={14} />{t('accounts.tab.add')}</button>
   </div>
 {/if}
 {#if adding}<AccountModal {engine} onclose={() => (adding = false)} />{/if}
@@ -95,13 +97,13 @@
         <ul class="accounts" aria-label={t('wizard.account.reserved')}>
           {#each reservable as a (a.id)}
             <li>
-              <label>
+              <label class="w-tick">
                 <input
                   type="checkbox"
                   checked={own(a.id) || form.config.reserved.includes(a.id)}
                   disabled={own(a.id)}
                   onchange={(e) => reserve(a.id, e.currentTarget.checked)}
-                />
+                /><span class="tick-box" aria-hidden="true"><Icon name="check" size={12} /></span>
                 <span>{accountName(a)}</span>
                 {#if own(a.id)}<span class="tag">{t('wizard.account.reservedAlready')}</span>{/if}
               </label>
@@ -120,22 +122,18 @@
 
 <style>
   .missing {
-    display: flex;
+    grid-template-columns: 16px minmax(0, 1fr) auto;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 10px;
-    font-size: 12.5px;
-    line-height: 1.5;
-    color: var(--wait);
   }
+  /* The step's settings, a row each between rules (no box: the window is the box). */
   .box {
-    border: 1px solid var(--line);
-    border-radius: var(--r);
-    background: var(--bg);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
   }
-  .private {
-    margin-top: 10px;
+  .box > :global(.row) {
+    padding-inline: 0;
   }
+
   .accounts {
     margin: 0;
     padding: 0;
@@ -145,15 +143,7 @@
     gap: 4px;
   }
   .accounts label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
     font-size: 12.5px;
-    cursor: pointer;
-  }
-  input[type='checkbox'] {
-    margin: 0;
-    accent-color: var(--accent);
   }
   .tag {
     font-size: 11px;

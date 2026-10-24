@@ -1,9 +1,10 @@
 <script lang="ts">
   import { open } from '@tauri-apps/plugin-dialog';
-  import { fDate } from '../../lib/format';
+  import { fDate, tildify } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
+  import { initials } from '../../lib/project-rail';
   import { PROJECT_COLORS } from '../../lib/theme';
   import type { Start, StepId } from '../../lib/wizard';
   import { WizardForm } from '../../lib/wizard-form.svelte';
@@ -15,6 +16,7 @@
   import LaunchStep from '../wizard/LaunchStep.svelte';
   import SummaryStep from '../wizard/SummaryStep.svelte';
   import WorktreesStep from '../wizard/WorktreesStep.svelte';
+  import Icon from '../Icon.svelte';
   import Modal from './Modal.svelte';
 
   // The new project's assistant, in steps: the folder, its name and color and where its settings start from, then its
@@ -189,53 +191,61 @@
 
 <Modal
   title={existing ? t('wizard.titleEdit', { name: existing.name }) : t('wizard.title')}
-  width={840}
-  tall
+  width={900}
+  height="min(640px, 100vh - 80px)"
+  flush
   onclose={() => (app.modal = null)}
 >
-  <div class="wizard">
+  {#snippet badge()}
+    {#if form.path.trim()}<span class="chip-sm mono path">{tildify(form.path.trim())}</span>{/if}
+    <span class="chip-sm" data-step-of>{t('wizard.stepOf', { n: at + 1, count: form.steps.length })}</span>
+  {/snippet}
+  <div class="wiz">
     <nav class="rail" aria-label={t('wizard.stepsLabel')}>
       <ol>
         {#each form.steps as s, i (s)}
+          {@const done = form.done.includes(s) && form.step !== s}
+          {@const skipped = form.skipped.includes(s) && form.step !== s}
           <li>
             <button
               class="st"
-              class:on={form.step === s}
-              class:done={form.done.includes(s)}
-              class:skip={form.skipped.includes(s)}
+              class:done
+              class:skip={skipped}
               aria-current={form.step === s ? 'step' : undefined}
               disabled={!ready || restoring}
               onclick={() => goTo(s)}
             >
-              <span class="n"
-                >{form.done.includes(s) && form.step !== s ? '✓' : form.skipped.includes(s) && form.step !== s ? '–' : i + 1}</span
+              <span class="k"
+                >{#if done}<Icon name="check" size={11} />{:else}{i + 1}{/if}</span
               >
-              <span class="l">{t(`wizard.steps.${s}`)}</span>
-              {#if form.skipped.includes(s) && form.step !== s}<span class="tag">{t('wizard.skippedTag')}</span>
-              {:else if s === 'integrations'}<span class="tag">{t('wizard.optionalTag')}</span>{/if}
+              <span class="l"
+                >{t(`wizard.steps.${s}`)}{#if skipped}{' '}<span class="tag">{t('wizard.skippedTag')}</span>
+                {:else if s === 'integrations'}{' '}<span class="tag">{t('wizard.optionalTag')}</span>{/if}</span
+              >
             </button>
           </li>
         {/each}
       </ol>
     </nav>
     <div class="page" data-step={form.step}>
-      <p class="of">{t('wizard.stepOf', { n: at + 1, count: form.steps.length })}</p>
       {#if form.step === 'start'}
+        <h3 class="h">{t('wizard.start.label')}</h3>
+        <p class="lead">{t('wizard.leads.start', { name: name.trim() || t('shell.newProject.untitled') })}</p>
         {#if !existing}
-          <div class="grp">
+          <div class="w-fld">
             <span class="lab">{t('common.folder')}</span>
             <div class="row">
               <!-- svelte-ignore a11y_autofocus -->
               <input
-                class="field mono"
-                style="flex:1;font-size:12.5px"
+                class="field mono path-in"
                 bind:value={form.path}
                 placeholder={t('shell.newProject.pathPlaceholder')}
+                spellcheck="false"
                 autofocus
               />
-              <button class="btn" style="height:36px" onclick={browse}>{t('shell.newProject.browse')}</button>
+              <button class="btn" onclick={browse}><Icon name="folder" size={14} />{t('shell.newProject.browse')}</button>
             </div>
-            <span class="git mono" style:color={gitLine.color}><span class="d" style:background={gitLine.color}></span>{gitLine.text}</span>
+            <span class="git" style:color={gitLine.color}><span class="gd" style:background={gitLine.color}></span>{gitLine.text}</span>
           </div>
         {/if}
         {#if history}
@@ -267,69 +277,67 @@
           </div>
         {/if}
         <div class="two">
-          <div class="grp">
+          <div class="w-fld">
             <span class="lab">{t('common.name')}</span>
-            <input class="field" style="font-weight:600;font-size:13.5px" bind:value={name} oninput={() => (nameTouched = true)} />
-          </div>
-          <div class="grp">
-            <span class="lab">{t('shell.newProject.tabPreview')}</span>
-            <div class="preview" style:border-bottom-color={color}>
-              <span class="sw" style:background={color}></span>{name || t('shell.newProject.untitled')}
+            <div class="row">
+              <span class="tile" style:--c={color} aria-hidden="true">{initials(name || t('shell.newProject.untitled'))}</span>
+              <input class="field name" bind:value={name} oninput={() => (nameTouched = true)} />
             </div>
           </div>
-        </div>
-        <div class="grp">
-          <span class="lab">{t('common.color')}</span>
-          <div class="colors">
-            {#each PROJECT_COLORS as c, i (c)}
-              <button
-                class="swatch"
-                aria-label={t('shell.newProject.colorN', { n: i + 1 })}
-                aria-pressed={color === c}
-                style:background={c}
-                style:box-shadow={color === c ? '0 0 0 2px var(--panel), 0 0 0 4px var(--text)' : 'none'}
-                onclick={() => {
-                  color = c;
-                  colorTouched = true;
-                }}
-              ></button>
-            {/each}
+          <div class="w-fld">
+            <span class="lab">{t('common.color')}</span>
+            <div class="swatches">
+              {#each PROJECT_COLORS as c, i (c)}
+                <button
+                  aria-label={t('shell.newProject.colorN', { n: i + 1 })}
+                  aria-pressed={color === c}
+                  style:--c={c}
+                  onclick={() => {
+                    color = c;
+                    colorTouched = true;
+                  }}
+                ></button>
+              {/each}
+            </div>
           </div>
         </div>
         {#if !restoring}
           <Checks {form} step="start" />
-          <div class="grp" role="radiogroup" aria-label={t('wizard.start.label')}>
-            <span class="lab">{t('wizard.start.label')}</span>
+          <div class="w-radios" role="radiogroup" aria-label={t('wizard.start.label')}>
             {#each STARTS as s (s.id)}
-              <div class="card" class:on={form.start === s.id}>
-                <button class="pick" role="radio" aria-checked={form.start === s.id} onclick={() => form.chooseStart(s.id)}>
-                  <span class="radio"></span>
-                  <span class="ct">{s.label}</span>
-                  <span class="cd">{s.desc}</span>
-                </button>
-                {#if s.id === 'copy' && form.start === 'copy'}
-                  <select
-                    class="field source"
-                    aria-label={t('wizard.start.copyFrom')}
-                    value={form.sourceId}
-                    onchange={(e) => form.chooseSource(e.currentTarget.value)}
-                  >
-                    {#each form.sources as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
-                  </select>
-                {/if}
-              </div>
+              <button class="w-radio" role="radio" aria-checked={form.start === s.id} onclick={() => form.chooseStart(s.id)}>
+                <i class="dot"></i>
+                <span><b>{s.label}</b><span class="d">{s.desc}</span></span>
+              </button>
+              {#if s.id === 'copy' && form.start === 'copy'}
+                <div class="sub">
+                  <div class="w-chips" role="group" aria-label={t('wizard.start.copyFrom')}>
+                    {#each form.sources as p (p.id)}
+                      <button class="w-chip" aria-pressed={form.sourceId === p.id} onclick={() => form.chooseSource(p.id)}
+                        ><i class="sw" style:background={p.color}></i>{p.name}</button
+                      >
+                    {/each}
+                  </div>
+                  {#if form.privateLeftOut}
+                    <span class="private"
+                      ><Icon name="lock" size={14} />{t('wizard.start.privateLeftOut', { count: form.privateLeftOut })}</span
+                    >
+                  {/if}
+                </div>
+              {/if}
             {/each}
-            {#if form.privateLeftOut}
-              <p class="cd private">{t('wizard.start.privateLeftOut', { count: form.privateLeftOut })}</p>
+            {#if form.privateLeftOut && form.start !== 'copy'}
+              <span class="private alone"
+                ><Icon name="lock" size={14} />{t('wizard.start.privateLeftOut', { count: form.privateLeftOut })}</span
+              >
             {/if}
           </div>
         {/if}
       {:else}
-        <h2 class="h2">
-          {t(`wizard.steps.${form.step}`)}{#if form.step === 'copied' && form.source}<span class="from" style:color={form.source.color}
-              >{` · ${form.source.name}`}</span
+        <h3 class="h">
+          {t(`wizard.steps.${form.step}`)}{#if form.step === 'copied' && form.source}<span class="from">{` · ${form.source.name}`}</span
             >{/if}
-        </h2>
+        </h3>
         {#if form.step === 'copied'}
           <p class="lead">{t('wizard.leads.copied', { name: name.trim() || t('shell.newProject.untitled') })}</p>
           <CopiedStep {form} />
@@ -347,222 +355,182 @@
   </div>
   {#snippet footer()}
     {#if !existing && !restoring}
-      <button class="btn link" disabled={!ready || busy} onclick={() => create(false)}>{t('wizard.buttons.withoutWizard')}</button>
-    {/if}
-    <span class="sp"></span>
-    {#if at > 0}
-      <button class="btn ghost" onclick={() => form.back()}>{t('wizard.buttons.back')}</button>
+      <button class="btn without" disabled={!ready || busy} onclick={() => create(false)}>{t('wizard.buttons.withoutWizard')}</button>
     {:else}
-      <button class="btn ghost" onclick={() => (app.modal = null)}>{t('common.cancel')}</button>
+      <span class="sp"></span>
+    {/if}
+    {#if at > 0}
+      <button class="btn" onclick={() => form.back()}>{t('wizard.buttons.back')}</button>
+    {:else}
+      <button class="btn" onclick={() => (app.modal = null)}>{t('common.cancel')}</button>
     {/if}
     {#if restoring}
-      <button class="btn primary" style:background={color} disabled={!ready || busy} onclick={() => create(false)}>
+      <button class="btn primary" disabled={!ready || busy} onclick={() => create(false)}>
         {busy ? t('shell.newProject.history.reopening') : t('shell.newProject.history.reopen')}
       </button>
     {:else if last}
-      <button class="btn primary" style:background={color} disabled={!ready || busy} onclick={() => create(true)}>
+      <button class="btn primary" disabled={!ready || busy} onclick={() => create(true)}>
         {#if existing}{busy ? t('wizard.buttons.saving') : t('wizard.buttons.save')}
         {:else}{busy ? t('wizard.buttons.creating') : t('wizard.buttons.create')}{/if}
       </button>
     {:else}
       {#if skippable}<button class="btn" onclick={() => form.next(true)}>{t('wizard.buttons.skip')}</button>{/if}
-      <button class="btn primary" style:background={color} disabled={!ready} onclick={() => form.next()}>{t('wizard.buttons.next')}</button>
+      <button class="btn primary" disabled={!ready} onclick={() => form.next()}>{t('wizard.buttons.next')}</button>
     {/if}
   {/snippet}
 </Modal>
 
 <style>
-  .wizard {
-    display: flex;
-    gap: 22px;
-    min-height: 100%;
+  /* The assistant, form A (the preview's `#wizard`): the steps on a rail of 200 px, the step's page beside it. */
+  .wiz {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
   }
   .rail {
-    width: 178px;
-    flex: none;
-    padding-right: 14px;
+    min-height: 0;
+    overflow: auto;
+    padding: 14px 10px;
     border-right: 1px solid var(--line);
   }
   .rail ol {
-    list-style: none;
+    display: grid;
+    align-content: start;
+    gap: 2px;
     margin: 0;
     padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    position: sticky;
-    top: 0;
+    list-style: none;
   }
   .st {
-    width: 100%;
-    display: flex;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
     align-items: center;
-    gap: 10px;
-    height: 32px;
-    padding: 0 10px;
+    gap: 8px;
+    width: 100%;
+    height: 30px;
+    padding: 0 8px;
     border: none;
-    border-radius: var(--r-sm);
+    border-radius: 7px;
     background: transparent;
     color: var(--muted);
+    font: inherit;
     font-size: 12.5px;
-    font-weight: 600;
     text-align: left;
     cursor: pointer;
   }
   .st:disabled {
     cursor: default;
-    opacity: 0.55;
   }
-  .st:hover:not(:disabled) {
-    background: var(--elev);
+  .st:hover:not(:disabled, [aria-current='step']) {
+    background: var(--hover);
   }
-  .st.on {
-    background: var(--elev);
-    color: var(--text);
-    opacity: 1;
+  .st:focus-visible {
+    outline: 2px solid var(--p-ink);
+    outline-offset: -2px;
   }
-  .n {
-    width: 20px;
-    height: 20px;
-    flex: none;
-    border-radius: 50%;
-    border: 1px solid var(--line2);
+  .k {
     display: grid;
     place-items: center;
-    font: 10.5px var(--mono);
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px var(--line-3);
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .st.done {
+    color: var(--soft);
+  }
+  .st.done .k {
+    background: color-mix(in oklch, var(--p) 30%, transparent);
+    box-shadow: none;
+    color: var(--text);
+  }
+  .st.skip {
     color: var(--dim);
   }
-  .st.done .n {
-    border-color: transparent;
-    background: color-mix(in oklch, var(--ok) 22%, transparent);
-    color: var(--ok);
+  .st[aria-current='step'] {
+    background: rgba(var(--fg-rgb), 0.06);
+    color: var(--text);
+    font-weight: 550;
   }
-  .st.on .n {
-    border-color: transparent;
-    background: var(--accent);
-    color: var(--accent-ink);
-  }
-  .st.skip:not(.on) {
-    color: var(--dim);
+  .st[aria-current='step'] .k {
+    box-shadow: inset 0 0 0 1.5px var(--p-ink);
+    color: var(--text);
   }
   .l {
-    flex: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .tag {
-    font-size: 10.5px;
-    font-weight: 400;
+    margin-left: 1px;
     color: var(--dim);
+    font-size: 11px;
+    font-weight: 450;
   }
   .page {
-    flex: 1;
+    display: grid;
+    align-content: start;
+    gap: 18px;
+    min-height: 0;
     min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+    padding: 18px 20px 20px;
+    overflow: auto;
   }
-  .of {
-    margin: 0 0 -8px;
-    font-size: 11px;
-    color: var(--dim);
-  }
-  .h2 {
+  .h {
     margin: 0;
     font-size: 15px;
     font-weight: 700;
   }
   .from {
+    color: var(--muted);
+    font-weight: 550;
     white-space: pre;
   }
   .lead {
-    margin: -8px 0 0;
+    margin: -6px 0 0;
     color: var(--muted);
-    font-size: 12.5px;
     line-height: 1.5;
-  }
-  .grp {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    min-width: 0;
-  }
-  .lab {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--muted);
   }
   .row {
     display: flex;
+    align-items: center;
     gap: 8px;
+  }
+  .path-in {
+    flex: 1;
+    height: 32px;
+    font-size: 12px;
   }
   .git {
     display: flex;
     align-items: center;
     gap: 7px;
-    font-size: 11px;
+    font-family: var(--mono);
+    font-size: 11.5px;
   }
-  .d {
+  .gd {
     width: 6px;
     height: 6px;
+    flex: none;
     border-radius: 50%;
   }
   .history {
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 12px;
-    padding: 12px 14px;
-    border: 1px solid var(--line2);
-    border-left: 2px solid var(--accent);
-    border-radius: var(--r-sm);
-    background: var(--elev);
+    padding: 11px 13px;
+    border-radius: 10px;
+    background: rgba(var(--fg-rgb), 0.035);
+    box-shadow: inset 0 0 0 1px var(--line);
   }
   .found {
     margin: 0;
+    color: var(--soft);
     font-size: 12.5px;
     line-height: 1.5;
-  }
-  .two {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 16px;
-    align-items: end;
-  }
-  .preview {
-    height: 36px;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 0 14px;
-    border: 1px solid var(--line2);
-    border-bottom: 2px solid;
-    border-radius: var(--r-sm);
-    background: var(--bg);
-    font-weight: 600;
-    white-space: nowrap;
-    max-width: 220px;
-    overflow: hidden;
-  }
-  .sw {
-    width: 10px;
-    height: 10px;
-    border-radius: 3px;
-    flex: none;
-  }
-  .colors {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 9px;
-  }
-  .swatch {
-    width: 26px;
-    height: 26px;
-    border-radius: 8px;
-    border: none;
-    padding: 0;
-    cursor: pointer;
   }
   .toggle {
     display: flex;
@@ -571,80 +539,98 @@
   }
   .tx {
     flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
+    display: grid;
+    gap: 2px;
   }
   .tt {
-    font-size: 13.5px;
-    font-weight: 600;
+    font-weight: 550;
   }
   .ts {
-    font-size: 12px;
     color: var(--muted);
+    font-size: 12px;
     text-wrap: pretty;
   }
-  .card {
-    border: 1px solid var(--line2);
-    border-radius: 9px;
-    background: var(--bg);
-  }
-  .card.on {
-    border-color: var(--accent);
-    background: color-mix(in oklch, var(--accent) 7%, var(--bg));
-  }
-  .pick {
-    width: 100%;
+  .two {
     display: grid;
-    grid-template-columns: 16px 1fr;
-    column-gap: 12px;
-    row-gap: 3px;
-    padding: 11px 14px;
-    border: none;
-    background: transparent;
-    color: var(--text);
-    text-align: left;
-    cursor: pointer;
+    grid-template-columns: minmax(200px, 1fr) minmax(0, max-content);
+    gap: 18px;
   }
-  .radio {
-    grid-row: span 2;
-    width: 16px;
-    height: 16px;
-    margin-top: 1px;
-    border-radius: 50%;
-    border: 1.5px solid var(--line2);
+  /* The folder beside the title, cut short when it is long. */
+  .chip-sm.path {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 380px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .card.on .radio {
-    border: 5px solid var(--accent);
+  /* The project's tile as the rail will show it: its initials on its colour. */
+  .tile {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    background: var(--c);
+    color: var(--on-tile);
+    font: 650 12px/1 var(--font);
   }
-  .ct {
-    font-weight: 700;
+  .name {
+    flex: 1;
+    min-width: 0;
+    height: 32px;
     font-size: 13px;
+    font-weight: 550;
   }
-  .cd {
-    color: var(--muted);
-    font-size: 12px;
-    line-height: 1.45;
+  .swatches {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+  }
+  .swatches button {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 7px;
+    background: var(--c);
+    cursor: pointer;
+    transition: transform 0.15s var(--ease);
+  }
+  .swatches button:hover {
+    transform: scale(1.1);
+  }
+  .swatches button[aria-pressed='true'] {
+    box-shadow:
+      0 0 0 2px var(--raise),
+      0 0 0 4px var(--c);
+  }
+  .sub {
+    display: grid;
+    gap: 8px;
+    margin: 4px 0 4px 28px;
+  }
+  .sw {
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
   }
   .private {
-    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 11.5px;
   }
-  .source {
-    margin: 0 14px 12px 42px;
-    height: 30px;
-    max-width: 260px;
-    font-size: 12.5px;
+  .private.alone {
+    margin: 4px 0 0;
+  }
+  .without {
+    margin-right: auto;
   }
   .sp {
     flex: 1;
-  }
-  .btn.link {
-    border: none;
-    background: none;
-    color: var(--muted);
-    padding: 0 6px;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    text-decoration-color: var(--line2);
   }
 </style>

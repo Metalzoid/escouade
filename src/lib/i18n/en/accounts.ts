@@ -98,6 +98,8 @@ export default defineZone('accounts', {
     nothingToShare: '{name} has no settings, CLAUDE.md, skills, agents, commands, plugins, hooks or output styles to share.',
     neverShared: 'The sign-in (.credentials.json) and .claude.json are never shared: each account has its own.',
     create: 'Create and sign in',
+    /** Above the sign-in's terminal. */
+    signIn: 'Sign-in',
     signInHint: 'Sign in in the terminal below (use the /login command if Claude Code doesn’t offer it).',
     connected: 'Signed in as {email}',
     connectedNoEmail: 'Signed in',

@@ -77,6 +77,8 @@
   --on-primary-dim: #4a4e55;
   --on-wait: #1a1405;
   --on-hit: #fff;
+  /* The tick of a checkbox on the project's colour (lot 11a): white in both themes. */
+  --on-tick: #fff;
   --vo-base: #070809;
   --orb-base: #0b0c0e;
   /* Code, diffs and the terminal (xterm's theme, CodeMirror's highlight). */
@@ -954,4 +956,228 @@ kbd,
   from {
     opacity: 0;
   }
+}
+
+/* ---------- The windows' controls (lot 11a): a notice, a drawn checkbox, choices, chips ---------- */
+
+/* What a window says before its fields: an icon in amber, the subject in bold (the preview's `.notice`). */
+.w-notice {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 10px;
+  margin: 0;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: rgba(var(--fg-rgb), 0.035);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--soft);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.w-notice > .icon {
+  margin-top: 1px;
+  color: var(--wait);
+}
+
+.w-notice b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* A checkbox drawn: its native box kept for the pointer, the keyboard and screen readers, unseen over the drawn one; the
+   project's colour once ticked. */
+.w-tick {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--soft);
+  cursor: pointer;
+}
+
+.w-tick > input {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.w-tick > .tick-box {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+  color: transparent;
+}
+
+.w-tick > .tick-box .icon {
+  stroke-width: 2;
+}
+
+.w-tick > input:checked + .tick-box,
+.w-tick > input:indeterminate + .tick-box {
+  background: color-mix(in oklch, var(--p) 75%, black);
+  box-shadow: none;
+  color: var(--on-tick);
+}
+
+/* Some of a group ticked: a bar, not the tick. */
+.w-tick > input:indeterminate + .tick-box .icon {
+  display: none;
+}
+
+.w-tick > input:indeterminate + .tick-box::after {
+  content: '';
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.w-tick > input:focus-visible + .tick-box {
+  outline: 2px solid var(--p-ink);
+  outline-offset: 2px;
+}
+
+.w-tick > input:disabled + .tick-box {
+  opacity: 0.4;
+}
+
+/* One choice among a few, each with what it does (the preview's `.radios`). */
+.w-radios {
+  display: grid;
+  gap: 2px;
+}
+
+.w-radio {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 12px;
+  width: calc(100% + 24px);
+  margin: 0 -12px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.w-radio:hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--hover);
+}
+
+.w-radio[aria-checked='true'] {
+  background: rgba(var(--fg-rgb), 0.04);
+}
+
+.w-radio:disabled,
+.w-radio[aria-disabled='true'] {
+  cursor: default;
+}
+
+.w-radio:disabled > *,
+.w-radio[aria-disabled='true'] > * {
+  opacity: 0.55;
+}
+
+.w-radio:focus-visible {
+  outline: 2px solid var(--p-ink);
+  outline-offset: -2px;
+}
+
+.w-radio > .dot {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+
+.w-radio[aria-checked='true'] > .dot {
+  box-shadow: inset 0 0 0 5px color-mix(in oklch, var(--p) 75%, white);
+}
+
+.w-radio b {
+  display: block;
+  font-weight: 550;
+}
+
+.w-radio .d {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* A chip that is on or off (`aria-pressed`): a file shared, a project to copy, a branch. */
+.w-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.w-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 9px 0 7px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.w-chip:hover {
+  color: var(--text);
+}
+
+.w-chip[aria-pressed='true'] {
+  background: rgba(var(--fg-rgb), 0.07);
+  color: var(--text);
+}
+
+.w-chip.bad {
+  box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.45);
+  color: var(--del);
+}
+
+.w-chip > .icon {
+  color: var(--muted);
+}
+
+/* A field with its label above it (the preview's `.fld`). */
+.w-fld {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.w-fld > .lab {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.w-fld > .help {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
 }

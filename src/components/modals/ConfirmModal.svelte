@@ -62,7 +62,7 @@
     </label>
   {/if}
   {#snippet footer()}
-    <button class="btn ghost" onclick={cancel}>{t('common.cancel')}</button>
+    <button class="btn" onclick={cancel}>{t('common.cancel')}</button>
     {#if alt}
       <button class="btn" disabled={busy} onclick={() => choose(alt.onClick)}>{alt.label}</button>
     {/if}
@@ -73,7 +73,7 @@
 <style>
   .p {
     margin: 0;
-    color: var(--muted);
+    color: var(--soft);
     line-height: 1.55;
   }
   .lead {

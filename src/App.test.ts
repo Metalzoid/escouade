@@ -777,7 +777,7 @@ describe('App ticket window', () => {
     const backend = await onBoard({ ticket_create: () => made });
     await userEvent.click(plus());
     const dialog = await screen.findByRole('dialog', { name: 'Nouveau ticket' });
-    expect(dialog).toHaveStyle({ width: '760px' });
+    expect(dialog.style.getPropertyValue('--w')).toBe('760px');
     expect(title()).toHaveFocus();
     // The column holds no form of its own.
     expect(within(screen.getByRole('region', { name: 'À faire' })).queryByRole('textbox')).toBeNull();
