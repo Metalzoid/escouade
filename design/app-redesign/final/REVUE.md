@@ -50,7 +50,7 @@ Le détecteur d'Impeccable a été passé deux fois : sur les sources (`impeccab
 disposition: fix → corrections faites ci-dessus ; ce qui reste est listé.
 
 - **persistence** : PRODUCT.md existe et est à jour. Chemin code-led : pas de tour de comps ni de `state.json` ; l'aperçu validé par l'utilisateur (« implémente le redesign comme ça », 2026-10-12, direction claire le 2026-10-23) tient lieu de comp, comme le dit le contrat. DESIGN.md est écrit après cette revue.
-- **fidelity** : chaque écran est comparé à l'aperçu par les e2e « look » (styles calculés, places, dans les deux thèmes, aux deux tailles) : 67 tests verts avant les retouches. TYPE : Inter variable (cv11, ss03) et JetBrains Mono, comme l'aperçu. MATERIAL : surfaces plates teintées, filets, ombres sous ce qui flotte seulement, comme l'aperçu. GROUND : cadre `--p` 8 % sur #08090a en sombre, 7 % sur #f0f1f3 en clair, lu identique dans l'aperçu et l'app. Adaptations citées : la marque du harness n'apparaît qu'avec deux harness au travail (choix 14) ; les couleurs des modèles par rang, pas par nom (quatre harness, d'autres modèles que ceux de Claude) ; les replis par `@container` (demande du 2026-10-24) ; les choix 50 à 58, en attente de l'utilisateur.
+- **fidelity** : chaque écran est comparé à l'aperçu par les e2e « look » (styles calculés, places, dans les deux thèmes, aux deux tailles) : 67 tests verts avant les retouches. TYPE : Inter variable (cv11, ss03) et JetBrains Mono, comme l'aperçu. MATERIAL : surfaces plates teintées, filets, ombres sous ce qui flotte seulement, comme l'aperçu. GROUND : cadre `--p` 8 % sur #08090a en sombre, 7 % sur #f0f1f3 en clair, lu identique dans l'aperçu et l'app. Adaptations citées : la marque du harness n'apparaît qu'avec deux harness au travail (choix 14) ; les couleurs des modèles par rang, pas par nom (quatre harness, d'autres modèles que ceux de Claude) ; les replis par `@container` (demande du 2026-10-24) ; les choix 50 à 58, validés par l'utilisateur le 2026-10-24.
 - **ceiling** : atteint pour ce monde (Linear, Raycast) : teint par projet qui glisse, lumière du projet, filets, icônes tracées, chiffres tabulaires, sélection et barres de défilement aux couleurs du thème, focus du projet.
 - **material_fixes** : les sept corrections ci-dessus.
 - **keep** : l'agent qui attend en tête, en ambre, et la fenêtre qui prend la couleur du projet.
@@ -100,7 +100,7 @@ Les harness Claude Code, Codex, OpenCode et Copilot CLI sont joués par leurs fa
 | 37. Bande verte « Escouade garde le fil » d'OpenCode | | `terminals-look.spec.ts`, capture `opencode-view-small-en` |
 | 38. Demandes de la conversation en cartes | « Toujours autoriser » d'OpenCode, « Pour cette session » de Codex et Copilot | `opencode.spec.ts`, `codex.spec.ts`, `copilot.spec.ts`, `sidebar.spec.ts` (`list-answers`) |
 | 39–49. Barre des projets | tuiles, menu, beaucoup de projets, premier démarrage | `rail.spec.ts`, `shell.spec.ts` |
-| 50–58. En attente de l'utilisateur | gardés tels quels | `choices-look.spec.ts`, captures `choice-*` |
+| 50–58. Validés par l'utilisateur le 2026-10-24 | gardés tels quels | `choices-look.spec.ts`, captures `choice-*` |
 
 ## Responsive : le tour de tous les écrans
 
@@ -112,7 +112,7 @@ L'app réelle (build de debug, données du banc e2e), prise par les specs e2e av
 
 **Chaque écran en quatre variantes** : `<écran>.png` (1440 × 900, sombre), `<écran>-light.png` (1440 × 900, clair), `<écran>-small.png` (1028 × 779, sombre), `<écran>-small-light.png` (1028 × 779, clair). Les écrans : `account-codex`, `account-signin`, `accounts-quotas`, `agent-menu`, `agents`, `card-pr`, `card-running`, `card-waiting`, `copilot-view`, `editor`, `git`, `history`, `kanban`, `opencode-view`, `overview`, `plan`, `plan-closed`, `pr-open`, `private`, `run`, `run-conflict`, `settings-about`, `settings-accounts`, `settings-app`, `settings-board`, `settings-claude`, `settings-integrations`, `settings-mcp`, `settings-network`, `settings-notifications`, `settings-projects`, `settings-terminals`, `settings-voice`, `sidebar`, `stats`, `terminal`, `test`, `test-run`, `ticket`, `update`, `wizard`, `wizard-private`, `wizard-summary`.
 
-**Les choix 50 à 58** (en attente de l'utilisateur), à 1028 × 779, en sombre puis en clair (`-light`) :
+**Les choix 50 à 58** (validés par l'utilisateur le 2026-10-24), à 1028 × 779, en sombre puis en clair (`-light`) :
 - 50 et 51 (en-tête replié, le chemin garde la branche) : `final/choice-50-51-header.png`, `final/choice-50-51-header-light.png`
 - 52 (« … » reprend la disposition et les fichiers) : `final/choice-52-more.png`, `final/choice-52-more-light.png`
 - 53, 54 et 55 (actions de l'arbre au survol, pas d'icône de type, arbre de 200 px) : `final/choice-53-54-55-tree.png`, `final/choice-53-54-55-tree-light.png`

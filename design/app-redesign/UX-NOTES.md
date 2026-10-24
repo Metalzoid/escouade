@@ -211,7 +211,7 @@ Demandé par l'utilisateur le 2026-10-23 : « fais la navigation des projets sur
 
 Remonté par l'utilisateur le 2026-10-24 : l'en-tête d'un agent débordait quand le panneau de droite (fichiers, diff, historique) était ouvert. Dans l'aperçu aussi : à 1028 px, `#git` ne laissait du nom qu'un « p » et coupait le chemin avant la branche. Les replis suivent la largeur de la colonne de la conversation (`@container conv`), pas celle de la fenêtre ; l'app (`Conversation.svelte`) et l'aperçu ont les mêmes paliers.
 
-**À valider par l'utilisateur** : les choix 50 à 52.
+**Validés par l'utilisateur le 2026-10-24** (« Les screens sont ok ! », sur les captures de `final/choice-*`) : les choix 50 à 52.
 
 ## Adresses
 
@@ -233,7 +233,7 @@ Remonté par l'utilisateur le 2026-10-24 : l'en-tête d'un agent débordait quan
 
 L'aperçu dessine l'éditeur (`#editor`) sans ce que l'app y fait de plus : les actions de l'arbre, la recherche dans les fichiers, « Voir les changements », les fenêtres « Ouvrir un fichier » (Ctrl P) et « Rechercher dans les conversations » (Ctrl K). Les replis suivent la place de l'éditeur (`@container editor` et `editor-pane`), pas la largeur de la fenêtre.
 
-**À valider par l'utilisateur** : les choix 53 à 56.
+**Validés par l'utilisateur le 2026-10-24** (« Les screens sont ok ! », sur les captures de `final/choice-*`) : les choix 53 à 56.
 
 ## Adresses
 
@@ -257,7 +257,7 @@ L'aperçu dessine l'éditeur (`#editor`) sans ce que l'app y fait de plus : les 
 
 L'app suit `#settings` et ses onglets, et les adresses du lot 0 bis (`#private`, `#private-accounts`, `#worktree-cleanup`, `#accounts-quotas`) : `tests/e2e/settings-look.spec.ts` les compare dans les deux thèmes et aux deux tailles. Les choix 2 (onglet « Serveur MCP », « Quand un quota est épuisé » dans Comptes), 13 (échec de mise à jour gardé dans À propos), 18 à 20, 27 à 29, 31, 34 et 35 y sont en place. La fenêtre des réglages est au-dessus de tout : le panneau latéral ne change pas sa largeur ; ses replis suivent la largeur de son corps (`@container settings`).
 
-**À valider par l'utilisateur** : les choix 57 et 58.
+**Validés par l'utilisateur le 2026-10-24** (« Les screens sont ok ! », sur les captures de `final/choice-*`) : les choix 57 et 58.
 
 ## Choix
 
