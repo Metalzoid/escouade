@@ -109,16 +109,18 @@
     display: flex;
     flex-direction: column;
     padding: 5px;
-    border-radius: var(--r);
-    border: 1px solid var(--line2);
-    background: var(--elev);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
-    animation: ccFadeIn 0.08s ease-out;
+    border-radius: 11px;
+    background: var(--raise-2);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 18px 48px -10px rgba(0, 0, 0, calc(0.8 * var(--shade)));
+    animation: ccFadeIn 0.08s var(--ease);
   }
   .title {
-    padding: 6px 10px 4px;
-    font-size: 11px;
-    color: var(--dim);
+    padding: 7px 9px 5px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--muted);
   }
   .list {
     max-height: 340px;
@@ -132,16 +134,16 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: 6px 10px;
-    border-radius: var(--r-sm);
+    padding: 6px 9px;
+    border-radius: 7px;
     cursor: pointer;
   }
   .opt.on {
-    background: var(--elev2);
+    background: rgba(var(--fg-rgb), 0.06);
   }
   /* Where the keys are: the list has the focus. */
   .list:focus .opt.on {
-    box-shadow: inset 2px 0 0 var(--accent);
+    box-shadow: inset 2px 0 0 var(--p-ink);
   }
   .where,
   .text {
@@ -150,6 +152,7 @@
     white-space: nowrap;
   }
   .where {
+    font-family: var(--mono);
     font-size: 12px;
     color: var(--text);
   }

@@ -22,8 +22,8 @@ export default defineZone('editor', {
   },
 
   head: {
-    back: '← Conversation',
-    unsaved: '● Unsaved · {key}',
+    back: 'Conversation',
+    unsaved: 'Unsaved',
     saved: 'Saved',
   },
 
@@ -44,12 +44,14 @@ export default defineZone('editor', {
     revealRoot: { windows: 'Reveal in File Explorer', mac: 'Reveal in Finder', linux: 'Open the folder' },
     rename: 'Rename…',
     deleteKey: 'Del',
+    deleteKeyMac: '⌘⌫',
     copyRelativePath: 'Copy relative path',
   },
 
   diff: {
     newFile: 'New file · not in {reference}',
-    changedLines: { one: '{n} line changed vs {reference}', other: '{n} lines changed vs {reference}' },
+    changedCount: { one: '{n} line', other: '{n} lines' },
+    changedVs: { one: 'changed from {reference}', other: 'changed from {reference}' },
     same: 'Same as {reference}',
     show: 'Show changes',
   },
@@ -197,6 +199,24 @@ export default defineZone('editor', {
     keyChoose: 'choose',
     keyOpen: 'open',
     keyClose: 'close',
+  },
+
+  find: {
+    label: 'Find in file',
+    find: 'Find',
+    replace: 'Replace',
+    of: '{i} of {n}',
+    total: { one: '{n} result', other: '{n} results' },
+    none: 'No results',
+    matchCase: 'Match case',
+    regexp: 'Regular expression',
+    wholeWord: 'Whole word',
+    previous: 'Previous',
+    next: 'Next',
+    close: 'Close',
+    replaceOne: 'Replace',
+    replaceAll: 'All',
+    replaceAllLabel: 'Replace all',
   },
 
   // CodeMirror's own English, but for the word the app uses for a chunk (« block »).

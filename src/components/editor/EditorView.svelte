@@ -11,7 +11,7 @@
   import { navHistory, type NavEntry } from '../../lib/editor/history';
   import { detectIndent } from '../../lib/editor/indent';
   import { languageLabel, loadLanguage } from '../../lib/editor/languages';
-  import { readTreeWidth, TREE_DEFAULT, TREE_MIN, treeMax, writeTreeWidth } from '../../lib/editor/layout';
+  import { readTreeWidth, treeDefault, TREE_MIN, treeMax, writeTreeWidth } from '../../lib/editor/layout';
   import { DEFAULT_ALIASES, fileSet, linkResolvers, parseAliases, type Aliases } from '../../lib/editor/links';
   import { setEditorJump } from '../../lib/editor/quick-open';
   import { fileSearches, setFindInFiles } from '../../lib/editor/search.svelte';
@@ -26,6 +26,7 @@
   import { app } from '../../lib/state.svelte';
   import { terminalIn } from '../../lib/term-actions';
   import type { Project } from '../../lib/types';
+  import Icon from '../Icon.svelte';
   import Splitter from '../Splitter.svelte';
   import CodeEditor from './CodeEditor.svelte';
   import EditorTabs from './EditorTabs.svelte';
@@ -42,11 +43,13 @@
 
   /** The width of the editor's area, which the left column takes at most half of: the window's until it is measured. */
   let area = $state(window.innerWidth);
-  /** The width of the left column chosen with its handle, the same for all projects. */
+  /** The width of the left column chosen with its handle, the same for all projects; null for the usual one. */
   let treeWidth = $state(readTreeWidth());
+  /** The usual width of the column, by the editor's own room (not the window's). */
+  const usual = $derived(treeDefault(area));
   const treeLimit = $derived(treeMax(area));
   /** What it is drawn at: too narrow an area for the width chosen draws it narrower, and the width chosen comes back with the room. */
-  const treeShown = $derived(clamp(treeWidth, TREE_MIN, treeLimit));
+  const treeShown = $derived(clamp(treeWidth ?? usual, TREE_MIN, treeLimit));
 
   const st = $derived(app.editor[project.id]);
   const source = $derived(st?.source ?? 'project');
@@ -485,7 +488,12 @@
       items.push(
         { label: '', separator: true },
         { label: t('editor.menu.rename'), hint: 'F2', onClick: () => startRename(r) },
-        { label: t('common.delete'), hint: IS_MAC ? '⌘⌫' : t('editor.menu.deleteKey'), danger: true, onClick: () => remove(r) },
+        {
+          label: t('common.delete'),
+          hint: t(IS_MAC ? 'editor.menu.deleteKeyMac' : 'editor.menu.deleteKey'),
+          danger: true,
+          onClick: () => remove(r),
+        },
       );
     }
     const root = tree?.root;
@@ -512,20 +520,24 @@
   );
 
   /** What the file differs by from its reference version; `same` when it does not differ (nothing to flag). */
-  const diff = $derived.by((): { label: string; same: boolean } => {
+  // « 5 lignes » (`count`, in green) « modifiées par rapport à main » (`label`).
+  const diff = $derived.by((): { count: string; label: string } => {
     const base = buf?.base;
-    if (!buf || buf.kind !== 'text' || !base) return { label: '', same: false };
-    if (base.text === null) return { label: t('editor.diff.newFile', { reference: base.reference }), same: false };
-    if (changesKey !== buf.key) return { label: '', same: false };
+    if (!buf || buf.kind !== 'text' || !base) return { count: '', label: '' };
+    if (base.text === null) return { count: '', label: t('editor.diff.newFile', { reference: base.reference }) };
+    if (changesKey !== buf.key) return { count: '', label: '' };
     return changes.count
-      ? { label: t('editor.diff.changedLines', { count: changes.count, n: fInt(changes.count), reference: base.reference }), same: false }
-      : { label: t('editor.diff.same', { reference: base.reference }), same: true };
+      ? {
+          count: t('editor.diff.changedCount', { count: changes.count, n: fInt(changes.count) }),
+          label: t('editor.diff.changedVs', { count: changes.count, reference: base.reference }),
+        }
+      : { count: '', label: t('editor.diff.same', { reference: base.reference }) };
   });
-  /** The tree's count of files and of changes, as one line. */
+  /** The tree's count of files and of changes, as one line after « Fichiers »: « 128 · 3 modif. ». */
   const summary = $derived(
     tree
       ? [
-          t('editor.count.files', { count: tree.files.length, n: fInt(tree.files.length) }),
+          fInt(tree.files.length),
           t('editor.count.changes', { count: changedCount, n: fInt(changedCount) }),
           tree.truncated ? t('editor.count.listTruncated') : null,
         ]
@@ -723,9 +735,11 @@
 </script>
 
 <main class="editor">
-  <header class="head">
-    <button class="back" onclick={() => app.closeEditor(project.id)}>{t('editor.head.back')}</button>
-    <span class="sep"></span>
+  <!-- The bar of the editor (`.ed-bar`): back to the conversation, the source, whether it is saved, « Enregistrer ». -->
+  <header class="ed-bar">
+    <button class="btn" onclick={() => app.closeEditor(project.id)}
+      ><span class="back"><Icon name="right" size={14} /></span>{t('editor.head.back')}</button
+    >
     <SourcePicker
       {project}
       {source}
@@ -733,106 +747,81 @@
       git={app.git[project.id]}
       onpick={(s) => app.openEditor({ projectId: project.id, source: s })}
     />
-    <div style="flex:1"></div>
-    {#if buf?.kind === 'text'}
-      <span class="hint mono" class:dirty>{dirty ? t('editor.head.unsaved', { key: keyLabel('Ctrl+S') }) : t('editor.head.saved')}</span>
-    {/if}
-    <button class="btn" class:primary={dirty} disabled={buf?.kind !== 'text' || (!dirty && buf.disk === 'ok')} onclick={save}
-      >{t('common.save')}</button
+    <span class="saved" class:dirty>{buf?.kind === 'text' ? (dirty ? t('editor.head.unsaved') : t('editor.head.saved')) : ''}</span>
+    <button
+      class="btn"
+      class:primary={dirty}
+      aria-keyshortcuts="Control+S"
+      disabled={buf?.kind !== 'text' || (!dirty && buf.disk === 'ok')}
+      onclick={save}>{t('common.save')}<kbd aria-hidden="true">{keyLabel('Ctrl+S').split('+').join(' ')}</kbd></button
     >
   </header>
   <div class="body" use:observeWidth={(w) => (area = w)}>
     <!-- The left column: the files' tree or the search, both kept to find them again as they were. Not `.side`, the
          sidebar's class: one locator must not find both. -->
     <aside class="editor-side" style:width="{treeShown}px">
-      <div class="views">
-        <div class="segmented small" role="group" aria-label={t('editor.side.viewLabel')}>
-          <button
-            class:on={!search.shown}
-            aria-pressed={!search.shown}
-            aria-label={t('common.files')}
-            use:tip={t('common.files')}
-            onclick={() => (search.shown = false)}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
-              ><path d="M9 2.5H5A1.5 1.5 0 0 0 3.5 4v8A1.5 1.5 0 0 0 5 13.5h6a1.5 1.5 0 0 0 1.5-1.5V6M9 2.5 12.5 6M9 2.5V6h3.5" /></svg
+      <div class="tree-h">
+        <div class="th-row">
+          {#if search.shown}
+            <b>{t('editor.search.title')}</b>
+          {:else}
+            <b
+              >{t('common.files')}
+              {#if tree}<span class="n">{summary}</span>{/if}</b
             >
-          </button>
-          <button
-            class:on={search.shown}
-            aria-pressed={search.shown}
-            aria-label={t('editor.side.searchFiles')}
-            use:tip={t('editor.side.searchFilesKey', { key: keyLabel('Ctrl+Shift+F') })}
-            onclick={showSearch}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
-              ><circle cx="7" cy="7" r="4.2" /><path d="M10.2 10.2 13.5 13.5" /></svg
-            >
-          </button>
-        </div>
-      </div>
-      <div class="view" hidden={search.shown}>
-        <div class="ftitle">
-          <div class="row">
-            <span class="label">{t('common.files')}</span>
             <div class="actions">
               <button
                 class="act"
                 aria-label={t('editor.side.newFile')}
                 use:tip={t('editor.side.newFile')}
                 disabled={!tree}
-                onclick={() => newHere('file')}
+                onclick={() => newHere('file')}><Icon name="file-plus" size={14} /></button
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
-                  ><path
-                    d="M8.5 2H4.5A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14H8M8.5 2 13 6.5M8.5 2v4.5H13M13 6.5V9M12 10.5v4M10 12.5h4"
-                  /></svg
-                >
-              </button>
               <button
                 class="act"
                 aria-label={t('editor.side.newFolder')}
                 use:tip={t('editor.side.newFolder')}
                 disabled={!tree}
-                onclick={() => newHere('dir')}
+                onclick={() => newHere('dir')}><Icon name="folder-plus" size={14} /></button
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
-                  ><path
-                    d="M8 13H3.5A1.5 1.5 0 0 1 2 11.5v-7A1.5 1.5 0 0 1 3.5 3h2.6l1.5 1.5h4.9A1.5 1.5 0 0 1 14 6v2.5M12 10.5v4M10 12.5h4"
-                  /></svg
-                >
-              </button>
               <button
                 class="act"
                 aria-label={t('common.refresh')}
                 use:tip={t('common.refresh')}
-                onclick={() => refresh(project.id, source, false)}
+                onclick={() => refresh(project.id, source, false)}><Icon name="restart" size={14} /></button
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5V5h-2.5" /></svg>
-              </button>
               <button
                 class="act"
                 aria-label={t('common.collapseAll')}
                 use:tip={t('common.collapseAll')}
-                onclick={() => app.collapseEditorDirs(project.id, source)}
+                onclick={() => app.collapseEditorDirs(project.id, source)}><Icon name="collapse" size={14} /></button
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
-                  ><rect x="5.5" y="5.5" width="8" height="8" rx="1" /><path d="M3 10.5V3.8a.8.8 0 0 1 .8-.8h6.7M7.5 9.5h4" /></svg
-                >
-              </button>
             </div>
-          </div>
-          <span class="mono dim root" use:tip={tree?.root}
-            >{srcAgent
-              ? srcAgent.worktree
-                ? worktreeLabel(project.path, srcAgent.worktree.path)
-                : tildify(project.path)
-              : tildify(project.path)}</span
-          >
-          {#if tree}
-            <span class="mono dim count">{summary}</span>
           {/if}
+          <div class="views" role="group" aria-label={t('editor.side.viewLabel')}>
+            <button
+              class="act"
+              aria-pressed={!search.shown}
+              aria-label={t('common.files')}
+              use:tip={t('common.files')}
+              onclick={() => (search.shown = false)}><Icon name="file" size={14} /></button
+            >
+            <button
+              class="act"
+              aria-pressed={search.shown}
+              aria-label={t('editor.side.searchFiles')}
+              use:tip={t('editor.side.searchFilesKey', { key: keyLabel('Ctrl+Shift+F') })}
+              onclick={showSearch}><Icon name="search" size={14} /></button
+            >
+          </div>
         </div>
+        {#if !search.shown}
+          <span class="caption mono" use:tip={tree?.root}
+            >{srcAgent?.worktree ? worktreeLabel(project.path, srcAgent.worktree.path) : tildify(project.path)}</span
+          >
+        {/if}
+      </div>
+      <div class="view" hidden={search.shown}>
         <div class="scroll">
           <FileTree
             bind:this={fileTree}
@@ -868,7 +857,7 @@
       value={treeShown}
       min={TREE_MIN}
       max={treeLimit}
-      reset={TREE_DEFAULT}
+      reset={usual}
       label={t('editor.side.widthLabel')}
       onresize={(w) => (treeWidth = w)}
       oncommit={writeTreeWidth}
@@ -878,21 +867,38 @@
       {#if !activePath}
         <div class="empty">{t('editor.empty.selectFile')}</div>
       {:else}
-        <div class="crumbs mono">
-          <span class="path">{activePath.split('/').join('  /  ')}</span>
-          <div style="flex:1"></div>
-          <span class:add={!!diff.label && !diff.same}>{diff.label}</span>
+        {@const parts = activePath.split('/')}
+        <div class="crumbs">
+          <span class="path" use:tip={{ text: activePath, cut: true }}
+            >{#each parts as part, i (i)}{#if i}<Icon name="right" size={12} />{/if}<span class:last={i === parts.length - 1}>{part}</span
+              >{/each}</span
+          >
+          <span class="vs"
+            >{#if diff.count}<span class="add">{diff.count}</span>{' '}{/if}<span class="lbl">{diff.label}</span></span
+          >
           <!-- The comparison with the disk takes the text while it lasts: its banner tells what is shown. -->
           {#if reference !== null && !onDisk}
             <!-- A toggle keeps its name, `aria-pressed` and its look say whether it is on. -->
-            <button class="changes" aria-pressed={changesShown} onclick={() => (changesShown = !changesShown)}
-              >{t('editor.diff.show')}</button
+            <button
+              class="changes"
+              aria-pressed={changesShown}
+              aria-label={t('editor.diff.show')}
+              use:tip={t('editor.diff.show')}
+              onclick={() => (changesShown = !changesShown)}
+              ><Icon name="read" size={14} /><span class="lbl">{t('editor.diff.show')}</span></button
             >
           {/if}
         </div>
         {#if buf?.disk === 'changed'}
           <div class="banner" role="alert">
-            {onDisk ? (onDisk.replaced ? t('editor.banner.newerOnDisk') : t('editor.banner.comparing')) : t('editor.banner.changed')}
+            <Icon name="info" size={14} />
+            <span class="msg"
+              >{onDisk
+                ? onDisk.replaced
+                  ? t('editor.banner.newerOnDisk')
+                  : t('editor.banner.comparing')
+                : t('editor.banner.changed')}</span
+            >
             <button class="btn small" onclick={() => reload(buf.key)}>{t('editor.banner.reload')}</button>
             {#if !onDisk}
               <button class="btn small" onclick={() => compareDisk(buf.key)}>{t('editor.banner.compare')}</button>
@@ -904,7 +910,8 @@
           </div>
         {:else if buf?.disk === 'deleted'}
           <div class="banner" role="alert">
-            {t('editor.banner.deleted')}
+            <Icon name="info" size={14} />
+            <span class="msg">{t('editor.banner.deleted')}</span>
             <button class="btn small" onclick={() => closeTab(buf.path)}>{t('common.close')}</button>
             <button class="btn small" onclick={() => keep(buf.key)}>{t('editor.banner.recreate')}</button>
           </div>
@@ -943,14 +950,19 @@
           {#if picking}
             <TargetPicker targets={picking.targets} label={picking.label} at={picking.at} onpick={pick} onclose={() => (picking = null)} />
           {/if}
-          <div class="status mono">
+          <!-- The status line (`.ed-status`): position, language, encoding, ends of lines, indentation; the source at the end. -->
+          <div class="status">
             <span>{t('editor.status.position', { line: cursor.line, col: cursor.col })}</span>
             <span>{languageLabel(activePath)}</span>
-            <span>UTF-8</span>
-            <span>{buf.eol === 'crlf' ? 'CRLF' : 'LF'}</span>
-            <span>{indent.tabs ? t('editor.status.tabs') : t('editor.status.spaces', { size: indent.size })}</span>
-            <div style="flex:1"></div>
-            <span class="source" use:tip={{ text: sourceLabel, cut: true }}>{sourceLabel}</span>
+            <span class="enc">UTF-8</span>
+            <span class="enc">{buf.eol === 'crlf' ? 'CRLF' : 'LF'}</span>
+            <span class="ind">{indent.tabs ? t('editor.status.tabs') : t('editor.status.spaces', { size: indent.size })}</span>
+            <span class="source"
+              ><span class="kind">{srcAgent ? t('editor.source.kindWorktree') : t('editor.source.kindBranch')} ·</span>
+              <span class="mono" use:tip={{ text: sourceLabel, cut: true }}
+                >{srcAgent ? srcAgent.name : app.git[project.id]?.branch || t('editor.source.noBranch')}</span
+              ></span
+            >
           </div>
         {/if}
       {/if}
@@ -959,107 +971,120 @@
 </main>
 
 <style>
+  /* What gives way when the editor's own room shrinks (container queries, not the window's width): the key of
+     « Enregistrer » and « worktree » first, then « Enregistré ». */
   .editor {
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
+    container: editor / inline-size;
   }
-  .head {
-    height: 60px;
+  @container editor (max-width: 560px) {
+    .ed-bar kbd,
+    .ed-bar :global(.src .kind) {
+      display: none;
+    }
+  }
+  @container editor (max-width: 460px) {
+    .saved {
+      visibility: hidden;
+    }
+  }
+  .ed-bar {
+    height: 52px;
     flex: none;
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 0 18px 0 14px;
+    gap: 10px;
+    padding: 0 14px 0 12px;
     border-bottom: 1px solid var(--line);
     white-space: nowrap;
   }
   .back {
-    height: 30px;
-    padding: 0 10px;
-    border: none;
-    border-radius: var(--r-sm);
-    background: transparent;
+    display: grid;
+    transform: rotate(180deg);
     color: var(--muted);
-    font: inherit;
-    font-size: 12.5px;
-    font-weight: 600;
-    cursor: pointer;
   }
-  .back:hover {
-    background: var(--elev2);
-    color: var(--text);
+  .saved {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 12px;
   }
-  .sep {
-    width: 1px;
-    height: 22px;
-    background: var(--line2);
-  }
-  .hint {
-    font-size: 11px;
-    color: var(--dim);
-  }
-  .hint.dirty {
-    color: var(--wait);
+  .saved.dirty {
+    color: var(--warn-ink);
   }
   .body {
     flex: 1;
     min-height: 0;
     display: flex;
   }
+  /* The tree (`.tree`): 12 px from the top, 8 from the sides, a line on its right: the splitter's, over its last pixel,
+     as the design's column of 240 px holds its border. */
   .editor-side {
     flex: none;
+    margin-right: -1px;
     display: flex;
     flex-direction: column;
-    background: var(--bg);
+    min-width: 0;
+    /* 8 px from the line on its right, which lies over its last pixel. */
+    padding: 12px 9px 0 8px;
+  }
+  .tree-h {
+    flex: none;
+    display: grid;
+    gap: 2px;
+    padding: 0 8px 10px;
+  }
+  /* As high as its title's line (the design's 12 px on 1.45): the buttons beside it overflow it, centred. */
+  .th-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    height: 1.45em;
+    font-size: 12px;
+  }
+  .tree-h b {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--soft);
+    font-size: 12px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tree-h b .n {
+    color: var(--muted);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .caption {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* The tree's actions come up over its count when the column is hovered or holds the focus, as VS Code's do. */
+  .actions {
+    position: absolute;
+    right: 48px;
+    display: flex;
+    gap: 2px;
+    padding-left: 6px;
+    background: var(--panel);
+    opacity: 0;
+    transition: opacity 0.12s var(--ease);
+  }
+  .editor-side:hover .actions,
+  .actions:focus-within {
+    opacity: 1;
   }
   .views {
     flex: none;
-    display: flex;
-    padding: 10px 14px 0 14px;
-  }
-  .views button {
-    display: flex;
-    align-items: center;
-    padding: 0 6px;
-  }
-  .views svg {
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-  .view {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
-  .view[hidden] {
-    display: none;
-  }
-  .ftitle {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 10px 14px 10px 16px;
-  }
-  .ftitle .row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .label {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-  .actions {
-    margin-left: auto;
     display: flex;
     gap: 2px;
   }
@@ -1070,105 +1095,154 @@
     place-items: center;
     padding: 0;
     border: none;
-    border-radius: var(--r-sm);
+    border-radius: 6px;
     background: transparent;
     color: var(--muted);
     cursor: pointer;
   }
   .act:hover:not(:disabled) {
-    background: var(--elev2);
+    background: var(--hover);
+    color: var(--text);
+  }
+  /* The view shown: its icon lit (the title says which it is). */
+  .act[aria-pressed='true'] {
     color: var(--text);
   }
   .act:disabled {
     opacity: 0.4;
     cursor: default;
   }
-  .act svg {
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+  .view {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
-  .dim {
-    font-size: 11px;
-    color: var(--dim);
-  }
-  .root,
-  .count {
-    font-size: 10.5px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .view[hidden] {
+    display: none;
   }
   .scroll {
     flex: 1;
     overflow: auto;
   }
   .pane {
+    position: relative;
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    background: var(--term);
+    container: editor-pane / inline-size;
+  }
+  /* The search floats 400 px wide, 340 in a narrow pane (as the preview's .find at 1 028 px). */
+  .pane :global(.cm-find) {
+    --find-width: 400px;
+  }
+  @container editor-pane (max-width: 680px) {
+    .pane :global(.cm-find) {
+      --find-width: 340px;
+    }
+  }
+  /* In a narrow pane, « Voir les changements » keeps its icon (its name in its tooltip); narrower, the encoding and the
+     ends of lines leave the status line; narrower still, what changed is told by its count, and the indentation goes. */
+  @container editor-pane (max-width: 600px) {
+    .changes .lbl {
+      display: none;
+    }
+    .changes {
+      width: 24px;
+      padding: 0;
+    }
+  }
+  @container editor-pane (max-width: 420px) {
+    .status .enc {
+      display: none;
+    }
+  }
+  @container editor-pane (max-width: 340px) {
+    .vs .lbl,
+    .status .ind {
+      display: none;
+    }
   }
   .crumbs {
-    height: 30px;
+    height: 32px;
     flex: none;
     display: flex;
     align-items: center;
     gap: 12px;
     padding: 0 16px;
-    border-bottom: 1px solid var(--line);
-    font-size: 11px;
     color: var(--muted);
+    font-size: 12px;
     white-space: nowrap;
   }
   .crumbs .path {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
-  .crumbs .add {
+  .crumbs .path :global(.icon) {
+    color: var(--dim);
+  }
+  .crumbs .last {
+    color: var(--soft);
+  }
+  .vs {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+  }
+  .vs .add {
     color: var(--add);
   }
   .changes {
     height: 22px;
     flex: none;
-    padding: 0 8px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 8px 0 6px;
+    border: none;
+    border-radius: 6px;
     background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-2);
     color: var(--muted);
-    font-family: var(--ui);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 11.5px;
+    font-weight: 550;
     cursor: pointer;
   }
   .changes:hover {
-    background: var(--elev2);
+    background: var(--hover);
     color: var(--text);
   }
   .changes[aria-pressed='true'] {
-    border-color: var(--accent);
-    background: var(--elev2);
+    background: color-mix(in oklch, var(--p) 14%, rgba(var(--fg-rgb), 0.03));
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 50%, transparent);
     color: var(--text);
   }
+  /* The file changed or deleted on disk: an amber band under the path, as the app's other bands. */
   .banner {
     flex: none;
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 16px;
-    background: var(--wait-soft);
-    border-bottom: 1px solid var(--line);
-    color: var(--wait);
+    margin: 0 16px 6px;
+    padding: 6px 8px 6px 12px;
+    border-radius: 8px;
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
+    color: var(--warn-ink);
     font-size: 12.5px;
+  }
+  .banner .msg {
+    flex: 1;
+    min-width: 0;
   }
   /* As the app's disabled buttons look. */
   .banner .btn[aria-disabled='true'] {
     opacity: 0.5;
     cursor: default;
-    border-color: var(--line2);
   }
   .empty {
     flex: 1;
@@ -1179,27 +1253,48 @@
     font-size: 13px;
   }
   .status {
-    height: 26px;
+    height: 28px;
     flex: none;
     display: flex;
     align-items: center;
     gap: 16px;
     padding: 0 14px;
     border-top: 1px solid var(--line);
-    background: var(--bg);
-    font-size: 10.5px;
     color: var(--muted);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
     overflow: hidden;
   }
   .status > span {
     flex: none;
   }
+  .status .mono {
+    font-size: 11px;
+  }
   /* A long branch or agent name is cut short, whole in its tooltip. */
   .status > .source {
     flex: 0 1 auto;
+    display: flex;
+    align-items: baseline;
+    gap: 0.3em;
     min-width: 0;
+    margin-left: auto;
+  }
+  .source .kind {
+    flex: none;
+  }
+  /* Its own height, as an inline name has (the line of the status line centres it). */
+  .source .mono {
+    align-self: center;
+    min-width: 0;
+    line-height: normal;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .actions {
+      transition: none;
+    }
   }
 </style>

@@ -60,6 +60,12 @@ export const ICONS = {
   mute: '<path d="M2.75 6.25h2.25L8.25 3.5v9L5 9.75H2.75z" /><path d="M10.75 6.25l3 3.5M13.75 6.25l-3 3.5" />',
   restore: '<path d="M5.5 3.5h7v7" /><rect x="3.5" y="5.5" width="7" height="7" rx="0.5" />',
   close: '<path d="M3.5 3.5l9 9M12.5 3.5l-9 9" />',
+  // The editor's files (lot 9, not in the preview, which leaves out the tree's actions): a new file, a new folder,
+  // every folder collapsed.
+  'file-plus': '<path d="M8.5 2.25H4v11.5h4M8.5 2.25l3.5 3.5M8.5 2.25v3.5H12M12 5.75V8.5M11.75 10.25v3.5M10 12h3.5" />',
+  'folder-plus':
+    '<path d="M8 12.75H3.75c-.55 0-1-.45-1-1V4.25c0-.55.45-1 1-1h2.9l1.4 1.5h4.2c.55 0 1 .45 1 1V8.5M11.75 10.25v3.5M10 12h3.5" />',
+  collapse: '<rect x="5.5" y="5.5" width="8" height="8" rx="1.5" /><path d="M2.75 10.5V4.25c0-.83.67-1.5 1.5-1.5h6.25M7.5 9.5h4" />',
   // The Enter key, in the key of « Envoyer » (not in the preview, which writes it with a character).
   enter: '<path d="M12.5 3.5v4.25a2 2 0 0 1-2 2H4M6.75 6.75L4 9.75l2.75 3" />',
   mic: '<rect x="5.75" y="2.25" width="4.5" height="7.5" rx="2.25" /><path d="M3.5 7.75a4.5 4.5 0 0 0 9 0M8 12.25v1.5" />',

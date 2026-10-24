@@ -6,12 +6,14 @@ import { diff } from '@codemirror/merge';
 export interface LineChanges {
   /** Lines (1-based) added or modified. */
   changed: number[];
+  /** Those of `changed` that took the place of lines of the reference (the others were added): amber in the gutter. */
+  modified?: number[];
   /** Lines (1-based) above which lines were removed. */
   deleted: number[];
   count: number;
 }
 
-const NONE = (): LineChanges => ({ changed: [], deleted: [], count: 0 });
+const NONE = (): LineChanges => ({ changed: [], modified: [], deleted: [], count: 0 });
 
 /** The longest the diff may run before it settles for a cruder answer, in ms. */
 export const DIFF_TIMEOUT = 300;
@@ -56,21 +58,25 @@ export function lineChanges(base: string | null, current: string): LineChanges {
     // A trailing line break opens an empty last line: not a line of the file.
     const last = lines[lines.length - 1] === '' ? lines.length - 1 : lines.length;
     const changed = Array.from({ length: last }, (_, i) => i + 1);
-    return { changed, deleted: [], count: changed.length };
+    return { changed, modified: [], deleted: [], count: changed.length };
   }
   if (base === current) return NONE();
   const tokens = lineTokens(base.split('\n'), lines);
   if (!tokens) return NONE();
   const [a, b] = tokens;
   const changed = new Set<number>();
+  const modified = new Set<number>();
   const deleted = new Set<number>();
   for (const c of diff(a, b, { timeout: DIFF_TIMEOUT })) {
     if (c.toB > c.fromB) {
-      for (let n = c.fromB + 1; n <= c.toB; n++) changed.add(n);
+      for (let n = c.fromB + 1; n <= c.toB; n++) {
+        changed.add(n);
+        if (c.toA > c.fromA) modified.add(n);
+      }
     } else if (c.toA > c.fromA) {
       deleted.add(Math.min(c.fromB + 1, lines.length));
     }
   }
   const sorted = (s: Set<number>) => [...s].sort((x, y) => x - y);
-  return { changed: sorted(changed), deleted: sorted(deleted), count: changed.size };
+  return { changed: sorted(changed), modified: sorted(modified), deleted: sorted(deleted), count: changed.size };
 }

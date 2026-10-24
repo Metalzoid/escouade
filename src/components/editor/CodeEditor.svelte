@@ -17,9 +17,11 @@
     type NavResolver,
     type NavTarget,
   } from '../../lib/editor/goto';
+  import { findPanel } from '../../lib/editor/find';
   import { changeGutter, setChanges } from '../../lib/editor/gutter';
   import { reloadChange } from '../../lib/editor/reload';
   import { editorTheme, phrases } from '../../lib/editor/theme';
+  import { shownTheme } from '../../lib/appearance';
   import { locale } from '../../lib/i18n';
   import { app } from '../../lib/state.svelte';
   import { observeWidth } from '../../lib/resize';
@@ -78,6 +80,7 @@
   const ind = new Compartment();
   const compared = new Compartment();
   const words = new Compartment();
+  const look = new Compartment();
   /** A text replaced from outside is not the user typing. */
   let applying = false;
   let shownKey = untrack(() => docKey);
@@ -116,23 +119,25 @@
           onForward: () => onforward?.(),
           onReferences: (name) => onreferences?.(name),
         }),
-        changeGutter(),
+        // The numbers, then the marks of the changes between them and the text, as the design draws them.
         lineNumbers(),
+        changeGutter(),
         highlightActiveLineGutter(),
         history(),
-        drawSelection(),
+        // The caret does not blink with prefers-reduced-motion (the design's three moments of motion stop there).
+        drawSelection({ cursorBlinkRate: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : 1200 }),
         highlightActiveLine(),
         indentOnInput(),
         bracketMatching(),
         closeBrackets(),
-        search({ top: true }),
+        search({ top: true, createPanel: findPanel }),
         comparison(
           compared,
           untrack(() => compare),
         ),
         words.of(EditorState.phrases.of(phrases())),
         keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, indentWithTab]),
-        editorTheme,
+        look.of(editorTheme(shownTheme() === 'dark')),
         lang.of(untrack(() => language) ?? []),
         ind.of(indentExt(untrack(() => indent))),
         EditorView.updateListener.of((u) => {
@@ -148,7 +153,17 @@
     view.dispatch({ effects: setChanges.of(untrack(() => changes)) });
     reportCursor(view.state);
   });
-  onDestroy(() => view?.destroy());
+  // The window's theme changed (« Thème », or the system's): CodeMirror's own base theme follows it, at once; the
+  // colours are tokens, which follow by themselves.
+  const themeWatch =
+    typeof MutationObserver === 'undefined'
+      ? null
+      : new MutationObserver(() => view?.dispatch({ effects: look.reconfigure(editorTheme(shownTheme() === 'dark')) }));
+  themeWatch?.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  onDestroy(() => {
+    themeWatch?.disconnect();
+    view?.destroy();
+  });
 
   // « Taille du texte de l’éditeur » changed (`--editor-font`): its lines and gutters measured again.
   $effect(() => {
@@ -256,5 +271,135 @@
   }
   .code :global(.cm-editor.cm-focused) {
     outline: none;
+  }
+  /* The search in the file (lib/editor/find.ts), as the design's .find: a raised box, its field in a well with its
+     count and toggles, the icons of the app. */
+  .code :global(.cm-find) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    /* 400 px, 340 in a narrow pane (EditorView sets --find-width by a container query), never wider than the text. */
+    width: min(var(--find-width, 400px), calc(100cqw - 36px));
+    padding: 8px;
+    border-radius: 10px;
+    background: var(--raise-2);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 12px 32px -10px rgba(0, 0, 0, calc(0.7 * var(--shade)));
+    font-family: var(--font);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .code :global(.cm-find-row) {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .code :global(.cm-find-field) {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    gap: 6px;
+    height: 28px;
+    padding: 0 4px 0 9px;
+    border-radius: 7px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    font-size: 12.5px;
+  }
+  .code :global(.cm-find-field:focus-within) {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--p) 60%, transparent),
+      0 0 0 3px color-mix(in oklch, var(--p) 14%, transparent);
+  }
+  .code :global(.cm-find-invalid .cm-find-row:first-child .cm-find-field) {
+    box-shadow: inset 0 0 0 1px var(--del);
+  }
+  .code :global(.cm-find-input) {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--text);
+    font-family: inherit;
+    font-size: inherit;
+  }
+  .code :global(.cm-find-input::placeholder) {
+    color: var(--muted);
+    opacity: 1;
+  }
+  .code :global(.cm-find-count) {
+    flex: none;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .code :global(.cm-find-tog) {
+    display: grid;
+    place-items: center;
+    min-width: 22px;
+    height: 20px;
+    padding: 0 3px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .code :global(.cm-find-tog:hover) {
+    background: var(--hover);
+    color: var(--text);
+  }
+  .code :global(.cm-find-tog[aria-pressed='true']) {
+    background: color-mix(in oklch, var(--p) 24%, transparent);
+    color: var(--text);
+  }
+  .code :global(.cm-find-btn),
+  .code :global(.cm-find-mini) {
+    flex: none;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .code :global(.cm-find-btn) {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+  }
+  .code :global(.cm-find-mini) {
+    height: 26px;
+    padding: 0 8px;
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 550;
+  }
+  .code :global(.cm-find-btn:hover),
+  .code :global(.cm-find-mini:hover) {
+    background: var(--hover);
+    color: var(--text);
+  }
+  .code :global(.cm-find-icon) {
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .code :global(.cm-find button:focus-visible) {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--p-ink);
   }
 </style>

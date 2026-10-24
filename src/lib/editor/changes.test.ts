@@ -5,34 +5,34 @@ import { markerRanges } from './gutter';
 
 describe('lineChanges', () => {
   it('marks the lines changed or added since the reference', () => {
-    expect(lineChanges('a\nb\nc\n', 'a\nB\nc\n')).toEqual({ changed: [2], deleted: [], count: 1 });
-    expect(lineChanges('a\nb\nc\n', 'a\nb\nx\ny\nc\n')).toEqual({ changed: [3, 4], deleted: [], count: 2 });
+    expect(lineChanges('a\nb\nc\n', 'a\nB\nc\n')).toEqual({ changed: [2], modified: [2], deleted: [], count: 1 });
+    expect(lineChanges('a\nb\nc\n', 'a\nb\nx\ny\nc\n')).toEqual({ changed: [3, 4], modified: [], deleted: [], count: 2 });
   });
 
   it('marks an added blank line', () => {
-    expect(lineChanges('a\nb\n', 'a\n\nb\n')).toEqual({ changed: [2], deleted: [], count: 1 });
+    expect(lineChanges('a\nb\n', 'a\n\nb\n')).toEqual({ changed: [2], modified: [], deleted: [], count: 1 });
   });
 
   it('marks where lines were removed', () => {
-    expect(lineChanges('a\nb\nc\n', 'a\nc\n')).toEqual({ changed: [], deleted: [2], count: 0 });
+    expect(lineChanges('a\nb\nc\n', 'a\nc\n')).toEqual({ changed: [], modified: [], deleted: [2], count: 0 });
   });
 
   it('counts every line of a new file, nothing for the same text', () => {
-    expect(lineChanges(null, 'a\nb')).toEqual({ changed: [1, 2], deleted: [], count: 2 });
-    expect(lineChanges(null, 'a\nb\n')).toEqual({ changed: [1, 2], deleted: [], count: 2 });
-    expect(lineChanges('a\n', 'a\n')).toEqual({ changed: [], deleted: [], count: 0 });
+    expect(lineChanges(null, 'a\nb')).toEqual({ changed: [1, 2], modified: [], deleted: [], count: 2 });
+    expect(lineChanges(null, 'a\nb\n')).toEqual({ changed: [1, 2], modified: [], deleted: [], count: 2 });
+    expect(lineChanges('a\n', 'a\n')).toEqual({ changed: [], modified: [], deleted: [], count: 0 });
   });
 
   it('marks nothing for an empty new file', () => {
-    expect(lineChanges(null, '')).toEqual({ changed: [], deleted: [], count: 0 });
+    expect(lineChanges(null, '')).toEqual({ changed: [], modified: [], deleted: [], count: 0 });
   });
 
   it('keeps a removal at the end of the file on its last line', () => {
-    expect(lineChanges('a\nb\nc', 'a\nb')).toEqual({ changed: [], deleted: [2], count: 0 });
+    expect(lineChanges('a\nb\nc', 'a\nb')).toEqual({ changed: [], modified: [], deleted: [2], count: 0 });
   });
 
   it('tells apart a modification that also removes lines', () => {
-    expect(lineChanges('a\nb\nc\nd\n', 'a\nX\nd\n')).toEqual({ changed: [2], deleted: [], count: 1 });
+    expect(lineChanges('a\nb\nc\nd\n', 'a\nX\nd\n')).toEqual({ changed: [2], modified: [2], deleted: [], count: 1 });
   });
 });
 
@@ -84,14 +84,24 @@ describe('lineChanges on big files', () => {
     const base = lines.join('\n');
     const one = [...lines];
     one[100] = 'X';
-    expect(lineChanges(base, one.join('\n'))).toEqual({ changed: [101], deleted: [], count: 1 });
+    expect(lineChanges(base, one.join('\n'))).toEqual({ changed: [101], modified: [101], deleted: [], count: 1 });
     const two = [...one];
     two[200] = 'Y';
-    expect(lineChanges(base, two.join('\n'))).toEqual({ changed: [], deleted: [], count: 0 });
+    expect(lineChanges(base, two.join('\n'))).toEqual({ changed: [], modified: [], deleted: [], count: 0 });
   });
 });
 
 describe('markerRanges', () => {
+  it('tells a line added (green) from one modified (amber)', () => {
+    const doc = Text.of(['a', 'b', 'c']);
+    const marks = markerRanges(doc, { changed: [1, 2], modified: [2], deleted: [3], count: 2 });
+    expect(marks.map((r) => [r.from, (r.value as any).kind])).toEqual([
+      [0, 'changed'],
+      [2, 'changed modified'],
+      [4, 'deleted'],
+    ]);
+  });
+
   it('puts one marker per marked line, both kinds on the same line', () => {
     const doc = Text.of(['a', 'b', 'c']);
     const marks = markerRanges(doc, { changed: [2], deleted: [2, 3, 9], count: 1 });

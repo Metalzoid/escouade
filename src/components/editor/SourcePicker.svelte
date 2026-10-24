@@ -4,6 +4,7 @@
   import { tip } from '../../lib/tip';
   import type { Agent, GitInfo, Project } from '../../lib/types';
   import { worktreeLabel } from '../../lib/worktrees';
+  import Icon from '../Icon.svelte';
   import StatusDot from '../StatusDot.svelte';
 
   let {
@@ -34,29 +35,31 @@
 
 <div class="picker" bind:this={box}>
   <button
-    class="btn src"
+    class="src"
     aria-haspopup="menu"
     aria-expanded={open}
     aria-label={t('editor.source.label', { name: current ? current.name : branch })}
     onclick={() => (open = !open)}
   >
-    {#if current}<StatusDot status={current.status} size={7} />{:else}<span class="glyph mono">⎇</span>{/if}
+    {#if current}<StatusDot status={current.status} size={7} />{:else}<span class="glyph"><Icon name="branch" size={14} /></span>{/if}
     <span class="nm" use:tip={{ text: current ? current.name : branch, cut: true }}>{current ? current.name : branch}</span>
-    <span class="kind mono">{current ? t('editor.source.kindWorktree') : t('editor.source.kindBranch')}</span>
-    <span class="chev">▾</span>
+    <span class="kind">{current ? t('editor.source.kindWorktree') : t('editor.source.kindBranch')}</span>
+    <span class="chev"><Icon name="down" size={14} /></span>
   </button>
   {#if open}
     <div class="menu" role="menu" aria-label={t('common.browse')}>
       <span class="title">{t('common.browse')}</span>
       <button class="opt" role="menuitemradio" aria-checked={source === 'project'} onclick={() => pick('project')}>
-        <span class="ic mono">⎇</span>
+        <span class="ic"><Icon name="branch" size={14} /></span>
         <span class="txt"
           ><span class="nm">{branch}</span><span class="sub mono">{t('editor.source.projectBranch', { path: project.path })}</span></span
         >
         <span class="count mono" class:some={projectCount > 0}
           >{projectCount ? t('editor.source.delta', { count: projectCount }) : t('editor.source.clean')}</span
         >
-        <span class="check">{source === 'project' ? '✓' : ''}</span>
+        <span class="check"
+          >{#if source === 'project'}<Icon name="check" size={14} />{/if}</span
+        >
       </button>
       {#each agents as a (a.id)}
         {@const n = git?.agents[a.id] ?? 0}
@@ -70,7 +73,9 @@
           <span class="count mono" class:some={n > 0}
             >{n ? t('editor.count.changes', { count: n, n: fInt(n) }) : t('editor.source.clean')}</span
           >
-          <span class="check">{source === a.id ? '✓' : ''}</span>
+          <span class="check"
+            >{#if source === a.id}<Icon name="check" size={14} />{/if}</span
+          >
         </button>
       {/each}
     </div>
@@ -83,13 +88,29 @@
     position: relative;
     min-width: 0;
   }
+  /* The source (the design's .agent-pick): a 30 px button in a line, the agent's dot, its name, « worktree », a chevron. */
   .src {
-    height: 36px;
+    height: 30px;
     max-width: 100%;
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 10px;
-    padding: 0 10px 0 12px;
+    gap: 8px;
+    padding: 0 8px 0 10px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 550;
+    cursor: pointer;
+  }
+  .src:hover {
+    background: var(--hover);
+  }
+  .src:focus-visible {
+    outline: 2px solid var(--p-ink);
+    outline-offset: 1px;
   }
   .src > * {
     flex: none;
@@ -99,63 +120,61 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 13.5px;
-    font-weight: 700;
   }
   .kind {
-    font-size: 10.5px;
-    padding: 2px 6px;
-    border-radius: 3px;
-    background: var(--elev2);
     color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 500;
   }
-  .chev {
-    font-size: 10px;
-    color: var(--dim);
-  }
+  .chev,
   .glyph {
-    font-size: 13px;
+    display: grid;
     color: var(--muted);
   }
   .menu {
     position: absolute;
-    top: 42px;
+    top: 36px;
     left: 0;
     z-index: 30;
     width: 380px;
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: 6px;
-    border-radius: var(--r);
-    border: 1px solid var(--line2);
-    background: var(--elev);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+    padding: 5px;
+    border-radius: 11px;
+    background: var(--raise-2);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 18px 48px -10px rgba(0, 0, 0, calc(0.8 * var(--shade)));
+    animation: ccFadeIn 0.2s var(--ease);
   }
   .title {
-    padding: 6px 10px 4px;
-    font-size: 10.5px;
+    padding: 7px 9px 5px;
+    color: var(--muted);
+    font-size: 11.5px;
     font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--dim);
   }
   .opt {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 10px;
+    padding: 7px 9px;
     border: none;
-    border-radius: var(--r-sm);
+    border-radius: 7px;
     background: transparent;
     color: var(--text);
     font: inherit;
+    font-size: 12.5px;
     text-align: left;
     cursor: pointer;
   }
   .opt:hover,
   .opt[aria-checked='true'] {
-    background: var(--elev2);
+    background: rgba(var(--fg-rgb), 0.06);
+  }
+  .opt:focus-visible {
+    outline: 2px solid var(--p-ink);
+    outline-offset: -2px;
   }
   .ic {
     width: 16px;
@@ -172,26 +191,30 @@
     gap: 2px;
   }
   .txt .nm {
-    font-size: 13px;
     font-weight: 600;
   }
   .sub {
-    font-size: 10.5px;
-    color: var(--dim);
+    font-size: 11px;
+    color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .count {
-    font-size: 10.5px;
-    color: var(--dim);
+    font-size: 11px;
+    color: var(--muted);
   }
   .count.some {
-    color: var(--wait);
+    color: var(--git-m);
   }
   .check {
     width: 14px;
-    font-size: 12px;
-    color: var(--accent);
+    display: grid;
+    color: var(--p-ink);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .menu {
+      animation: none;
+    }
   }
 </style>

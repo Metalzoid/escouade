@@ -228,3 +228,27 @@ Remonté par l'utilisateur le 2026-10-24 : l'en-tête d'un agent débordait quan
 
 - La zone de saisie, le bandeau Plan (ses replis `@container conv` du lot 5), la carte d'une question, les onglets et le haut de « Non commités » et d'« Historique » dans le panneau à 340 px : rien ne déborde ni ne passe sur deux lignes, en français et en anglais.
 - Les en-têtes d'un terminal et du log d'un lancement ne sont jamais à côté du panneau (il n'accompagne que la conversation) : leur colonne la plus étroite est celle de la fenêtre à 1028 px, déjà vérifiée par `terminals-look.spec.ts`.
+
+# L'éditeur et les recherches (ESC-81, lot 9, 2026-10-24)
+
+L'aperçu dessine l'éditeur (`#editor`) sans ce que l'app y fait de plus : les actions de l'arbre, la recherche dans les fichiers, « Voir les changements », les fenêtres « Ouvrir un fichier » (Ctrl P) et « Rechercher dans les conversations » (Ctrl K). Les replis suivent la place de l'éditeur (`@container editor` et `editor-pane`), pas la largeur de la fenêtre.
+
+**À valider par l'utilisateur** : les choix 53 à 56.
+
+## Adresses
+
+- `#editor` à 1440×900 et 1028×779, clair et sombre : comparé à l'app par `tests/e2e/editor-look.spec.ts`.
+- L'app à 1028, 1280 et 1440 px, panneau latéral fermé, seul (340 px) et côte à côte (44 %), en français et en anglais : rien ne déborde, dans l'éditeur (barre, titre de l'arbre, chemin, recherche flottante, ligne d'état) ni dans les deux fenêtres de recherche (même spec).
+
+## Choix
+
+53. **Les actions de l'arbre viennent au survol** : Nouveau fichier, Nouveau dossier, Actualiser et Tout réduire, en icônes, passent par-dessus le compte (« 128 · 3 modif. ») quand la colonne est survolée ou tient le focus, comme dans VS Code ; Fichiers et Recherche restent en deux icônes à droite du titre, celle de la vue montrée allumée, et le titre dit laquelle (« Fichiers », « Recherche »). Raison : l'aperçu n'en montre aucune, et le compte se lit au repos.
+54. **Plus d'icône de type de fichier** : l'arbre n'en a pas, comme l'aperçu (les lettres et signes de la 1.x, « TS », « ⚛ », « ▣ », dessinaient des icônes avec des caractères) ; les listes (résultats de la recherche, « Ouvrir un fichier ») ont une seule icône de fichier, celle de la famille de l'app. Raison : une seule famille d'icônes, aucune couleur en dur.
+55. **Les replis de l'éditeur, par sa place** : l'arbre fait 200 px dans un éditeur de 904 px ou moins (240 au-delà, tant qu'on ne l'a pas redimensionné) ; la recherche 340 px dans un panneau de 680 px ou moins, jamais plus large que le texte ; sous 600 px de panneau, « Voir les changements » ne garde que son icône (son nom en infobulle) ; sous 420 px, l'encodage et la fin de ligne quittent la ligne d'état ; sous 340 px, ce qui a changé se dit par son compte et l'indentation s'en va ; sous 560 px d'éditeur, « Enregistrer » perd sa touche et la source « worktree » ; sous 460 px, « Enregistré » s'efface. Raison : les deux largeurs comparées (1104 et 692 px) restent celles de l'aperçu, et le nom du fichier, sa position et l'état d'enregistrement restent toujours.
+56. **La recherche dans le fichier dit ce qu'elle trouve** : « 1 sur 3 » quand le curseur est sur une occurrence, « 3 résultats » sinon, « Aucun résultat », « 1000+ » au-delà de mille ; une expression régulière invalide entoure le champ de rouge ; « Tout » se lit « Tout remplacer » pour un lecteur d'écran. Raison : le compte de l'aperçu, avec ses autres états.
+
+## Vérifié, sans retouche
+
+- L'éditeur n'est jamais à côté du panneau latéral : il prend tout le panneau de travail (le panneau n'accompagne que la conversation), donc sa place ne dépend que de la fenêtre et de la barre des agents.
+- « Ouvrir un fichier » et « Rechercher dans les conversations » sont des fenêtres au-dessus de tout, de 680 px au plus : à 1028 px aussi, leur champ, leur portée et leurs touches tiennent, panneau ouvert ou non.
+- Il n'y a pas de recherche dans les réglages (comptes, voix, harness) : rien à reprendre dans ce lot.

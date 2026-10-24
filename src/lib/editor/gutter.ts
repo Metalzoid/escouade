@@ -18,16 +18,23 @@ class ChangeMark extends GutterMarker {
   }
 }
 
-const CHANGED = new ChangeMark('changed');
+// A line added is green, one that took the place of lines of the reference amber (the design's `--add` and `--git-m`).
+const ADDED = new ChangeMark('changed');
+const MODIFIED = new ChangeMark('changed modified');
 const DELETED = new ChangeMark('deleted');
-const BOTH = new ChangeMark('changed deleted');
+const ADDED_DELETED = new ChangeMark('changed deleted');
+const MODIFIED_DELETED = new ChangeMark('changed modified deleted');
 
 export const setChanges = StateEffect.define<LineChanges>();
 
 export function markerRanges(doc: Text, c: LineChanges): Range<GutterMarker>[] {
   const kinds = new Map<number, ChangeMark>();
   for (const n of c.deleted) kinds.set(n, DELETED);
-  for (const n of c.changed) kinds.set(n, kinds.has(n) ? BOTH : CHANGED);
+  const modified = new Set(c.modified ?? []);
+  for (const n of c.changed) {
+    const m = modified.has(n);
+    kinds.set(n, kinds.has(n) ? (m ? MODIFIED_DELETED : ADDED_DELETED) : m ? MODIFIED : ADDED);
+  }
   return [...kinds.keys()]
     .filter((n) => n >= 1 && n <= doc.lines)
     .sort((a, b) => a - b)

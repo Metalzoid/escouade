@@ -3,7 +3,7 @@
   import type { EntryKind } from '../../lib/editor/create';
   import { isDeleteKey, type FileStatus, type TreeRow } from '../../lib/editor/tree';
   import { t } from '../../lib/i18n';
-  import FileIcon from './FileIcon.svelte';
+  import Icon from '../Icon.svelte';
   import NewFileField from './NewFileField.svelte';
   import { tip } from '../../lib/tip';
 
@@ -46,11 +46,12 @@
     ondeleterow?: (row: TreeRow) => void;
   } = $props();
 
-  // As VS Code draws them: 8 px from the edge, 12 px a level, a 16 px chevron whose middle the level's guide goes through.
+  // As the 2.0 design draws them (`.node`): 8 px from the edge, 14 px a level.
   const PAD = 8;
-  const INDENT = 12;
+  const INDENT = 14;
   const pad = (depth: number) => PAD + depth * INDENT;
-  const COLOR: Record<FileStatus, string> = { M: 'var(--wait)', A: 'var(--add)', D: 'var(--del)' };
+  /** The class of a status's letter, coloured as git's (`--git-m`, `--add`, `--del`). */
+  const LETTER: Record<FileStatus, string> = { M: 'm', A: 'a', D: 'd' };
 
   let el = $state<HTMLDivElement>();
   /** The row holding the focus, the tree's one Tab stop; the file shown or the first row until one does. */
@@ -127,9 +128,7 @@
 </script>
 
 {#snippet chevron(open: boolean)}
-  <svg class:open width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
-    ><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" /></svg
-  >
+  <Icon name={open ? 'down' : 'right'} size={14} />
 {/snippet}
 
 <!-- A click on the free space focuses the tree itself: its Tab stop takes the focus, for the arrows to work. -->
@@ -144,22 +143,16 @@
   oncontextmenu={(e) => onmenu?.(e, null)}
 >
   {#each rows as r, i (keyOf(r))}
-    {#snippet guides()}
-      {#each { length: r.depth } as _, level (level)}
-        <span class="guide" style:left="{pad(level) + 8}px"></span>
-      {/each}
-    {/snippet}
     {#if isField(r)}
       {@const kind = r.kind === 'new' ? adding : r.kind}
       <div
         class="row new"
         role="none"
         style:padding-left="{pad(r.depth)}px"
-        style:--field-left="{pad(r.depth) + (kind === 'file' ? 40 : 20)}px"
+        style:--field-left="{pad(r.depth) + 20}px"
         oncontextmenu={(e) => e.stopPropagation()}
       >
-        {@render guides()}
-        <span class="twistie"
+        <span class="fd"
           >{#if kind === 'dir'}{@render chevron(r.kind === 'dir' && r.open)}{/if}</span
         >
         {#if r.kind === 'new'}
@@ -177,7 +170,6 @@
         {/if}
       </div>
     {:else}
-      {@const color = r.status ? COLOR[r.status] : r.inside ? COLOR[r.inside] : undefined}
       <button
         class="row"
         class:on={r.kind === 'file' && r.path === active}
@@ -197,16 +189,15 @@
           onmenu?.(e, r);
         }}
       >
-        {@render guides()}
-        <span class="twistie"
+        <span class="fd"
           >{#if r.kind === 'dir'}{@render chevron(r.open)}{/if}</span
         >
-        {#if r.kind === 'file'}<FileIcon path={r.path} />{/if}
-        <span class="name" style:color>{r.name}</span>
+        <span class="name">{r.name}</span>
         {#if r.status}
-          <span class="st mono" style:color>{r.status}</span>
+          <span class="letter {LETTER[r.status]}">{r.status}</span>
         {:else if r.inside}
-          <span class="dot" style:background={color} aria-hidden="true"></span>
+          <!-- A folder holding changes: the design's amber dot after its name. -->
+          <i class="mdot" aria-hidden="true"></i>
         {/if}
       </button>
     {/if}
@@ -218,44 +209,45 @@
     min-height: 100%;
     display: flex;
     flex-direction: column;
-    padding: 2px 0 12px;
+    padding: 0 0 12px;
     outline: none;
   }
+  /* A row (`.node` of the design): 26 px, 14 px a level, a chevron or the room of one, the name, its letter at the end. */
   .row {
     position: relative;
     width: 100%;
     flex: none;
-    height: 22px;
+    height: 26px;
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding-right: 10px;
+    gap: 6px;
+    padding-top: 0;
+    padding-right: 8px;
+    padding-bottom: 0;
     border: none;
-    border-radius: 0;
+    border-radius: 6px;
     background: transparent;
-    color: var(--text);
+    color: var(--soft);
     font: inherit;
-    font-size: 13px;
+    font-size: 12.5px;
     text-align: left;
     white-space: nowrap;
     cursor: pointer;
   }
   .row:hover {
-    background: var(--elev);
+    background: var(--hover);
   }
   /* A file git ignores, shown because the project copies it into its worktrees: faded as in VS Code's explorer. */
   .row.ignored {
     color: var(--dim);
   }
-  .row.ignored :global(.ficon) {
-    opacity: 0.55;
-  }
   .row.on {
-    background: var(--elev2);
+    background: color-mix(in oklch, var(--p) 14%, rgba(var(--fg-rgb), 0.03));
+    color: var(--text);
   }
   .row:focus-visible {
-    outline: 1px solid var(--accent);
-    outline-offset: -1px;
+    outline: 2px solid var(--p-ink);
+    outline-offset: -2px;
   }
   .row.new {
     cursor: default;
@@ -263,52 +255,37 @@
   .row.new:hover {
     background: transparent;
   }
-  .guide {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 1px;
-    background: var(--line);
-    pointer-events: none;
-  }
-  .tree:hover .guide {
-    background: var(--line2);
-  }
-  .twistie {
-    width: 16px;
-    height: 16px;
+  .fd {
+    width: 14px;
     flex: none;
     display: grid;
     place-items: center;
-    color: var(--muted);
-  }
-  .twistie svg {
-    transition: transform 0.1s ease-out;
-  }
-  .twistie svg.open {
-    transform: rotate(90deg);
+    color: var(--dim);
   }
   .name {
-    flex: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .st {
+  .mdot {
+    width: 5px;
+    height: 5px;
     flex: none;
-    font-size: 11px;
-    font-weight: 600;
-  }
-  .dot {
-    width: 6px;
-    height: 6px;
-    flex: none;
-    margin-right: 2px;
     border-radius: 50%;
+    background: var(--git-m);
   }
-  @media (prefers-reduced-motion: reduce) {
-    .twistie svg {
-      transition: none;
-    }
+  .letter {
+    flex: none;
+    margin-left: auto;
+    font: 600 11px var(--mono);
+  }
+  .letter.m {
+    color: var(--git-m);
+  }
+  .letter.a {
+    color: var(--add);
+  }
+  .letter.d {
+    color: var(--del);
   }
 </style>

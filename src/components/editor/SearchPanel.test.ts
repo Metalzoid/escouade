@@ -205,7 +205,7 @@ describe('SearchPanel', () => {
 });
 
 describe('SearchPanel in English', () => {
-  it('titles the panel and the options, counts the results and names the rows in English', async () => {
+  it('names the options, counts the results and names the rows in English', async () => {
     setLang('en');
     const search = new FileSearch(
       vi.fn(async () => FOUND),
@@ -215,7 +215,6 @@ describe('SearchPanel in English', () => {
     search.result = FOUND;
     render(SearchPanel, { search, onopen: vi.fn() });
     expect(screen.getByRole('textbox', { name: 'Search' })).toHaveAttribute('placeholder', 'Search');
-    expect(screen.getByText('Search', { selector: '.label' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Match case' })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByRole('button', { name: 'Whole word' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Regular expression' })).toBeInTheDocument();

@@ -31,6 +31,8 @@ vi.mock('../../lib/terminals', () => ({
   disposeTerminal() {},
 }));
 
+/** The line above the text that says how the file differs (« 1 ligne » in green, then the rest): found as one text. */
+const vs = (whole: string) => (_: string, el: Element | null) => !!el?.classList.contains('vs') && el.textContent === whole;
 const text = (t: string, hash = 'h1') => ({ kind: 'text', text: t, size: t.length, hash, eol: 'lf', bom: false });
 
 function backend(over: Record<string, (a: any) => unknown> = {}) {
@@ -58,7 +60,7 @@ describe('EditorView', () => {
     render(EditorView, { project: project() });
     expect(await screen.findByRole('tab', { name: /app\.ts/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('treeitem', { name: /src/ })).toHaveAttribute('aria-expanded', 'true');
-    expect(await screen.findByText('1 ligne modifiée vs HEAD')).toBeInTheDocument();
+    expect(await screen.findByText(vs('1 ligne modifiée par rapport à HEAD'))).toBeInTheDocument();
     expect(screen.getByText('TypeScript')).toBeInTheDocument();
     expect(screen.getByText('Enregistré')).toBeInTheDocument();
   });
@@ -71,7 +73,7 @@ describe('EditorView', () => {
     const key = buffers.key('p1', 'project', 'src/app.ts');
     await expect.poll(() => buffers.all[key]?.kind).toBe('text');
     buffers.edit(key, 'const a = 3;\n');
-    expect(await screen.findByText(/● Non enregistré/)).toBeInTheDocument();
+    expect(await screen.findByText('Non enregistré')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     expect(be.called('fs_write')[0].args).toMatchObject({ path: 'src/app.ts', text: 'const a = 3;\n', expectedHash: 'h1' });
     expect(await screen.findByText('Enregistré')).toBeInTheDocument();
@@ -109,7 +111,7 @@ describe('EditorView', () => {
     backend();
     await app.openEditor({ source: 'project' });
     render(EditorView, { project: project() });
-    await userEvent.click(screen.getByRole('button', { name: '← Conversation' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Conversation' }));
     expect(app.editorOn).toBe(false);
   });
 
@@ -120,7 +122,7 @@ describe('EditorView', () => {
     render(EditorView, { project: project() });
     await screen.findByRole('tab', { name: /app\.ts/ });
     // The first refresh (tree, status, open files) is over once the comparison shows.
-    await screen.findByText('1 ligne modifiée vs HEAD');
+    await screen.findByText(vs('1 ligne modifiée par rapport à HEAD'));
     const reads = () => be.called('fs_read').filter((c) => c.args.path === 'README.md').length;
     await userEvent.click(screen.getByRole('tab', { name: /README\.md/ }));
     await expect.poll(reads).toBe(1);
@@ -176,7 +178,7 @@ describe('EditorView', () => {
     await app.openEditor({ source: 'project', path: 'src/app.ts' });
     render(EditorView, { project: project() });
     // The first refresh (tree, status, open files) is over once the comparison shows.
-    await screen.findByText('1 ligne modifiée vs HEAD');
+    await screen.findByText(vs('1 ligne modifiée par rapport à HEAD'));
     await userEvent.click(screen.getByRole('button', { name: 'Fermer app.ts' }));
     expect(screen.getByText('Sélectionne un fichier dans l’arborescence.')).toBeInTheDocument();
     const listed = be.called('git_files').length;
@@ -289,7 +291,7 @@ describe('EditorView', () => {
     await app.openEditor({ source: 'project', path: 'README.md' });
     await app.openEditor({ source: 'project', path: 'src/app.ts' });
     render(EditorView, { project: project() });
-    await screen.findByText('1 ligne modifiée vs HEAD');
+    await screen.findByText(vs('1 ligne modifiée par rapport à HEAD'));
     await userEvent.click(screen.getByRole('tab', { name: /README\.md/ }));
     expect(await screen.findByText('Ce fichier n’existe pas (ou plus).')).toBeInTheDocument();
     there = true;
@@ -313,7 +315,7 @@ describe('EditorView', () => {
     backend();
     await app.openEditor({ source: 'project', path: 'README.md' });
     render(EditorView, { project: project() });
-    expect(await screen.findByText('branche · projet')).toBeInTheDocument();
+    await vi.waitFor(() => expect(document.querySelector('.status .source')).toHaveTextContent('branche · projet'));
   });
 
   it('closes the tab of the source it was asked on, even if the source changed meanwhile', async () => {
@@ -363,13 +365,13 @@ describe('EditorView', () => {
     await app.openEditor({ source: 'project', path: 'README.md' });
     await app.openEditor({ source: 'project', path: 'src/app.ts' });
     render(EditorView, { project: project() });
-    await screen.findByText('1 ligne modifiée vs HEAD');
+    await screen.findByText(vs('1 ligne modifiée par rapport à HEAD'));
     await userEvent.click(screen.getByRole('tab', { name: /README\.md/ }));
     await screen.findByText('Identique à HEAD');
     // Both files are loaded now: back on app.ts, README.md’s comparison must not stay until app.ts’s is computed.
     await userEvent.click(screen.getByRole('tab', { name: /app\.ts/ }));
     expect(screen.queryByText('Identique à HEAD')).not.toBeInTheDocument();
-    expect(await screen.findByText('1 ligne modifiée vs HEAD')).toBeInTheDocument();
+    expect(await screen.findByText(vs('1 ligne modifiée par rapport à HEAD'))).toBeInTheDocument();
   });
 });
 
@@ -426,7 +428,7 @@ describe('EditorView changes in the text, and comparison with the disk', () => {
 
   it('shows the changes against the reference in the text, follows what is typed, and hides them', async () => {
     const { key, container } = await opened();
-    await screen.findByText('1 ligne modifiée vs HEAD');
+    await screen.findByText(vs('1 ligne modifiée par rapport à HEAD'));
     const toggle = screen.getByRole('button', { name: 'Voir les changements' });
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
     expect(container.querySelector('.cm-deletedChunk')).toBeNull();
@@ -449,7 +451,7 @@ describe('EditorView changes in the text, and comparison with the disk', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Voir les changements' }));
     await userEvent.click(screen.getByRole('button', { name: 'Annuler ce bloc' }));
     expect(buffers.all[key].text).toBe(REFERENCE);
-    expect(await screen.findByText(/● Non enregistré/)).toBeInTheDocument();
+    expect(await screen.findByText('Non enregistré')).toBeInTheDocument();
     expect(be.called('fs_write')).toHaveLength(0);
     // The focus is in the text: Ctrl+Z goes to it.
     await userEvent.keyboard('{Control>}z{/Control}');
@@ -611,7 +613,7 @@ describe('EditorView changes in the text, and comparison with the disk', () => {
     expect(be.called('fs_write')).toHaveLength(1);
     expect(disk).toEqual({ text: SAVED, hash: 'h1' });
     expect(buffers.all[key].text).toBe(MINE);
-    expect(screen.getByText(/● Non enregistré/)).toBeInTheDocument();
+    expect(screen.getByText('Non enregistré')).toBeInTheDocument();
   });
 
   it('does not write, without « Comparer », over a version the agent wrote once the banner was up, says so, and holds the button back a moment', async () => {
@@ -1154,7 +1156,7 @@ describe('EditorView renaming, deleting and new folders', () => {
     await expect.poll(() => container.querySelector('.cm-content')?.textContent).toBe('// src/app.ts');
     const view = codeOf(container);
     view.dispatch({ changes: { from: 0, insert: 'mine ' } });
-    expect(await screen.findByText(/● Non enregistré/)).toBeInTheDocument();
+    expect(await screen.findByText('Non enregistré')).toBeInTheDocument();
     await pick(item(/app\.ts/), 'Renommer…');
     expect(await field('app.ts')).toHaveValue('app.ts');
     await userEvent.keyboard('main{Enter}');
@@ -1164,7 +1166,7 @@ describe('EditorView renaming, deleting and new folders', () => {
     expect(await screen.findByRole('treeitem', { name: /main\.ts/ })).toHaveAttribute('aria-selected', 'true');
     expect(buffers.all[buffers.key('p1', 'project', 'src/main.ts')]).toMatchObject({ text: 'mine // src/app.ts\n', disk: 'ok' });
     expect(buffers.all[buffers.key('p1', 'project', 'src/app.ts')]).toBeUndefined();
-    expect(screen.getByText(/● Non enregistré/)).toBeInTheDocument();
+    expect(screen.getByText('Non enregistré')).toBeInTheDocument();
     // The same document in the editor: what was typed can still be undone.
     expect(undoDepth(codeOf(container).state)).toBe(1);
     expect(app.toasts).toEqual([]);
@@ -1902,6 +1904,14 @@ describe('EditorView left column width', () => {
     await fireEvent.pointerUp(handle(), { pointerId: 1 });
   }
 
+  it('is 200 px wide in a narrow editor (904 px or less), by its own room', async () => {
+    areaOf(692);
+    await app.openEditor({ source: 'project' });
+    const { container } = render(EditorView, { project: project() });
+    expect(column(container)).toHaveStyle({ width: '200px' });
+    expect(handle()).toHaveAttribute('aria-valuenow', '200');
+  });
+
   it('is 240 px wide until it is resized, with a handle between it and the code', async () => {
     areaOf(1000);
     await app.openEditor({ source: 'project' });
@@ -2011,8 +2021,8 @@ describe('EditorView in English', () => {
     backend({ fs_tree: () => ({ root: 'C:/code/demo-api', files: ['README.md', 'src/app.ts'], truncated: true }) });
     await app.openEditor({ source: 'project', path: 'src/app.ts' });
     render(EditorView, { project: project() });
-    expect(await screen.findByText('1 line changed vs HEAD')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '← Conversation' })).toBeInTheDocument();
+    expect(await screen.findByText(vs('1 line changed from HEAD'))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Conversation' })).toBeInTheDocument();
     expect(screen.getByText('Saved')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     for (const name of ['New file', 'New folder', 'Refresh', 'Collapse all', 'Search in files']) {
@@ -2021,7 +2031,9 @@ describe('EditorView in English', () => {
     expect(screen.getByRole('button', { name: 'Show changes' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Column view' })).toBeInTheDocument();
     expect(screen.getByRole('separator', { name: 'Width of the files column' })).toBeInTheDocument();
-    expect(screen.getByText('2 files · 1 change · list truncated')).toBeInTheDocument();
+    expect(document.querySelector('.tree-h b')).toHaveTextContent('Files 2 · 1 change · list truncated');
+    await userEvent.click(screen.getByRole('button', { name: 'Search in files' }));
+    expect(document.querySelector('.tree-h b')).toHaveTextContent('Search');
     const status = document.querySelector('.status') as HTMLElement;
     expect(status).toHaveTextContent('Ln 1, Col 1');
     expect(status).toHaveTextContent('branch · main');
@@ -2034,7 +2046,7 @@ describe('EditorView in English', () => {
     const key = buffers.key('p1', 'project', 'src/app.ts');
     await expect.poll(() => buffers.all[key]?.kind).toBe('text');
     buffers.edit(key, 'mine\n');
-    expect(await screen.findByText('● Unsaved · Ctrl+S')).toBeInTheDocument();
+    expect(await screen.findByText('Unsaved')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('This file changed on disk.');
     for (const name of ['Reload', 'Compare', 'Keep my version']) expect(screen.getByRole('button', { name })).toBeInTheDocument();

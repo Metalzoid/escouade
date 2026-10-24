@@ -5,6 +5,7 @@
   import { basename, fInt } from '../../lib/format';
   import { t, type Key } from '../../lib/i18n';
   import type { SearchMatch } from '../../lib/types';
+  import Icon from '../Icon.svelte';
   import FileIcon from './FileIcon.svelte';
   import { tip } from '../../lib/tip';
 
@@ -135,7 +136,6 @@
 </script>
 
 <div class="search">
-  <div class="title"><span class="label">{t('editor.search.title')}</span></div>
   <div class="box" class:invalid={!!search.error}>
     <input
       bind:this={field}
@@ -197,19 +197,8 @@
             onfocus={() => (focused = r.key)}
             onclick={() => fold(r.path)}
           >
-            <span class="twistie">
-              <svg class:open={r.open} width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
-                ><path
-                  d="M6 4l4 4-4 4"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.3"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                /></svg
-              >
-            </span>
-            <FileIcon path={r.path} />
+            <span class="twistie"><Icon name={r.open ? 'down' : 'right'} size={14} /></span>
+            <FileIcon />
             <span class="name">{basename(r.path)}</span>
             {#if dir}<span class="dir">{dir}</span>{/if}
             <span class="count mono">{r.count}</span>
@@ -245,80 +234,74 @@
 </div>
 
 <style>
+  /* The search through the files, in the editor's left column under its title (« Recherche »). */
   .search {
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
   }
-  .title {
-    padding: 10px 14px 8px 16px;
-  }
-  .label {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
+  /* The field, as the search in the file draws it: a well, its three toggles inside. */
   .box {
-    margin: 0 12px 0 14px;
+    margin: 0 4px;
     height: 28px;
     flex: none;
     display: flex;
     align-items: center;
-    gap: 1px;
-    padding: 0 3px 0 0;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: var(--term);
+    gap: 2px;
+    padding: 0 4px 0 0;
+    border-radius: 7px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--line-2);
   }
   .box:focus-within {
-    border-color: var(--accent);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--p) 60%, transparent),
+      0 0 0 3px color-mix(in oklch, var(--p) 14%, transparent);
   }
   .box.invalid {
-    border-color: var(--del);
+    box-shadow: inset 0 0 0 1px var(--del);
   }
   .box input {
     flex: 1;
     min-width: 0;
     height: 100%;
-    padding: 0 8px;
+    padding: 0 9px;
     border: none;
     background: transparent;
-    font-size: 13px;
+    color: var(--text);
+    font-size: 12.5px;
     outline: none;
   }
   .opt {
-    width: 22px;
+    min-width: 22px;
     height: 20px;
     flex: none;
     display: grid;
     place-items: center;
-    padding: 0;
-    border: 1px solid transparent;
-    border-radius: 3px;
+    padding: 0 3px;
+    border: none;
+    border-radius: 5px;
     background: transparent;
     color: var(--muted);
     font-size: 11px;
+    font-weight: 600;
     cursor: pointer;
   }
   .opt:hover {
-    background: var(--elev2);
+    background: var(--hover);
     color: var(--text);
   }
   .opt.on {
-    border-color: var(--accent);
-    background: var(--elev2);
+    background: color-mix(in oklch, var(--p) 24%, transparent);
     color: var(--text);
   }
   .problem {
-    margin: 0 12px 0 14px;
+    margin: 0 4px;
     padding: 5px 8px;
-    border: 1px solid var(--del);
-    border-top: none;
-    border-radius: 0 0 var(--r-sm) var(--r-sm);
-    background: oklch(0.3 0.06 25);
+    border-radius: 0 0 7px 7px;
+    background: oklch(from var(--del) l c h / 0.1);
+    box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.4);
     color: var(--text);
     font-size: 12px;
     line-height: 1.4;
@@ -334,7 +317,7 @@
     min-height: 100%;
     display: flex;
     flex-direction: column;
-    padding: 2px 0 12px;
+    padding: 0 0 12px;
     outline: none;
   }
   /* The answer to come replaces these. */
@@ -344,47 +327,40 @@
   .row {
     width: 100%;
     flex: none;
-    height: 22px;
+    height: 26px;
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 0 10px 0 8px;
+    gap: 6px;
+    padding: 0 8px;
     border: none;
-    border-radius: 0;
+    border-radius: 6px;
     background: transparent;
-    color: var(--text);
+    color: var(--soft);
     font: inherit;
-    font-size: 13px;
+    font-size: 12.5px;
     text-align: left;
     white-space: nowrap;
     cursor: pointer;
     /* Thousands of rows: those out of view cost no layout. */
     content-visibility: auto;
-    contain-intrinsic-size: auto 22px;
+    contain-intrinsic-size: auto 26px;
   }
   .row:hover {
-    background: var(--elev);
+    background: var(--hover);
   }
   .row:focus-visible {
-    outline: 1px solid var(--accent);
-    outline-offset: -1px;
+    outline: 2px solid var(--p-ink);
+    outline-offset: -2px;
   }
   .row.line {
-    padding-left: 44px;
+    padding-left: 30px;
   }
   .twistie {
-    width: 16px;
-    height: 16px;
+    width: 14px;
     flex: none;
     display: grid;
     place-items: center;
-    color: var(--muted);
-  }
-  .twistie svg {
-    transition: transform 0.1s ease-out;
-  }
-  .twistie svg.open {
-    transform: rotate(90deg);
+    color: var(--dim);
   }
   .name {
     flex: none;
@@ -398,7 +374,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     font-size: 11.5px;
-    color: var(--dim);
+    color: var(--muted);
   }
   .count {
     flex: none;
@@ -406,11 +382,12 @@
     min-width: 18px;
     padding: 0 5px;
     border-radius: 99px;
-    background: var(--elev2);
+    background: rgba(var(--fg-rgb), 0.06);
     color: var(--muted);
-    font-size: 10.5px;
+    font-size: 11px;
     line-height: 16px;
     text-align: center;
+    font-variant-numeric: tabular-nums;
   }
   .text {
     min-width: 0;
@@ -420,19 +397,19 @@
     color: var(--muted);
   }
   mark {
-    background: color-mix(in oklch, var(--wait) 28%, transparent);
+    border-radius: 3px;
+    background: color-mix(in oklch, var(--p) 32%, transparent);
     color: var(--text);
-    border-radius: 2px;
   }
   .foot {
     flex: none;
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: 7px 14px 8px 16px;
+    padding: 7px 8px 8px;
     border-top: 1px solid var(--line);
-    font-size: 11px;
-    color: var(--dim);
+    font-size: 11.5px;
+    color: var(--muted);
   }
   /* Nothing to tell: no bar drawn, the status kept for what comes. */
   .foot.idle {
@@ -440,11 +417,6 @@
     border-top: none;
   }
   .limit {
-    color: var(--wait);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .twistie svg {
-      transition: none;
-    }
+    color: var(--warn-ink);
   }
 </style>

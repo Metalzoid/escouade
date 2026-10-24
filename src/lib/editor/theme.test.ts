@@ -6,13 +6,13 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 import { setLang } from '../i18n';
-import { editorTheme, phrases } from './theme';
+import { editorTheme, phrases, SYNTAX } from './theme';
 
 // jsdom has no cascade, so compare the rules CodeMirror injects: our rule must be at least as specific as
 // the base theme's one (a class counts for as much as another) and come after it, or the base wins.
 function rules(extensions: Extension = bracketMatching()): { selectors: string[]; body: string; at: number }[] {
   const view = new EditorView({
-    state: EditorState.create({ doc: 'a', extensions: [editorTheme, extensions] }),
+    state: EditorState.create({ doc: 'a', extensions: [editorTheme(), extensions] }),
     parent: document.body,
   });
   const css = [...document.querySelectorAll('style')].map((s) => s.textContent ?? '').join('\n');
@@ -27,9 +27,9 @@ const specificity = (selector: string) => (selector.match(/\.[^\s.>:,+~]+/g) ?? 
 const strongest = (r: { selectors: string[] }, within: RegExp) => Math.max(...r.selectors.filter((s) => within.test(s)).map(specificity));
 
 describe('editorTheme', () => {
-  it('tints the focused selection with the accent, over the base theme', () => {
+  it('tints the focused selection with the selection token, over the base theme', () => {
     const all = rules();
-    const ours = all.find((r) => r.body.includes('var(--accent) 28%'))!;
+    const ours = all.find((r) => r.body.includes('var(--sel)'))!;
     const base = all.filter(
       (r) =>
         /cm-focused > \.cm-scroller > \.cm-selectionLayer \.cm-selectionBackground/.test(r.selectors.join()) && !r.body.includes('var('),
@@ -44,7 +44,7 @@ describe('editorTheme', () => {
 
   it('styles the matching bracket while focused, over the base theme', () => {
     const all = rules();
-    const ours = all.find((r) => r.body.includes('var(--elev2)'))!;
+    const ours = all.find((r) => r.body.includes('rgba(var(--fg-rgb), 0.08)'))!;
     const base = all.find((r) => r.selectors.some((s) => /\.cm-focused \.cm-matchingBracket/.test(s)) && !r.body.includes('var('))!;
     const focused = /\.cm-focused \.cm-matchingBracket/;
     expect(strongest(ours, focused)).toBeGreaterThanOrEqual(strongest(base, focused));
@@ -57,7 +57,7 @@ describe('editorTheme', () => {
     const cases: [string, RegExp, string][] = [
       ['var(--add) 8%', /\.cm-changedLine$/, 'background'],
       ['var(--add) 24%', /\.cm-changedText$/, 'background'],
-      ['var(--del) 8%', /\.cm-deletedChunk$/, 'background'],
+      ['var(--del) 9%', /\.cm-deletedChunk$/, 'background'],
       ['var(--del) 28%', /\.cm-deletedText$/, 'background'],
       ['font-size: 11px', /\.cm-deletedChunk (button|\.cm-blockAction)$/, 'color'],
     ];
@@ -71,6 +71,37 @@ describe('editorTheme', () => {
         expect(ours!.at, `${mark} after ${b.selectors.join()}`).toBeGreaterThan(b.at);
       }
     }
+  });
+});
+
+describe('editorTheme in both themes', () => {
+  it('is made once for each theme, not once for each file opened', () => {
+    expect(editorTheme(true)).toBe(editorTheme(true));
+    expect(editorTheme(false)).toBe(editorTheme(false));
+    expect(editorTheme(true)).not.toBe(editorTheme(false));
+  });
+
+  it('tells CodeMirror whether the window is dark, for its own base theme', () => {
+    const dark = (d: boolean) => EditorState.create({ extensions: editorTheme(d) }).facet(EditorView.darkTheme);
+    expect(dark(true)).toBe(true);
+    expect(dark(false)).toBe(false);
+  });
+
+  // Shadows are black scaled by `--shade`, as the design writes them in both themes.
+  it('draws every colour with a token of src/app.css, none written in', () => {
+    const src = readFileSync('src/lib/editor/theme.ts', 'utf8');
+    expect(src.match(/#[0-9a-f]{3,8}\b|oklch\(\d|rgba?\((?!0, 0, 0, calc\([\d.]+ \* var\(--shade\)\))\d/gi) ?? []).toEqual([]);
+  });
+
+  it('colours the code as the design does', () => {
+    expect(SYNTAX).toEqual({
+      keyword: 'var(--syn-k)',
+      function: 'var(--syn-f)',
+      string: 'var(--syn-s)',
+      type: 'var(--syn-t)',
+      number: 'var(--syn-n)',
+      comment: 'var(--code-dim)',
+    });
   });
 });
 

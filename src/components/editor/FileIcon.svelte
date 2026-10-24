@@ -1,25 +1,18 @@
 <script lang="ts">
-  import { fileIcon } from '../../lib/editor/icons';
+  import Icon from '../Icon.svelte';
 
-  let { path }: { path: string } = $props();
-
-  const icon = $derived(fileIcon(path));
+  // A file in a list (search results, « Ouvrir un fichier »): the icon of the app's family, the same for every kind of
+  // file (2.0 design; the letters and signs of the 1.x drew icons with characters). The tree draws none, as the design.
 </script>
 
-<span class="ficon mono" class:long={icon.glyph.length > 2} aria-hidden="true" style:color={icon.color}>{icon.glyph}</span>
+<span class="ficon" aria-hidden="true"><Icon name="file" size={14} /></span>
 
 <style>
   .ficon {
-    width: 16px;
     flex: none;
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: -0.04em;
-    text-align: center;
-    line-height: 1;
-  }
-  .long {
-    font-size: 7.5px;
-    letter-spacing: -0.08em;
+    display: grid;
+    place-items: center;
+    width: 16px;
+    color: var(--dim);
   }
 </style>

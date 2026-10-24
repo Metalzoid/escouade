@@ -3,6 +3,7 @@
   import type { FileStatus } from '../../lib/editor/tree';
   import { t } from '../../lib/i18n';
   import { tip } from '../../lib/tip';
+  import Icon from '../Icon.svelte';
 
   let {
     tabs,
@@ -14,7 +15,6 @@
     onclose: (path: string) => void;
   } = $props();
 
-  const SC: Record<string, string> = { M: 'var(--wait)', A: 'var(--add)', D: 'var(--del)' };
   /** The folder that tells a tab from the open ones of the same name; '' for a name that is alone. */
   const hints = $derived(tabHints(tabs.map((tab) => tab.path)));
 </script>
@@ -34,9 +34,7 @@
       onauxclick={(e) => e.button === 1 && onclose(tab.path)}
     >
       <span class="label"
-        ><span class="name" style:color={tab.status ? SC[tab.status] : undefined}>{tab.name}</span>{#if hint}<span class="hint"
-            >{' · ' + hint}</span
-          >{/if}</span
+        ><span class="name">{tab.name}</span>{#if hint}<span class="hint">{' · ' + hint}</span>{/if}</span
       >
       <button
         class="close"
@@ -46,58 +44,67 @@
         onclick={(e) => {
           e.stopPropagation();
           onclose(tab.path);
-        }}><span class="dot"></span><span class="x">×</span></button
+        }}><span class="dot"></span><span class="x"><Icon name="close" size={10} /></span></button
       >
     </div>
   {/each}
 </div>
 
 <style>
+  /* The open files (the design's .ed-tabs): 38 px, the one shown lit and underlined in the project's colour. */
   .tabs {
-    height: 36px;
+    height: 38px;
     flex: none;
     display: flex;
     align-items: stretch;
-    background: var(--bg);
     border-bottom: 1px solid var(--line);
     overflow-x: auto;
+    scrollbar-width: none;
   }
   .tab {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 0 6px 0 14px;
+    padding: 0 10px 0 14px;
     border-right: 1px solid var(--line);
-    border-top: 2px solid transparent;
     white-space: nowrap;
     cursor: pointer;
     color: var(--muted);
     font-size: 12.5px;
   }
+  .tab:hover {
+    color: var(--soft);
+  }
   .tab.on {
-    border-top-color: var(--accent);
-    background: var(--term);
+    background: rgba(var(--fg-rgb), 0.03);
+    box-shadow: inset 0 -2px 0 var(--p-ink);
     color: var(--text);
+  }
+  .tab:focus-visible {
+    outline: 2px solid var(--p-ink);
+    outline-offset: -2px;
   }
   .hint {
     color: var(--dim);
   }
   .close {
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 18px;
+    height: 18px;
+    display: grid;
+    place-items: center;
+    padding: 0;
     border: none;
-    border-radius: 3px;
+    border-radius: 4px;
     background: transparent;
     color: var(--dim);
-    font-size: 13px;
     cursor: pointer;
   }
   .close:hover {
-    background: var(--elev2);
+    background: var(--hover);
     color: var(--text);
+  }
+  .x {
+    display: grid;
   }
   .dot {
     display: none;
@@ -118,6 +125,6 @@
   }
   .close.dirty:hover .x,
   .close.dirty:focus-visible .x {
-    display: inline;
+    display: grid;
   }
 </style>

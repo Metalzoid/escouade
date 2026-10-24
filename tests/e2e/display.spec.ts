@@ -212,8 +212,8 @@ test('the terminals and the editor have their own font size, set at once and fit
       return { font: style.fontSize, height: el.getBoundingClientRect().height };
     });
   expect(line.font).toBe('16px');
-  // The lines grow with the text: 1.6 times its size.
-  expect(Math.round(line.height)).toBe(Math.round(16 * 1.6));
+  // The lines grow with the text: 1.75 times its size, as the 2.0 design draws them (ESC-81).
+  expect(Math.round(line.height)).toBe(Math.round(16 * 1.75));
   // The gutter's line numbers sit on their lines.
   const gutter = await page
     .locator('.cm-lineNumbers .cm-gutterElement')

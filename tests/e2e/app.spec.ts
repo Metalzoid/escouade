@@ -821,11 +821,11 @@ test('a file is browsed, edited and saved in the embedded editor', async ({ app 
   await code.click();
   await page.keyboard.press('Control+End');
   await page.keyboard.type('export const b = 2;');
-  await expect(page.getByText(/● Non enregistré/)).toBeVisible();
+  await expect(page.getByText('Non enregistré', { exact: true })).toBeVisible();
   await page.keyboard.press('Control+S');
   await expect(page.getByText('Enregistré', { exact: true })).toBeVisible();
   expect(fs.readFileSync(path.join(app.repo, 'src', 'app.ts'), 'utf8')).toBe('const a = 1;\nexport const b = 2;');
-  await page.getByRole('button', { name: '← Conversation' }).click();
+  await page.getByRole('button', { name: 'Conversation', exact: true }).click();
   await expect(page.locator('main.conv')).toBeVisible();
 });
 
@@ -865,7 +865,7 @@ test('a file of an agent’s worktree opens in the editor from the uncommitted f
   await page.locator('.filerow').filter({ hasText: 'app.ts' }).hover();
   await page.getByRole('button', { name: 'Ouvrir app.ts dans l’éditeur' }).click();
   await expect(page.locator('.cm-content')).toContainText('const a = 42;');
-  await expect(page.getByText('1 ligne modifiée vs main')).toBeVisible();
+  await expect(page.locator('.crumbs .vs')).toHaveText('1 ligne modifiée par rapport à main');
 });
 
 test('a ticket is taken by an agent that loops until its criteria are met, then merged once validated', async ({ app }) => {

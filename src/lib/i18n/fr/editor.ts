@@ -24,8 +24,8 @@ export default {
 
   /** The bar above the editor. */
   head: {
-    back: '← Conversation',
-    unsaved: '● Non enregistré · {key}',
+    back: 'Conversation',
+    unsaved: 'Non enregistré',
     saved: 'Enregistré',
   },
 
@@ -51,13 +51,17 @@ export default {
     rename: 'Renommer…',
     /** The Delete key, as written on the keyboard (shown in the menu). */
     deleteKey: 'Suppr',
+    /** The same on macOS: Cmd+Backspace, as the Mac's menus write it. */
+    deleteKeyMac: '⌘⌫',
     copyRelativePath: 'Copier le chemin relatif',
   },
 
   /** The line above the text: how the file differs from its reference version (`reference`: « main », « HEAD »…). */
   diff: {
     newFile: 'Nouveau fichier · absent de {reference}',
-    changedLines: { one: '{n} ligne modifiée vs {reference}', other: '{n} lignes modifiées vs {reference}' },
+    /** « 5 lignes » in green, then « modifiées par rapport à main ». */
+    changedCount: { one: '{n} ligne', other: '{n} lignes' },
+    changedVs: { one: 'modifiée par rapport à {reference}', other: 'modifiées par rapport à {reference}' },
     same: 'Identique à {reference}',
     show: 'Voir les changements',
   },
@@ -225,6 +229,26 @@ export default {
     keyChoose: 'choisir',
     keyOpen: 'ouvrir',
     keyClose: 'fermer',
+  },
+
+  /** The search in the file, floating over the text. */
+  find: {
+    label: 'Rechercher dans le fichier',
+    find: 'Rechercher',
+    replace: 'Remplacer',
+    /** `i`: the match the cursor is on, `n`: how many there are (« 1000+ » past a thousand). */
+    of: '{i} sur {n}',
+    total: { one: '{n} résultat', other: '{n} résultats' },
+    none: 'Aucun résultat',
+    matchCase: 'Respecter la casse',
+    regexp: 'Expression régulière',
+    wholeWord: 'Mot entier',
+    previous: 'Précédent',
+    next: 'Suivant',
+    close: 'Fermer',
+    replaceOne: 'Remplacer',
+    replaceAll: 'Tout',
+    replaceAllLabel: 'Tout remplacer',
   },
 
   /** CodeMirror's own texts (search panel, merge view), by the English phrase it asks with. */

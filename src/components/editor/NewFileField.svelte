@@ -2,7 +2,6 @@
   import { untrack } from 'svelte';
   import type { EntryKind } from '../../lib/editor/create';
   import { t } from '../../lib/i18n';
-  import FileIcon from './FileIcon.svelte';
 
   let {
     check,
@@ -82,7 +81,6 @@
   }
 </script>
 
-{#if kind === 'file'}<FileIcon path={name.replaceAll('\\', '/')} />{/if}
 <input
   use:take
   bind:this={input}
@@ -104,16 +102,18 @@
   input {
     flex: 1;
     min-width: 0;
-    height: 20px;
-    padding: 0 4px;
-    border: 1px solid var(--accent);
-    border-radius: 2px;
+    height: 22px;
+    padding: 0 6px;
+    border: none;
+    border-radius: 5px;
     outline: none;
-    background: var(--term);
-    font-size: 13px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 60%, transparent);
+    color: var(--text);
+    font-size: 12.5px;
   }
   input[aria-invalid='true'] {
-    border-color: var(--del);
+    box-shadow: inset 0 0 0 1px var(--del);
   }
   .problem {
     position: absolute;
@@ -122,9 +122,9 @@
     left: var(--field-left);
     right: 8px;
     padding: 5px 8px;
-    border: 1px solid var(--del);
-    border-top: none;
-    background: oklch(0.3 0.06 25);
+    border-radius: 0 0 6px 6px;
+    background: var(--raise-2);
+    box-shadow: inset 0 0 0 1px var(--del);
     color: var(--text);
     font-size: 12px;
     line-height: 1.4;

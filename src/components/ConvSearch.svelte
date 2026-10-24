@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from './Icon.svelte';
   import { conversationOf } from '../lib/conversations.svelte';
   import { trapFocus } from '../lib/focus';
   import { fAgo, fInt } from '../lib/format';
@@ -157,7 +158,7 @@
     aria-label={t('conv.search.title')}
   >
     <div class="search">
-      <span class="ic" aria-hidden="true">⌕</span>
+      <span class="ic" aria-hidden="true"><Icon name="search" size={16} /></span>
       <!-- svelte-ignore a11y_autofocus -->
       <input
         bind:this={field}
@@ -173,7 +174,7 @@
         aria-activedescendant={hits.length ? optionId(active) : undefined}
         onkeydown={onKeydown}
       />
-      <button class="icon-btn" style="width:28px;height:28px;font-size:16px" onclick={close} aria-label={t('common.close')}>×</button>
+      <button class="icon-btn close" onclick={close} aria-label={t('common.close')}><Icon name="close" size={14} /></button>
     </div>
     <div class="scope">
       <div class="segmented small" role="group" aria-label={t('conv.search.scope')}>
@@ -227,7 +228,7 @@
       {/if}
       <div style="flex:1"></div>
       <span class="keys" aria-hidden="true"
-        ><kbd>↑</kbd><kbd>↓</kbd>
+        ><kbd><Icon name="up" size={11} /><Icon name="pull" size={11} /></kbd>
         {t('conv.search.keyChoose')} <span class="sep">·</span> <kbd>{keyLabel('Enter')}</kbd>
         {t('conv.search.keyOpen')} <span class="sep">·</span>
         <kbd>{keyLabel('Esc')}</kbd>
@@ -238,6 +239,8 @@
 </div>
 
 <style>
+  /* A palette of the 2.0 design: over the window's scrim, a raised panel 14 px round, the field at its top with its
+     icon, the list, the keys at the foot. */
   .overlay {
     position: fixed;
     inset: 0;
@@ -246,9 +249,8 @@
     align-items: flex-start;
     justify-content: center;
     padding-top: 12vh;
-    background: rgba(12, 10, 8, 0.6);
-    backdrop-filter: blur(3px);
-    animation: fade 0.12s ease-out;
+    background: var(--scrim);
+    animation: fade 0.12s var(--ease);
   }
   @keyframes fade {
     from {
@@ -261,12 +263,13 @@
     max-height: 70vh;
     display: flex;
     flex-direction: column;
-    background: var(--panel);
-    border: 1px solid var(--line2);
     border-radius: 14px;
-    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+    background: var(--raise);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 24px 64px -12px rgba(0, 0, 0, calc(0.8 * var(--shade)));
     overflow: hidden;
-    animation: ccFadeIn 0.15s ease-out;
+    animation: ccFadeIn 0.15s var(--ease);
   }
   @media (prefers-reduced-motion: reduce) {
     .overlay,
@@ -278,12 +281,13 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 12px 12px 12px 18px;
+    height: 54px;
+    padding: 0 12px 0 18px;
     border-bottom: 1px solid var(--line);
   }
   .ic {
-    color: var(--dim);
-    font-size: 16px;
+    display: grid;
+    color: var(--muted);
   }
   .search input {
     flex: 1;
@@ -297,7 +301,70 @@
     outline: none;
   }
   .search input::placeholder {
-    color: var(--dim);
+    color: var(--muted);
+  }
+  .list {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 6px;
+  }
+  .list:empty {
+    display: none;
+  }
+  .hit {
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .hit.on {
+    background: rgba(var(--fg-rgb), 0.06);
+  }
+  .tag {
+    flex: none;
+    padding: 0 6px;
+    border-radius: 5px;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    font-size: 11px;
+    line-height: 18px;
+    color: var(--muted);
+  }
+  mark {
+    border-radius: 3px;
+    background: color-mix(in oklch, var(--p) 32%, transparent);
+    color: var(--text);
+  }
+  .foot {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 38px;
+    padding: 0 18px;
+    border-top: 1px solid var(--line);
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  .status {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .status.error {
+    color: var(--del);
+  }
+  .keys {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  .keys kbd {
+    gap: 2px;
+  }
+  .sep {
+    margin: 0 4px;
+    color: var(--sep);
   }
   .scope {
     display: flex;
@@ -311,63 +378,43 @@
     align-items: center;
     gap: 7px;
     font-size: 12.5px;
-    color: var(--muted);
+    color: var(--soft);
     cursor: pointer;
   }
   .check input {
     margin: 0;
-    accent-color: var(--accent);
-  }
-  .list {
-    flex: 1;
-    min-height: 0;
-    overflow: auto;
-    padding: 6px 8px;
-  }
-  .list:empty {
-    display: none;
+    accent-color: var(--p);
   }
   .group + .group {
     margin-top: 6px;
   }
   .who {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 8px;
     padding: 8px 10px 4px;
     font-size: 11.5px;
-    color: var(--dim);
+    color: var(--muted);
     white-space: nowrap;
     overflow: hidden;
   }
   .who .name {
-    font-weight: 700;
-    color: var(--muted);
+    font-weight: 600;
+    color: var(--soft);
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-  .tag {
-    padding: 0 6px;
-    border-radius: 99px;
-    border: 1px solid var(--line2);
-    font-size: 10.5px;
   }
   .hit {
     display: flex;
     align-items: baseline;
     gap: 12px;
     padding: 7px 10px;
-    border-radius: var(--r-sm);
-    cursor: pointer;
-  }
-  .hit.on {
-    background: var(--elev2);
   }
   .snip {
     flex: 1;
     min-width: 0;
     font-size: 13px;
-    color: var(--muted);
+    color: var(--soft);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -375,48 +422,10 @@
   .hit.on .snip {
     color: var(--text);
   }
-  mark {
-    background: color-mix(in oklch, var(--wait) 28%, transparent);
-    color: var(--text);
-    border-radius: 2px;
-  }
   .when {
     flex: none;
     font-size: 11px;
-    color: var(--dim);
-  }
-  .foot {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 18px;
-    border-top: 1px solid var(--line);
-    font-size: 11.5px;
-    color: var(--dim);
-  }
-  .status {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .status.error {
-    color: var(--del);
-  }
-  .keys {
-    flex: none;
-    white-space: nowrap;
-  }
-  kbd {
-    font-family: var(--mono);
-    font-size: 10.5px;
-    padding: 0 4px;
-    margin-right: 2px;
-    border: 1px solid var(--line2);
-    border-radius: 4px;
     color: var(--muted);
-  }
-  .sep {
-    margin: 0 4px;
+    font-variant-numeric: tabular-nums;
   }
 </style>

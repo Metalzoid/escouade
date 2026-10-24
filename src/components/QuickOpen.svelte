@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from './Icon.svelte';
   import { onMount, tick } from 'svelte';
   import { editorJump, parseQuickQuery, QUICK_OPEN_MAX, rankFiles, recentFiles } from '../lib/editor/quick-open';
   import { trees } from '../lib/editor/trees.svelte';
@@ -124,7 +125,7 @@
     aria-label={t('editor.quickOpen.title')}
   >
     <div class="search">
-      <span class="ic" aria-hidden="true">⌕</span>
+      <span class="ic" aria-hidden="true"><Icon name="search" size={16} /></span>
       <!-- svelte-ignore a11y_autofocus -->
       <input
         bind:value={text}
@@ -141,7 +142,7 @@
         onkeydown={onKeydown}
       />
       <span class="where" use:tip={{ text: place, cut: true }}>{place}</span>
-      <button class="icon-btn" style="width:28px;height:28px;font-size:16px" onclick={close} aria-label={t('common.close')}>×</button>
+      <button class="icon-btn close" onclick={close} aria-label={t('common.close')}><Icon name="close" size={14} /></button>
     </div>
     <div class="list" id="quick-open-files" role="listbox" aria-label={t('common.files')} bind:this={list}>
       {#each shown as path, rank (path)}
@@ -156,7 +157,7 @@
           onclick={() => open(path)}
           onmousemove={() => (active = rank)}
         >
-          <FileIcon {path} />
+          <FileIcon />
           <span class="name">{basename(path)}</span>
           {#if folder(path)}<span class="dir">{folder(path)}</span>{/if}
           {#if ignored.has(path)}<span class="tag">{t('editor.quickOpen.ignored')}</span>{/if}
@@ -171,7 +172,7 @@
       {/if}
       <div style="flex:1"></div>
       <span class="keys" aria-hidden="true"
-        ><kbd>↑</kbd><kbd>↓</kbd>
+        ><kbd><Icon name="up" size={11} /><Icon name="pull" size={11} /></kbd>
         {t('editor.quickOpen.keyChoose')} <span class="sep">·</span> <kbd>{keyLabel('Enter')}</kbd>
         {t('editor.quickOpen.keyOpen')} <span class="sep">·</span>
         <kbd>{keyLabel('Esc')}</kbd>
@@ -182,6 +183,8 @@
 </div>
 
 <style>
+  /* A palette of the 2.0 design: over the window's scrim, a raised panel 14 px round, the field at its top with its
+     icon, the list, the keys at the foot. */
   .overlay {
     position: fixed;
     inset: 0;
@@ -190,9 +193,8 @@
     align-items: flex-start;
     justify-content: center;
     padding-top: 12vh;
-    background: rgba(12, 10, 8, 0.6);
-    backdrop-filter: blur(3px);
-    animation: fade 0.12s ease-out;
+    background: var(--scrim);
+    animation: fade 0.12s var(--ease);
   }
   @keyframes fade {
     from {
@@ -205,12 +207,13 @@
     max-height: 70vh;
     display: flex;
     flex-direction: column;
-    background: var(--panel);
-    border: 1px solid var(--line2);
     border-radius: 14px;
-    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+    background: var(--raise);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 24px 64px -12px rgba(0, 0, 0, calc(0.8 * var(--shade)));
     overflow: hidden;
-    animation: ccFadeIn 0.15s ease-out;
+    animation: ccFadeIn 0.15s var(--ease);
   }
   @media (prefers-reduced-motion: reduce) {
     .overlay,
@@ -222,12 +225,13 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 12px 12px 12px 18px;
+    height: 54px;
+    padding: 0 12px 0 18px;
     border-bottom: 1px solid var(--line);
   }
   .ic {
-    color: var(--dim);
-    font-size: 16px;
+    display: grid;
+    color: var(--muted);
   }
   .search input {
     flex: 1;
@@ -241,75 +245,42 @@
     outline: none;
   }
   .search input::placeholder {
-    color: var(--dim);
-  }
-  .where {
-    flex: none;
-    max-width: 180px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 11.5px;
-    color: var(--dim);
+    color: var(--muted);
   }
   .list {
     flex: 1;
     min-height: 0;
     overflow: auto;
-    padding: 6px 8px;
+    padding: 6px;
   }
   .list:empty {
     display: none;
   }
   .hit {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
-    border-radius: var(--r-sm);
+    border-radius: 7px;
     cursor: pointer;
-    white-space: nowrap;
   }
   .hit.on {
-    background: var(--elev2);
-  }
-  .name {
-    flex: none;
-    max-width: 60%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--text);
-  }
-  .dir {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 12px;
-    color: var(--dim);
-  }
-  .hit.on .dir {
-    color: var(--muted);
+    background: rgba(var(--fg-rgb), 0.06);
   }
   .tag {
     flex: none;
-    margin-left: auto;
     padding: 0 6px;
-    border-radius: 99px;
-    border: 1px solid var(--line2);
-    font-size: 10.5px;
-    color: var(--dim);
+    border-radius: 5px;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    font-size: 11px;
+    line-height: 18px;
+    color: var(--muted);
   }
   .foot {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 9px 18px;
+    height: 38px;
+    padding: 0 18px;
     border-top: 1px solid var(--line);
     font-size: 11.5px;
-    color: var(--dim);
+    color: var(--muted);
   }
   .status {
     min-width: 0;
@@ -322,18 +293,53 @@
   }
   .keys {
     flex: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
     white-space: nowrap;
   }
-  kbd {
-    font-family: var(--mono);
-    font-size: 10.5px;
-    padding: 0 4px;
-    margin-right: 2px;
-    border: 1px solid var(--line2);
-    border-radius: 4px;
-    color: var(--muted);
+  .keys kbd {
+    gap: 2px;
   }
   .sep {
     margin: 0 4px;
+    color: var(--sep);
+  }
+  .hit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 10px;
+    white-space: nowrap;
+  }
+  .name {
+    flex: none;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .dir {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .tag {
+    margin-left: auto;
+  }
+  .where {
+    flex: none;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11.5px;
+    color: var(--muted);
   }
 </style>

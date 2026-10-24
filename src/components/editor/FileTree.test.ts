@@ -23,21 +23,24 @@ describe('FileTree', () => {
     expect(screen.getByRole('treeitem', { name: /README\.md/ })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('shows the git status of a file and a dot on its folder', () => {
+  it('shows the git status of a file in its letter and an amber dot on its folder, as the design', () => {
     render(FileTree, { ...base, rows });
-    expect(screen.getByRole('treeitem', { name: /app\.ts/ })).toHaveTextContent('M');
-    expect(screen.getByRole('treeitem', { name: /src/ }).querySelector('.dot')).toHaveStyle({ background: 'var(--wait)' });
-    expect(screen.getByRole('treeitem', { name: /app\.ts/ }).querySelector('.dot')).toBeNull();
+    const file = screen.getByRole('treeitem', { name: /app\.ts/ });
+    expect(file.querySelector('.letter.m')).toHaveTextContent('M');
+    expect(screen.getByRole('treeitem', { name: /src/ }).querySelector('.mdot')).toBeInTheDocument();
+    expect(file.querySelector('.mdot')).toBeNull();
   });
 
-  it('marks each file with its type, each row with its level, and a folder of a single folder with its whole chain', () => {
+  it('marks each row with its level and its indent, a folder with a chevron, and a folder of a single folder with its whole chain', () => {
     render(FileTree, { ...base, rows: treeRows(['src/lib/editor/a.ts', 'src/lib/editor/b.md'], { 'src/lib/editor': true }, {}) });
-    expect(screen.getByRole('treeitem', { name: /src\/lib\/editor/ })).toHaveAttribute('aria-level', '1');
+    const dir = screen.getByRole('treeitem', { name: /src\/lib\/editor/ });
+    expect(dir).toHaveAttribute('aria-level', '1');
+    expect(dir.querySelector('svg[data-icon="down"]')).toBeInTheDocument();
     const a = screen.getByRole('treeitem', { name: /a\.ts/ });
-    expect(a).toHaveTextContent('TS');
     expect(a).toHaveAttribute('aria-level', '2');
-    expect(a.querySelectorAll('.guide')).toHaveLength(1);
-    expect(screen.getByRole('treeitem', { name: /b\.md/ })).toHaveTextContent('M↓');
+    // 8 px from the edge, 14 px a level; no icon drawn with a character, a file the room of a chevron.
+    expect(a).toHaveStyle({ paddingLeft: '22px' });
+    expect(a).toHaveTextContent(/^a\.ts$/);
   });
 });
 
@@ -139,10 +142,10 @@ describe('FileTree naming a new file', () => {
     expect(oncreate).toHaveBeenCalledTimes(1);
   });
 
-  it('marks the name typed with the type of the file', async () => {
+  it('draws no icon of a type before the name typed, as the tree draws none', async () => {
     render(FileTree, { ...base, rows, check, oncreate: vi.fn(), oncancel: noop });
     await userEvent.keyboard('data.json');
-    expect(field().closest('.row')).toHaveTextContent('{}');
+    expect(field().closest('.row')?.querySelector('.ficon')).toBeNull();
   });
 
   it('tells why a name cannot be taken and keeps the field until it can', async () => {
@@ -305,7 +308,6 @@ describe('FileTree renaming and deleting', () => {
     expect([f.selectionStart, f.selectionEnd]).toEqual([0, 3]);
     expect(screen.queryByRole('treeitem', { name: /app\.ts/ })).not.toBeInTheDocument();
     expect(item(/\.env/).nextElementSibling).toContainElement(f);
-    expect(f.closest('.row')).toHaveTextContent('TS');
   });
 
   it('selects all of a name without an extension, and of a folder', async () => {

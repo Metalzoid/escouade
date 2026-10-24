@@ -341,25 +341,28 @@ describe('CodeEditor', () => {
     expect(ensureSyntaxTree(viewOf(container).state, 100)?.type.name).toBe('Script');
   });
 
-  it('opens its search panel in French', async () => {
+  it('opens its floating search in French', async () => {
     const { container } = render(CodeEditor, { ...base, docKey: 'k1', text: 'abc\n', version: 0, onchange: () => {} });
     await tick();
     expect(openSearchPanel(viewOf(container))).toBe(true);
-    const panel = container.querySelector('.cm-search') as HTMLElement;
+    const panel = container.querySelector('.cm-find') as HTMLElement;
     expect(panel.querySelector('input[name=search]')?.getAttribute('placeholder')).toBe('Rechercher');
-    expect(panel.querySelector('button[name=next]')?.textContent).toBe('suivant');
-    expect(panel.querySelector('button[name=close]')?.getAttribute('aria-label')).toBe('fermer');
+    expect([...panel.querySelectorAll('.cm-find-btn')].map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Précédent',
+      'Suivant',
+      'Fermer',
+    ]);
   });
 
-  it('opens its search panel in English when the interface is', async () => {
+  it('opens its floating search in English when the interface is', async () => {
     setLang('en');
     const { container } = render(CodeEditor, { ...base, docKey: 'k1', text: 'abc\n', version: 0, onchange: () => {} });
     await tick();
     expect(openSearchPanel(viewOf(container))).toBe(true);
-    const panel = container.querySelector('.cm-search') as HTMLElement;
+    const panel = container.querySelector('.cm-find') as HTMLElement;
     expect(panel.querySelector('input[name=search]')?.getAttribute('placeholder')).toBe('Find');
-    expect(panel.querySelector('button[name=next]')?.textContent).toBe('next');
-    expect(panel.querySelector('button[name=close]')?.getAttribute('aria-label')).toBe('close');
+    expect([...panel.querySelectorAll('.cm-find-btn')].map((b) => b.getAttribute('aria-label'))).toEqual(['Previous', 'Next', 'Close']);
+    expect(panel.querySelector('.cm-find-mini:last-child')?.textContent).toBe('All');
   });
 
   it('changes the words of CodeMirror and the buttons of the blocks with the language of the interface', async () => {
@@ -381,12 +384,26 @@ describe('CodeEditor', () => {
     expect(removedLines(container)).toEqual(['b']);
     // The panel is drawn with the words of the moment.
     expect(openSearchPanel(viewOf(container))).toBe(true);
-    expect(container.querySelector('.cm-search button[name=next]')?.textContent).toBe('next');
+    expect(container.querySelector('.cm-find input[name=search]')?.getAttribute('placeholder')).toBe('Find');
     setLang('fr');
     flushSync();
     await tick();
     expect(blockButtons(container).map((b) => b.textContent)).toEqual(['Annuler ce bloc']);
     expect(viewOf(container).state.phrase('next')).toBe('suivant');
+  });
+
+  it('follows the window’s theme at once, and draws the numbers before the marks of the changes', async () => {
+    document.documentElement.dataset.theme = 'dark';
+    const { container } = render(CodeEditor, { ...base, docKey: 'k1', text: 'a\n', version: 0, onchange: () => {} });
+    await tick();
+    expect(viewOf(container).state.facet(EditorView.darkTheme)).toBe(true);
+    document.documentElement.dataset.theme = 'light';
+    await vi.waitFor(() => expect(viewOf(container).state.facet(EditorView.darkTheme)).toBe(false));
+    document.documentElement.dataset.theme = 'dark';
+    await vi.waitFor(() => expect(viewOf(container).state.facet(EditorView.darkTheme)).toBe(true));
+    const gutters = [...container.querySelectorAll('.cm-gutter')].map((g) => g.className);
+    expect(gutters[0]).toContain('cm-lineNumbers');
+    expect(gutters[1]).toContain('cm-change-gutter');
   });
 
   it('indents the way the project does, and follows a change of style', async () => {
