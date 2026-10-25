@@ -166,9 +166,11 @@
         ],
   );
   // A narrow composer (a small window, the split layout) drops the chips' captions, as the preview does under 760 px of
-  // conversation; a narrower one, Stop's word too.
+  // conversation; a narrower one, Stop's word too; the narrowest (the panel open beside a widened projects' rail in a
+  // window of 1028 px, ESC-168), the key of « Envoyer ».
   const tight = $derived(width > 0 && width < 696);
   const narrow = $derived(width > 0 && width < 520);
+  const cramped = $derived(width > 0 && width < 300);
   const placeholder = $derived(
     pendingItem
       ? pendingItem.kind === 'permission'
@@ -763,7 +765,7 @@
           disabled={sending || reading > 0 || copying || (!text.trim() && !files.length)}
           onclick={send}
         >
-          {t('composer.send.label')}<kbd aria-hidden="true"><Icon name="enter" size={12} /></kbd>
+          {t('composer.send.label')}{#if !cramped}<kbd aria-hidden="true"><Icon name="enter" size={12} /></kbd>{/if}
         </button>
       </div>
     </div>

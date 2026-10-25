@@ -1,13 +1,13 @@
 <script lang="ts">
   import { t } from '../lib/i18n';
   import { logoUrl } from '../lib/project-logo.svelte';
-  import { tileText, type TileState } from '../lib/project-rail';
+  import { labelText, tileText, type TileState } from '../lib/project-rail';
   import { tip, type TipRow } from '../lib/tip';
   import type { Project } from '../lib/types';
   import Icon from './Icon.svelte';
   import TileFace from './TileFace.svelte';
 
-  // A project's tile on the rail (ESC-158): its colour and its two letters, or those chosen, or its logo (ESC-167); its agents waiting in an amber pill, at work in
+  // A project's tile on the rail (ESC-158): its colour and its two letters, or those chosen, or its logo (ESC-167), its label (ESC-168); its agents waiting in an amber pill, at work in
   // a green dot, the lock of a private project; its name, its shortcut, its changes and the rest in a tooltip beside it.
   // The rail handles the clicks, the menu, the keys and the drag (ProjectRail).
   let {
@@ -71,6 +71,7 @@
   class="tile proj"
   class:alert={!!state.alert && !selected}
   class:dragging
+  class:labelled={!!project.tileLabel}
   role="tab"
   aria-selected={selected}
   aria-label={label}
@@ -83,6 +84,10 @@
   {...handlers}
 >
   <TileFace text={tileText(project)} logo={logoUrl(project)} />
+  <!-- Its label (ESC-168): under the tile when it has one, beside it on a wide rail; the rail draws it (ProjectRail); the badges after it, drawn over it. -->
+  <span class="lbl" aria-hidden="true"
+    ><span class="tx">{labelText(project)}</span>{#if state.waiting}<span class="n">{state.waiting}</span>{/if}</span
+  >
   {#if project.private}<span class="lock" aria-hidden="true"><Icon name="lock" size={12} /></span>{/if}
   {#if state.waiting}<span class="ask" aria-hidden="true">{state.waiting}</span>{/if}
   {#if state.running}<span class="busy" aria-hidden="true"></span>{/if}
@@ -118,7 +123,8 @@
   .tile::before {
     content: '';
     position: absolute;
-    left: -8px;
+    /* On the rail's edge, whatever its width (ESC-168): the tile is in its middle. */
+    left: calc((36px - 100cqi) / 2);
     top: 50%;
     width: 4px;
     height: 22px;
@@ -212,5 +218,19 @@
     border-radius: 50%;
     background: var(--frame);
     color: var(--soft);
+  }
+  /* The rail widened to a list (ESC-168): the tile on the left, its label on its right (ProjectRail), its agents waiting
+     at the end of its row rather than on its corner. */
+  @container rail (min-width: 160px) {
+    .tile {
+      align-self: flex-start;
+      margin-left: 8px;
+    }
+    .tile::before {
+      left: -8px;
+    }
+    .ask {
+      display: none;
+    }
   }
 </style>

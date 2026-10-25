@@ -5,7 +5,7 @@
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import { knowLogo, logoUrl, pickLogo } from '../../lib/project-logo.svelte';
-  import { cleanLetters, initials, tileText } from '../../lib/project-rail';
+  import { cleanLabel, cleanLetters, initials, tileText } from '../../lib/project-rail';
   import TileFace from '../TileFace.svelte';
   import { PROJECT_COLORS } from '../../lib/theme';
   import type { Start, StepId } from '../../lib/wizard';
@@ -41,6 +41,9 @@
   let colorTouched = !!existing;
   /** « Lettres de la tuile » (ESC-167): empty is the initials of the name. */
   let letters = $state(existing?.tileLetters ?? '');
+  /** « Libellé sous la tuile » (ESC-168): off by default; its text, empty for the name. */
+  let labelOn = $state(!!existing?.tileLabel);
+  let labelText = $state(existing?.tileLabelText ?? '');
   /** « Logo »: an image chosen (copied once the project is saved), or the existing one's removed. */
   let logoPick = $state<{ path: string; url: string } | null>(null);
   let logoRemoved = $state(false);
@@ -55,8 +58,13 @@
   /** The tile's letters and logo set in the window, saved into the project made or edited; the project as it is then. */
   async function saveTile(p: import('../../lib/types').Project) {
     let out = p;
-    if ((out.tileLetters ?? '') !== letters.trim()) {
-      const next = { ...out, tileLetters: letters.trim() };
+    const tile = { tileLetters: letters.trim(), tileLabel: labelOn, tileLabelText: labelText.trim() };
+    if (
+      (out.tileLetters ?? '') !== tile.tileLetters ||
+      !!out.tileLabel !== tile.tileLabel ||
+      (out.tileLabelText ?? '') !== tile.tileLabelText
+    ) {
+      const next = { ...out, ...tile };
       if (await app.run(api.updateProject(next).then(() => true))) out = next;
     }
     if (logoPick || (logoRemoved && out.logo)) {
@@ -187,6 +195,8 @@
           name: name.trim() || existing.name,
           color,
           tileLetters: letters.trim(),
+          tileLabel: labelOn,
+          tileLabelText: labelText.trim(),
         });
         if (saved) {
           app.replaceProject(await saveTile(saved));
@@ -211,8 +221,8 @@
         }),
       );
       if (!p) return;
-      // Its history's letters and logo come back unless others were set here.
-      if (restoring) return void show(letters.trim() || logoPick ? await saveTile(p) : p, null);
+      // Its history's letters, logo and label come back unless others were set here.
+      if (restoring) return void show(letters.trim() || logoPick || labelOn || labelText.trim() ? await saveTile(p) : p, null);
       if (!withSettings) return void show(await saveTile(p), null);
       // Made: shown even if its settings were refused (said by a toast), to be set in Réglages › Projets.
       const saved = await form.save(p);
@@ -370,6 +380,32 @@
                   }}>{t('settings.project.logoRemove')}</button
                 >{/if}
             </div>
+          </div>
+        </div>
+        <div class="w-fld">
+          <span class="lab">{t('settings.project.labelLabel')}</span>
+          <div class="row">
+            <input
+              class="field label-text"
+              aria-label={t('settings.project.labelText')}
+              spellcheck="false"
+              autocomplete="off"
+              placeholder={name || t('shell.newProject.untitled')}
+              value={labelText}
+              oninput={(e) => {
+                const v = cleanLabel(e.currentTarget.value);
+                if (v !== e.currentTarget.value) e.currentTarget.value = v;
+                labelText = v;
+              }}
+            />
+            <button
+              class="switch"
+              role="switch"
+              aria-checked={labelOn}
+              class:on={labelOn}
+              aria-label={t('settings.project.labelLabel')}
+              onclick={() => (labelOn = !labelOn)}
+            ></button>
           </div>
         </div>
         {#if !restoring}
@@ -651,6 +687,10 @@
     width: 96px;
     height: 32px;
     text-align: center;
+  }
+  .label-text {
+    width: 150px;
+    height: 32px;
   }
   .name {
     flex: 1;

@@ -148,10 +148,18 @@ const shots = [
   { name: 'tile-settings', ...BIG, hash: 'tile-settings' },
   { name: 'tile-small', ...SMALL, hash: 'tile' },
   { name: 'tile-settings-small-en', ...SMALL, ...EN, hash: 'tile-settings' },
+  // The rail's width and the labels (ESC-168): labels under the tiles (72 px), the rail at 300 px with every name on the
+  // right, the setting; at 1028 px the rail is held to the window's room.
+  { name: 'labels', ...BIG, hash: 'labels' },
+  { name: 'labels-wide', ...BIG, hash: 'labels-wide' },
+  { name: 'labels-settings', ...BIG, hash: 'labels-settings' },
+  { name: 'labels-small', ...SMALL, hash: 'labels' },
+  { name: 'labels-wide-small-en', ...SMALL, ...EN, hash: 'labels-wide' },
+  { name: 'labels-settings-small-en', ...SMALL, ...EN, hash: 'labels-settings' },
   // The theme selector, on Système (its default): the window follows the emulated system theme.
   { name: 'settings-app', ...BIG, hash: 'settings-app', system: true },
 ];
-const LIGHT_SMALL = ['kanban-small', 'pr-small-en', 'models-small-en', 'waiting-small-en', 'private-small-en', 'agents-small', 'git-small', 'overview-small', 'settings-small', 'agents-small-en', 'quota-small-en', 'terminal-view-small-en', 'settings-harness-small-en', 'rail-small', 'rail-small-en', 'tile-small', 'tile-settings-small-en'];
+const LIGHT_SMALL = ['kanban-small', 'pr-small-en', 'models-small-en', 'waiting-small-en', 'private-small-en', 'agents-small', 'git-small', 'overview-small', 'settings-small', 'agents-small-en', 'quota-small-en', 'terminal-view-small-en', 'settings-harness-small-en', 'rail-small', 'rail-small-en', 'tile-small', 'tile-settings-small-en', 'labels-small', 'labels-wide-small-en', 'labels-settings-small-en'];
 shots.push(
   ...shots
     .filter((s) => (s.width === BIG.width && !s.lang) || LIGHT_SMALL.includes(s.name))

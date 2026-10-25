@@ -118,6 +118,8 @@ type ProjectFields = Pick<
   | 'color'
   | 'tileLetters'
   | 'logo'
+  | 'tileLabel'
+  | 'tileLabelText'
   | 'worktreePerAgent'
   | 'worktreeAtFirstMessage'
   | 'worktreeBase'
@@ -146,6 +148,10 @@ export interface ProjectDraft {
   tileLetters: string;
   /** « Logo »: the project's file, or the path of the image chosen (copied once saved), or empty for none. */
   logo: string;
+  /** « Libellé sous la tuile » (ESC-168): off by default. */
+  tileLabel: boolean;
+  /** Its text: empty is the name. */
+  tileLabelText: string;
   worktreePerAgent: boolean;
   /** « Créer le worktree au premier message, au nom de l’agent ». */
   worktreeAtFirstMessage: boolean;
@@ -185,6 +191,8 @@ function draftOf(p: Project): ProjectDraft {
     color,
     tileLetters,
     logo,
+    tileLabel,
+    tileLabelText,
     worktreePerAgent,
     worktreeAtFirstMessage,
     worktreeBase,
@@ -210,6 +218,9 @@ function draftOf(p: Project): ProjectDraft {
     // Absent from a project of the window's tests made before ESC-167.
     tileLetters: tileLetters ?? '',
     logo: logo ?? '',
+    // Absent from a project of the window's tests made before ESC-168.
+    tileLabel: tileLabel ?? false,
+    tileLabelText: tileLabelText ?? '',
     worktreePerAgent,
     // Absent from a project of the window's tests made before ESC-156: on, as the backend has it.
     worktreeAtFirstMessage: worktreeAtFirstMessage ?? true,
@@ -266,6 +277,8 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     color: d.color,
     tileLetters: d.tileLetters.trim(),
     logo: d.logo,
+    tileLabel: d.tileLabel,
+    tileLabelText: d.tileLabelText.trim(),
     worktreePerAgent: d.worktreePerAgent,
     worktreeAtFirstMessage: d.worktreeAtFirstMessage,
     // A branch not chosen yet (« Une branche… » with no name) leaves it as the folder's.

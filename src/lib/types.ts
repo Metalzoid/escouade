@@ -90,6 +90,8 @@ export interface Settings {
   quotaProjection: boolean;
   /** « Taille du texte de l’éditeur », in CSS pixels before the zoom. */
   editorFontSize: number;
+  /** The width of the projects’ rail chosen by its edge (ESC-168), in CSS pixels; 0 (or absent) is its usual width. */
+  railWidth?: number;
   /** « Voix »: the dictation. */
   voice: VoiceSettings;
 }
@@ -670,6 +672,10 @@ export interface Project {
   tileLetters?: string;
   /** « Logo » (ESC-167): the file of its copy in the app’s data folder, empty for none; set by `setProjectLogo` alone. */
   logo?: string;
+  /** « Libellé sous la tuile » (ESC-168): off by default. Absent from a project of the window’s tests made before it. */
+  tileLabel?: boolean;
+  /** Its text, shorter than the name; empty is the name. */
+  tileLabelText?: string;
   worktreePerAgent: boolean;
   /** « Créer le worktree au premier message, au nom de l’agent » (ESC-156): on unless switched off. Absent from a project of the window’s tests made before it. */
   worktreeAtFirstMessage?: boolean;

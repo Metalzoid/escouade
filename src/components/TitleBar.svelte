@@ -154,6 +154,14 @@
     place-items: center;
     width: var(--rail);
     align-self: stretch;
+    container: corner / inline-size;
+  }
+  /* The rail widened to a list (ESC-168): the logo stays over its tiles. */
+  @container corner (min-width: 160px) {
+    .mark {
+      justify-self: start;
+      margin-left: 15px;
+    }
   }
   .bar.mac .corner {
     width: var(--mac-corner);

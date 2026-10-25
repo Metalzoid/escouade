@@ -54,6 +54,12 @@ The tooltip, to the right of the tile, gives the project’s name and its shortc
 
 When the projects don’t fit in the column, the list scrolls between “Overview” and `+`, its faded edges saying there are more. The tile of the project on screen comes back into view by itself, however it was shown (click, notification, shortcut, “Overview”). A project out of view with an agent waiting is signalled by an amber pill under the list (or above it): a click brings it into view.
 
+### Its width
+
+The rail’s right edge is dragged to widen it, from 52 to 300 px. The tiles keep their size and their signs; up to 160 px, a project that has its label (see [Settings: Projects](settings-projects)) shows it under its tile, on one line, cut with “…”, the shown project’s in its color. Past that, every tile has its name on its right, a row per project: its label if it has one, else the project’s name, on or not; “Overview”, `+`, “Stats” and “Settings” have theirs too, and the agents waiting move to the end of the row. The tooltip then opens on the rail’s right.
+
+The width chosen holds for the whole app and stays after a restart. A double click on the edge goes back to the usual width: 52 px, or 72 px as soon as a project has its label. With the keyboard, the edge takes the focus with `Tab`; `←` and `→` move it by 16 px, `Home` and `End` go to either end. In a narrow window, the rail is drawn narrower than chosen (at most the window’s width minus 948 px: 80 px at 1028 px, 300 px from 1248 px), so that the agents, the conversation and the panel keep their room; the width chosen comes back with the room.
+
 ### The rail’s buttons
 
 - **“Overview”** (`Ctrl+Shift+A`) shows the agents of every project on one page; the same button, or the same shortcut, closes it. See [following your agents](overview).

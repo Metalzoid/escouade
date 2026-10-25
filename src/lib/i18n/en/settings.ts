@@ -274,6 +274,10 @@ export default defineZone('settings', {
     logoDesc: 'PNG, JPEG, WebP, SVG or ICO, 1 MB at most. It takes the place of the letters; Escouade keeps a copy of it.',
     logoChoose: 'Choose an image…',
     logoRemove: 'Remove',
+    /** « Libellé sous la tuile » (ESC-168). */
+    labelLabel: 'Label under the tile',
+    labelDesc: 'The project’s name, or a shorter text (12 characters at most). Widened, the rail shows it on the tile’s right, on or not.',
+    labelText: 'Label text',
     logoTitle: 'Project logo',
     logoFilter: 'Images',
     tilePreview: 'Project tile',

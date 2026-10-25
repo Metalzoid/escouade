@@ -674,6 +674,24 @@ describe('Composer in a narrow column (split layout)', () => {
     expect(stop).toHaveClass('icon');
     // Claude takes a message sent during a turn at its next step: it is sent, not queued.
     expect(screen.getByRole('button', { name: 'Envoyer' })).toBeInTheDocument();
+    // 400 px: « Envoyer » keeps its key.
+    expect(screen.getByRole('button', { name: 'Envoyer' }).querySelector('kbd')).not.toBeNull();
+  });
+
+  it('drops the key of « Envoyer » in the narrowest column (the panel beside a widened projects’ rail)', () => {
+    globalThis.ResizeObserver = class {
+      constructor(private cb: ResizeObserverCallback) {}
+      observe() {
+        this.cb([{ contentRect: { width: 260 } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+      }
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    setup({ status: 'running' });
+    const send = screen.getByRole('button', { name: 'Envoyer' });
+    expect(send).toHaveTextContent('Envoyer');
+    expect(send.querySelector('kbd')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Stop' })).toHaveClass('icon');
   });
 });
 

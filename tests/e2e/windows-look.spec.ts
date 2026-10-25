@@ -222,6 +222,9 @@ test('the assistant « Nouveau projet » reads as the preview: its start, its la
   const dialog = await openAssistant(page, other);
   await dialog.getByRole('radio', { name: /^Copier la configuration/ }).click();
   await expect(dialog.getByRole('group', { name: 'Projet copié' }).locator('[aria-pressed="true"]')).toHaveCount(1);
+  // The click brought the radio into view: the step is compared from its top, as it opens (its tile's fields, ESC-167
+  // and 168, make it taller than the preview's).
+  await dialog.locator('.page').evaluate((p) => p.scrollTo(0, 0));
   // The step and the folder beside the title; the rail drawn, numbers and no glyph.
   await expect(dialog.locator('.head .chip-sm')).toHaveText([/billing-service$/, 'Étape 1 sur 8']);
   await compare(page, 'wizard-private', async (preview, where) => {

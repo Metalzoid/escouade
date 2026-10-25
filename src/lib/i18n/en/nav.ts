@@ -157,6 +157,9 @@ export default defineZone('nav', {
     upKey: 'Alt ↑',
     downKey: 'Alt ↓',
     closeDetail: 'Its history is kept: + reopens it',
+    /** The rail's right edge (ESC-168). */
+    width: 'Width of the projects’ rail',
+    widthTip: 'Drag to widen · double click: usual width',
     addMenu: {
       new: 'Add a project…',
       newDetail: 'A folder, a repository to clone or an empty project, through the assistant',

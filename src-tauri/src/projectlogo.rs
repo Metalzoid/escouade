@@ -195,6 +195,26 @@ pub(crate) fn clean_letters(text: &str) -> String {
     }
 }
 
+/// The most characters of « Libellé sous la tuile » kept (ESC-168). The window takes twelve
+/// letters, an emoji's joiners and accents aside; this keeps a state edited by hand from filling
+/// the rail.
+pub(crate) const MAX_LABEL_CHARS: usize = 48;
+
+/// « Libellé sous la tuile » as saved: on one line (its spaces and controls one space), trimmed, cut
+/// at `MAX_LABEL_CHARS`; empty is the name of the project.
+pub(crate) fn clean_label(text: &str) -> String {
+    let line: Vec<&str> = text
+        .split(|c: char| c.is_whitespace() || c.is_control())
+        .filter(|w| !w.is_empty())
+        .collect();
+    line.join(" ")
+        .nfc()
+        .take(MAX_LABEL_CHARS)
+        .collect::<String>()
+        .trim_end()
+        .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -352,5 +372,18 @@ mod tests {
         assert_eq!(clean_letters("\u{7}"), "");
         assert_eq!(clean_letters("-."), "");
         assert_eq!(clean_letters(&"🚀".repeat(20)), "");
+    }
+
+    #[test]
+    fn the_label_is_one_line_trimmed_and_bounded() {
+        assert_eq!(clean_label(""), "");
+        assert_eq!(clean_label("   "), "");
+        assert_eq!(clean_label(" API  v2 "), "API v2");
+        assert_eq!(clean_label("a\nb\t\u{7}c"), "a b c");
+        assert_eq!(clean_label("e\u{301}tat"), "\u{e9}tat");
+        assert_eq!(
+            clean_label(&"x".repeat(100)).chars().count(),
+            MAX_LABEL_CHARS
+        );
     }
 }

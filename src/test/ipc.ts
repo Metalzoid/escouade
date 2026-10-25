@@ -107,6 +107,7 @@ export const SETTINGS: Settings = {
   quotaProjection: true,
   terminalFontSize: 12.5,
   editorFontSize: 12.5,
+  railWidth: 0,
   voice: {
     device: '',
     model: 'base',

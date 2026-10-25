@@ -318,6 +318,11 @@ export default {
     logoDesc: 'PNG, JPEG, WebP, SVG ou ICO, 1 Mo au plus. Il remplace les lettres ; Escouade en garde une copie.',
     logoChoose: 'Choisir une image…',
     logoRemove: 'Retirer',
+    /** « Libellé sous la tuile » (ESC-168). */
+    labelLabel: 'Libellé sous la tuile',
+    labelDesc:
+      'Le nom du projet, ou un texte plus court (12 caractères au plus). Élargie, la barre le montre à droite de la tuile, allumé ou non.',
+    labelText: 'Texte du libellé',
     logoTitle: 'Logo du projet',
     logoFilter: 'Images',
     tilePreview: 'Tuile du projet',

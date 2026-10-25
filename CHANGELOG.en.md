@@ -10,6 +10,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 - A project’s tile in the projects’ rail can say something other than its initials: up to three letters or an emoji, or the logo of your choice in their place, in Settings › Projects or in the “New project” assistant. The agents waiting and those at work stay readable over it.
 - Cursor CLI becomes the fifth harness: a Cursor agent converses in Escouade, asks its questions and permissions there, proposes its plan to approve and keeps its tasks and subagents in the Plan banner. Its “Always” becomes “For this agent”: the rule holds for that agent alone, never for your Cursor config.
+- A project can show a label under its tile, its name or a shorter text, and the projects’ rail widens by dragging its right edge: wide enough, it shows each project’s name beside its tile, as a list. The width chosen is kept for the whole app.
 
 ## [2.0.0] — 2026-10-24
 

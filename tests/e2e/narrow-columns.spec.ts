@@ -235,4 +235,42 @@ for (const lang of ['fr', 'en'] as const)
       await expect(page.locator('aside.git-side.docked')).toBeHidden();
       await expect(page.locator('aside.git-side')).toBeVisible();
     });
+
+    // The projects' rail widened by its edge (ESC-168) takes its room from the rest: chosen at 300 px, it is drawn as
+    // wide as each window lets it (80 px at 1028, 300 from 1248), and nothing of the conversation overflows.
+    test(`with the projects' rail at its widest, the agent's header and what a narrow column holds never overflow (${lang})`, async ({
+      app,
+    }) => {
+      test.setTimeout(240_000);
+      const { page } = app;
+      await addProject(page, app.repo, { worktrees: true, lang });
+      await send(page, 'edit');
+      await expect(page.locator('main.conv header.head .btn.test')).toBeVisible();
+      await page.setViewportSize(SIZES[2]);
+      await settle(page);
+      const edge = page.locator('nav.rail [role="separator"]');
+      await edge.focus();
+      await page.keyboard.press('End');
+      await expect(edge).toHaveAttribute('aria-valuenow', '300');
+      await send(page, 'plan superpowers');
+      await expect(page.getByTestId('question-pending')).toBeVisible();
+
+      const problems = await measureConversation(page, lang, [
+        'nav.rail',
+        'main.conv .composer',
+        'main.conv .plan .head',
+        '[data-testid="question-pending"]',
+        'aside.git-side .utabs',
+        'aside.git-side .side-top',
+      ]);
+      await setLayout(page, lang, 'panel');
+      for (let width = 1000; width <= 1960; width += 32) {
+        await page.setViewportSize({ width, height: 800 });
+        await settle(page);
+        const rail = await widthOf(page.locator('nav.rail'));
+        if (rail !== Math.max(52, Math.min(300, width - 948))) problems.push(`${lang} ${width} px: the rail is ${rail} px`);
+        problems.push(...(await headerProblems(page, `${lang} ${width} px, panel, rail ${rail} px`)));
+      }
+      expect(problems).toEqual([]);
+    });
   });

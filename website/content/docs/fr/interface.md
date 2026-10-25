@@ -54,6 +54,12 @@ L’infobulle, à droite de la tuile, donne le nom du projet et son raccourci (`
 
 Quand les projets ne tiennent pas dans la colonne, la liste défile entre « Vue d’ensemble » et `+`, ses bords fondus disant qu’il y en a d’autres. La tuile du projet affiché revient d’elle-même dans la vue, quelle que soit la façon de l’afficher (clic, notification, raccourci, « Vue d’ensemble »). Un projet hors de vue dont un agent attend se signale par une pastille ambre sous la liste (ou au-dessus) : un clic l’amène dans la vue.
 
+### Sa largeur
+
+Le bord droit de la barre se tire pour l’élargir, de 52 à 300 px. Les tuiles gardent leur taille et leurs signes ; jusqu’à 160 px, un projet qui a son libellé (voir [Réglages : Projets](settings-projects)) le montre sous sa tuile, sur une ligne, coupé en « … », celui du projet affiché dans sa couleur. Au-delà, chaque tuile a son nom à sa droite, une rangée par projet : son libellé s’il en a un, sinon le nom du projet, allumé ou non ; « Vue d’ensemble », `+`, « Stats » et « Réglages » ont aussi le leur, et les agents qui attendent passent au bout de la rangée. L’infobulle s’ouvre alors à droite de la barre.
+
+La largeur choisie vaut pour toute l’application et reste après un redémarrage. Un double clic sur le bord revient à la largeur par défaut : 52 px, ou 72 px dès qu’un projet a son libellé. Au clavier, le bord prend le focus avec `Tab` ; `←` et `→` le déplacent de 16 px, `Début` et `Fin` vont aux deux bouts. Dans une fenêtre étroite, la barre se dessine moins large que choisi (au plus la largeur de la fenêtre moins 948 px : 80 px à 1028 px, 300 px dès 1248 px), pour que les agents, la conversation et le panneau gardent leur place ; la largeur choisie revient avec la place.
+
 ### Les boutons de la barre
 
 - **« Vue d’ensemble »** (`Ctrl+Maj+A`) affiche les agents de tous les projets sur une page ; le même bouton, ou le même raccourci, la referme. Voir [suivre ses agents](overview).

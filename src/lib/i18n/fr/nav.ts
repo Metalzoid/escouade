@@ -192,6 +192,9 @@ export default {
     upKey: 'Alt ↑',
     downKey: 'Alt ↓',
     closeDetail: 'Son historique est gardé : « + » le rouvre',
+    /** The rail's right edge (ESC-168). */
+    width: 'Largeur de la barre des projets',
+    widthTip: 'Tirer pour élargir · double clic : largeur par défaut',
     // The menu of « + », with closed projects.
     addMenu: {
       new: 'Ajouter un projet…',

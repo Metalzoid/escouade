@@ -6,16 +6,19 @@
   import { menu, type MenuItem } from '../lib/menu.svelte';
   import { keyLabel } from '../lib/platform';
   import { dropProject, moveProject, projectMenu, tileState } from '../lib/project-rail';
+  import { RAIL_MIN, railWidth } from '../lib/rail-width.svelte';
   import { app } from '../lib/state.svelte';
   import { tip } from '../lib/tip';
   import type { Project } from '../lib/types';
   import Icon from './Icon.svelte';
   import ProjectTile from './ProjectTile.svelte';
+  import Splitter from './Splitter.svelte';
 
   // The projects' rail (ESC-158), as Slack's workspaces, from the title bar to the status bar: « Vue d'ensemble » on top,
   // a tile per open project (the list scrolls when they are many, the active one kept in view, a pill for those out of
   // view that wait), « + » (the assistant, or a menu with the closed projects), then the stats and the settings. At the
-  // first start, « + » and the settings alone.
+  // first start, « + » and the settings alone. Its right edge sets its width (ESC-168): from 160 px, every tile has its name
+  // on its right, a row each.
 
   /** A shortcut as the rail writes it: « Ctrl 1 », « Ctrl Maj A ». */
   const kbd = (s: string) => keyLabel(s).split('+').join(' ');
@@ -85,12 +88,16 @@
     app.selectProject(p.id);
   }
 
+  let nav = $state<HTMLElement>();
+  /** Where a menu of the rail opens: beside its edge, or beside the tile of a narrow rail. */
+  const besideRail = (r: DOMRect) => Math.max(r.right, (nav?.getBoundingClientRect().right ?? 0) - 8) + 12;
+
   function tileMenu(e: MouseEvent, p: Project) {
     // Its tooltip goes: the menu stands where it was.
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     e.preventDefault();
     e.stopPropagation();
-    menu.open = { x: r.right + 12, y: Math.max(8, r.top - 6), items: projectMenu(p) };
+    menu.open = { x: besideRail(r), y: Math.max(8, r.top - 6), items: projectMenu(p) };
   }
 
   function onTileKey(e: KeyboardEvent, p: Project, i: number) {
@@ -153,7 +160,7 @@
       },
     ];
     const r = button.getBoundingClientRect();
-    menu.open = { x: r.right + 12, y: Math.max(8, r.top - 6), items, keyboard: true };
+    menu.open = { x: besideRail(r), y: Math.max(8, r.top - 6), items, keyboard: true };
   }
 
   /** A pill of projects out of view: a click brings the first of them into view. */
@@ -162,14 +169,15 @@
   }
 </script>
 
-<nav class="rail" aria-label={t('nav.rail.label')}>
+<nav class="rail" aria-label={t('nav.rail.label')} data-tip-edge bind:this={nav}>
   {#if !first}
     <button
       class="tile global"
       aria-pressed={app.ui.view === 'overview'}
       aria-label={t('nav.rail.overview')}
       use:tip={{ title: t('nav.rail.overview'), kbd: kbd('Ctrl+Shift+A'), rows: [t('nav.rail.overviewTip')], side: 'right', aria: false }}
-      onclick={() => app.toggleOverview()}><Icon name="overview" /></button
+      onclick={() => app.toggleOverview()}
+      ><Icon name="overview" /><span class="lbl" aria-hidden="true"><span class="tx">{t('nav.rail.overview')}</span></span></button
     >
     <div class="sep"></div>
     {#if above}
@@ -227,7 +235,7 @@
     aria-haspopup="menu"
     aria-label={t('nav.rail.add')}
     use:tip={{ title: t('nav.rail.add'), rows: [t('nav.rail.addTip')], side: 'right', aria: false }}
-    onclick={add}><Icon name="plus" /></button
+    onclick={add}><Icon name="plus" /><span class="lbl" aria-hidden="true"><span class="tx">{t('nav.rail.add')}</span></span></button
   >
   <div class="spacer"></div>
   {#if !first}
@@ -237,15 +245,28 @@
       aria-label={t('nav.rail.stats')}
       use:tip={{ title: t('nav.rail.stats'), rows: [t('nav.rail.statsTip')], side: 'right', aria: false }}
       onclick={() => (app.ui.view === 'stats' && app.ui.activeProject ? app.selectProject(app.ui.activeProject) : app.openStats())}
-      ><Icon name="stats" /></button
+      ><Icon name="stats" /><span class="lbl" aria-hidden="true"><span class="tx">{t('nav.rail.stats')}</span></span></button
     >
   {/if}
   <button
     class="tile global"
     aria-label={t('nav.rail.settingsLabel', { key: keyLabel('Ctrl+,') })}
     use:tip={{ title: t('nav.rail.settings'), kbd: kbd('Ctrl+,'), side: 'right', aria: false }}
-    onclick={() => (app.modal = { kind: 'settings' })}><Icon name="sliders" /></button
+    onclick={() => (app.modal = { kind: 'settings' })}
+    ><Icon name="sliders" /><span class="lbl" aria-hidden="true"><span class="tx">{t('nav.rail.settings')}</span></span></button
   >
+  <div class="edge">
+    <Splitter
+      value={railWidth.shown}
+      min={RAIL_MIN}
+      max={railWidth.max}
+      onreset={() => railWidth.reset()}
+      label={t('nav.rail.width')}
+      title={t('nav.rail.widthTip')}
+      onresize={(w) => railWidth.set(w)}
+      oncommit={(w) => railWidth.commit(w)}
+    />
+  </div>
 </nav>
 
 <style>
@@ -258,6 +279,9 @@
     gap: 8px;
     min-height: 0;
     padding: 6px 0 8px;
+    /* Its width chosen (ESC-168): the labels and the tiles follow it. */
+    position: relative;
+    container: rail / inline-size;
   }
   /* Positioned: the tiles' offsetTop is measured from it (measure). */
   .list {
@@ -322,7 +346,8 @@
   .tile::before {
     content: '';
     position: absolute;
-    left: -8px;
+    /* On the rail's edge, whatever its width (ESC-168): the tile is in its middle. */
+    left: calc((36px - 100cqi) / 2);
     top: 50%;
     width: 4px;
     height: 22px;
@@ -387,5 +412,114 @@
   }
   .more :global(.icon) {
     stroke-width: 2;
+  }
+
+  /* The labels (ESC-168), of the projects' tiles and of the others. Narrow, a project's goes under its tile when it has
+     one, on one line, cut in « … »; the active one's in the project's ink (its colour, legible on the frame). */
+  .rail :global(.lbl) {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 50%;
+    display: none;
+    width: calc(100cqi - 8px);
+    transform: translateX(-50%);
+    color: var(--muted);
+    font: 550 10.5px/13px var(--font);
+    letter-spacing: 0;
+    text-align: center;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .rail :global(.lbl .tx) {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .rail :global(.lbl .n) {
+    display: none;
+  }
+  .rail :global(.tile.labelled) {
+    margin-bottom: 17px;
+  }
+  .rail :global(.tile.labelled .lbl) {
+    display: block;
+  }
+  .rail :global(.tile:hover .lbl) {
+    color: var(--text);
+  }
+  .rail :global(.tile[aria-selected='true'] .lbl),
+  .rail :global(.tile[aria-pressed='true'] .lbl) {
+    color: var(--p-ink);
+    font-weight: 650;
+  }
+  /* The right edge, which sets the width: the line of the other handles, on the rail's edge, seen once hovered. */
+  .edge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+  }
+  .edge :global(.splitter) {
+    background: transparent;
+  }
+  /* Its grip inside the rail: out of it, it would widen what the rail holds. */
+  .edge :global(.splitter::before) {
+    inset: 0 0 0 -6px;
+  }
+
+  /* Widened to a list: every tile has its label on its right (the text chosen, else the name), a row each, its agents
+     waiting at the row's end; the tiles and their badges stay as they are. */
+  @container rail (min-width: 160px) {
+    .tile,
+    .more {
+      align-self: flex-start;
+      margin-left: 8px;
+    }
+    .sep {
+      align-self: flex-start;
+      margin-left: 14px;
+    }
+    .drop {
+      align-self: flex-start;
+      margin-left: 10px;
+    }
+    .tile::before {
+      left: -8px;
+    }
+    .rail :global(.tile.labelled) {
+      margin-bottom: 0;
+    }
+    .rail :global(.lbl),
+    .rail :global(.tile.labelled .lbl) {
+      top: 50%;
+      left: calc(100% + 10px);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: calc(100cqi - 64px);
+      transform: translateY(-50%);
+      font-size: 13px;
+      line-height: 18px;
+      text-align: left;
+    }
+    .rail :global(.lbl .tx) {
+      flex: 1;
+    }
+    .rail :global(.lbl .n) {
+      display: grid;
+      place-items: center;
+      flex: none;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      background: var(--wait);
+      color: var(--on-wait);
+      font-size: 11px;
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+    }
   }
 </style>

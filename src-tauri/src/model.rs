@@ -149,12 +149,19 @@ pub struct Settings {
     pub terminal_font_size: f64,
     /// « Taille du texte de l’éditeur », in CSS pixels, before the zoom (`FONT_SIZE_RANGE`).
     pub editor_font_size: f64,
+    /// The width of the projects' rail, in CSS pixels (ESC-168), its right edge dragged:
+    /// `RAIL_WIDTH_RANGE`, the same for all projects; 0 is its usual width (52 px, 72 with a
+    /// label under a tile), until the edge is dragged.
+    pub rail_width: u32,
     /// « Projection des quotas »: the status bar writes, after each quota, where it would end at
     /// the pace used so far (« → 64 % »), and the day's cost where it would end the day.
     pub quota_projection: bool,
     /// « Voix »: the dictation (`voice`).
     pub voice: VoiceSettings,
 }
+
+/// The widths the projects' rail is dragged to (ESC-168): its tiles alone, up to a list of names.
+pub const RAIL_WIDTH_RANGE: (u32, u32) = (52, 300);
 
 /// The steps of « Zoom de l’interface », in percent: the window's own (`Settings::normalize_display`).
 pub const ZOOM_LEVELS: [u32; 8] = [80, 90, 100, 110, 125, 150, 175, 200];
@@ -436,8 +443,14 @@ impl Settings {
 
     /// What the display settings say that they may not (written by hand, or by a later version):
     /// a zoom off the steps is the nearest one, a font size out of range its nearest bound (not a
-    /// number: the default), to the half pixel.
+    /// number: the default), to the half pixel; the rail's width in its range, 0 (its usual one)
+    /// left as it is.
     pub fn normalize_display(&mut self) {
+        if self.rail_width != 0 {
+            self.rail_width = self
+                .rail_width
+                .clamp(RAIL_WIDTH_RANGE.0, RAIL_WIDTH_RANGE.1);
+        }
         let z = self.ui_zoom;
         self.ui_zoom = *ZOOM_LEVELS
             .iter()
@@ -545,6 +558,7 @@ impl Default for Settings {
             ui_zoom: 100,
             terminal_font_size: DEFAULT_FONT_SIZE,
             editor_font_size: DEFAULT_FONT_SIZE,
+            rail_width: 0,
             quota_projection: true,
             voice: VoiceSettings::default(),
         }
@@ -567,6 +581,14 @@ pub struct Project {
     /// alone, never by `update_project`.
     #[serde(default)]
     pub logo: String,
+    /// « Libellé sous la tuile » (ESC-168): its label under its tile on a narrow rail; off by
+    /// default. Of this machine, as its colour.
+    #[serde(default)]
+    pub tile_label: bool,
+    /// The label's text, shorter than its name; empty is its name. The rail widened to a list shows
+    /// it beside the tile, on or not.
+    #[serde(default)]
+    pub tile_label_text: String,
     #[serde(default)]
     pub worktree_per_agent: bool,
     #[serde(default)]
@@ -2549,10 +2571,22 @@ mod tests {
         s.ui_zoom = 0;
         s.normalize_display();
         assert_eq!(s.ui_zoom, 80);
+        // The rail's width (ESC-168): its usual one until dragged, then in its range.
+        assert_eq!(s.rail_width, 0);
+        for (kept, read) in [(0, 0), (10, 52), (180, 180), (900, 300)] {
+            s.rail_width = kept;
+            s.normalize_display();
+            assert_eq!(s.rail_width, read);
+        }
+        s.rail_width = 180;
         let v = serde_json::to_value(&s).unwrap();
         assert_eq!(
-            (v["uiZoom"].clone(), v["editorFontSize"].clone()),
-            (json!(80), json!(24.0))
+            (
+                v["uiZoom"].clone(),
+                v["editorFontSize"].clone(),
+                v["railWidth"].clone()
+            ),
+            (json!(80), json!(24.0), json!(180))
         );
     }
 

@@ -53,7 +53,13 @@ describe('ProjectRail', () => {
     fakeBackend();
     render(ProjectRail);
     expect(screen.getByRole('tablist', { name: 'Projets ouverts' })).toBeInTheDocument();
-    expect(tiles().map((t) => t.textContent?.replace(/\s+/g, ''))).toEqual(['DA2', 'SW', 'In']);
+    // Their letters and badges, their labels (ESC-168) aside.
+    const shown = (t: HTMLElement) => {
+      const c = t.cloneNode(true) as HTMLElement;
+      c.querySelector('.lbl')?.remove();
+      return c.textContent?.replace(/\s+/g, '');
+    };
+    expect(tiles().map(shown)).toEqual(['DA2', 'SW', 'In']);
     expect(tile('studio-web').style.getPropertyValue('--c')).toBe(PROJECT_COLORS[1]);
   });
 

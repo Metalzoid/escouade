@@ -330,10 +330,18 @@
         place-items: center;
         flex: none;
         width: var(--rail);
+        container: corner / inline-size;
       }
       .logo {
         width: 22px;
         height: 22px;
+      }
+      /* The rail widened to a list (ESC-168): the logo stays over its tiles. */
+      @container corner (min-width: 160px) {
+        .tb-corner .logo {
+          justify-self: start;
+          margin-left: 15px;
+        }
       }
       .mac-lights {
         display: none;
@@ -701,6 +709,135 @@
         width: 11px;
         height: 11px;
         stroke-width: 2;
+      }
+      /* ESC-168: the rail's width is chosen, its right edge dragged (52 to 300 px, held to the window's room); its tiles
+         keep their 36 px and their badges. Narrow, a project's label goes under its tile, on one line, when it has one;
+         from 160 px, every tile has its name on its right, a row each, its agents waiting at the row's end. */
+      .prail {
+        position: relative;
+        container: prail / inline-size;
+      }
+      .prail .tile::before {
+        left: calc((36px - 100cqi) / 2);
+      }
+      .tile .lbl {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 50%;
+        display: none;
+        width: calc(100cqi - 8px);
+        transform: translateX(-50%);
+        color: var(--muted);
+        font-size: 10.5px;
+        font-weight: 550;
+        line-height: 13px;
+        letter-spacing: 0;
+        text-align: center;
+        white-space: nowrap;
+        pointer-events: none;
+      }
+      .tile .lbl .tx {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .tile .lbl .n {
+        display: none;
+      }
+      .tile.labelled {
+        margin-bottom: 17px;
+      }
+      .tile.labelled .lbl {
+        display: block;
+      }
+      .tile:hover .lbl {
+        color: var(--text);
+      }
+      .tile[aria-selected='true'] .lbl,
+      .tile[aria-pressed='true'] .lbl {
+        color: var(--p-ink);
+        font-weight: 650;
+      }
+      @container prail (min-width: 160px) {
+        .prail .tile,
+        .prail .r-sep,
+        .prail .r-drop,
+        .prail .r-more {
+          align-self: flex-start;
+          margin-left: 8px;
+        }
+        .prail .tile::before {
+          left: -8px;
+        }
+        .prail .tile.labelled {
+          margin-bottom: 0;
+        }
+        .prail .tile .lbl {
+          top: 50%;
+          left: calc(100% + 10px);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          width: calc(100cqi - 64px);
+          transform: translateY(-50%);
+          font-size: 13px;
+          line-height: 18px;
+          text-align: left;
+        }
+        .prail .tile .lbl .tx {
+          flex: 1;
+        }
+        .prail .tile .lbl .n {
+          display: grid;
+          place-items: center;
+          flex: none;
+          min-width: 18px;
+          height: 18px;
+          padding: 0 5px;
+          border-radius: 9px;
+          background: var(--wait);
+          color: var(--on-wait);
+          font-size: 11px;
+          font-weight: 650;
+          font-variant-numeric: tabular-nums;
+        }
+        .prail .tile:has(.lbl .n) .ask {
+          display: none;
+        }
+      }
+      /* The rail's right edge, dragged: a line in the accent once hovered, as the other handles. */
+      .r-grip {
+        position: absolute;
+        z-index: 2;
+        top: 0;
+        right: -3px;
+        bottom: 0;
+        width: 6px;
+        cursor: col-resize;
+        touch-action: none;
+      }
+      .r-grip::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 1px;
+        width: 3px;
+        background: var(--accent);
+        opacity: 0;
+        transition: opacity 0.12s;
+      }
+      .r-grip:hover::after,
+      .r-grip.on::after,
+      .r-grip:focus-visible::after {
+        opacity: 1;
+      }
+      .r-grip:focus-visible {
+        outline: none;
+      }
+      .tile-set .label-text {
+        width: 150px;
       }
       /* The name in a bubble beside the tile, with what the tab showed. */
       .r-tip {
@@ -7152,6 +7289,7 @@
         <div class="r-spacer"></div>
         <button class="tile" id="btn-stats" aria-pressed="false" aria-label="Stats" data-tip="stats"><svg class="i"><use href="#i-stats" /></svg></button>
         <button class="tile" id="btn-settings" aria-label="Réglages (Ctrl+,)" data-tip="settings"><svg class="i"><use href="#i-sliders" /></svg></button>
+        <div class="r-grip" id="r-grip" role="separator" aria-orientation="vertical" aria-label="Largeur de la barre des projets" aria-valuemin="52" aria-valuemax="300" aria-valuenow="52" tabindex="0"></div>
       </nav>
 
       <div class="body">
@@ -9332,6 +9470,16 @@ If your browser did not open, navigate to this URL to authenticate:
                     </div>
                   </div>
                 </div>
+                <!-- ESC-168: the label under the tile, off by default; its text, the name unless one shorter is typed. -->
+                <div class="sr" id="sr-label">
+                  <div class="lab"><b>Libellé sous la tuile</b><span>Le nom du projet, ou un texte plus court (12 caractères au plus). Élargie, la barre le montre à droite de la tuile, allumé ou non.</span></div>
+                  <div class="ctl">
+                    <div class="tile-set">
+                      <input class="inp label-text" id="label-text" maxlength="12" placeholder="demo-api" aria-label="Texte du libellé" />
+                      <button class="tgl" role="switch" id="label-on" aria-checked="false" aria-label="Libellé sous la tuile"></button>
+                    </div>
+                  </div>
+                </div>
               </section>
               <section class="sg" id="sg-private">
                 <h2>Confidentialité</h2>
@@ -9663,6 +9811,9 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
         ['Lettres de la tuile', 'Tile letters'], ['Une à trois lettres ou chiffres, ou un emoji. Vide : les initiales du nom.', 'One to three letters or digits, or an emoji. Empty: the initials of the name.'],
         ['PNG, JPEG, WebP, SVG ou ICO, 1 Mo au plus. Il remplace les lettres ; Escouade en garde une copie.', 'PNG, JPEG, WebP, SVG or ICO, 1 MB at most. It takes the place of the letters; Escouade keeps a copy of it.'],
         ['Choisir une image…', 'Choose an image…'], ['Retirer', 'Remove'], ['Tuile du projet', 'Project tile'],
+        ['Libellé sous la tuile', 'Label under the tile'], ['Texte du libellé', 'Label text'],
+        ['Le nom du projet, ou un texte plus court (12 caractères au plus). Élargie, la barre le montre à droite de la tuile, allumé ou non.', 'The project’s name, or a shorter text (12 characters at most). Widened, the rail shows it on the tile’s right, on or not.'],
+        ['Largeur de la barre des projets', 'Width of the projects’ rail'],
         ['Fermer le projet…', 'Close the project…'], ['Son historique est gardé : « + » le rouvre', 'Its history is kept: “+” reopens it'],
         ['Ajouter un projet…', 'Add a project…'], ['Un dossier, un dépôt à cloner ou un projet vide, par l’assistant', 'A folder, a repository to clone or an empty project, through the assistant'],
         ['Projets fermés · leur historique est gardé', 'Closed projects · their history is kept'], ['Fermé le 18 oct. · 23 agents', 'Closed on Oct 18 · 23 agents'],
@@ -10178,7 +10329,7 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
         }
         tip.innerHTML = html;
         const r = tile.getBoundingClientRect();
-        tip.style.left = `${r.right + 12}px`;
+        tip.style.left = `${Math.max(r.right, $('.prail').getBoundingClientRect().right - 8) + 12}px`;
         tip.style.top = `${r.top + r.height / 2}px`;
         tip.hidden = false;
       }
@@ -10197,7 +10348,7 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
         pop('#proj-menu', true);
         const m = $('#proj-menu');
         const r = tile.getBoundingClientRect();
-        m.style.left = `${r.right + 12}px`;
+        m.style.left = `${Math.max(r.right, $('.prail').getBoundingClientRect().right - 8) + 12}px`;
         m.style.top = `${Math.max(8, Math.min(r.top - 6, innerHeight - m.offsetHeight - 8))}px`;
       }
       document.addEventListener('keydown', (e) => {
@@ -10688,6 +10839,97 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
         $('#tile-prev').innerHTML = LOGO_OPAQUE;
         $('#tile-remove').hidden = false;
         settingsAt('projects', 'sr-tile');
+      }
+
+      // The rail's width and the projects' labels (ESC-168). #labels: the rail at its width with labels (72 px), the
+      // active's in the project's colour, a text of one's own (studio-web, its logo), a long name cut, a private project,
+      // one without a label; #labels-wide: the rail dragged to 300 px, many projects, every name on its tile's right, the
+      // agents waiting at the row's end; #labels-settings: the setting. Wherever, the rail's edge drags (52 to 300 px), a
+      // double click goes back to its usual width; held to the window's room (its width − 948 px at most), as in the app.
+      const RAIL = { min: 52, max: 300, labelled: 72 };
+      const railRoom = () => Math.max(RAIL.min, Math.min(RAIL.max, innerWidth - 948));
+      let railChosen = null;
+      function railWidth() {
+        const usual = projTiles().some((t) => t.classList.contains('labelled')) ? RAIL.labelled : RAIL.min;
+        const w = Math.max(RAIL.min, Math.min(railRoom(), railChosen ?? usual));
+        app.style.setProperty('--rail', `${w}px`);
+        $('#r-grip').setAttribute('aria-valuenow', String(w));
+        $('#r-grip').setAttribute('aria-valuemax', String(railRoom()));
+        railFade();
+        return w;
+      }
+      const GLOBAL_LABELS = { overview: ['Vue d’ensemble', 'Overview'], add: ['Ajouter un projet', 'Add a project'], stats: ['Stats', 'Stats'], settings: ['Réglages', 'Settings'] };
+      /** Every tile gets its label: a project's text (its name unless one is set), the others' names; shown by the rail's width. */
+      function labelTiles() {
+        for (const t of $$('.prail .tile')) {
+          if (t.querySelector('.lbl')) continue;
+          const name = t.dataset.tip ? L(GLOBAL_LABELS[t.dataset.tip]) : (t.dataset.label ?? t.dataset.name);
+          const wait = t.dataset.tip ? 0 : (PROJ[t.dataset.name]?.wait ?? 0);
+          t.insertAdjacentHTML('beforeend', `<span class="lbl" aria-hidden="true"><span class="tx">${name}</span>${wait ? `<span class="n">${wait}</span>` : ''}</span>`);
+        }
+      }
+      labelTiles();
+      railWidth();
+      addEventListener('resize', railWidth);
+      {
+        const grip = $('#r-grip');
+        let from = null;
+        grip.addEventListener('pointerdown', (e) => {
+          grip.setPointerCapture(e.pointerId);
+          from = { x: e.clientX, w: railWidth() };
+          grip.classList.add('on');
+        });
+        grip.addEventListener('pointermove', (e) => {
+          if (!from) return;
+          railChosen = Math.max(RAIL.min, Math.min(railRoom(), Math.round(from.w + e.clientX - from.x)));
+          railWidth();
+        });
+        const end = () => ((from = null), grip.classList.remove('on'));
+        grip.addEventListener('pointerup', end);
+        grip.addEventListener('pointercancel', end);
+        grip.addEventListener('dblclick', () => ((railChosen = null), railWidth()));
+        grip.addEventListener('keydown', (e) => {
+          const w = railWidth();
+          const to = { ArrowLeft: w - 16, ArrowRight: w + 16, Home: RAIL.min, End: railRoom() }[e.key];
+          if (to === undefined) return;
+          e.preventDefault();
+          railChosen = Math.max(RAIL.min, Math.min(railRoom(), to));
+          railWidth();
+        });
+      }
+      function labelledRail() {
+        customTiles();
+        const t = document.createElement('button');
+        t.className = 'tile proj';
+        t.setAttribute('role', 'tab');
+        t.setAttribute('aria-selected', 'false');
+        Object.assign(t.dataset, { hue: '25', name: 'pagination-service' });
+        t.style.setProperty('--h', '25');
+        t.innerHTML = '<span class="ini">PS</span><span class="busy"></span>';
+        PROJ['pagination-service'] = { busy: 1 };
+        projTiles().at(-1).after(t);
+        wireTile(t);
+        const byName = (n) => projTiles().find((x) => x.dataset.name === n);
+        byName('studio-web').dataset.label = 'Studio';
+        $$('.prail .lbl').forEach((l) => l.remove());
+        labelTiles();
+        for (const n of ['demo-api', 'studio-web', 'infra', 'pagination-service']) byName(n).classList.add('labelled');
+      }
+      if (route === 'labels') (labelledRail(), railWidth());
+      if (route === 'labels-wide') {
+        labelledRail();
+        manyProjects();
+        $$('.prail .lbl').forEach((l) => l.remove());
+        labelTiles();
+        railChosen = 300;
+        railWidth();
+        selectTile(projTiles().find((x) => x.dataset.name === 'demo-api'));
+      }
+      if (route === 'labels-settings') {
+        labelledRail();
+        railWidth();
+        $('#label-on').setAttribute('aria-checked', 'true');
+        settingsAt('projects', 'sr-label');
       }
 
       /** A conversation of the panel: whose, on which harness, which thread. */

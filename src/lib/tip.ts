@@ -30,7 +30,7 @@ export type TipContent =
       /** The shortcut of what it names, at the end of its title (a project's tile: « Ctrl 1 »). */
       kbd?: string;
       rows?: (TipRow | string)[];
-      /** Beside the element, on its right, rather than above it (the projects' rail). */
+      /** Beside the element, on its right, rather than above it (the projects' rail); beside the edge of a `[data-tip-edge]` around it. */
       side?: 'right';
     };
 
@@ -52,6 +52,8 @@ const MARGIN = 8;
 const GAP = 6;
 /** The room between a tooltip beside its element and the element (a tile of the projects' rail, its active trait). */
 const BESIDE = 12;
+/** How far inside its column's edge a tooltip beside it stands from: as beside a tile of the narrowest rail (52 px). */
+const EDGE = 8;
 
 interface Options {
   text: string;
@@ -180,7 +182,9 @@ function position() {
   const view = { width: window.innerWidth, height: window.innerHeight };
   const anchor = owner.node.getBoundingClientRect();
   const at =
-    owner.options().side === 'right' ? beside(anchor, box.getBoundingClientRect(), view) : place(anchor, box.getBoundingClientRect(), view);
+    owner.options().side === 'right'
+      ? beside(besideEdge(owner.node, anchor), box.getBoundingClientRect(), view)
+      : place(anchor, box.getBoundingClientRect(), view);
   box.style.left = `${at.left}px`;
   box.style.top = `${at.top}px`;
 }
@@ -260,6 +264,15 @@ function install() {
     cancel();
     close();
   });
+}
+
+/**
+ * What a tooltip beside `node` stands beside: inside a column that says so (`[data-tip-edge]`, the projects' rail), that
+ * column's edge rather than the element, so that it covers none of the names of a rail widened to a list (ESC-168).
+ */
+export function besideEdge(node: Element, anchor: { right: number; top: number; height: number }) {
+  const edge = node.closest('[data-tip-edge]')?.getBoundingClientRect();
+  return edge && edge.right - EDGE > anchor.right ? { right: edge.right - EDGE, top: anchor.top, height: anchor.height } : anchor;
 }
 
 /** Where a tooltip of `size` stands beside an element at `anchor`: on its right, centered on it, in the window. */

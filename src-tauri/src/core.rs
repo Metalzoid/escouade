@@ -1478,6 +1478,8 @@ pub(crate) fn blank_project(path: &str) -> Project {
         color: String::new(),
         tile_letters: String::new(),
         logo: String::new(),
+        tile_label: false,
+        tile_label_text: String::new(),
         worktree_per_agent: false,
         created_at: 0,
         run_commands: Vec::new(),
@@ -7189,6 +7191,8 @@ impl<R: Runtime> Core<R> {
         cur.color = p.color;
         // Its logo is `set_project_logo`'s: the window's copy may be older.
         cur.tile_letters = crate::projectlogo::clean_letters(&p.tile_letters);
+        cur.tile_label = p.tile_label;
+        cur.tile_label_text = crate::projectlogo::clean_label(&p.tile_label_text);
         cur.worktree_per_agent = p.worktree_per_agent;
         cur.worktree_at_first_message = p.worktree_at_first_message;
         cur.worktree_base = p.worktree_base;

@@ -2283,3 +2283,63 @@ fn a_project_saved_before_the_tiles_settings_has_its_initials_and_no_logo() {
     assert_eq!(back["tileLetters"], "");
     assert_eq!(back["logo"], "");
 }
+
+// ---------- the label under the tile (ESC-168) ----------
+
+#[tokio::test]
+async fn the_tiles_label_is_saved_and_comes_back_with_the_project() {
+    let h = harness("closed-label");
+    let (p, r) = h.project(false).await;
+    // On one line, trimmed: as the window cuts it.
+    h.core
+        .update_project(Project {
+            tile_label: true,
+            tile_label_text: "  Démo\n  API ".into(),
+            ..p.clone()
+        })
+        .unwrap();
+    let saved = h.core.project(&p.id).unwrap();
+    assert!(saved.tile_label);
+    assert_eq!(saved.tile_label_text, "Démo API");
+    // In the state, not in its `.escouade.yml`.
+    h.core.save_state().unwrap();
+    let state: Value =
+        serde_json::from_slice(&std::fs::read(h.core.data.state_file()).unwrap()).unwrap();
+    let kept = state["projects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|x| x["id"] == p.id.as_str())
+        .unwrap();
+    assert_eq!(kept["tileLabel"], true);
+    assert_eq!(kept["tileLabelText"], "Démo API");
+    assert!(!r.join(".escouade.yml").exists());
+    // Closed then added again: it comes back.
+    close(&h, &p.id).await;
+    let back = add_again(&h, &r).await;
+    assert!(back.tile_label);
+    assert_eq!(back.tile_label_text, "Démo API");
+    // Off, its text kept for the wide rail.
+    h.core
+        .update_project(Project {
+            tile_label: false,
+            ..back
+        })
+        .unwrap();
+    let off = h.core.project(&p.id).unwrap();
+    assert!(!off.tile_label);
+    assert_eq!(off.tile_label_text, "Démo API");
+}
+
+#[test]
+fn a_project_saved_before_the_label_has_none() {
+    let p: Project = serde_json::from_value(json!({
+        "id": "p1", "name": "demo", "path": "C:/demo", "color": "red", "tileLetters": "DM"
+    }))
+    .unwrap();
+    assert!(!p.tile_label && p.tile_label_text.is_empty());
+    assert_eq!(p.tile_letters, "DM");
+    let back = as_json(&p);
+    assert_eq!(back["tileLabel"], false);
+    assert_eq!(back["tileLabelText"], "");
+}

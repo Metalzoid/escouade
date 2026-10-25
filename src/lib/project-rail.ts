@@ -52,6 +52,27 @@ export function cleanLetters(text: string): string {
 /** What a project's tile says: the letters chosen, else the initials of its name. */
 export const tileText = (p: Pick<Project, 'name' | 'tileLetters'>) => p.tileLetters?.trim() || initials(p.name);
 
+/**
+ * The most letters « Libellé sous la tuile » takes (ESC-168): twelve still fit whole under the tile of a rail at 104 px,
+ * and beside it from 160 px; the name of a project is longer, often, and cut there.
+ */
+export const MAX_LABEL = 12;
+
+/** « Libellé sous la tuile » as it may be typed: on one line, its spaces one, at most twelve letters (an emoji one). */
+export function cleanLabel(text: string): string {
+  return graphemes(
+    text
+      .normalize('NFC')
+      .replace(/[\s\p{Cc}]+/gu, ' ')
+      .replace(/^ /, ''),
+  )
+    .slice(0, MAX_LABEL)
+    .join('');
+}
+
+/** What a project's label says: the text chosen, else its name. */
+export const labelText = (p: Pick<Project, 'name' | 'tileLabelText'>) => p.tileLabelText?.trim() || p.name;
+
 /** How the tile's letters are drawn: an emoji bigger, three letters smaller, else as the initials. */
 export function tileSize(text: string): 'emoji' | 'three' | null {
   const gs = graphemes(text);
