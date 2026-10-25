@@ -271,7 +271,7 @@ L'app suit `#settings` et ses onglets, et les adresses du lot 0 bis (`#private`,
 
 # La tuile d'un projet à soi (ESC-167, 2026-10-25) : ses lettres, son logo
 
-Demandé par l'utilisateur le 2026-10-25 : « pouvoir personnaliser les lettres dans les icônes de chaque projet et aussi de pouvoir mettre le logo qu'on veut (qui remplacerait les lettres) ». Fait dans l'app (`ProjectTile.svelte`, `TileFace.svelte`, Réglages › Projets, l'assistant) et dans l'aperçu ; les choix 59 à 64 sont **validés par l’utilisateur le 2026-10-25** (« Tout me va », sur les captures ).
+Demandé par l'utilisateur le 2026-10-25 : « pouvoir personnaliser les lettres dans les icônes de chaque projet et aussi de pouvoir mettre le logo qu'on veut (qui remplacerait les lettres) ». Fait dans l'app (`ProjectTile.svelte`, `TileFace.svelte`, Réglages › Projets, l'assistant) et dans l'aperçu ; les choix 59 à 64 sont **validés par l’utilisateur le 2026-10-25** (« Tout me va », sur les captures `tile*`).
 
 ## Adresses
 
