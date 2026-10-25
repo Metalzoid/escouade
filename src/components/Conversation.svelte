@@ -44,6 +44,7 @@
   import Notice from './conv/Notice.svelte';
   import PermissionCard from './conv/PermissionCard.svelte';
   import QuestionCard from './conv/QuestionCard.svelte';
+  import SentFiles from './conv/SentFiles.svelte';
   import SetupProgress from './conv/SetupProgress.svelte';
   import Thinking from './conv/Thinking.svelte';
   import ToolRow from './conv/ToolRow.svelte';
@@ -533,8 +534,13 @@
 
   /** Whether the next item drawn after the `j`-th is a tool call too: the calls of a turn are tied in one thread. */
   function nextIsTool(j: number) {
-    for (let k = j + 1; k < drawn.length; k++) if (shows(drawn[k])) return drawn[k].kind === 'tool';
+    for (let k = j + 1; k < drawn.length; k++) if (shows(drawn[k])) return isCall(drawn[k]);
     return false;
+  }
+
+  /** A tool call drawn as a row of the thread: not the files the agent sent, which have their own card (ESC-171). */
+  function isCall(item: ConvItem) {
+    return item.kind === 'tool' && item.name !== 'SendUserFile';
   }
 
   /** Items that draw nothing: an empty block of text, the calls whose question or plan has its own card. */
@@ -781,7 +787,7 @@
           {@const i = start + j}
           {#if shows(item)}
             <!-- The block of an item, found by it (reveal). -->
-            <div class="item" class:found={found === item.id} class:tool-item={item.kind === 'tool'} data-item={item.id}>
+            <div class="item" class:found={found === item.id} class:tool-item={isCall(item)} data-item={item.id}>
               {#if item.kind === 'user'}
                 {@const injected = injectedSource(item)}
                 {@const command = commands.get(item.id)}
@@ -807,7 +813,7 @@
                       {#if seg.kind === 'report'}
                         <CriteriaReport report={seg.report} criteria={ticket?.criteria ?? []} {agent} />
                       {:else}
-                        <Markdown text={seg.text} streaming={item.streaming} />
+                        <Markdown text={seg.text} streaming={item.streaming} agentId={agent.id} />
                       {/if}
                     {/each}
                     {#if item.spoken}
@@ -821,6 +827,8 @@
                 </div>
               {:else if item.kind === 'thinking'}
                 <Thinking {item} />
+              {:else if item.kind === 'tool' && item.name === 'SendUserFile' && !item.parent}
+                <SentFiles {item} agentId={agent.id} engine={agent.engine} />
               {:else if item.kind === 'tool'}
                 <ToolRow
                   {item}

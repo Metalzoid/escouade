@@ -86,12 +86,16 @@
 // question and its role both), a name ends with "-en", a direct commit's message with " (en)"; with
 // a question and a role that disagree, "mixed" says so in the same places. A task that says [muet] gets
 // no name (it fails), one that says [lent] gets it 3 s late.
+// "envoie des fichiers" (ESC-171): it writes two PNG images and a PDF in a temporary folder of its own folder
+// (`.impeccable/tmp/`), and sends them to the user by SendUserFile, their paths written with `/` as Claude Code does
+// under Windows; with [proactif] the call says it sends them of itself.
 
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
+import zlib from 'node:zlib';
 
 const argv = process.argv.slice(2);
 // `--version`, as Claude Code prints it, not logged (the app asks it before an agent starts, not a launch of one):
@@ -1576,6 +1580,71 @@ function startSession() {
     result();
   }
 
+  // ---------- "envoie des fichiers" (ESC-171) ----------
+
+  /** A PNG of `w` × `h` pixels of one colour, made here (zlib), that a browser draws. */
+  function png(w, h, [r, g, b]) {
+    const crcTable = Array.from({ length: 256 }, (_, n) => {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      return c >>> 0;
+    });
+    const crc = (buf) => {
+      let c = 0xffffffff;
+      for (const x of buf) c = crcTable[(c ^ x) & 0xff] ^ (c >>> 8);
+      return (c ^ 0xffffffff) >>> 0;
+    };
+    const chunk = (type, data) => {
+      const len = Buffer.alloc(4);
+      len.writeUInt32BE(data.length);
+      const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+      const sum = Buffer.alloc(4);
+      sum.writeUInt32BE(crc(body));
+      return Buffer.concat([len, body, sum]);
+    };
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(w, 0);
+    ihdr.writeUInt32BE(h, 4);
+    ihdr[8] = 8;
+    ihdr[9] = 2;
+    const row = Buffer.concat([Buffer.from([0]), Buffer.alloc(w * 3).map((_, i) => [r, g, b][i % 3])]);
+    const raw = Buffer.concat(Array.from({ length: h }, () => row));
+    return Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      chunk('IHDR', ihdr),
+      chunk('IDAT', zlib.deflateSync(raw)),
+      chunk('IEND', Buffer.alloc(0)),
+    ]);
+  }
+
+  function sendFiles(text) {
+    const dir = path.join(process.cwd(), '.impeccable', 'tmp');
+    fs.mkdirSync(dir, { recursive: true });
+    const files = [
+      ['vue-face.png', png(160, 100, [214, 120, 60])],
+      ['vue-dessus.png', png(120, 120, [60, 130, 210])],
+      ['contrat.pdf', Buffer.from('%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n')],
+    ].map(([name, bytes]) => {
+      const file = path.join(dir, name);
+      fs.writeFileSync(file, bytes);
+      return file.replace(/\\/g, '/');
+    });
+    const id = `toolu_send${msg}`;
+    const input = {
+      files,
+      caption: 'Les deux vues et le contrat.',
+      status: text.includes('[proactif]') ? 'proactive' : 'normal',
+      display: 'render',
+    };
+    assistant({ type: 'tool_use', id, name: 'SendUserFile', input });
+    toolResult(
+      id,
+      `${files.length} files delivered to user.\n${files.map((f) => `${f} → file_uuid: 00000000-0000-0000-0000-00000000000${files.indexOf(f)}`).join('\n')}`,
+    );
+    streamText('Je t’ai envoyé les vues et le contrat.');
+    result();
+  }
+
   function toolResult(toolUseId, content, extra = {}) {
     out({
       type: 'user',
@@ -2159,6 +2228,7 @@ function startSession() {
       result();
       return;
     }
+    if (text.includes('envoie des fichiers')) return sendFiles(text);
     if (sys) return ticketTurn(text);
     if (text.includes('plan superpowers')) {
       planRun(text).catch((e) => {

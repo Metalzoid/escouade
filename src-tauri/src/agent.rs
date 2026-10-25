@@ -99,6 +99,9 @@ pub struct Effects {
     /// What the agent just did may have changed the files of its plan (a command ended, a
     /// subagent came back, the turn ended): the core has them looked at.
     pub plan_files: bool,
+    /// Calls of `SendUserFile` (ESC-171), by their item and with their input: the core copies
+    /// their images and says what their files are on their item (`sentfiles::deliver`).
+    pub sent: Vec<(String, Value)>,
 }
 
 struct Block {
@@ -907,7 +910,7 @@ impl AgentRt {
         self.push(ConvOp::Append { item }, fx);
     }
 
-    fn patch(&mut self, id: &str, patch: Value, fx: &mut Effects) {
+    pub(crate) fn patch(&mut self, id: &str, patch: Value, fx: &mut Effects) {
         self.push(
             ConvOp::Patch {
                 id: id.to_string(),
@@ -1942,6 +1945,15 @@ fn after_cd(command: &str) -> &str {
     rest
 }
 
+/// The `s` of a plural, in French and in English alike.
+fn plural(n: usize) -> &'static str {
+    if n > 1 {
+        "s"
+    } else {
+        ""
+    }
+}
+
 /// `tool_activity` in `lang`. A verb alone is the start of the same verb followed by what it acts
 /// on ("Lit", "Lit src/a.ts"; “Reading”, “Reading src/a.ts”): `set_activity` relies on it.
 fn tool_activity_in(lang: Lang, name: &str, input: &Value, cwd: &str) -> Option<String> {
@@ -1985,6 +1997,31 @@ fn tool_activity_in(lang: Lang, name: &str, input: &Value, cwd: &str) -> Option<
             )),
         ),
         "Task" | "Agent" => tr_in!(lang, "Délègue", "Delegating"),
+        crate::sentfiles::TOOL => {
+            let (images, files) = crate::sentfiles::count_images(input);
+            match (images, files) {
+                (0, 0) => return None,
+                (n, 0) => tr_in!(
+                    lang,
+                    "A envoyé {n} image{s}",
+                    "Sent {n} image{s}",
+                    s = plural(n)
+                ),
+                (0, n) => tr_in!(
+                    lang,
+                    "A envoyé {n} fichier{s}",
+                    "Sent {n} file{s}",
+                    s = plural(n)
+                ),
+                (i, n) => tr_in!(
+                    lang,
+                    "A envoyé {i} image{si} et {n} fichier{sn}",
+                    "Sent {i} image{si} and {n} file{sn}",
+                    si = plural(i),
+                    sn = plural(n)
+                ),
+            }
+        }
         _ => return None,
     })
 }

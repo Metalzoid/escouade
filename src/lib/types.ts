@@ -1704,6 +1704,21 @@ export interface ToolItem extends Base {
   report?: string;
   /** The call of a subagent: what it was once it ended. */
   run?: SubagentRun;
+  /** A call of `SendUserFile` (ESC-171): its files as the core delivered them (its images copied). Read through `sentFiles`. */
+  sent?: unknown[];
+}
+
+/** A file an agent sent (`sentFiles`): an image with its `data:` URL, or a file; there (`ok`), gone (`missing`), of a private project (`fenced`). */
+export interface SentView {
+  name: string;
+  kind: 'image' | 'file';
+  state: 'ok' | 'missing' | 'fenced';
+  size?: number;
+  /** An image too heavy for a preview: shown as a file. */
+  big?: boolean;
+  url?: string;
+  /** A program or a script: never opened, only shown in its folder. */
+  runnable?: boolean;
 }
 export interface QuestionItem extends Base {
   kind: 'question';

@@ -947,7 +947,7 @@ fn append(path: &Path, text: &str) {
 
 impl Harness {
     /// A frame of the agent's process, as `claude` writes it.
-    fn feed(&self, id: &str, frame: Value) {
+    pub(crate) fn feed(&self, id: &str, frame: Value) {
         let agent = self.core.agent(id).unwrap();
         let gen = agent.lock().gen;
         self.core.on_frame(&agent, gen, frame);

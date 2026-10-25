@@ -87,6 +87,9 @@ mod pty;
 mod resources;
 mod search;
 mod selfupdate;
+mod sentfiles;
+#[cfg(test)]
+mod sentfiles_tests;
 #[cfg(unix)]
 mod shellenv;
 mod signin;
@@ -530,6 +533,10 @@ pub fn run() {
             commands::fs_rename,
             commands::fs_delete,
             commands::fs_reveal,
+            commands::sent_files,
+            commands::sent_file_open,
+            commands::agent_local_image,
+            commands::remote_image,
             commands::fs_mkdir,
             commands::fs_base,
             commands::code_search,

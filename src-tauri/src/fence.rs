@@ -55,7 +55,6 @@ impl Fence {
 
     /// Whether `path` is one of the paths refused or under one, whatever its spelling (case under
     /// Windows, separators).
-    #[cfg(test)]
     pub fn covers(&self, path: &str) -> bool {
         let key = crate::paths::folder_key(path);
         self.paths.iter().any(|p| under(&key, &key_of(p)))

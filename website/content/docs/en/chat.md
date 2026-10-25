@@ -157,7 +157,7 @@ When a new agent’s worktree is being set up, the conversation shows “Setting
 
 ### Messages
 
-Your messages are in bubbles on the right, Claude’s on the left with a “C”. Claude’s text appears as it is written, with “Claude is working…” while the turn lasts. It’s rendered as Markdown: headings, lists, tables, quotes, links (a click on an `http`, `https`, or `mailto` link opens it in your browser). HTML written in a reply is displayed as text.
+Your messages are in bubbles on the right, Claude’s on the left with a “C”. Claude’s text appears as it is written, with “Claude is working…” while the turn lasts. It’s rendered as Markdown: headings, lists, tables, quotes, links (a click on an `http`, `https`, or `mailto` link opens it in your browser). HTML written in a reply is displayed as text. A Markdown image (`![caption](address)`) whose address is a path of the machine (absolute, or relative to the agent’s folder) shows: Escouade reads the file as a file sent (an image recognised by its content, 10 MB at most, never of a private project), and a click opens it in the viewer. An image of the web never loads by itself: an agent that read a rigged page or file could write a secret in its address, which loading it would send. It stays a label, its caption and its domain (“image from example.com”), with “Show image”: on that click only, Escouade downloads it (`https` only, 10 MB at most, an image recognised by its content, without a cookie or anything that tells who asks, through the proxy of the settings) and shows it. The rest (an `http` address, a path that is no image or no longer there) keeps its caption, as quiet text.
 
 Code blocks have a header with their language (“text” when none is given) and a “Copy” button that copies the code, then shows “Copied ✓”. Once the text is complete, the code is highlighted for common languages: TypeScript, JavaScript, JSON, Rust, Python, Bash, PowerShell, CSS, HTML, Svelte, Vue, Markdown, YAML, TOML, SQL, Go, Java, Kotlin, C, C++, C#, PHP, Ruby, Swift, diff, Dockerfile, GraphQL… Others stay plain text.
 
@@ -178,6 +178,20 @@ A click on the line (or `Enter` when it has focus) unfolds it:
 - **Other tools**: their result, otherwise the call’s parameters.
 
 Tools that only reread the task list (`TaskList`, `TaskGet`) are displayed in softer shades. The tools of Escouade’s MCP server carry an “Escouade · …” badge (see [the MCP server](mcp)).
+
+### Files the agent sends
+
+Claude Code can send files to the user (its `SendUserFile` tool): a screenshot, a render, a report. Escouade shows them in the conversation, in a “Sent by Claude” card that says how many images and files there are:
+
+- the **caption** the agent wrote, first;
+- the **images** (PNG, JPEG, GIF, WebP, SVG) as thumbnails, on a row that wraps. A click on a thumbnail opens it full size in a viewer: “Previous image” and “Next image” (or the arrow keys) go from one to the next, `Esc` or a click beside it closes it. When the agent asked to attach them rather than show them, they are listed as files, with a small thumbnail that opens the viewer too;
+- the **other files** (PDF, HTML, text, archive…) as rows, with their name, their size, “Open” (with the system’s default application) and “Show in folder”. A program or a script (`.exe`, `.bat`, `.ps1`, `.msi`, `.lnk`, `.sh`, `.app`, `.dmg`…, or a file marked executable on macOS and Linux) only has “Show in folder”: Escouade never runs what an agent sends.
+
+Escouade reads the files, never the window. An image is recognised by its content, not its extension: a `.png` file that is no image is a file like any other. The images are copied when they are sent into Escouade’s data folder, with the agent’s attached files, since they often live in a temporary folder of its worktree: the card still shows them once that folder is gone, and after a restart. The copy goes with the agent, or with the other copies after “Purge copies after”. An image over 10 MB has no preview: it is listed as a file and not copied; one sending copies 50 MB of images at most, the next ones are read where they are. The other files stay where they are: moved or deleted since, a file is marked “File not found”, without its buttons. A file of a private project (see [private projects](mcp#private-projects)) is neither read nor opened: the card says “File of a private project, not shown”.
+
+When the agent sends files on its own, without you asking, you get a notification, as for a question. While it sends them, its card in the list says for example “Sent 2 images and 1 file”.
+
+The other harnesses (Codex, Copilot CLI, OpenCode, Cursor CLI) have no tool to send a file to the user: their images go through the Markdown of their messages, below.
 
 ### Subagents, background tasks, and other sessions
 

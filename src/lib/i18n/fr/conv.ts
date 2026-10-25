@@ -145,6 +145,35 @@ export default {
     saidAloud: 'Dit à voix haute',
   },
 
+  /** The files an agent sent (Claude Code's SendUserFile, ESC-171): its caption, its images, its other files. */
+  sent: {
+    /** The card's label: `{engine}`, who sent them (« Claude »). */
+    by: 'Envoyé par {engine}',
+    images: { one: '{count} image', other: '{count} images' },
+    files: { one: '{count} fichier', other: '{count} fichiers' },
+    reveal: 'Afficher dans le dossier',
+    revealName: 'Afficher {name} dans le dossier',
+    openName: 'Ouvrir {name}',
+    missing: 'Fichier introuvable',
+    missingHint: 'Effacé ou déplacé depuis son envoi',
+    fenced: 'Fichier d’un projet privé, non affiché',
+    big: 'Image trop lourde pour l’aperçu',
+    loading: 'Chargement…',
+    /** A thumbnail, as a button: it opens the viewer. */
+    view: 'Voir {name} en grand',
+    /** The viewer of the images. */
+    viewer: 'Images envoyées',
+    prev: 'Image précédente',
+    next: 'Image suivante',
+    close: 'Fermer (Échap)',
+    counter: '{n} sur {count}',
+    /** An image of a message, by a path the agent wrote, that cannot be shown. */
+    imageMissing: 'Image introuvable : {src}',
+    /** An image of the web in a message: not loaded until asked (its address could carry a secret out). */
+    remoteOf: 'image de {host}',
+    remoteShow: 'Afficher l’image',
+  },
+
   /** What Claude Code passed on to Claude by itself (a background task, a subagent, another session). */
   event: {
     taskCompleted: 'Tâche de fond terminée',

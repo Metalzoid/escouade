@@ -874,6 +874,39 @@ kbd,
 
 .md img {
   max-width: 100%;
+  max-height: 420px;
+  border-radius: 9px;
+  cursor: zoom-in;
+}
+/* An image of a message not shown (not https, a path that is no image, gone, refused; one being read): its text, quiet
+   (ESC-171). */
+.md [data-img-off] {
+  display: inline-block;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: rgba(var(--fg-rgb), 0.05);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+/* « Afficher l'image » of an image of the web: the core downloads it on this click alone. */
+.md [data-img-off] button {
+  margin-left: 4px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 4px;
+  background: rgba(var(--fg-rgb), 0.07);
+  color: var(--soft);
+  font: inherit;
+  cursor: pointer;
+}
+.md [data-img-off] button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.md [data-img-off] button:focus-visible {
+  outline: 2px solid var(--p-ink);
+  outline-offset: 1px;
 }
 
 .md input[type='checkbox'] {

@@ -16,6 +16,10 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Réglages › À propos propose d’offrir un café pour soutenir Escouade, comme le site, la documentation et la page GitHub du dépôt.
 - La vue Cursor CLI ouvre l’interface de Cursor sur l’agent, dans un terminal : Escouade y suit ses messages et la fin de chaque tour, et sa bande dit ce qu’il ne voit pas (permissions en attente, résultats, tokens). Cursor y tient une conversation à part, qu’Escouade relie à celle de l’agent dans les deux sens.
 
+### Corrections
+
+- Les images et les fichiers qu’un agent t’envoie apparaissent enfin dans sa conversation : sa légende, les images en vignettes à voir en grand d’un clic, les autres fichiers à ouvrir ou à retrouver dans leur dossier. Les images restent visibles même une fois leur dossier effacé, et celles d’un message en Markdown s’affichent aussi.
+
 ## [2.0.0] — 2026-10-24
 
 ### Nouveautés

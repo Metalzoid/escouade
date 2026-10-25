@@ -157,7 +157,7 @@ Quand le worktree d’un nouvel agent se prépare, la conversation affiche « P
 
 ### Les messages
 
-Tes messages sont dans des bulles à droite, ceux de Claude à gauche avec un « C ». Le texte de Claude apparaît au fil de l’eau, avec « Claude travaille… » tant que le tour dure. Il est rendu en Markdown : titres, listes, tableaux, citations, liens (un clic sur un lien `http`, `https` ou `mailto` l’ouvre dans ton navigateur). Du HTML écrit dans une réponse est affiché comme du texte.
+Tes messages sont dans des bulles à droite, ceux de Claude à gauche avec un « C ». Le texte de Claude apparaît au fil de l’eau, avec « Claude travaille… » tant que le tour dure. Il est rendu en Markdown : titres, listes, tableaux, citations, liens (un clic sur un lien `http`, `https` ou `mailto` l’ouvre dans ton navigateur). Du HTML écrit dans une réponse est affiché comme du texte. Une image du Markdown (`![légende](adresse)`) dont l’adresse est un chemin de la machine (absolu, ou relatif au dossier de l’agent) s’affiche : Escouade lit le fichier comme un fichier envoyé (une image reconnue à son contenu, 10 Mo au plus, jamais d’un projet privé), et un clic l’ouvre dans la visionneuse. Une image du web ne se charge jamais seule : un agent qui a lu une page ou un fichier piégé pourrait écrire un secret dans son adresse, que le chargement enverrait. Elle reste une étiquette, sa légende et son domaine (« image de example.com »), avec « Afficher l’image » : à ce clic seulement, Escouade la télécharge (en `https` seulement, 10 Mo au plus, une image reconnue à son contenu, sans cookie ni rien qui dise qui la demande, par le proxy des réglages) et la montre. Le reste (une adresse `http`, un chemin qui n’est pas une image ou n’existe plus) garde sa légende, en texte discret.
 
 Les blocs de code ont un en-tête avec leur langage (« texte » quand il n’est pas précisé) et un bouton « Copier » qui copie le code, puis affiche « Copié ✓ ». Une fois le texte terminé, le code est coloré pour les langages courants : TypeScript, JavaScript, JSON, Rust, Python, Bash, PowerShell, CSS, HTML, Svelte, Vue, Markdown, YAML, TOML, SQL, Go, Java, Kotlin, C, C++, C#, PHP, Ruby, Swift, diff, Dockerfile, GraphQL… Les autres restent en texte brut.
 
@@ -178,6 +178,20 @@ Un clic sur la ligne (ou `Entrée` quand elle a le focus) la déplie :
 - **Les autres outils** : leur résultat, sinon les paramètres de l’appel.
 
 Les outils qui ne font que relire la liste des tâches (`TaskList`, `TaskGet`) sont affichés en teintes plus douces. Les outils du serveur MCP d’Escouade portent un badge « Escouade · … » (voir [le serveur MCP](mcp)).
+
+### Les fichiers envoyés par l’agent
+
+Claude Code peut envoyer des fichiers à l’utilisateur (son outil `SendUserFile`) : une capture d’écran, un rendu, un rapport. Escouade les montre dans la conversation, dans une carte « Envoyé par Claude » qui dit combien d’images et de fichiers il y a :
+
+- la **légende** que l’agent a écrite, en tête ;
+- les **images** (PNG, JPEG, GIF, WebP, SVG) en vignettes, sur une ligne qui passe à la ligne. Un clic sur une vignette l’ouvre en grand dans une visionneuse : « Image précédente » et « Image suivante » (ou les flèches du clavier) passent de l’une à l’autre, `Échap` ou un clic à côté la ferme. Quand l’agent a demandé à les joindre plutôt qu’à les montrer, elles sont listées comme des fichiers, avec une petite vignette qui ouvre aussi la visionneuse ;
+- les **autres fichiers** (PDF, HTML, texte, archive…) en lignes, avec leur nom, leur taille, « Ouvrir » (avec l’application par défaut du système) et « Afficher dans le dossier ». Un programme ou un script (`.exe`, `.bat`, `.ps1`, `.msi`, `.lnk`, `.sh`, `.app`, `.dmg`…, ou un fichier marqué exécutable sous macOS et Linux) n’a que « Afficher dans le dossier » : Escouade ne lance jamais ce qu’un agent envoie.
+
+C’est Escouade qui lit les fichiers, jamais la fenêtre. Une image est reconnue à son contenu, pas à son extension : un fichier `.png` qui n’est pas une image est un fichier comme un autre. Les images sont copiées au moment de l’envoi dans le dossier de données d’Escouade, avec les fichiers joints de l’agent, car elles vivent souvent dans un dossier temporaire de son worktree : la carte les montre encore une fois ce dossier effacé, et après un redémarrage. La copie s’efface avec l’agent, ou avec les autres copies au bout de la durée de « Purger les copies après ». Une image de plus de 10 Mo n’a pas d’aperçu : elle est listée comme un fichier, et n’est pas copiée ; un envoi copie 50 Mo d’images au plus, les suivantes sont lues là où elles sont. Les autres fichiers restent à leur place : déplacé ou effacé depuis, un fichier est marqué « Fichier introuvable », sans ses boutons. Un fichier d’un projet privé (voir [les projets privés](mcp#les-projets-prives)) n’est ni lu ni ouvert : la carte dit « Fichier d’un projet privé, non affiché ».
+
+Quand l’agent envoie des fichiers de lui-même, sans que tu le lui aies demandé, tu reçois une notification, comme pour une question. Pendant l’envoi, sa carte dans la liste dit par exemple « A envoyé 2 images et 1 fichier ».
+
+Les autres harness (Codex, Copilot CLI, OpenCode, Cursor CLI) n’ont pas d’outil pour envoyer un fichier à l’utilisateur : leurs images passent par le Markdown de leurs messages, ci-dessous.
 
 ### Sous-agents, tâches de fond et autres sessions
 

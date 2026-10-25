@@ -1,5 +1,6 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
+  SentView,
   LeftoverReport,
   Account,
   MachineAccount,
@@ -416,6 +417,15 @@ export const api = {
   fsDelete: (projectId: string, agentId: string | null, path: string) => invoke<void>('fs_delete', { projectId, agentId, path }),
   /** Shows a file or a folder in the system's file manager, selected; null opens the source's folder. */
   fsReveal: (projectId: string, agentId: string | null, path: string | null) => invoke<void>('fs_reveal', { projectId, agentId, path }),
+  /** The files an agent sent by a call of SendUserFile (ESC-171), as shown now: its images read by the core, the others looked at. */
+  sentFiles: (agentId: string, itemId: string) => invoke<SentView[]>('sent_files', { agentId, itemId }),
+  /** The file `index` an agent sent, opened with its application or shown in its folder (`reveal`). */
+  sentFileOpen: (agentId: string, itemId: string, index: number, reveal: boolean) =>
+    invoke<void>('sent_file_open', { agentId, itemId, index, reveal }),
+  /** The image a message of the agent shows by a local path: its `data:` URL, or null (not an image, too heavy, gone, refused). */
+  /** An image of the web a message shows, downloaded by the core at the user's click (https, 10 MB at most): its `data:` URL. */
+  remoteImage: (src: string) => invoke<string>('remote_image', { src }),
+  agentLocalImage: (agentId: string, src: string) => invoke<string | null>('agent_local_image', { agentId, src }),
   /** Creates an empty folder, its parents with it; refused when something is already there. */
   fsMkdir: (projectId: string, agentId: string | null, path: string) => invoke<void>('fs_mkdir', { projectId, agentId, path }),
   fsBase: (projectId: string, agentId: string | null, path: string) => invoke<FileBase | null>('fs_base', { projectId, agentId, path }),

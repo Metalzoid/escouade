@@ -2404,6 +2404,9 @@ impl<R: Runtime> Core<R> {
         if fx.plan_files {
             self.ask_plan_scan(id);
         }
+        for (item, input) in fx.sent {
+            self.deliver_sent(id, item, input);
+        }
         if changed {
             self.update_tray();
         }

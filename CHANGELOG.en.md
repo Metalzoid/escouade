@@ -16,6 +16,10 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Settings › About offers to buy a coffee to support Escouade, as do the site, the documentation and the repository’s GitHub page.
 - The Cursor CLI view opens Cursor’s interface on the agent, in a terminal: Escouade follows its messages and the end of each turn there, and its band says what it doesn’t see (permissions waiting, results, tokens). Cursor keeps a conversation of its own there, which Escouade links to the agent’s both ways.
 
+### Fixes
+
+- The images and files an agent sends you now show in its conversation: its caption, the images as thumbnails to see full size in a click, the other files to open or find in their folder. The images stay visible even once their folder is gone, and those of a message in Markdown show too.
+
 ## [2.0.0] — 2026-10-24
 
 ### New

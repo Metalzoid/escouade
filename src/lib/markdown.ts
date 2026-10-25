@@ -4,6 +4,16 @@ import DOMPurify from 'dompurify';
 import { Marked, type Tokens } from 'marked';
 import { locale, t } from './i18n';
 
+/** The domain of an https address, as its reader knows it; null for one that is not one. */
+function hostOf(src: string): string | null {
+  try {
+    const url = new URL(src);
+    return url.protocol === 'https:' && url.hostname ? url.hostname : null;
+  } catch {
+    return null;
+  }
+}
+
 const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 const marked = new Marked({
@@ -13,6 +23,27 @@ const marked = new Marked({
     // Raw HTML in a reply is shown as text: it could otherwise be styled over the app's own UI.
     html({ text }: Tokens.HTML | Tokens.Tag) {
       return escapeHtml(text);
+    },
+    // An image (ESC-171): the webview loads none by itself. One of the web would tell its address on its own as soon as the
+    // message shows, and an agent may have been led to write a secret in it: it is its text, its domain and « Afficher
+    // l'image » (`data-remote-src`), which the core downloads on that click alone (`Markdown`). A local path is left for
+    // the core to read by the agent whose message it is (`data-local-src`); any other is its text (`data-img-off`).
+    image({ href, title, text }: Tokens.Image) {
+      const src = href.trim();
+      const titled = title ? ` title="${escapeHtml(title)}"` : '';
+      const shown = escapeHtml(text || src);
+      const host = /^https:\/\//i.test(src) ? hostOf(src) : null;
+      if (host) {
+        return (
+          `<span data-img-off data-remote-src="${escapeHtml(src)}" title="${escapeHtml(src)}">${text ? `${escapeHtml(text)} · ` : ''}` +
+          `${escapeHtml(t('conv.sent.remoteOf', { host }))} <button type="button" data-show-img>${escapeHtml(t('conv.sent.remoteShow'))}</button></span>`
+        );
+      }
+      // Another scheme (http, data, an app's): nothing loaded. A drive (`C:/`) is a path.
+      if (/^[a-z][a-z0-9+.-]+:/i.test(src) && !/^[a-z]:[\\/]/i.test(src) && !/^file:/i.test(src)) {
+        return `<span data-img-off title="${escapeHtml(src)}">${shown}</span>`;
+      }
+      return `<span data-img-off data-local-src="${escapeHtml(src)}"${titled}>${shown}</span>`;
     },
     code({ text, lang }: Tokens.Code) {
       const l = (lang ?? '').trim().split(/\s+/)[0] ?? '';
@@ -44,7 +75,11 @@ export function renderMarkdown(text: string, cache = true): string {
     return hit;
   }
   const raw = marked.parse(text, { async: false }) as string;
-  const html = DOMPurify.sanitize(raw, { ADD_ATTR: ['data-lang'], FORBID_TAGS: ['style', 'form', 'input'], FORBID_ATTR: ['style'] });
+  const html = DOMPurify.sanitize(raw, {
+    ADD_ATTR: ['data-lang'],
+    FORBID_TAGS: ['style', 'form', 'input'],
+    FORBID_ATTR: ['style'],
+  });
   if (cache && text.length < 50_000) {
     cached.set(key, html);
     if (cached.size > CACHE_SIZE) cached.delete(cached.keys().next().value!);

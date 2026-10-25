@@ -333,6 +333,14 @@ impl AgentRt {
             if kind == "tool" {
                 self.plan_tool_use(parent.as_deref(), block, fx);
             }
+            // Files sent to the user (ESC-171): those of a call read again (the transcript of the
+            // Claude Code view) are kept as they were delivered.
+            let sending = kind == "tool" && block["name"] == crate::sentfiles::TOOL;
+            let delivered = sending
+                .then(|| block["id"].as_str())
+                .flatten()
+                .and_then(|id| self.conv.get(id))
+                .and_then(|v| v.get("sent").cloned());
             let streamed = self
                 .blocks
                 .get_mut(&mid)
@@ -385,6 +393,33 @@ impl AgentRt {
                 }
                 _ => {}
             }
+            if sending {
+                match (delivered, block["id"].as_str()) {
+                    (Some(sent), Some(id)) => self.patch(id, json!({ "sent": sent }), fx),
+                    _ => self.on_sent_files(parent.as_deref(), block, fx),
+                }
+            }
+        }
+    }
+
+    /// A `SendUserFile` call (ESC-171): its files for the core to deliver (`sentfiles::deliver`),
+    /// and, sent « proactive » by the agent itself, a notification as for a question.
+    pub(super) fn on_sent_files(&mut self, parent: Option<&str>, block: &Value, fx: &mut Effects) {
+        let Some(id) = block["id"].as_str() else {
+            return;
+        };
+        let input = &block["input"];
+        fx.sent.push((id.to_string(), input.clone()));
+        if parent.is_none() && input["status"] == "proactive" {
+            let caption = input["caption"]
+                .as_str()
+                .map(str::trim)
+                .filter(|c| !c.is_empty());
+            let body = caption
+                .map(|c| truncate(c, 200))
+                .or_else(|| tool_activity(crate::sentfiles::TOOL, input, &self.meta.cwd))
+                .unwrap_or_default();
+            fx.notify = Some(AgentAlert::new(NotifyKind::Question, body));
         }
     }
 

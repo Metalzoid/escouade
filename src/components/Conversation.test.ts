@@ -2399,3 +2399,48 @@ describe('Conversation header — the agent’s pull requests (ESC-64)', () => {
     expect(screen.getByRole('button', { name: 'Open a PR' })).toBeInTheDocument();
   });
 });
+
+describe('Conversation: files an agent sends (ESC-171)', () => {
+  const PNG = 'data:image/png;base64,iVBORw0KGgo=';
+  const call = {
+    kind: 'tool',
+    id: 'toolu_s1',
+    name: 'SendUserFile',
+    input: {
+      files: ['C:/w/.impeccable/tmp/a.png', 'C:/w/b.png', 'C:/w/contrat.pdf'],
+      caption: 'Deux vues et le contrat',
+      status: 'normal',
+      display: 'render',
+    },
+    status: 'ok',
+    ts: 1,
+  };
+
+  it('shows the caption, the images as thumbnails and the other files with their actions', async () => {
+    setLang('fr');
+    const a = agent({ id: 'sender', status: 'idle' });
+    resetApp({ projects: [project()], agents: [a] });
+    const asked: unknown[] = [];
+    fakeBackend({
+      get_conversation: () => [call],
+      sent_files: (args: unknown) => {
+        asked.push(args);
+        return [
+          { name: 'a.png', kind: 'image', state: 'ok', size: 2048, url: PNG },
+          { name: 'b.png', kind: 'image', state: 'ok', size: 4096, url: PNG },
+          { name: 'contrat.pdf', kind: 'file', state: 'ok', size: 1468006 },
+        ];
+      },
+    });
+    render(Conversation, { agent: a, project: project() });
+    expect(await screen.findByText('Deux vues et le contrat')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByRole('img').filter((i) => i.getAttribute('src') === PNG)).toHaveLength(2));
+    expect(asked[0]).toEqual({ agentId: 'sender', itemId: 'toolu_s1' });
+    expect(screen.getByRole('button', { name: 'Voir a.png en grand' })).toBeInTheDocument();
+    expect(screen.getByText('contrat.pdf')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ouvrir contrat.pdf' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Afficher contrat.pdf dans le dossier' })).toBeInTheDocument();
+    // Not a tool call among the others.
+    expect(screen.queryByText('SendUserFile')).not.toBeInTheDocument();
+  });
+});
