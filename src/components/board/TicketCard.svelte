@@ -30,6 +30,7 @@
   import Icon from '../Icon.svelte';
   import RejectForm from './RejectForm.svelte';
   import { tip } from '../../lib/tip';
+  import { isMulti, repoLabel, touchedRepos } from '../../lib/repos';
 
   const uid = $props.id();
 
@@ -51,6 +52,8 @@
   /** Why none starts for now (a quota, a usage limit): that of the accounts the project goes to. */
   const pause = $derived(pauseOf(project));
   const agent = $derived(ticket.agentId ? app.agents[ticket.agentId] : undefined);
+  /** Of several repositories (ESC-169): those its agent changed, while it is tested. */
+  const changedRepos = $derived(ticket.column === 'review' && agent && isMulti(project) ? touchedRepos(project, agent).map(repoLabel) : []);
   /** What every agent of the ticket used so far: the card of a finished ticket keeps the cost it was closed with. */
   const used = $derived(ticket.column === 'doing' || ticket.column === 'review' ? ticketSpent(ticket, app.agents) : null);
   /**
@@ -333,6 +336,11 @@
     </div>
   {/if}
   <h2 class="title">{ticket.title}</h2>
+  {#if changedRepos.length}
+    <span class="repos-line"
+      ><Icon name="branch" size={14} /><span>{t('repos.card.changed', { repos: changedRepos.join(', ') })}</span></span
+    >
+  {/if}
   {#if ticket.partial && (ticket.column === 'review' || ticket.column === 'done')}<span class="partial">{t('board.card.partial')}</span
     >{/if}
 
@@ -696,6 +704,20 @@
     font-size: 11.5px;
     font-weight: 550;
     line-height: 18px;
+  }
+  .repos-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11.5px;
+    white-space: nowrap;
+  }
+  .repos-line span {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .outcome {
     justify-self: start;

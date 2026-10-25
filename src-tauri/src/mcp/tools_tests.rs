@@ -656,6 +656,7 @@ async fn a_ticket_tells_its_agent_branch_block_step_and_outcome_to_follow_the_fl
     );
     let rest = put_agent(&h, &p, "dem-1-le-conflit", 1);
     h.core.agent(&rest.id).unwrap().lock().meta.worktree = Some(Worktree {
+        repos: Vec::new(),
         path: "/travail/dem-1".into(),
         branch: "ticket/dem-1".into(),
         base_branch: "main".into(),

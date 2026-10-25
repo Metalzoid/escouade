@@ -3,7 +3,7 @@
   import { deletable, deleteBranch, startAgentOn, switchBranch, worktreeReason } from '../../lib/branch-actions';
   import { rankFiles } from '../../lib/editor/quick-open';
   import { trapFocus } from '../../lib/focus';
-  import { gitSync, syncInfo, type SyncOp } from '../../lib/git-sync.svelte';
+  import { gitSync, repoSyncInfo, type SyncOp } from '../../lib/git-sync.svelte';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { menu, type MenuItem } from '../../lib/menu.svelte';
@@ -33,7 +33,10 @@
     over = false,
     chosen,
     forBranch,
+    repo = null,
   }: {
+    /** One of the repositories of a project of several (ESC-169). */
+    repo?: string | null;
     projectId: string;
     anchor?: HTMLElement;
     onclose: () => void;
@@ -81,7 +84,7 @@
   let list = $state<HTMLDivElement>();
   let place = $state<{ left: number; bottom?: number; top?: number; maxHeight: number }>({ left: 16, bottom: 38, maxHeight: 560 });
 
-  const sync = $derived(syncInfo(app.git[projectId]));
+  const sync = $derived(repoSyncInfo(app.git[projectId], repo));
 
   onMount(() => {
     if (!anchor) return;
@@ -99,7 +102,7 @@
   async function load() {
     const mine = ++reads;
     try {
-      const all = await api.branchList(projectId);
+      const all = await api.branchList(projectId, repo);
       if (mine !== reads) return;
       branches = all;
       failure = null;
@@ -222,7 +225,7 @@
     // Once the typing paused: the check asks git.
     const timer = setTimeout(async () => {
       try {
-        await api.branchCheck(projectId, name);
+        await api.branchCheck(projectId, name, repo);
       } catch (e) {
         if (mine === checks) problem = String(e);
       }
@@ -308,7 +311,7 @@
     }
     switching = true;
     // The picker is out of the way before a question opens: the focus then goes back to the button it came from.
-    const result = await switchBranch(projectId, b.name, false, release);
+    const result = await switchBranch(projectId, b.name, false, release, repo);
     switching = false;
     if (result === 'refused') await load();
     else onclose();
@@ -341,7 +344,7 @@
         danger: true,
         onClick: async () => {
           await release();
-          deleteBranch(projectId, b);
+          deleteBranch(projectId, b, repo);
         },
       });
     }
@@ -382,17 +385,17 @@
 
   async function newBranch() {
     await release();
-    app.modal = { kind: 'newBranch', projectId };
+    app.modal = { kind: 'newBranch', projectId, repo: repo ?? undefined };
   }
 
   async function mergedBranches() {
     await release();
-    app.modal = { kind: 'mergedBranches', projectId };
+    app.modal = { kind: 'mergedBranches', projectId, repo: repo ?? undefined };
   }
 
   function runSync(op: SyncOp) {
     onclose();
-    void gitSync.run(op, projectId);
+    void gitSync.run(op, projectId, repo);
   }
 </script>
 

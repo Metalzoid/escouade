@@ -10,7 +10,12 @@
   // « Nouvelle branche »: a name git accepts (checked as it is typed), where the branch starts, and whether the folder
   // goes to it. `start`: a branch or the commit the graph gave, the current branch by default; `resume`: what was
   // written, back from the question of the stash.
-  let { projectId, start, resume }: { projectId: string; start?: string; resume?: NewBranchDraft } = $props();
+  let {
+    projectId,
+    start,
+    resume,
+    repo = null,
+  }: { projectId: string; start?: string; resume?: NewBranchDraft; repo?: string | null } = $props();
 
   /** How long the typing must pause before the name is checked: the check asks git. */
   const CHECK_DELAY = 250;
@@ -83,7 +88,7 @@
     if (!wanted) return;
     timer = setTimeout(async () => {
       try {
-        await api.branchCheck(projectId, wanted);
+        await api.branchCheck(projectId, wanted, repo);
         if (mine === checks) problem = null;
       } catch (e) {
         if (mine === checks) problem = String(e);
@@ -104,7 +109,7 @@
     refused = null;
     const [at, here] = [from, switchTo];
     try {
-      const stashed = await api.branchCreate(projectId, wanted, at, here, stash);
+      const stashed = await api.branchCreate(projectId, wanted, at, here, stash, repo);
       if (!gone) close();
       app.toast(t(here ? 'branches.create.createdHere' : 'branches.create.created', { branch: wanted }), 'ok');
       if (stashed) app.toast(t('branches.switch.stashed', { name: stashed }), 'ok');
@@ -116,7 +121,7 @@
           t('branches.create.dirtyTitle', { branch: wanted }),
           () => create(true),
           () => {
-            app.modal = back ?? { kind: 'newBranch', projectId, start, resume: draft() };
+            app.modal = back ?? { kind: 'newBranch', projectId, start, resume: draft(), repo: repo ?? undefined };
           },
         );
       } else if (gone || branchRefusal(e)) {

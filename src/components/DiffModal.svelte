@@ -20,6 +20,7 @@
     commit = null,
     refs = null,
     wholeProject = false,
+    repo = null,
   }: {
     projectId: string;
     agentId: string | null;
@@ -28,6 +29,8 @@
     commit?: string | null;
     refs?: { from: string; to: string } | null;
     wholeProject?: boolean;
+    /** The repository of `commit` and `refs`, in a project of several (ESC-169). */
+    repo?: string | null;
   } = $props();
 
   // `agentId`: the agent a whole-project file is listed under, as in the files panel. `key`: the same
@@ -45,9 +48,9 @@
 
   $effect(() => {
     (refs
-      ? api.gitDiffRefs(projectId, refs.from, refs.to).then((d) => shown(d, null, 0))
+      ? api.gitDiffRefs(projectId, refs.from, refs.to, repo).then((d) => shown(d, null, 0))
       : commit
-        ? api.gitShow(projectId, commit).then((d) => shown(d, null, 0))
+        ? api.gitShow(projectId, commit, repo).then((d) => shown(d, null, 0))
         : wholeProject
           ? api.gitProjectDiff(projectId).then((parts) => parts.flatMap((p, i) => shown(p.diff, p.agentId, i)))
           : api.gitDiff(projectId, agentId, paths).then((d) => shown(d, null, 0))

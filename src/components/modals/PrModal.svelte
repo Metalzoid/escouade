@@ -5,6 +5,7 @@
   import { app } from '../../lib/state.svelte';
   import type { PrProposal } from '../../lib/types';
   import Icon from '../Icon.svelte';
+  import { repoLabel } from '../../lib/repos';
   import Modal from './Modal.svelte';
 
   // « Ouvrir une PR » on an ordinary agent's branch (ESC-64): the title and the description the model of the written
@@ -28,6 +29,9 @@
   onDestroy(() => (gone = true));
 
   const word = $derived(proposal?.word ?? agent?.prWord ?? 'PR');
+  /** Of an agent of several repositories (ESC-169): one pull request in each repository it changed. */
+  const repos = $derived(proposal?.repos ?? []);
+  const multi = $derived(repos.length > 0);
 
   onMount(propose);
 
@@ -85,9 +89,17 @@
   }
 </script>
 
-<Modal title={t('prs.modal.title', { word, host: proposal?.host ?? '…' })} width={760} onclose={close}>
+<Modal
+  title={multi
+    ? t('repos.pr.title', { count: repos.length, word, host: proposal?.host ?? '…' })
+    : t('prs.modal.title', { word, host: proposal?.host ?? '…' })}
+  width={760}
+  onclose={close}
+>
   {#snippet lead()}<span class="lead"><Icon name="pr" /></span>{/snippet}
-  {#if proposal}
+  {#if proposal && multi}
+    <p class="scope">{agent?.name ?? ''} · <span class="mono">{proposal.head}</span> · {t('repos.pr.scope', { word })}</p>
+  {:else if proposal}
     <p class="scope">
       {#each scope as part, i (i)}{#if part.mono}<span class="mono">{part.text}</span>{:else}{part.text}{/if}{/each}
     </p>
@@ -104,11 +116,24 @@
       <label class="lab" for="pr-body">{t('prs.modal.bodyLabel')}</label>
       <textarea id="pr-body" class="field ta" rows="7" bind:value={body} disabled={!proposal}></textarea>
     </div>
+    {#if multi}
+      <ul class="rlist" aria-label={t('repos.pr.scope', { word })}>
+        {#each repos as r (r.repo)}
+          <li class="rrow">
+            <Icon name="pr" size={14} /><span class="rn">{repoLabel(r.repo)}</span><span class="rb"
+              >{t('repos.pr.into', { remote: r.remote, base: r.base })}</span
+            ><span class="st">{t('repos.pr.commits', { count: r.commits })}</span>
+          </li>
+        {/each}
+      </ul>
+    {/if}
     <div class="two">
-      <div class="w-fld">
-        <label class="lab" for="pr-base">{t('prs.modal.baseLabel')}</label>
-        <input id="pr-base" class="field mono base" spellcheck="false" bind:value={base} disabled={!proposal} />
-      </div>
+      {#if !multi}
+        <div class="w-fld">
+          <label class="lab" for="pr-base">{t('prs.modal.baseLabel')}</label>
+          <input id="pr-base" class="field mono base" spellcheck="false" bind:value={base} disabled={!proposal} />
+        </div>
+      {/if}
       {#if proposal?.canDraft}
         <label class="w-tick draft"
           ><input type="checkbox" bind:checked={draft} /><span class="tick-box" aria-hidden="true"><Icon name="check" size={12} /></span>{t(
@@ -134,7 +159,11 @@
     <button class="btn" disabled={opening} onclick={close}>{t('common.cancel')}</button>
     {#if !failure}
       <button class="btn primary" disabled={!proposal || !title.trim() || opening || proposing} onclick={open}
-        ><Icon name="push" size={14} />{opening ? t('prs.modal.opening') : t('prs.modal.submit')}</button
+        ><Icon name="push" size={14} />{opening
+          ? t('prs.modal.opening')
+          : multi
+            ? t('repos.pr.confirm', { count: repos.length, word })
+            : t('prs.modal.submit')}</button
       >
     {/if}
   {/snippet}
@@ -144,6 +173,38 @@
   .lead {
     display: inline-flex;
     color: var(--muted);
+  }
+  .rlist {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+  }
+  .rrow {
+    display: grid;
+    grid-template-columns: 16px minmax(72px, auto) minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 9px;
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+  .rrow .rn {
+    color: var(--text);
+    font: 600 12px var(--mono);
+  }
+  .rrow .rb {
+    min-width: 0;
+    overflow: hidden;
+    font: 11px var(--mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .rrow .st {
+    font-size: 11.5px;
   }
   .scope {
     margin: 0;

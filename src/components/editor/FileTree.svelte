@@ -23,7 +23,10 @@
     onrenamecancel = () => {},
     onrenamerow,
     ondeleterow,
+    repoBranches = {},
   }: {
+    /** Of a project of several repositories (ESC-169): the branch of each repository's folder, shown after its name. */
+    repoBranches?: Record<string, string>;
     rows: TreeRow[];
     active: string | null;
     ontoggle: (dir: string) => void;
@@ -192,7 +195,8 @@
         <span class="fd"
           >{#if r.kind === 'dir'}{@render chevron(r.open)}{/if}</span
         >
-        <span class="name">{r.name}</span>
+        <span class="name" class:repo={r.kind === 'dir' && r.path in repoBranches}>{r.name}</span>
+        {#if r.kind === 'dir' && repoBranches[r.path]}<span class="rbadge">{repoBranches[r.path]}</span>{/if}
         {#if r.status}
           <span class="letter {LETTER[r.status]}">{r.status}</span>
         {:else if r.inside}
@@ -287,5 +291,18 @@
   }
   .letter.d {
     color: var(--del);
+  }
+  /* A repository's folder, of several (ESC-169): its name in bold, its branch after it. */
+  .name.repo {
+    font-weight: 600;
+  }
+  .rbadge {
+    min-width: 0;
+    margin-left: 8px;
+    overflow: hidden;
+    color: var(--muted);
+    font: 11px var(--mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 </style>

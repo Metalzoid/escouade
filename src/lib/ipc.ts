@@ -44,6 +44,7 @@ import type {
   IsolaService,
   IssuePage,
   Project,
+  RepoMerge,
   RunSuggestion,
   SearchQuery,
   SearchResult,
@@ -96,6 +97,11 @@ export type TermReport =
       sentToAcked?: number;
       outputEnd?: number;
     };
+
+/** The repository of a project of several a git command goes to (ESC-169): no key at all for a project of one. */
+function inRepo(repo: string | null): { repo?: string } {
+  return repo === null ? {} : { repo };
+}
 
 export const api = {
   subscribe: (onEvent: (e: UiEvent) => void) => {
@@ -333,6 +339,15 @@ export const api = {
   deleteAgent: (id: string, removeWorktree: boolean) => invoke<string | null>('delete_agent', { id, removeWorktree }),
   /** Merges into the agent's base branch; `switchToBase`: the project's folder is switched to it first. */
   mergeAgent: (id: string, squash: boolean, switchToBase = false) => invoke<string>('merge_agent', { id, squash, switchToBase }),
+  /** What merging the agent would do in each of its repositories (ESC-169). */
+  agentMergeCheck: (id: string) => invoke<RepoMerge[]>('agent_merge_check', { id }),
+  /** « Merger api seul » (ESC-169): the merge of some of the agent's repositories. */
+  mergeAgentRepos: (id: string, squash: boolean, switchToBase: boolean, repos: string[]) =>
+    invoke<string>('merge_agent_repos', { id, squash, switchToBase, repos }),
+  /** « Rechercher à nouveau » (ESC-169): the project's repositories looked for again. */
+  refreshRepos: (id: string) => invoke<Project>('refresh_repos', { id }),
+  /** « Oublier » a repository gone from the project's folder. */
+  forgetRepo: (id: string, repo: string) => invoke<Project>('forget_repo', { id, repo }),
   integrateBase: (id: string) => invoke<Integration>('integrate_base', { id }),
   /** « Ouvrir une PR » (ESC-64): the title and the description proposed from the agent's branch. */
   agentPrPropose: (id: string) => invoke<PrProposal>('agent_pr_propose', { id }),
@@ -348,36 +363,42 @@ export const api = {
   gitFiles: (projectId: string, agentId: string | null) => invoke<FileChange[]>('git_files', { projectId, agentId }),
   gitDiff: (projectId: string, agentId: string | null, paths: string[]) => invoke<string>('git_diff', { projectId, agentId, paths }),
   gitProjectDiff: (projectId: string) => invoke<OwnedDiff[]>('git_project_diff', { projectId }),
-  gitLog: (projectId: string, agentId: string | null) => invoke<GitLog>('git_log', { projectId, agentId }),
-  gitShow: (projectId: string, hash: string) => invoke<string>('git_show', { projectId, hash }),
+  /** `repo`: one of the project's repositories when it has several (ESC-169); the first one when null. */
+  gitLog: (projectId: string, agentId: string | null, repo: string | null = null) =>
+    invoke<GitLog>('git_log', { projectId, agentId, ...inRepo(repo) }),
+  gitShow: (projectId: string, hash: string, repo: string | null = null) =>
+    invoke<string>('git_show', { projectId, hash, ...inRepo(repo) }),
   /** Fetch, pull (fast-forward only) and push of the project's checkout; each returns a summary. */
-  gitFetch: (projectId: string) => invoke<string>('git_fetch', { projectId }),
-  gitPull: (projectId: string) => invoke<string>('git_pull', { projectId }),
-  gitPush: (projectId: string) => invoke<string>('git_push', { projectId }),
+  gitFetch: (projectId: string, repo: string | null = null) => invoke<string>('git_fetch', { projectId, ...inRepo(repo) }),
+  gitPull: (projectId: string, repo: string | null = null) => invoke<string>('git_pull', { projectId, ...inRepo(repo) }),
+  gitPush: (projectId: string, repo: string | null = null) => invoke<string>('git_push', { projectId, ...inRepo(repo) }),
   /** The project's branches: the local ones (the folder's first), then the remote ones. */
-  branchList: (projectId: string) => invoke<BranchInfo[]>('branch_list', { projectId }),
+  branchList: (projectId: string, repo: string | null = null) => invoke<BranchInfo[]>('branch_list', { projectId, ...inRepo(repo) }),
   /** Rejected with why `name` can't be a new branch (git's rules, a branch of that name already there). */
-  branchCheck: (projectId: string, name: string) => invoke<void>('branch_check', { projectId, name }),
+  branchCheck: (projectId: string, name: string, repo: string | null = null) =>
+    invoke<void>('branch_check', { projectId, name, ...inRepo(repo) }),
   /**
    * Switches the project's folder to `name` (a remote branch "origin/x": the local one that tracks it, made if need be); the stash's name when
    * `stash` put the uncommitted changes aside. Rejected with `DIRTY`, `IN_WORKTREE:<agent id>:<agent name>`, `AGENT_WORKING:<agent id>:<agent name>`.
    */
-  branchSwitch: (projectId: string, name: string, stash = false) => invoke<string | null>('branch_switch', { projectId, name, stash }),
+  branchSwitch: (projectId: string, name: string, stash = false, repo: string | null = null) =>
+    invoke<string | null>('branch_switch', { projectId, name, stash, ...inRepo(repo) }),
   /** Creates `name` at `start` (a branch, a commit; HEAD when empty); `switchTo`: the folder goes there, rejected as `branchSwitch` is. */
-  branchCreate: (projectId: string, name: string, start: string, switchTo: boolean, stash = false) =>
-    invoke<string | null>('branch_create', { projectId, name, start, switch: switchTo, stash }),
+  branchCreate: (projectId: string, name: string, start: string, switchTo: boolean, stash = false, repo: string | null = null) =>
+    invoke<string | null>('branch_create', { projectId, name, start, switch: switchTo, stash, ...inRepo(repo) }),
   /**
    * Deletes a branch, its remote one too with `remote` (or a remote branch alone, "origin/x"). Rejected with `UNMERGED:<n>` (`n` commits in no
    * other branch, maybe 0) unless `force`, `IN_WORKTREE:<agent id>:<agent name>`, or in words for the folder's own branch. Resolves with a
    * sentence to show when `remote` was asked but only the local branch went (its remote copy is the default branch, the base's, named
    * otherwise, or tracked by another branch), else null.
    */
-  branchDelete: (projectId: string, name: string, remote: boolean, force = false) =>
-    invoke<string | null>('branch_delete', { projectId, name, remote, force }),
+  branchDelete: (projectId: string, name: string, remote: boolean, force = false, repo: string | null = null) =>
+    invoke<string | null>('branch_delete', { projectId, name, remote, force, ...inRepo(repo) }),
   /** The local branches already in the project's base, but the base, the folder's branch and the worktrees' ones. */
-  branchesMerged: (projectId: string) => invoke<string[]>('branches_merged', { projectId }),
+  branchesMerged: (projectId: string, repo: string | null = null) => invoke<string[]>('branches_merged', { projectId, ...inRepo(repo) }),
   /** The diff from `a` to `b` (`git diff a b`), two branches or commits. */
-  gitDiffRefs: (projectId: string, a: string, b: string) => invoke<string>('git_diff_refs', { projectId, a, b }),
+  gitDiffRefs: (projectId: string, a: string, b: string, repo: string | null = null) =>
+    invoke<string>('git_diff_refs', { projectId, a, b, ...inRepo(repo) }),
   /**
    * Turns an agent's remote control on or off by hand (off sets it apart from the settings that cover it). Resolves with
    * whether the change waits for the next launch of the Claude Code interface that is open: Escouade can't change it there.

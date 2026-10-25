@@ -60,6 +60,9 @@ pub struct PrProposal {
     pub uncommitted: usize,
     /// The model did not answer: the title and the description are made from the commits.
     pub fallback: bool,
+    /// Of an agent of several repositories (ESC-169): one pull request each.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub repos: Vec<PrRepo>,
 }
 
 /// What the user validated in the window.
@@ -538,6 +541,9 @@ impl<R: Runtime> Core<R> {
     pub async fn agent_pr_propose(self: &Arc<Self>, id: &str) -> Result<PrProposal> {
         // The model may take its 90 s: the app does not restart for an update meanwhile.
         let _working = self.working();
+        if let Some(targets) = self.pr_targets_multi(id).await? {
+            return self.pr_propose_multi(id, targets).await;
+        }
         let t = self.pr_target(id).await?;
         let word = t.provider.request_word().to_string();
         let cwd = t.path.clone();
@@ -602,6 +608,7 @@ impl<R: Runtime> Core<R> {
             can_draft: t.provider.capabilities().draft,
             uncommitted,
             fallback,
+            repos: Vec::new(),
         })
     }
 
@@ -613,6 +620,9 @@ impl<R: Runtime> Core<R> {
             bail!(tr!("Écris le titre.", "Write the title."));
         }
         let _working = self.working();
+        if let Some(targets) = self.pr_targets_multi(id).await? {
+            return self.pr_open_multi(id, targets, form).await;
+        }
         let t = self.pr_target(id).await?;
         let base = match form.base.trim() {
             "" => t.base.clone(),
@@ -666,6 +676,19 @@ impl<R: Runtime> Core<R> {
                 return Ok(());
             }
             reads.insert(id.to_string(), Instant::now());
+        }
+        // Of several repositories (ESC-169): each one's, when there is one to have.
+        let multi = h
+            .lock()
+            .meta
+            .worktree
+            .as_ref()
+            .is_some_and(|w| w.is_multi());
+        if multi {
+            return match self.pr_targets_multi(id).await {
+                Ok(Some(targets)) => self.prs_refresh_multi(id, targets).await,
+                _ => Ok(()),
+            };
         }
         // Its host's word says it can have one (`pr_word`): set as soon as the project's host, its
         // client and an account are there, before the host is asked anything (a host that does not
@@ -758,5 +781,278 @@ impl<R: Runtime> Core<R> {
             }
         };
         self.send_message(id, message, Vec::new()).await
+    }
+}
+
+/// One repository of an agent's pull requests in a project of several (ESC-169), for its window.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PrRepo {
+    pub repo: String,
+    /// Its repository on the host (`acme/api`).
+    pub remote: String,
+    pub base: String,
+    pub commits: u32,
+}
+
+impl<R: Runtime> Core<R> {
+    /// The pull requests' targets of an agent of several repositories: one per repository its
+    /// branch has commits in, each with its host. None for an agent of one.
+    async fn pr_targets_multi(&self, id: &str) -> Result<Option<Vec<(String, Target)>>> {
+        let meta = self.agent(id)?.lock().meta.clone();
+        let Some(wt) = meta.worktree.clone().filter(|w| w.is_multi()) else {
+            return Ok(None);
+        };
+        if meta.ticket_id.is_some() {
+            bail!(tr!(
+                "La PR d'un agent de ticket s'ouvre à la validation du ticket.",
+                "A ticket agent’s pull request opens when its ticket is approved."
+            ));
+        }
+        if meta.archived {
+            bail!(tr!("Cet agent est archivé.", "This agent is archived."));
+        }
+        let project: Project = self.project(&meta.project_id)?;
+        let mut out = Vec::new();
+        for c in wt.checkouts() {
+            let repo_dir = crate::repos::join(&project.path, &c.repo);
+            if git::ahead_of(&repo_dir, &c.base, &wt.branch)
+                .await
+                .unwrap_or(0)
+                == 0
+            {
+                continue;
+            }
+            let label = crate::repos::label(&c.repo);
+            let remote = self
+                .remote_of(&repo_dir, &project.board.target)
+                .await
+                .ok_or_else(|| {
+                    anyhow!(tr!(
+                        "{label} n'a pas de dépôt distant chez un hébergeur de code.",
+                        "{label} has no remote on a code host."
+                    ))
+                })?;
+            let host = remote.host.clone();
+            let provider = remote
+                .kind
+                .as_deref()
+                .and_then(|k| self.forges.read().get(k))
+                .ok_or_else(|| {
+                    anyhow!(tr!(
+                        "Hébergeur inconnu pour {host} : connecte-le dans Réglages › Intégrations.",
+                        "Unknown code host for {host}: connect it in Settings › Integrations."
+                    ))
+                })?;
+            if !provider.capabilities().pull_requests {
+                let name = provider.name();
+                let word = provider.request_word();
+                bail!(tr!(
+                    "Escouade n'ouvre pas encore de {word} sur {name}.",
+                    "Escouade doesn’t open {word}s on {name} yet."
+                ));
+            }
+            let (client, _) = self.forge_client(&host).await?;
+            out.push((
+                c.repo.clone(),
+                Target {
+                    meta: meta.clone(),
+                    path: c.dir.clone(),
+                    branch: wt.branch.clone(),
+                    base: c.base.clone(),
+                    remote,
+                    provider,
+                    client,
+                },
+            ));
+        }
+        if out.is_empty() {
+            bail!(tr!(
+                "Rien à proposer : {b} n'a de commit de plus que sa base dans aucun dépôt.",
+                "Nothing to propose: {b} has no commit beyond its base in any repository.",
+                b = wt.branch
+            ));
+        }
+        Ok(Some(out))
+    }
+
+    /// `agent_pr_propose` of an agent of several repositories: one title and description for all
+    /// of its pull requests, from the commits and diffs of each.
+    async fn pr_propose_multi(
+        &self,
+        id: &str,
+        targets: Vec<(String, Target)>,
+    ) -> Result<PrProposal> {
+        let first = &targets[0].1;
+        let word = first.provider.request_word().to_string();
+        if let Some(open) = first.meta.prs.iter().find(|p| p.state == PrState::Open) {
+            let n = open.number;
+            bail!(tr!(
+                "La {word} #{n} est déjà ouverte pour cette branche.",
+                "{word} #{n} is already open for this branch."
+            ));
+        }
+        let (mut commits, mut diff, mut uncommitted, mut repos) =
+            (Vec::new(), String::new(), 0, Vec::new());
+        for (repo, t) in &targets {
+            let range = format!("{}..{}", t.base, t.branch);
+            let own: Vec<String> = git::text(&t.path, &["log", "--format=%s", &range])
+                .await
+                .map(|s| {
+                    s.lines()
+                        .filter(|l| !l.is_empty())
+                        .map(|l| format!("{}: {l}", crate::repos::label(repo)))
+                        .collect()
+                })
+                .unwrap_or_default();
+            repos.push(PrRepo {
+                repo: repo.clone(),
+                remote: t.remote.repo.full(),
+                base: t.base.clone(),
+                commits: own.len() as u32,
+            });
+            commits.extend(own);
+            uncommitted += git::text(&t.path, &["status", "--porcelain"])
+                .await
+                .map(|s| s.lines().filter(|l| !l.trim().is_empty()).count())
+                .unwrap_or(0);
+            let d = git::text(&t.path, &["diff", &format!("{}...{}", t.base, t.branch)])
+                .await
+                .unwrap_or_default();
+            diff.push_str(&crate::repos::prefix_diff(&d, repo));
+            diff.push('\n');
+        }
+        let lang = self.lang().claude;
+        let asked = self
+            .one_shot(
+                &proposal_system(lang, &word),
+                &proposal_prompt(lang, &word, &first.branch, &first.base, &commits, &diff),
+                Some(id),
+                Some(&first.meta.project_id),
+            )
+            .await;
+        let (title, body, fallback) = match asked.map(|a| proposal_from_answer(&a)) {
+            Ok(Some((title, body))) => (title, body, false),
+            _ => {
+                let (title, body) = fallback_proposal(&first.meta.name, &commits);
+                (title, body, true)
+            }
+        };
+        Ok(PrProposal {
+            title,
+            body,
+            head: first.branch.clone(),
+            base: first.base.clone(),
+            word,
+            host: first.provider.name().to_string(),
+            can_draft: first.provider.capabilities().draft,
+            uncommitted,
+            fallback,
+            repos,
+        })
+    }
+
+    /// `agent_pr_open` of an agent of several repositories: its branch pushed and its pull
+    /// request opened in each repository it changed, each description naming the others.
+    async fn pr_open_multi(
+        &self,
+        id: &str,
+        targets: Vec<(String, Target)>,
+        form: PrForm,
+    ) -> Result<PullRequest> {
+        let title = form.title.trim().to_string();
+        let names: Vec<String> = targets.iter().map(|(_, t)| t.remote.repo.full()).collect();
+        let mut opened: Vec<PullRequest> = Vec::new();
+        for (repo, t) in &targets {
+            let own = t.remote.repo.full();
+            let others: Vec<&String> = names.iter().filter(|n| **n != own).collect();
+            let mut body = form.body.trim().to_string();
+            if !others.is_empty() {
+                let list = others
+                    .iter()
+                    .map(|n| n.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                body.push_str(&tr_in!(
+                    self.lang().claude,
+                    "\n\nVa avec la branche {b} de {list} : à merger ensemble.",
+                    "\n\nGoes with the branch {b} of {list}: merge them together.",
+                    b = t.branch
+                ));
+            }
+            let step = async {
+                git::push_branch(&t.path, &t.branch).await?;
+                let draft = PullRequestDraft {
+                    title: title.clone(),
+                    body,
+                    head: t.branch.clone(),
+                    base: t.base.clone(),
+                    draft: form.draft && t.provider.capabilities().draft,
+                    ..Default::default()
+                };
+                t.client.create_pr(&t.remote.repo, &draft).await
+            };
+            match step.await {
+                Ok(mut pr) => {
+                    pr.repo = repo.clone();
+                    opened.push(pr);
+                }
+                Err(e) => {
+                    self.keep_prs(id, &opened, t.provider.request_word());
+                    return Err(e.context(crate::repos::label(repo)));
+                }
+            }
+        }
+        self.keep_prs(id, &opened, targets[0].1.provider.request_word());
+        Ok(opened.remove(0))
+    }
+
+    /// The pull requests just opened, kept on the agent.
+    fn keep_prs(&self, id: &str, opened: &[PullRequest], word: &str) {
+        let Ok(h) = self.agent(id) else { return };
+        {
+            let mut rt = h.lock();
+            for pr in opened {
+                rt.meta
+                    .prs
+                    .retain(|p| !(p.number == pr.number && p.repo == pr.repo));
+                rt.meta.prs.push(pr.clone());
+            }
+            sort_prs(&mut rt.meta.prs);
+            rt.meta.pr_word = Some(word.to_string());
+        }
+        self.pr_reads.lock().insert(id.to_string(), Instant::now());
+        self.emit_agent(&h);
+        self.request_save();
+    }
+
+    /// `agent_prs_refresh` of an agent of several repositories: each repository's.
+    async fn prs_refresh_multi(&self, id: &str, targets: Vec<(String, Target)>) -> Result<()> {
+        let word = targets[0].1.provider.request_word().to_string();
+        let mut prs = Vec::new();
+        for (repo, t) in &targets {
+            let found = t
+                .client
+                .pull_requests_of_branch(&t.remote.repo, &t.branch)
+                .await?;
+            prs.extend(own_prs(found).into_iter().map(|mut p| {
+                p.repo = repo.clone();
+                p
+            }));
+        }
+        sort_prs(&mut prs);
+        let h = self.agent(id)?;
+        let changed = {
+            let mut rt = h.lock();
+            let changed = rt.meta.prs != prs || rt.meta.pr_word.as_deref() != Some(&word);
+            rt.meta.prs = prs;
+            rt.meta.pr_word = Some(word);
+            changed
+        };
+        if changed {
+            self.emit_agent(&h);
+            self.request_save();
+        }
+        Ok(())
     }
 }

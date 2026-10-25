@@ -2,6 +2,7 @@
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { dictation } from '../lib/dictation.svelte';
   import { t } from '../lib/i18n';
+  import { deltaDetail } from '../lib/repos';
   import { menu } from '../lib/menu.svelte';
   import { IS_MAC, keyLabel } from '../lib/platform';
   import { projectMenu } from '../lib/project-rail';
@@ -65,7 +66,11 @@
         <span class="sw" aria-hidden="true"></span>
         <span class="name">{activeProject.name}</span>
         {#if activeProject.private}<PrivateMark />{/if}
-        {#if changes > 0}<span class="delta" use:tip={t('nav.titleBar.delta')}>Δ {changes}</span>{/if}
+        {#if changes > 0}<span
+            class="delta"
+            use:tip={app.git[activeProject.id]?.repos?.length ? deltaDetail(app.git[activeProject.id]) : t('nav.titleBar.delta')}
+            >Δ {changes}</span
+          >{/if}
         <span class="chev"><Icon name="down" size={14} /></span>
       </button>
     {/if}

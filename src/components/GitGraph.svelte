@@ -12,6 +12,7 @@
   import { syncInfo } from '../lib/git-sync.svelte';
   import { tip } from '../lib/tip';
   import Icon from './Icon.svelte';
+  import { isMulti, repoLabel, touchedRepos } from '../lib/repos';
 
   // The repository's history, every branch included, with the agent's branch highlighted. A commit's menu (right
   // click, menu key, Shift+F10) starts a branch there, switches to its branches, compares it, deletes its branches.
@@ -39,20 +40,48 @@
   const projectId = $derived(project.id);
   const agentId = $derived(agent?.id ?? null);
 
+  // Of several repositories (ESC-169): one repository's history at a time, the one the agent touched first by default.
+  const multi = $derived(isMulti(project));
+  let picked = $state<string | null>(null);
+  const repo = $derived.by(() => {
+    if (!multi) return null;
+    const repos = project.repos ?? [];
+    if (picked !== null && repos.includes(picked)) return picked;
+    return (agent ? touchedRepos(project, agent)[0] : undefined) ?? repos[0] ?? null;
+  });
+  let pickerButton = $state<HTMLButtonElement>();
+  function pickRepo() {
+    if (!pickerButton) return;
+    const repos = project.repos ?? [];
+    menu.showAt(pickerButton, [
+      { label: t('repos.history.of'), heading: true },
+      ...repos.map((r, i) => ({
+        label: repoLabel(r),
+        checked: r === repo,
+        key: i < 9 ? String(i + 1) : undefined,
+        detail: app.git[project.id]?.repos?.find((g) => g.repo === r)?.branch,
+        onClick: () => {
+          picked = r;
+          log = null;
+        },
+      })),
+    ]);
+  }
+
   $effect(() => {
     void app.gitTick;
-    const [pid, aid] = [projectId, agentId];
+    const [pid, aid, r] = [projectId, agentId, repo];
     clearTimeout(timer);
-    timer = setTimeout(() => load(pid, aid), first ? 0 : 150);
+    timer = setTimeout(() => load(pid, aid, r), first ? 0 : 150);
     first = false;
     return () => clearTimeout(timer);
   });
 
-  async function load(pid: string, aid: string | null) {
+  async function load(pid: string, aid: string | null, r: string | null) {
     const mine = ++seq;
     try {
       // The history is what the graph is for: the branches only serve the menu, and fail without taking it down.
-      const [result, all] = await Promise.all([api.gitLog(pid, aid), api.branchList(pid).catch(() => null)]);
+      const [result, all] = await Promise.all([api.gitLog(pid, aid, r), api.branchList(pid, r).catch(() => null)]);
       if (mine !== seq) return; // superseded by a newer request
       log = result;
       // A read that fails for a moment leaves the last list in place (the menu keeps its entries); one read for another project is no use.
@@ -90,8 +119,11 @@
   /** The colour of a lane: the trunk's grey, else one of the branches' colours. */
   const color = (lane: number) => (lane === trunk ? 'var(--lane-main)' : `var(--lane-${(lane % LANES) + 1})`);
   /** The folder's branch and how far it is from its remote, under the tabs. */
-  const sync = $derived(syncInfo(app.git[project.id]));
-  const folderBranch = $derived(app.git[project.id]?.branch ?? null);
+  const repoGit = $derived(repo === null ? null : (app.git[project.id]?.repos?.find((g) => g.repo === repo) ?? null));
+  const sync = $derived(
+    repoGit ? (repoGit.ahead || repoGit.behind ? { ahead: repoGit.ahead, behind: repoGit.behind } : null) : syncInfo(app.git[project.id]),
+  );
+  const folderBranch = $derived(repoGit ? repoGit.branch || null : (app.git[project.id]?.branch ?? null));
 
   // Shows the agent's branch once the history is first loaded.
   $effect(() => {
@@ -163,7 +195,7 @@
           label: t('branches.graph.createHere'),
           onClick: async () => {
             await afterMenu();
-            app.modal = { kind: 'newBranch', projectId: pid, start: c.hash };
+            app.modal = { kind: 'newBranch', projectId: pid, start: c.hash, repo: repo ?? undefined };
           },
         },
       ],
@@ -173,7 +205,7 @@
           label: t('branches.graph.switchTo', { branch: b.name }),
           disabled: !!why,
           title: why ?? undefined,
-          onClick: () => void switchBranch(pid, b.name),
+          onClick: () => void switchBranch(pid, b.name, false, undefined, repo),
         };
       }),
       others.map((b) => {
@@ -187,7 +219,7 @@
           title: why ?? undefined,
           onClick: async () => {
             await afterMenu();
-            deleteBranch(pid, b);
+            deleteBranch(pid, b, repo);
           },
         };
       }),
@@ -217,6 +249,7 @@
       paths: [],
       title: t('branches.graph.compareTitle', { from, to: shown }),
       refs: { from, to },
+      repo: repo ?? undefined,
     };
   }
 
@@ -236,13 +269,21 @@
       paths: [],
       title: `${c.hash.slice(0, 7)} · ${c.subject}`,
       commit: c.hash,
+      repo: repo ?? undefined,
     };
   }
 </script>
 
-<div class="side-top">
+<div class="side-top" class:multi>
+  {#if multi && repo !== null}
+    <button class="select repo" bind:this={pickerButton} aria-haspopup="menu" aria-label={t('repos.history.pick')} onclick={pickRepo}
+      ><b class="mono">{repoLabel(repo)}</b><Icon name="down" size={14} /></button
+    >
+  {/if}
   <div class="caption">
-    {t('git.graph.all')}{#if folderBranch}{' '}· <span class="mono">{folderBranch}</span>{/if}
+    {#if multi && repo !== null}{t('repos.history.caption', { repo: repoLabel(repo) })}{:else}{t(
+        'git.graph.all',
+      )}{/if}{#if folderBranch}{' '}· <span class="mono">{folderBranch}</span>{/if}
     {#if sync && (sync.behind || sync.ahead)}
       <span class="ab"
         ><span class="n"><Icon name="pull" size={11} /><span aria-hidden="true">{sync.behind}</span></span><span class="n"
@@ -295,6 +336,38 @@
 <style>
   .side-top {
     padding: 12px 14px 8px;
+  }
+  /* Of several repositories (ESC-169): the repository's menu before the caption. */
+  .side-top.multi {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .select.repo {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 8px 0 10px;
+    border: none;
+    border-radius: 7px;
+    background: rgba(var(--fg-rgb), 0.04);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+  }
+  .select.repo b {
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .select.repo:hover {
+    background: rgba(var(--fg-rgb), 0.08);
+  }
+  .side-top.multi .caption {
+    min-width: 0;
   }
   .caption {
     display: flex;

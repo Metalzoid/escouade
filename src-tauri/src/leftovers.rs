@@ -147,7 +147,9 @@ impl<R: Runtime> Core<R> {
         }
         let mut attempt = 1;
         let done = loop {
-            let removed = if keep_branch {
+            let removed = if wt.is_multi() {
+                crate::multiwt::remove(project, wt, keep_branch, git::REMOVE_RETRY_HELD).await
+            } else if keep_branch {
                 git::worktree_remove_dir(&project.path, &wt.path).await
             } else {
                 git::worktree_remove(&project.path, &wt.path, &wt.branch).await
@@ -209,6 +211,28 @@ impl<R: Runtime> Core<R> {
             return Cleaned::Nothing;
         }
         let shared_branch = others.iter().any(|o| o.branch == wt.branch);
+        // Of several repositories (ESC-169): each one's worktree judged apart.
+        if wt.is_multi() {
+            let keep = wt.existing || shared_branch;
+            let kept = self.clean_multi(&project, &wt, keep, ports, true).await;
+            return match kept {
+                None => {
+                    self.set_worktree_kept(id, None);
+                    Cleaned::Removed
+                }
+                Some((left, reason)) => {
+                    let _ = self.with_agent(id, |rt, fx| {
+                        if let Some(w) = rt.meta.worktree.as_mut() {
+                            w.repos.retain(|r| left.contains(&r.repo));
+                        }
+                        fx.save = true;
+                        Ok(())
+                    });
+                    self.set_worktree_kept(id, Some(reason.clone()));
+                    Cleaned::Kept(reason)
+                }
+            };
+        }
         let target = self.target_of(&project).await;
         let found = unsaved_work(&project.path, &wt, &target).await;
         if let Some(unsaved) = found.unsaved {
@@ -233,6 +257,58 @@ impl<R: Runtime> Core<R> {
                 Cleaned::Kept(reason)
             }
         }
+    }
+
+    /// The worktrees of an agent's folder of several repositories (ESC-169), each judged apart:
+    /// one that holds work stays, the others go, their branch too when its work is in its base
+    /// (unless `keep`). None when all went (the folder too, after the teardown); else the
+    /// repositories left, and why, in one sentence.
+    pub(crate) async fn clean_multi(
+        &self,
+        project: &Project,
+        wt: &Worktree,
+        keep: bool,
+        ports: Option<u16>,
+        teardown: bool,
+    ) -> Option<(Vec<String>, String)> {
+        let mut kept: Vec<(String, String)> = Vec::new();
+        let mut going = Vec::new();
+        for c in wt.checkouts() {
+            let repo_dir = crate::repos::join(&project.path, &c.repo);
+            let one = Worktree {
+                path: c.dir.clone(),
+                branch: wt.branch.clone(),
+                base_branch: c.base.clone(),
+                existing: wt.existing,
+                named_branch: wt.named_branch,
+                repos: Vec::new(),
+            };
+            let found = unsaved_work(&repo_dir, &one, &c.base).await;
+            match found.unsaved {
+                Some(u) => kept.push((c.repo.clone(), u.text(i18n::ui()))),
+                None => going.push((c.repo.clone(), keep || !found.merged)),
+            }
+        }
+        if kept.is_empty() && teardown {
+            if let Some(problem) = self.teardown_worktree(project, wt, ports).await {
+                log::warn!("{}: {problem}", wt.path);
+            }
+        }
+        for (repo, keep_branch) in &going {
+            if let Err(e) = crate::multiwt::remove_one(project, wt, repo, *keep_branch).await {
+                kept.push((repo.clone(), not_removed(i18n::ui(), &e)));
+            }
+        }
+        if kept.is_empty() {
+            let _ = std::fs::remove_dir_all(&wt.path);
+            return None;
+        }
+        let reason = kept
+            .iter()
+            .map(|(r, why)| format!("{} : {why}", crate::repos::label(r)))
+            .collect::<Vec<_>>()
+            .join(" ; ");
+        Some((kept.into_iter().map(|(r, _)| r).collect(), reason))
     }
 
     /// Says on the agent's card why its worktree was kept, or nothing any more.
@@ -276,7 +352,7 @@ impl<R: Runtime> Core<R> {
         self: &Arc<Self>,
         project_id: &str,
     ) -> Result<LeftoverReport> {
-        let project = self.project(project_id)?;
+        self.project(project_id)?;
         let ids: Vec<(String, String)> = self
             .project_agents(project_id)
             .iter()
@@ -298,7 +374,7 @@ impl<R: Runtime> Core<R> {
                 Cleaned::Nothing => {}
             }
         }
-        if let Some(repo) = self.toplevel(&project.path).await {
+        for repo in self.project_roots_of(project_id).await {
             let _ = git::run(&repo, &["worktree", "prune"]).await;
         }
         self.git.refresh(project_id);

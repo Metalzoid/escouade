@@ -504,7 +504,8 @@ impl<R: Runtime> Core<R> {
         // Refused here, before a file is moved out of the drafts, when the key will be refused for
         // want of a branch (below, under the lock): a copy moved for a ticket that is not made is
         // gone, and the form's chip would point at nothing when the user tries again.
-        if project.board.target.is_empty() && current.is_empty() {
+        // Of several repositories (ESC-169): each one's branch, none for the project.
+        if project.board.target.is_empty() && current.is_empty() && !project.is_multi() {
             bail!(board::no_branch(i18n::ui()));
         }
         // Written before a key is used up too (a disk that refuses them takes none), and off the
@@ -539,7 +540,7 @@ impl<R: Runtime> Core<R> {
                 .iter_mut()
                 .find(|p| p.id == project_id)
                 .ok_or_else(project_not_found)?;
-            if p.board.target.is_empty() {
+            if p.board.target.is_empty() && !p.is_multi() {
                 if current.is_empty() {
                     bail!(board::no_branch(i18n::ui()));
                 }
@@ -638,7 +639,8 @@ impl<R: Runtime> Core<R> {
     /// taken by then, or be the folder's: the start refuses it, as an agent made on it is.
     async fn ticket_branch(&self, project: &Project, branch: &str) -> Result<String> {
         let branch = branch_name(branch)?;
-        if branch.is_empty() {
+        // Of several repositories (ESC-169): taken up where it exists, made elsewhere.
+        if branch.is_empty() || project.is_multi() {
             return Ok(branch);
         }
         let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
@@ -1483,9 +1485,14 @@ impl<R: Runtime> Core<R> {
             // of the board, or the project's next git refresh (a first commit, the branch made
             // again) looks again.
             let target = self.target_of(&p).await;
-            let exists = !target.is_empty() && git::branch_exists(&p.path, &target).await;
-            let unborn = !exists && git::head_branch(&p.path).await == target;
-            let issue = board::target_issue(i18n::ui(), &target, exists, unborn);
+            // Of several repositories (ESC-169): each starts from its own (its worktree says why).
+            let issue = if p.is_multi() {
+                None
+            } else {
+                let exists = !target.is_empty() && git::branch_exists(&p.path, &target).await;
+                let unborn = !exists && git::head_branch(&p.path).await == target;
+                board::target_issue(i18n::ui(), &target, exists, unborn)
+            };
             if self.set_board_issue(&p.id, issue.clone()) {
                 if let Some(why) = &issue {
                     log::info!("board of {}: {why}", p.name);
@@ -2426,7 +2433,7 @@ impl<R: Runtime> Core<R> {
 
     // ---------- validation ----------
 
-    fn set_step(&self, id: &str, step: &str) {
+    pub(crate) fn set_step(&self, id: &str, step: &str) {
         let _ = self.edit_ticket(id, |t| {
             if t.column == Column::Review {
                 t.step = Some(step.to_string());
@@ -2438,7 +2445,7 @@ impl<R: Runtime> Core<R> {
     /// The ticket is still being validated with this agent (archiving or deleting the agent
     /// meanwhile sent it back to do: nothing of its validation goes on), and the agent is not at
     /// work (a message sent during the tests: its files may be half written).
-    fn still_validating(&self, id: &str, agent_id: &str) -> Result<()> {
+    pub(crate) fn still_validating(&self, id: &str, agent_id: &str) -> Result<()> {
         if !validating(&self.ticket(id)?, agent_id) {
             bail!(Refusal::Changed);
         }
@@ -2596,81 +2603,91 @@ impl<R: Runtime> Core<R> {
         // The files copied from the project into the worktree (`.env`…), the list the copy took:
         // never committed, merged or pushed. Git ignores them, so only an agent that forced one in
         // could; checked all the same.
-        let copied = testlaunch::matching_ignored(&project.path, &project.worktree_copy).await;
-        self.still_validating(&t.id, &agent_id)?;
-        let mut message = None;
-        // The branch brings nothing (no change, or only changes taken back): the ticket is done
-        // all the same, with nothing to merge, propose or push.
-        let mut nothing = false;
-        if s.action != "keep" {
-            if !git::branch_exists(&wt.path, &target).await {
-                bail!(tr!(
-                    "La branche cible {target} n'existe pas.",
-                    "The target branch {target} doesn’t exist."
-                ));
+        let (outcome, nothing) = if wt.is_multi() {
+            // Of several repositories (ESC-169): each one's, checked first, all or nothing.
+            match self.validate_repos(t, &s, &project, &wt, &agent_id).await? {
+                Some(done) => done,
+                // Stopped on a conflict, handled as the settings say.
+                None => return Ok(()),
             }
-            // Commit what is left in the worktree.
-            self.set_step(&t.id, "Commit…");
-            let unmerged = git::unmerged(&wt.path).await;
-            if !unmerged.is_empty() {
-                bail!(tr!(
-                    "Conflits non résolus dans le worktree sur : {files}",
-                    "Unresolved conflicts in the worktree on: {files}",
-                    files = unmerged.join(", ")
-                ));
-            }
-            // A commit elsewhere (another branch, a detached HEAD) would never reach the target.
-            if git::current_branch(&wt.path).await != wt.branch {
-                bail!(tr!(
-                    "Le worktree n'est plus sur la branche {b}",
-                    "The worktree is no longer on the branch {b}",
-                    b = wt.branch
-                ));
-            }
+        } else {
+            let copied = testlaunch::matching_ignored(&project.path, &project.worktree_copy).await;
             self.still_validating(&t.id, &agent_id)?;
-            let keep_out = not_committed(&wt.path, &copied).await;
-            if git::stage_all(&wt.path, &keep_out).await? {
-                let m = self.commit_message(t, &s, &wt.path, &target).await;
-                git::commit_staged(&wt.path, &m).await?;
-                message = Some(m);
-            }
-            // One the agent committed itself goes no further than its branch: in its tree, or
-            // only in its history (taken out again since, which a merge commit or a rebase would
-            // bring along all the same).
-            let in_tree = git::changed_in(&wt.path, &target, &wt.branch, &copied).await?;
-            let in_history = git::touched_by(&wt.path, &target, &wt.branch, &copied).await?;
-            if let Some(refusal) = board::copied_refusal(i18n::ui(), &in_tree, &in_history) {
-                bail!(refusal);
-            }
-            nothing = git::ahead_of(&wt.path, &target, &wt.branch).await? == 0;
-            self.still_validating(&t.id, &agent_id)?;
-        }
-        // Written in the interface's language (the card) and in that of the texts for Claude (the
-        // comment published for the team).
-        let lang = self.lang().claude;
-        let outcome: board::Outcome = match s.action.as_str() {
-            _ if nothing => board::Outcome::of(lang, board::nothing_outcome),
-            "merge" => {
-                self.set_step(&t.id, "Merge…");
-                match self
-                    .merge_ticket(t, &s, &project, &wt, &target, message)
-                    .await?
-                {
-                    Some(done) => done,
-                    // Stopped on a conflict, handled as the settings say.
-                    None => return Ok(()),
+            let mut message = None;
+            // The branch brings nothing (no change, or only changes taken back): the ticket is done
+            // all the same, with nothing to merge, propose or push.
+            let mut nothing = false;
+            if s.action != "keep" {
+                if !git::branch_exists(&wt.path, &target).await {
+                    bail!(tr!(
+                        "La branche cible {target} n'existe pas.",
+                        "The target branch {target} doesn’t exist."
+                    ));
                 }
+                // Commit what is left in the worktree.
+                self.set_step(&t.id, "Commit…");
+                let unmerged = git::unmerged(&wt.path).await;
+                if !unmerged.is_empty() {
+                    bail!(tr!(
+                        "Conflits non résolus dans le worktree sur : {files}",
+                        "Unresolved conflicts in the worktree on: {files}",
+                        files = unmerged.join(", ")
+                    ));
+                }
+                // A commit elsewhere (another branch, a detached HEAD) would never reach the target.
+                if git::current_branch(&wt.path).await != wt.branch {
+                    bail!(tr!(
+                        "Le worktree n'est plus sur la branche {b}",
+                        "The worktree is no longer on the branch {b}",
+                        b = wt.branch
+                    ));
+                }
+                self.still_validating(&t.id, &agent_id)?;
+                let keep_out = not_committed(&wt.path, &copied).await;
+                if git::stage_all(&wt.path, &keep_out).await? {
+                    let m = self.commit_message(t, &s, &wt.path, &target).await;
+                    git::commit_staged(&wt.path, &m).await?;
+                    message = Some(m);
+                }
+                // One the agent committed itself goes no further than its branch: in its tree, or
+                // only in its history (taken out again since, which a merge commit or a rebase would
+                // bring along all the same).
+                let in_tree = git::changed_in(&wt.path, &target, &wt.branch, &copied).await?;
+                let in_history = git::touched_by(&wt.path, &target, &wt.branch, &copied).await?;
+                if let Some(refusal) = board::copied_refusal(i18n::ui(), &in_tree, &in_history) {
+                    bail!(refusal);
+                }
+                nothing = git::ahead_of(&wt.path, &target, &wt.branch).await? == 0;
+                self.still_validating(&t.id, &agent_id)?;
             }
-            "pr" => {
-                self.set_step(&t.id, "Push…");
-                self.open_pr(t, &s, &wt, &target, message).await?
-            }
-            "push" => {
-                self.set_step(&t.id, "Push…");
-                git::push_branch(&wt.path, &wt.branch).await?;
-                board::Outcome::of(lang, |l| board::pushed_outcome(l, &wt.branch))
-            }
-            _ => board::Outcome::of(lang, board::kept_outcome),
+            // Written in the interface's language (the card) and in that of the texts for Claude (the
+            // comment published for the team).
+            let lang = self.lang().claude;
+            let outcome: board::Outcome = match s.action.as_str() {
+                _ if nothing => board::Outcome::of(lang, board::nothing_outcome),
+                "merge" => {
+                    self.set_step(&t.id, "Merge…");
+                    match self
+                        .merge_ticket(t, &s, &project, &wt, &target, message)
+                        .await?
+                    {
+                        Some(done) => done,
+                        // Stopped on a conflict, handled as the settings say.
+                        None => return Ok(()),
+                    }
+                }
+                "pr" => {
+                    self.set_step(&t.id, "Push…");
+                    self.open_pr(t, &s, &wt, &target, message).await?
+                }
+                "push" => {
+                    self.set_step(&t.id, "Push…");
+                    git::push_branch(&wt.path, &wt.branch).await?;
+                    board::Outcome::of(lang, |l| board::pushed_outcome(l, &wt.branch))
+                }
+                _ => board::Outcome::of(lang, board::kept_outcome),
+            };
+            (outcome, nothing)
         };
         // What every agent of the ticket cost, archived ones included (a ticket sent back and taken
         // over has several), as « À tester » and the statistics add it up; at least its own.
@@ -2715,6 +2732,17 @@ impl<R: Runtime> Core<R> {
                 self.remove_worktree_of(t, &project, &wt, proc, ports, keep_branch)
                     .await;
             }
+        } else if s.cleanup && wt.is_multi() {
+            // Left as it is, of several repositories: each worktree that holds nothing goes.
+            if let Err(e) = self.archive_agent(&agent_id, true).await {
+                log::warn!("ticket {}: its agent was not archived: {e:#}", t.key);
+            }
+            if let crate::leftovers::Cleaned::Kept(why) = self
+                .clean_agent_worktree(&agent_id, proc, meta.port_base)
+                .await
+            {
+                self.append_outcome(&t.id, |_| format!(" · {why}"));
+            }
         } else if s.cleanup {
             // Left as it is (ESC-143): its worktree goes too, with its agent archived, when it
             // holds nothing that would be lost; else both stay, and the outcome says why.
@@ -2741,7 +2769,7 @@ impl<R: Runtime> Core<R> {
 
     /// Haiku's commit message in the Conventional Commits form, checked, else
     /// `feat: <title> [<key>]`; without "Message de commit généré", `<key> <title>`.
-    async fn commit_message(
+    pub(crate) async fn commit_message(
         self: &Arc<Self>,
         t: &Ticket,
         s: &BoardSettings,
@@ -2786,6 +2814,23 @@ impl<R: Runtime> Core<R> {
         message: Option<String>,
     ) -> Result<Option<board::Outcome>> {
         let repo = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
+        self.merge_ticket_in(t, s, project, wt, target, message, &repo)
+            .await
+    }
+
+    /// `merge_ticket` into the repository `repo` (one of several, ESC-169), `wt` its worktree.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) async fn merge_ticket_in(
+        self: &Arc<Self>,
+        t: &Ticket,
+        s: &BoardSettings,
+        project: &Project,
+        wt: &Worktree,
+        target: &str,
+        message: Option<String>,
+        repo: &str,
+    ) -> Result<Option<board::Outcome>> {
+        let repo = repo.to_string();
         let message = match message {
             Some(m) => m,
             None => self.commit_message(t, s, &wt.path, target).await,
@@ -2926,7 +2971,7 @@ impl<R: Runtime> Core<R> {
 
     /// Pushes the ticket's branch, then opens its PR with `gh` on GitHub; without `gh` (or when it
     /// fails), GitHub's page to finish it opens in the browser; another host: pushed only.
-    async fn open_pr(
+    pub(crate) async fn open_pr(
         self: &Arc<Self>,
         t: &Ticket,
         s: &BoardSettings,
@@ -2978,7 +3023,7 @@ impl<R: Runtime> Core<R> {
 
     /// A merge stopped on conflicts (undone): blocked with "L'agent résout" / "Annuler" ("ask"),
     /// handed to the agent ("agent"), or blocked with the files ("abort").
-    async fn on_conflict(
+    pub(crate) async fn on_conflict(
         self: &Arc<Self>,
         t: &Ticket,
         s: &BoardSettings,
@@ -3026,7 +3071,31 @@ impl<R: Runtime> Core<R> {
         // Nothing goes into the worktree of an agent archived meanwhile, or at work.
         self.still_validating(id, &agent_id)?;
         let rebase = project.board.strategy == "rebase";
-        let text = if rebase {
+        let text = if wt.is_multi() {
+            // Of several repositories (ESC-169): each one's target into its worktree.
+            let mut files = Vec::new();
+            if !rebase {
+                for c in wt.checkouts() {
+                    let base = if c.base.is_empty() {
+                        target.clone()
+                    } else {
+                        c.base.clone()
+                    };
+                    if let Err(e) = git::run_hooks(&c.dir, &["merge", "--no-edit", &base]).await {
+                        let unmerged = git::unmerged(&c.dir).await;
+                        if unmerged.is_empty() {
+                            return Err(e.context(crate::repos::label(&c.repo)));
+                        }
+                        files.extend(unmerged.iter().map(|f| crate::repos::prefixed(&c.repo, f)));
+                    }
+                }
+            }
+            if rebase {
+                board::rebase_message(lang, &target)
+            } else {
+                board::conflict_message(lang, &target, &files)
+            }
+        } else if rebase {
             board::rebase_message(lang, &target)
         } else {
             match git::run_hooks(&wt.path, &["merge", "--no-edit", &target]).await {
@@ -3054,7 +3123,9 @@ impl<R: Runtime> Core<R> {
         if let Err(e) = handed {
             // It left meanwhile (its agent archived): its worktree is not left mid-merge.
             if !rebase {
-                let _ = git::run(&wt.path, &["merge", "--abort"]).await;
+                for c in wt.checkouts() {
+                    let _ = git::run(&c.dir, &["merge", "--abort"]).await;
+                }
             }
             return Err(e);
         }
@@ -3499,7 +3570,7 @@ async fn gh_pr_create(gh: &Path, cwd: &str, pr: &PullRequest<'_>) -> Result<Stri
 /// Of the files copied from the project, those the branch checked out in `cwd` has not
 /// committed: left out of the validation's commit, staged or not (unstaging one it has would
 /// commit its deletion; the branch's check refuses those).
-async fn not_committed(cwd: &str, copied: &[String]) -> Vec<String> {
+pub(crate) async fn not_committed(cwd: &str, copied: &[String]) -> Vec<String> {
     let mut out = Vec::new();
     for f in copied {
         if git::run(cwd, &["cat-file", "-e", &format!("HEAD:{f}")])

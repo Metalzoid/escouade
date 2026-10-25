@@ -25,6 +25,7 @@
   import Switch from './Switch.svelte';
   import WorktreeBaseField from './WorktreeBaseField.svelte';
   import { tip } from '../../lib/tip';
+  import { repoLabel } from '../../lib/repos';
   import { DEFAULT_WORKTREES, worktreesRoot, type WorktreesProblem } from '../../lib/worktrees';
 
   // A project's own settings: who it is, its worktrees and what runs in them, its launch commands (its draft: the
@@ -32,6 +33,16 @@
   let { project }: { project: Project } = $props();
 
   const draft = $derived(settingsForm.project!);
+  /** Its repositories as the backend last found them (ESC-169), whatever the draft says. */
+  const live = $derived(app.projects.find((p) => p.id === project.id) ?? project);
+  const liveRepos = $derived(live.repos ?? []);
+  const goneRepos = $derived(live.reposGone ?? []);
+  let rescanning = $state(false);
+  async function rescan() {
+    rescanning = true;
+    await app.run(api.refreshRepos(project.id));
+    rescanning = false;
+  }
 
   /** « Nettoyer »: the worktrees its archived agents left, while it runs, then what it did (ESC-143). */
   let cleaning = $state(false);
@@ -388,6 +399,33 @@
     </Row>
   {/if}
 </Group>
+
+{#if liveRepos.length || goneRepos.length}
+  <!-- A project of several repositories (ESC-169): those found, those gone, where its .escouade.yml is. -->
+  <Group title={t('repos.settings.title')} anchor="repos">
+    <Row label={t('repos.settings.count', { count: liveRepos.length })} desc={t('repos.settings.hint')}>
+      <button class="btn" disabled={rescanning} onclick={rescan}><Icon name="restart" size={14} />{t('repos.settings.rescan')}</button>
+    </Row>
+    <ul class="repo-list">
+      {#each liveRepos.filter((r) => !goneRepos.includes(r)) as r (r)}
+        {@const g = app.git[project.id]?.repos?.find((x) => x.repo === r)}
+        <li class="repo-row">
+          <Icon name="branch" size={14} /><span class="rn">{repoLabel(r)}</span><span class="rb">{g?.branch ?? ''}</span>
+        </li>
+      {/each}
+      {#each goneRepos as r (r)}
+        <li class="repo-row gone">
+          <Icon name="shield" size={14} /><span class="rn">{repoLabel(r)}</span><span class="rb">{t('repos.settings.gone')}</span>
+          <button class="link" onclick={() => app.run(api.forgetRepo(project.id, r))}
+            >{t('repos.settings.forget', { repo: repoLabel(r) })}</button
+          >
+          <span class="why">{t('repos.settings.goneHint')}</span>
+        </li>
+      {/each}
+    </ul>
+    {#if !liveRepos.includes('')}<p class="repo-note">{t('repos.settings.yml')}</p>{/if}
+  </Group>
+{/if}
 
 <Group title="Git">
   <Row label={t('settings.project.worktreePerAgent')} desc={t('settings.project.worktreePerAgentDesc')} shared="worktrees.per_agent">
@@ -989,5 +1027,58 @@
     .fence .how {
       grid-column: 1 / -1;
     }
+  }
+  /* The repositories of a project of several (ESC-169), one line each. */
+  .repo-list {
+    list-style: none;
+    margin: 4px 0 10px;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+  }
+  .repo-row {
+    display: grid;
+    grid-template-columns: 16px auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 4px 10px;
+    padding: 8px 12px;
+    border-radius: 9px;
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+  .repo-row .rn {
+    color: var(--text);
+    font: 600 12px var(--mono);
+  }
+  .repo-row .rb {
+    min-width: 0;
+    overflow: hidden;
+    font: 11px var(--mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .repo-row.gone {
+    background: oklch(from var(--del) l c h / 0.06);
+    box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.35);
+  }
+  .repo-row.gone :global(svg),
+  .repo-row.gone .rb {
+    color: var(--del);
+  }
+  .repo-row .link {
+    color: var(--p-ink);
+    font-size: 12px;
+  }
+  .repo-row .why {
+    grid-column: 2 / -1;
+    color: var(--soft);
+    font-size: 12px;
+  }
+  .repo-note {
+    margin: 0 0 6px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
   }
 </style>

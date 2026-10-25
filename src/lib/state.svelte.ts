@@ -98,6 +98,8 @@ export type Modal =
       commit?: string;
       refs?: { from: string; to: string };
       wholeProject?: boolean;
+      /** The repository `commit` and `refs` are of, in a project of several (ESC-169). */
+      repo?: string;
     }
   | {
       kind: 'confirm';
@@ -135,13 +137,15 @@ export type Modal =
   | { kind: 'commit'; projectId: string; agentId: string | null; resume?: CommitDraft }
   /** « Ouvrir une PR » on an ordinary agent's branch (ESC-64): its title and description proposed, then read and edited. */
   | { kind: 'pullRequest'; agentId: string }
+  /** « Merger… » of an agent of several repositories (ESC-169): each repository checked, all or nothing. */
+  | { kind: 'mergeRepos'; agentId: string }
   /**
    * « Nouvelle branche » on a project. `start`: where it starts (a branch, or the commit the graph gave), the current
    * branch by default; `resume`: what had been written, back from the question of the stash.
    */
-  | { kind: 'newBranch'; projectId: string; start?: string; resume?: NewBranchDraft }
+  | { kind: 'newBranch'; projectId: string; start?: string; resume?: NewBranchDraft; repo?: string }
   /** « Branches mergées » : the local branches already in the project's base, to delete together. */
-  | { kind: 'mergedBranches'; projectId: string }
+  | { kind: 'mergedBranches'; projectId: string; repo?: string }
   /**
    * The form of a ticket, new or (`ticket`) edited, in a large window. `onSubmit` saves it and tells whether it did (the
    * window closes then, else it stays with what was typed); `resume`: what had been typed, back from a dialog that took

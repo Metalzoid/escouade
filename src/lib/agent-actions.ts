@@ -45,6 +45,11 @@ function branchInTheWay(error: unknown): string | null {
 export function mergeAgent(agent: Agent) {
   if (!agent.worktree) return;
   const wt = agent.worktree;
+  // Of several repositories (ESC-169): each one checked in its window, all or nothing.
+  if (wt.repos?.length) {
+    app.modal = { kind: 'mergeRepos', agentId: agent.id };
+    return;
+  }
   const merge = async (squash: boolean, switchToBase: boolean) => {
     try {
       const out = await api.mergeAgent(agent.id, squash, switchToBase);

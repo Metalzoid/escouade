@@ -2,6 +2,7 @@
   import { keyLabel } from '../lib/platform';
   import { onMount, tick, untrack } from 'svelte';
   import { t } from '../lib/i18n';
+  import { isMulti, repoLabel, touchedRepos } from '../lib/repos';
   import Rich from '../lib/i18n/Rich.svelte';
   import { api } from '../lib/ipc';
   import { withoutPassage } from '../lib/conversation';
@@ -132,11 +133,17 @@
   // Its worktree waits for its first message (ESC-156): on no branch yet, not on the project's folder's.
   // Without one, the worktree it went into by itself (ESC-161), else the project's folder's.
   const branch = $derived(ownBranch(agent) ?? (agent.worktreePending ? '' : (app.git[project.id]?.branch ?? '')));
+  /** Of several repositories (ESC-169): those the agent changed, after its branch (« · api, front »). */
+  const changedRepos = $derived(isMulti(project) ? touchedRepos(project, agent).map(repoLabel) : []);
   const files = $derived(app.git[project.id]?.agents[agent.id] ?? 0);
   // Its pull requests (ESC-64): read when it is shown, then every minute while it is (the backend asks its host at most
   // every 20 s, and no more once they are merged).
   const prs = $derived(cardPrs(agent));
   const word = $derived(prWord(agent));
+  /** « Ouvrir 2 PR »: one per repository changed. */
+  const openPrLabel = $derived(
+    changedRepos.length > 1 ? t('repos.pr.button', { count: changedRepos.length, word }) : t('prs.openButton', { word }),
+  );
   const agentId = $derived(agent.id);
   $effect(() => {
     const id = agentId;
@@ -595,7 +602,10 @@
       </div>
       <div class="crumbs">
         <EngineMark engine={agent.engine} full />
-        <span class="proj-name">{project.name}</span><span aria-hidden="true">/</span><span class="mono branch">{branch || '—'}</span>
+        <span class="proj-name">{project.name}</span><span aria-hidden="true">/</span><span class="mono branch">{branch || '—'}</span
+        >{#if changedRepos.length}<span class="repos" use:tip={t('repos.card.changed', { repos: changedRepos.join(', ') })}
+            >· {changedRepos.join(', ')}</span
+          >{/if}
         <!-- Its pull requests, each opening in the browser (ESC-64), beside its branch (choice 26). -->
         {#each prs as p (p.number)}
           <button
@@ -603,7 +613,7 @@
             aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
             use:tip={{ text: prTip(word, p), aria: false }}
             data-pr={p.number}
-            onclick={() => openPr(p)}><Icon name={prIcon(p)} size={12} />#{p.number}</button
+            onclick={() => openPr(p)}><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
           >
         {/each}
         <!-- Codex's sandbox, which its modes set (but Bypass, which has none): said where it matters. -->
@@ -667,11 +677,11 @@
       {#if prFirst}
         <button
           class="btn openpr"
-          aria-label={t('prs.openButton', { word })}
+          aria-label={openPrLabel}
           use:tip={t('prs.openHint', { word, branch: ownBranch(agent) ?? '' })}
           onclick={() => askOpenPr(agent)}
         >
-          <Icon name="pr" size={14} /><span class="lbl">{t('prs.openButton', { word })}</span>
+          <Icon name="pr" size={14} /><span class="lbl">{openPrLabel}</span>
         </button>
       {:else if agent.recipe || agent.isola}
         {#if canTest(agent)}
@@ -1011,6 +1021,16 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  /* The repositories changed, after the branch: the last to go when the header folds (ESC-169). */
+  .crumbs .repos {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   /* A pull request's number beside the branch: the icon of its state coloured by what to look at first (ESC-64). */
   .prnum {

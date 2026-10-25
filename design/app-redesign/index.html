@@ -7173,6 +7173,228 @@
           left: 150px;
         }
       }
+
+      /* A project of several git repositories (ESC-169): a group per repository wherever git speaks. */
+      .repo-h {
+        display: grid;
+        grid-template-columns: 14px auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: 30px;
+        margin-top: 4px;
+        padding: 0 8px;
+        border-radius: 7px;
+        color: var(--soft);
+        font-size: 12px;
+        text-align: left;
+      }
+      .repo-h:hover {
+        background: var(--hover);
+      }
+      .repo-h > svg {
+        color: var(--muted);
+        transition: transform 0.2s var(--ease);
+      }
+      .repo-h[aria-expanded='false'] > svg {
+        transform: rotate(-90deg);
+      }
+      .repo-h .rn {
+        color: var(--text);
+        font: 600 12px var(--mono);
+      }
+      .repo-h .rb,
+      .rrow .rb,
+      .rbadge {
+        overflow: hidden;
+        min-width: 0;
+        color: var(--muted);
+        font: 11px var(--mono);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .repo-h .cnt,
+      .rrow .cnt {
+        display: inline-flex;
+        gap: 6px;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .files .file.in {
+        padding-left: 30px;
+      }
+      .repo-quiet {
+        padding: 10px 16px 4px;
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .repo-quiet .mono {
+        color: var(--soft);
+        font-size: 11px;
+      }
+      .rlist {
+        display: grid;
+        gap: 6px;
+      }
+      .rrow {
+        display: grid;
+        grid-template-columns: 16px minmax(72px, auto) minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 4px 10px;
+        padding: 9px 12px;
+        border-radius: 9px;
+        box-shadow: inset 0 0 0 1px var(--line);
+        font-size: 12.5px;
+      }
+      .rrow > svg {
+        color: var(--muted);
+      }
+      .rrow .rn {
+        color: var(--text);
+        font: 600 12px var(--mono);
+      }
+      .rrow .why {
+        grid-column: 2 / -1;
+        color: var(--soft);
+        font-size: 12px;
+      }
+      .rrow.ok > svg {
+        color: var(--add);
+      }
+      .rrow.bad {
+        background: oklch(from var(--del) l c h / 0.06);
+        box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.35);
+      }
+      .rrow.bad > svg {
+        color: var(--del);
+      }
+      .rrow.idle {
+        color: var(--muted);
+        box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.05);
+      }
+      .rrow.idle .rn {
+        color: var(--muted);
+      }
+      .rrow.busy > svg {
+        color: var(--run);
+      }
+      .rrow .st {
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .rrow.bad .st {
+        color: var(--del);
+      }
+      .rmsg {
+        display: grid;
+        gap: 6px;
+        padding: 10px 12px 12px;
+        border-radius: 10px;
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .rmsg .rhead {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .rmsg .rhead .rn {
+        color: var(--text);
+        font: 600 12px var(--mono);
+      }
+      .rmsg .ta {
+        min-height: 0;
+      }
+      .rmsg .ta.wait {
+        color: var(--muted);
+      }
+      .repo-chips {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .repo-chips .chip-sm {
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+      .repo-chips .chip-sm.dim {
+        color: var(--muted);
+      }
+      .h-repos {
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 11.5px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .card:has(.refuse) .row-btns {
+        flex-wrap: wrap;
+      }
+      .card .repos-line {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 11.5px;
+        white-space: nowrap;
+      }
+      .card .repos-line .mono {
+        color: var(--soft);
+        font-size: 11px;
+      }
+      .card .refuse {
+        display: grid;
+        grid-template-columns: 14px minmax(0, 1fr);
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: oklch(from var(--del) l c h / 0.06);
+        box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.32);
+        color: var(--soft);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .card .refuse > svg {
+        margin-top: 1px;
+        color: var(--del);
+      }
+      .menu .mi .rbadge {
+        margin-left: auto;
+      }
+      .menu .mi .ab {
+        color: var(--muted);
+        font-size: 11.5px;
+        font-variant-numeric: tabular-nums;
+      }
+      .menu .mi.bad .d {
+        color: var(--del);
+      }
+      .menu-note {
+        padding: 2px 9px 7px;
+        color: var(--muted);
+        font-size: 11.5px;
+        line-height: 1.4;
+      }
+      .node .rbadge {
+        margin-left: 8px;
+      }
+      .node.repo {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .repo-pop {
+        position: fixed;
+        right: 140px;
+        bottom: 38px;
+        min-width: 340px;
+      }
+      .repo-sel {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
     </style>
   </head>
   <body>
@@ -9780,6 +10002,151 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
       <span class="row"><svg class="i s14"><use href="#i-agents" /></svg>2 agents pilotés au travail : dem-5-export-csv-des-factures, dem-6-limiter-les-tentatives</span>
       <span class="row"><svg class="i s14"><use href="#i-clock" /></svg>Claude Code le relance à 15:30</span>
     </div>
+    <!-- ESC-169: a project whose folder holds several git repositories (front, api, infra, docs). -->
+    <template id="tpl-rfiles">
+      <div class="side-top">
+        <div class="seg small" role="tablist" aria-label="Portée">
+          <button role="tab" aria-selected="true">Cet agent</button>
+          <button role="tab" aria-selected="false">Tout le projet</button>
+        </div>
+        <div class="caption">Dossier <span class="mono">.claude/worktrees/pagination-users</span> · un worktree de chacun des 4 dépôts</div>
+      </div>
+      <div class="files">
+        <button class="repo-h" aria-expanded="true"><svg class="i s14"><use href="#i-down" /></svg><span class="rn">api</span><span class="rb">escouade/pagination-users</span><span class="cnt"><span class="add">+70</span><span class="del">−5</span></span></button>
+        <button class="file in" aria-current="true"><span class="letter m" aria-label="Modifié">M</span><span class="fn"><b>users.ts</b><span>src/routes</span></span><span class="cnt"><span class="add">+29</span><span class="del">−3</span></span></button>
+        <button class="file in"><span class="letter a" aria-label="Ajouté">A</span><span class="fn"><b>paginate.ts</b><span>src/db</span></span><span class="cnt"><span class="add">+41</span><span class="del">−2</span></span></button>
+        <button class="repo-h" aria-expanded="true"><svg class="i s14"><use href="#i-down" /></svg><span class="rn">front</span><span class="rb">escouade/pagination-users</span><span class="cnt"><span class="add">+37</span><span class="del">−2</span></span></button>
+        <button class="file in"><span class="letter m" aria-label="Modifié">M</span><span class="fn"><b>UserList.svelte</b><span>src/users</span></span><span class="cnt"><span class="add">+37</span><span class="del">−2</span></span></button>
+        <p class="repo-quiet">Sans changement : <span class="mono">infra</span>, <span class="mono">docs</span></p>
+      </div>
+    </template>
+    <template id="tpl-rfiles-two">
+      <div class="side-top">
+        <div class="seg small" role="tablist" aria-label="Portée">
+          <button role="tab" aria-selected="false">Cet agent</button>
+          <button role="tab" aria-selected="true">Tout le projet</button>
+        </div>
+        <div class="caption">Dossier du projet · 2 dépôts, sur leurs branches</div>
+      </div>
+      <div class="files">
+        <button class="repo-h" aria-expanded="true"><svg class="i s14"><use href="#i-down" /></svg><span class="rn">app</span><span class="rb">main</span><span class="cnt"><span class="add">+12</span><span class="del">−4</span></span></button>
+        <button class="file in" aria-current="true"><span class="letter m" aria-label="Modifié">M</span><span class="fn"><b>Login.tsx</b><span>src/screens</span></span><span class="cnt"><span class="add">+12</span><span class="del">−4</span></span></button>
+        <button class="repo-h" aria-expanded="false"><svg class="i s14"><use href="#i-down" /></svg><span class="rn">server</span><span class="rb">develop</span><span class="cnt"><span class="add">+3</span><span class="del">−0</span></span></button>
+      </div>
+    </template>
+
+    <!-- The branches of the repositories, from the status bar: each one's branch, then its own branch picker. -->
+    <div class="menu repo-pop" id="repo-pop" role="menu" aria-label="Branches des dépôts" hidden>
+      <div class="menu-h split"><span>Branches des 4 dépôts</span><span class="d">↓3 ↑1 en tout</span></div>
+      <button class="mi no-mark kb" role="menuitem"><svg class="i s14 ic"><use href="#i-branch" /></svg><span class="ml"><b class="mono">api</b><span class="d mono">main</span></span><span class="ab">↓2 ↑1</span></button>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-branch" /></svg><span class="ml"><b class="mono">front</b><span class="d mono">feat/nouveau-menu</span></span><span class="ab">↓1</span></button>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-branch" /></svg><span class="ml"><b class="mono">infra</b><span class="d mono">main</span></span><span class="ab">à jour</span></button>
+      <button class="mi no-mark bad" role="menuitem"><svg class="i s14 ic" style="color: var(--del)"><use href="#i-shield" /></svg><span class="ml"><b class="mono">docs</b><span class="d">HEAD détaché sur 4f2c1a9 : ni worktree ni merge tant qu’il l’est</span></span><span class="ab"></span></button>
+      <div class="menu-sep"></div>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-restart" /></svg><span class="ml"><b>Rechercher les dépôts à nouveau</b><span class="d">Un dossier ajouté ou retiré depuis l’ouverture</span></span></button>
+      <p class="foot-note">Choisis un dépôt : son sélecteur de branche s’ouvre, le même qu’un projet à un seul dépôt (changer, créer, supprimer, nettoyer les branches mergées).</p>
+    </div>
+
+    <!-- « Historique » of one repository: the graph does not mix repositories. -->
+    <div class="menu" id="repo-hist-menu" role="menu" aria-label="Dépôt de l’historique" hidden style="position: fixed; min-width: 300px">
+      <div class="menu-h">Historique de</div>
+      <button class="mi no-mark" role="menuitemradio" aria-checked="true"><svg class="i s14 ic"><use href="#i-check" /></svg><span class="ml"><b class="mono">api</b><span class="d mono">escouade/pagination-users · 2 commits</span></span><kbd>1</kbd></button>
+      <button class="mi no-mark" role="menuitemradio" aria-checked="false"><span class="ic"></span><span class="ml"><b class="mono">front</b><span class="d mono">escouade/pagination-users · 1 commit</span></span><kbd>2</kbd></button>
+      <button class="mi no-mark" role="menuitemradio" aria-checked="false"><span class="ic"></span><span class="ml"><b class="mono">infra</b><span class="d">aucun commit de l’agent</span></span><kbd>3</kbd></button>
+      <button class="mi no-mark" role="menuitemradio" aria-checked="false"><span class="ic"></span><span class="ml"><b class="mono">docs</b><span class="d">aucun commit de l’agent</span></span><kbd>4</kbd></button>
+    </div>
+
+    <!-- « Commit… » of several repositories: one message per repository changed, each proposed apart. -->
+    <div class="scrim" id="rc-modal" hidden>
+      <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="rc-title">
+        <div class="m-head">
+          <svg class="i" style="color: var(--muted)"><use href="#i-check-c" /></svg><h2 id="rc-title">Commit dans 2 dépôts</h2>
+          <button class="icon-btn" data-close-any aria-label="Fermer"><svg class="i s14"><use href="#i-close" /></svg></button>
+        </div>
+        <div class="m-body">
+          <span class="scope">pagination-users · <span class="mono">escouade/pagination-users</span> · un commit par dépôt, chacun avec son message</span>
+          <div class="rmsg">
+            <div class="rhead"><span class="rn">api</span><span>2 fichiers</span><span class="add">+70</span><span class="del">−5</span></div>
+            <div class="ta">feat(users): pagination par curseur de /users
+
+paginate() rend un curseur opaque ; 50 par page, 100 au plus.</div>
+          </div>
+          <div class="rmsg">
+            <div class="rhead"><span class="rn">front</span><span>1 fichier</span><span class="add">+37</span><span class="del">−2</span><span style="margin-left: auto" class="since">Message en cours de rédaction…</span></div>
+            <div class="ta wait">Haiku lit le diff de front et le style de ses derniers commits.</div>
+          </div>
+          <p class="notice"><svg class="i"><use href="#i-info" /></svg><span>Un dépôt dont le commit échoue (un hook, un fichier verrouillé) le dit ici ; les autres sont commités quand même.</span></p>
+        </div>
+        <div class="m-foot">
+          <button class="btn" data-close-any>Annuler</button>
+          <button class="btn primary">Commiter les 2 dépôts</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- « Merger… » of an agent with several repositories: everything is checked first, nothing merges if one cannot. -->
+    <div class="scrim" id="rm-modal" hidden>
+      <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="rm-title">
+        <div class="m-head">
+          <svg class="i" style="color: var(--muted)"><use href="#i-merge" /></svg><h2 id="rm-title">Merger pagination-users</h2>
+          <button class="icon-btn" data-close-any aria-label="Fermer"><svg class="i s14"><use href="#i-close" /></svg></button>
+        </div>
+        <div class="m-body">
+          <span class="scope"><span class="mono">escouade/pagination-users</span> → la branche de base de chaque dépôt · squash</span>
+          <div class="rlist">
+            <div class="rrow ok"><svg class="i s14"><use href="#i-check-c" /></svg><span class="rn">api</span><span class="rb">→ main · 2 commits</span><span class="cnt"><span class="add">+70</span><span class="del">−5</span></span></div>
+            <div class="rrow bad"><svg class="i s14"><use href="#i-shield" /></svg><span class="rn">front</span><span class="rb">→ develop · 1 commit</span><span class="st">conflit</span><span class="why"><span class="mono">src/users/UserList.svelte</span> a changé dans develop depuis le départ de l’agent.</span></div>
+            <div class="rrow idle"><svg class="i s14"><use href="#i-circle" /></svg><span class="rn">infra</span><span class="rb">rien à merger</span><span></span></div>
+            <div class="rrow idle"><svg class="i s14"><use href="#i-circle" /></svg><span class="rn">docs</span><span class="rb">rien à merger</span><span></span></div>
+          </div>
+          <p class="notice"><svg class="i"><use href="#i-info" /></svg><span><b>Rien n’est mergé</b> tant que front ne peut pas l’être : api attend, pour que les dépôts restent d’accord entre eux.</span></p>
+        </div>
+        <div class="m-foot">
+          <button class="btn" data-close-any style="margin-right: auto">Annuler</button>
+          <button class="btn">Merger api seul</button>
+          <button class="btn primary">L’agent résout le conflit</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- « Ouvrir les PR » of an agent with several repositories: one pull request per repository changed. -->
+    <div class="scrim" id="rp-modal" hidden>
+      <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="rp-title">
+        <div class="m-head">
+          <svg class="i" style="color: var(--muted)"><use href="#i-pr" /></svg><h2 id="rp-title">Ouvrir 2 PR sur GitHub</h2>
+          <button class="icon-btn" data-close-any aria-label="Fermer"><svg class="i s14"><use href="#i-close" /></svg></button>
+        </div>
+        <div class="m-body">
+          <span class="scope">pagination-users · <span class="mono">escouade/pagination-users</span> · une PR par dépôt changé</span>
+          <div class="fld"><label for="rp-t">Titre</label><input class="inp" id="rp-t" value="feat(users): pagination par curseur de /users" /></div>
+          <div class="fld">
+            <span class="lb">Description</span>
+            <div class="ta" style="min-height: 96px">## Ce qui change
+- /users accepte cursor et limit ; la liste du front les suit
+
+Chaque PR cite l’autre : à merger ensemble.</div>
+          </div>
+          <div class="rlist">
+            <div class="rrow"><svg class="i s14"><use href="#i-pr" /></svg><span class="rn">api</span><span class="rb">acme/api · → main</span><span class="st">2 commits</span></div>
+            <div class="rrow"><svg class="i s14"><use href="#i-pr" /></svg><span class="rn">front</span><span class="rb">acme/front · → develop</span><span class="st">1 commit</span></div>
+            <div class="rrow idle"><svg class="i s14"><use href="#i-circle" /></svg><span class="rn">infra, docs</span><span class="rb">sans changement : pas de PR</span><span></span></div>
+          </div>
+          <button class="cbline"><span class="cb" role="checkbox" aria-checked="false"><svg class="i"><use href="#i-check" /></svg></span>En brouillon</button>
+        </div>
+        <div class="m-foot">
+          <button class="btn" style="margin-right: auto"><svg class="i s14"><use href="#i-sparkle" /></svg>Proposer à nouveau</button>
+          <button class="btn" data-close-any>Annuler</button>
+          <button class="btn primary"><svg class="i s14"><use href="#i-push" /></svg>Pousser et ouvrir les 2 PR</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- The Δ of a project of several repositories, its detail. -->
+    <div class="ptip" id="tip-repos" role="tooltip" hidden>
+      <b>4 dépôts · ~5 +2 −0</b>
+      <span><span class="mono">api</span> ~2 +1 · <span class="mono">front</span> ~3 +1 · <span class="mono">infra</span>, <span class="mono">docs</span> sans changement</span>
+    </div>
+
     <div class="toast" id="toast" role="status"><svg class="i s14" id="toast-ic"><use href="#i-check" /></svg><span id="toast-text"></span></div>
 
     <script>
@@ -11183,6 +11550,169 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
       if (route === 'escouade-yml') ($$('[data-yml]').forEach((e) => (e.hidden = false)), settingsAt('projects', 'sg-worktrees'));
       if (route === 'escouade-yml-pending') ($$('[data-yml]').forEach((e) => (e.hidden = false)), settingsAt('projects', 'sg-yml'));
       if (route === 'escouade-yml-board') (show('board'), ($('#yml-banner').hidden = false));
+      // A project of several git repositories (ESC-169): ~/dev/demo-api holds front, api, infra and docs, each its own
+      // repository; pagination-users has a folder of its own with a worktree of each, and changed api and front.
+      const sbBranch = () => $$('.statusbar .sb-item').find((s) => s.querySelector('use[href="#i-branch"]'));
+      function reposBase({ branches = 'main', note = '4 dépôts', ab = '↓3 ↑1' } = {}) {
+        sbBranch().innerHTML = `<svg class="i s14"><use href="#i-branch" /></svg><b class="mono">${branches}</b><span style="color: var(--muted)">· ${note}</span> ${ab}`;
+        const foot = $$('.side-foot .foot-row')[1];
+        foot.querySelector('.grow').innerHTML = `main <span style="color: var(--muted); font-family: var(--font)">· ${note}</span>`;
+        $('#h-branch').insertAdjacentHTML('afterend', '<span class="h-repos" id="h-repos">· api, front</span>');
+        $('#ag-pag .a-act').innerHTML = '<b>Edit</b><span class="tgt mono">front/src/users/UserList.svelte</span><span class="spend">12,4 k · 0,14 $</span>';
+      }
+      function reposFiles(tpl = '#tpl-rfiles') {
+        split(true);
+        sideTab('files');
+        const pane = $('#side-files');
+        pane.querySelector('.side-top').remove();
+        pane.querySelector('.files').replaceWith($(tpl).content.cloneNode(true));
+        pane.prepend(pane.querySelector('.side-top'));
+        $('#side .utabs .n').textContent = '3';
+        const merge = pane.querySelector('.side-foot2 .btn.wide');
+        merge.innerHTML = '<svg class="i s14"><use href="#i-merge" /></svg><span class="ell">Merger dans <b>api</b> et <b>front</b>…</span>';
+      }
+      if (route.startsWith('repos')) $('#proj-path').textContent = '~/dev/demo-api · 4 dépôts';
+      if (route === 'repos') (reposBase(), reposFiles(), (($$('.side-foot .foot-row')[1].querySelector('.changes').id = 'foot-changes'), tipAt('tip-repos', '#foot-changes', -150, -96)));
+      if (route === 'repos-two') {
+        reposBase({ branches: '2 branches', note: '2 dépôts', ab: '↑1' });
+        $('#h-repos').textContent = '· app';
+        reposFiles('#tpl-rfiles-two');
+        $('#side-files .side-foot2 .btn.wide').hidden = true;
+      }
+      if (route === 'repos-history') {
+        reposBase();
+        split(true);
+        sideTab('history');
+        const top = $('#side-history .side-top');
+        top.innerHTML = '<div class="repo-sel"><button class="select" id="repo-hist-btn" aria-haspopup="menu" aria-expanded="true"><b class="mono">api</b><svg class="i s14"><use href="#i-down" /></svg></button><span class="caption">Toutes les branches de api · <span class="mono">main</span> ↓2 ↑1</span></div>';
+        const r = $('#repo-hist-btn').getBoundingClientRect();
+        Object.assign($('#repo-hist-menu').style, { left: `${r.left}px`, top: `${r.bottom + 6}px` });
+        $('#repo-hist-menu').hidden = false;
+      }
+      if (route === 'repos-branch') {
+        reposBase({ branches: '3 branches', note: '4 dépôts' });
+        const r = sbBranch().getBoundingClientRect();
+        Object.assign($('#repo-pop').style, { left: `${Math.min(r.left, innerWidth - 360)}px`, right: 'auto' });
+        $('#repo-pop').hidden = false;
+      }
+      if (route === 'repos-commit') (reposBase(), reposFiles(), openModal('#rc-modal'));
+      if (route === 'repos-merge') (reposBase(), reposFiles(), openModal('#rm-modal'));
+      if (route === 'repos-pr') {
+        reposBase();
+        $('#h-pr').hidden = false;
+        $('#h-pr .lbl').textContent = 'Ouvrir 2 PR';
+        $('#h-launch').hidden = true;
+        openModal('#rp-modal');
+      }
+      if (route === 'repos-board') {
+        reposBase();
+        show('board');
+        const card = $$('.col .card.attn').find((c) => c.textContent.includes('DEM-4'));
+        card.querySelector('h2').insertAdjacentHTML('afterend', '<div class="repos-line"><svg class="i s14"><use href="#i-branch" /></svg><span><span class="mono">api</span>, <span class="mono">front</span> changés · <span class="mono">infra</span>, <span class="mono">docs</span> non</span></div>');
+        card.querySelector('.row-btns').insertAdjacentHTML('beforebegin', '<div class="refuse"><svg class="i s14"><use href="#i-shield" /></svg><span><b>Rien n’est mergé</b> : <span class="mono">front</span> a un conflit avec develop. api attend avec lui.</span></div>');
+        card.querySelector('.row-btns .btn.primary').innerHTML = '<svg class="i s14"><use href="#i-restart" /></svg>Renvoyer';
+        const done = $$('.col .card.past').find((c) => c.textContent.includes('DEM-2'));
+        done.querySelector('.outcome').innerHTML = '<svg class="i s14"><use href="#i-pr" /></svg>PR api #41 · front #12 → main';
+        toast('DEM-4 : rien n’est mergé, front a un conflit avec develop', { bad: true, sticky: true });
+      }
+      if (route === 'repos-wizard') {
+        openModal('#wiz-modal');
+        $('#wiz-launch').hidden = true;
+        $('#wiz-start').hidden = false;
+        $('#wiz-step').textContent = 'Étape 1 sur 8';
+        $$('#wiz-modal .rail li').forEach((li, i) => {
+          li.classList.remove('ok');
+          li.removeAttribute('aria-current');
+          li.querySelector('.k').textContent = String(i + 1);
+        });
+        $('#wiz-modal .rail li').setAttribute('aria-current', 'step');
+        $('#wiz-modal .m-head .chip-sm.mono').textContent = '~/dev/acme';
+        $('#wiz-start .wiz-lead').textContent = 'D’où viennent les réglages de acme : chaque étape suivante se revoit, et se passe.';
+        $('#wiz-start .wiz-lead').insertAdjacentHTML(
+          'afterend',
+          `<div class="checks2">
+            <div class="ck ok"><svg class="i s14"><use href="#i-check-c" /></svg><div><b>4 dépôts git : front, api, infra, docs</b><p>Trouvés dans le dossier et un niveau plus bas (<span class="mono">services/</span>, <span class="mono">apps/</span>…) ; node_modules, target, les dossiers cachés et ceux que git ignore sont passés. Le dossier lui-même n’est pas un dépôt.</p></div></div>
+            <div class="ck bad"><svg class="i s14"><use href="#i-shield" /></svg><div><b>infra n’a aucun commit</b><p>Un worktree ne part que d’un commit : les agents n’auront pas de worktree d’infra tant qu’il n’en a pas.</p></div><button class="btn">Faire un premier commit</button></div>
+          </div>`,
+        );
+      }
+      if (route === 'repos-settings') {
+        openSettings('projects');
+        $('#sg-worktrees').insertAdjacentHTML(
+          'beforebegin',
+          `<section class="sg" id="sg-repos">
+            <h2>Dépôts</h2>
+            <div class="sr">
+              <div class="lab"><b>4 dépôts git dans le dossier</b><span>Cherchés à l’ouverture du projet et quand la fenêtre revient au premier plan, dans le dossier et un niveau plus bas. Un sous-module reste dans son dépôt.</span></div>
+              <div class="ctl"><button class="btn"><svg class="i s14"><use href="#i-restart" /></svg>Rechercher à nouveau</button></div>
+            </div>
+            <div class="rlist" style="margin: 4px 0 10px">
+              <div class="rrow"><svg class="i s14"><use href="#i-branch" /></svg><span class="rn">api</span><span class="rb">main · github.com/acme/api</span><span class="st">3 worktrees</span></div>
+              <div class="rrow"><svg class="i s14"><use href="#i-branch" /></svg><span class="rn">front</span><span class="rb">develop · github.com/acme/front</span><span class="st">3 worktrees</span></div>
+              <div class="rrow"><svg class="i s14"><use href="#i-branch" /></svg><span class="rn">infra</span><span class="rb">main · aucun dépôt distant</span><span class="st">3 worktrees</span></div>
+              <div class="rrow ok"><svg class="i s14"><use href="#i-plus" /></svg><span class="rn">services/billing</span><span class="rb">main · trouvé il y a 2 min</span><span class="st">nouveau</span><span class="why">Les prochains agents en auront un worktree ; ceux qui ont déjà le leur n’en reçoivent pas.</span></div>
+              <div class="rrow bad"><svg class="i s14"><use href="#i-shield" /></svg><span class="rn">docs</span><span class="rb">introuvable depuis 10:42</span><span class="st">retiré</span><span class="why">Le worktree de docs de 2 agents reste là où il est, jusqu’au nettoyage. <button class="link" style="color: var(--p-ink)">Oublier docs</button></span></div>
+            </div>
+            <div class="sr">
+              <div class="lab"><b>.escouade.yml</b><span>À la racine du dossier, qui n’est pas un dépôt : il n’est versionné nulle part tant que tu ne le mets pas toi-même dans un dépôt. Celui d’un dépôt n’est pas lu.</span></div>
+              <div class="ctl"><button class="btn">Ouvrir le fichier</button></div>
+            </div>
+          </section>`,
+        );
+        $$('#settings .launch-row input[aria-label="Sous-dossier"]').forEach((i, n) => n === 0 && (i.value = 'front'));
+        settingsAt('projects', 'sg-repos');
+      }
+      if (route === 'repos-new-agent') {
+        reposBase();
+        pop('#new-menu', true);
+        const wt = $$('#new-menu .menu-h').find((h) => h.textContent === 'Worktree');
+        wt.insertAdjacentHTML('afterend', '<p class="menu-note">Un dossier à lui, avec un worktree de chacun des 3 dépôts sous la même branche (pas d’infra, sans commit), au nom que son premier message lui donne.</p>');
+        const bare = $$('#new-menu .mi').find((m) => m.textContent.includes('sans worktree'));
+        bare.querySelector('.d').textContent = 'À la racine du projet : il voit les 4 dépôts, chacun sur sa branche';
+        bare.insertAdjacentHTML('afterend', '<button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-branch" /></svg><span class="ml"><b>Nouvel agent depuis une autre branche…</b><span class="d">La même branche dans chaque dépôt qui l’a ; les autres partent de leur branche de départ</span></span></button>');
+        $('#ag-pag').insertAdjacentHTML('beforebegin', '<button class="agent" id="ag-prep"><div class="a-top"><i class="state-dot"></i><span class="a-name">export-csv-factures</span><span class="a-state">Préparation</span></div><div class="a-act"><b>Worktrees</b><span class="tgt">2 sur 3 dépôts · npm ci dans front</span></div></button>');
+      }
+      if (route === 'repos-editor') {
+        reposBase();
+        show('editor');
+        const tree = $('#editor .tree') ?? $('nav.tree');
+        tree.querySelectorAll('.node').forEach((n) => n.remove());
+        tree.querySelector('.tree-h .caption').textContent = '.claude/worktrees/pagination-users · 4 dépôts';
+        tree.insertAdjacentHTML(
+          'beforeend',
+          `<button class="node repo" style="--lv: 0"><svg class="i s14 fd"><use href="#i-down" /></svg>api<span class="rbadge">escouade/pagination-users</span><i class="mdot"></i></button>
+          <button class="node" style="--lv: 1"><svg class="i s14 fd"><use href="#i-down" /></svg>src<i class="mdot"></i></button>
+          <button class="node" style="--lv: 2"><svg class="i s14 fd"><use href="#i-right" /></svg>db<i class="mdot"></i></button>
+          <button class="node" style="--lv: 2"><svg class="i s14 fd"><use href="#i-down" /></svg>routes<i class="mdot"></i></button>
+          <button class="node" style="--lv: 3" aria-current="true"><span class="fd"></span>users.ts<span class="letter m">M</span></button>
+          <button class="node" style="--lv: 1"><span class="fd"></span>package.json</button>
+          <button class="node repo" style="--lv: 0"><svg class="i s14 fd"><use href="#i-right" /></svg>front<span class="rbadge">escouade/pagination-users</span><i class="mdot"></i></button>
+          <button class="node repo" style="--lv: 0"><svg class="i s14 fd"><use href="#i-right" /></svg>infra<span class="rbadge">escouade/pagination-users</span></button>
+          <button class="node repo" style="--lv: 0"><svg class="i s14 fd"><use href="#i-right" /></svg>docs<span class="rbadge">escouade/pagination-users</span></button>
+          <button class="node" style="--lv: 0"><span class="fd"></span>docker-compose.yml</button>
+          <button class="node" style="--lv: 0"><span class="fd"></span>README.md</button>`,
+        );
+        $('.ed-crumbs').innerHTML = 'api<svg class="i"><use href="#i-right" /></svg>src<svg class="i"><use href="#i-right" /></svg>routes<svg class="i"><use href="#i-right" /></svg><span style="color: var(--soft)">users.ts</span><span class="vs"><span class="add">5 lignes</span> modifiées par rapport à main d’api</span>';
+      }
+      if (route === 'repos-run') {
+        reposBase();
+        $('#wt-group').hidden = false;
+        const r = $('#sec-worker-play').getBoundingClientRect();
+        Object.assign($('#run-menu').style, { left: `${r.right + 8}px`, top: `${r.top - 40}px` });
+        $('#run-menu .menu-h').textContent = 'Lancer « Worker » dans api';
+        const items = $$('#run-menu .mi');
+        items[0].querySelector('.d').textContent = '~/dev/demo-api/api';
+        items[1].querySelector('b').textContent = 'Dans le dossier de refacto-auth';
+        items[1].querySelector('.d').textContent = 'Son worktree d’api, ses ports réservés';
+        items[2].querySelector('b').textContent = 'Dans le dossier de pagination-users';
+        items[2].querySelector('.d').textContent = 'Son worktree d’api, ses ports réservés';
+        $('#run-menu').hidden = false;
+      }
+      if (route === 'repos-overview') {
+        global('overview');
+        const paths = ['api/src/auth/jwt.ts', 'api · npm test', 'api/src/billing/invoices.ts', 'front/src/App.svelte', 'infra/main.tf', 'docs/guide.md'];
+        $$("#full-overview .ov-act .mono").forEach((m, i) => paths[i] && (m.textContent = paths[i]));
+      }
       // Worktrees cleaned (ESC-143): the leftovers, and what was kept.
       if (route === 'worktree-cleanup') (($('#leftovers').hidden = false), settingsAt('projects', 'sr-leftovers'));
       // Launch commands in an agent's worktree (1.8.0).

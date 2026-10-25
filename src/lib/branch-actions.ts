@@ -67,15 +67,16 @@ export async function switchBranch(
   name: string,
   stash = false,
   release?: () => void | Promise<void>,
+  repo: string | null = null,
 ): Promise<SwitchResult> {
   try {
-    const stashed = await api.branchSwitch(projectId, name, stash);
+    const stashed = await api.branchSwitch(projectId, name, stash, repo);
     if (stashed) app.toast(t('branches.switch.stashed', { name: stashed }), 'ok');
     return 'switched';
   } catch (e) {
     if (branchRefusal(e)?.kind === 'dirty') {
       await release?.();
-      askStash(t('branches.switch.title', { branch: name }), () => switchBranch(projectId, name, true));
+      askStash(t('branches.switch.title', { branch: name }), () => switchBranch(projectId, name, true, undefined, repo));
       return 'asked';
     }
     tellRefusal(e, name);
@@ -143,11 +144,11 @@ export function remoteCopy(b: BranchInfo): string | null {
  * Deletes a branch of the project after asking. A branch whose work is not in the base is refused by the backend
  * (`UNMERGED:<n>`): the question comes again, with what would be lost, and only then is it forced.
  */
-export function deleteBranch(projectId: string, b: BranchInfo) {
+export function deleteBranch(projectId: string, b: BranchInfo, repo: string | null = null) {
   const remote = remoteCopy(b);
   const run = async (alsoRemote: boolean, force: boolean) => {
     try {
-      const note = await api.branchDelete(projectId, b.name, alsoRemote, force);
+      const note = await api.branchDelete(projectId, b.name, alsoRemote, force, repo);
       // The sentence says why the remote copy stayed: it says the rest too.
       if (note) app.toast(note, 'info');
       else app.toast(t('branches.delete.done', { branch: b.name }), 'ok');

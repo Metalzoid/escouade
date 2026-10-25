@@ -292,7 +292,7 @@ impl<R: Runtime> Core<R> {
         self.remote_of(&p.path, &p.board.target).await
     }
 
-    async fn remote_of(&self, path: &str, target: &str) -> Option<Remote> {
+    pub(crate) async fn remote_of(&self, path: &str, target: &str) -> Option<Remote> {
         let url = project_remote_url(path, target).await?;
         let list = accounts::all(&self.accounts.read());
         let registry = self.forges.read().clone();

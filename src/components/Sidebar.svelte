@@ -7,6 +7,7 @@
   import { tick, untrack } from 'svelte';
   import { keyLabel } from '../lib/platform';
   import { t } from '../lib/i18n';
+  import { branchSummary, deltaDetail, repoLabel } from '../lib/repos';
   import { api } from '../lib/ipc';
   import { fDur, fUsd, fWhen, tildify } from '../lib/format';
   import { accountName, addAccount, defaultEngine, hasAccount, newAgentAccount, newAgentDefaults } from '../lib/accounts';
@@ -546,13 +547,18 @@
         ? {
             label: t('nav.sidebar.newAgentNoWorktree'),
             icon: 'folder',
-            detail: t('nav.sidebar.newAgentNoWorktreeDetail'),
+            // Of several repositories (ESC-169): it sees them all, from the project's root.
+            detail: project.repos?.length
+              ? t('repos.agent.bare', { count: project.repos.length })
+              : t('nav.sidebar.newAgentNoWorktreeDetail'),
             onClick: () => app.newAgent(project.id, null, false),
           }
         : {
             label: t('nav.sidebar.newAgentInWorktree'),
             icon: 'branch',
-            detail: t('nav.sidebar.newAgentInWorktreeDetail'),
+            detail: project.repos?.length
+              ? t('repos.agent.note', { count: project.repos.length })
+              : t('nav.sidebar.newAgentInWorktreeDetail'),
             onClick: () => app.newAgent(project.id, null, true),
           },
       {
@@ -948,7 +954,7 @@
                 class="prnum {prTone(p)}"
                 aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
                 use:tip={{ text: prTip(word, p), aria: false }}
-                onclick={() => openPr(p)}><Icon name={prIcon(p)} size={12} />#{p.number}</button
+                onclick={() => openPr(p)}><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
               >
               {#if !a.archived && canFixChecks(p)}
                 <button
@@ -1210,8 +1216,17 @@
     <div class="foot-row">
       <Icon name="branch" size={14} />
       {#if git?.isRepo}
-        <span class="grow mono branch">{git.branch || '—'}</span>
-        <span class="changes mono" use:tip={t('nav.sidebar.changesTitle', { m: git.modified, a: git.added, d: git.deleted })}>
+        {#if git.repos?.length}
+          <!-- Of several repositories (ESC-169): their branch when they share it, and how many they are. -->
+          {@const s = branchSummary(git)}
+          <span class="grow mono branch">{s.branch ?? ''}<span class="repos">{s.branch ? ' · ' : ''}{s.text}</span></span>
+        {:else}
+          <span class="grow mono branch">{git.branch || '—'}</span>
+        {/if}
+        <span
+          class="changes mono"
+          use:tip={git.repos?.length ? deltaDetail(git) : t('nav.sidebar.changesTitle', { m: git.modified, a: git.added, d: git.deleted })}
+        >
           <span class="mod" aria-label={t('nav.sidebar.modified', { n: git.modified })}>~{git.modified}</span>
           <span class="add" aria-label={t('nav.sidebar.added', { n: git.added })}>+{git.added}</span>
           <span class="del" aria-label={t('nav.sidebar.deleted', { n: git.deleted })}>−{git.deleted}</span>
@@ -2102,6 +2117,10 @@
   }
 
   /* The project's folder and branch. */
+  .branch .repos {
+    color: var(--muted);
+    font-family: var(--font);
+  }
   .side-foot {
     display: grid;
     gap: 2px;

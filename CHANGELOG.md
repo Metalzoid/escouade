@@ -15,6 +15,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Un projet peut afficher un libellé sous sa tuile, son nom ou un texte plus court, et la barre des projets s’élargit en tirant son bord droit : assez large, elle montre le nom de chaque projet à côté de sa tuile, comme une liste. La largeur choisie est gardée pour toute l’app.
 - Réglages › À propos propose d’offrir un café pour soutenir Escouade, comme le site, la documentation et la page GitHub du dépôt.
 - La vue Cursor CLI ouvre l’interface de Cursor sur l’agent, dans un terminal : Escouade y suit ses messages et la fin de chaque tour, et sa bande dit ce qu’il ne voit pas (permissions en attente, résultats, tokens). Cursor y tient une conversation à part, qu’Escouade relie à celle de l’agent dans les deux sens.
+- Un projet peut être un dossier qui tient plusieurs dépôts git, un par sous-dossier (front, api, infra…) : Escouade les trouve, montre la branche et les changements de chacun, et donne à chaque agent un worktree de chaque dépôt sous une même branche. Merge, PR et validation d’un ticket se font dans chaque dépôt changé, et rien n’est mergé tant que l’un d’eux ne peut pas l’être.
 
 ### Corrections
 

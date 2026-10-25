@@ -120,6 +120,9 @@ pub struct PullRequest {
     pub checks: Option<CheckState>,
     /// Its branch is a fork's: another repository's branch that only bears the same name.
     pub fork: bool,
+    /// Of an agent of several repositories (ESC-169): the repository it was opened in.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub repo: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

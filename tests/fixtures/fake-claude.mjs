@@ -47,7 +47,8 @@
 // interrupt, [commite] its work committed by itself (every file of its folder, a copied .env forced
 // in), [retire-env] then .env taken out of git again in a second commit (still in the branch's
 // history), [tenace] a process that lasts 5 s once its input is closed, [rien] no file written (nothing
-// to merge); by default criterion n is met from loop n on.
+// to merge), [dans:api] its file written in that folder instead (each one named; ESC-169); by default criterion n is
+// met from loop n on.
 // "[worktree <branch>]" in a message goes into a worktree of its own as Claude Code's EnterWorktree does (ESC-161): made
 // under <repository>/.claude/worktrees/<branch with non-alphanumerics replaced by -> on the new branch <branch> (or
 // gone into again), the session goes on there (the `cwd` of its entries), kept in its first folder's project folder.
@@ -1011,7 +1012,10 @@ function startSession() {
       return;
     }
     const file = `${key.toLowerCase()}.txt`;
-    if (!all.includes('[rien]')) fs.writeFileSync(path.join(process.cwd(), file), `Boucle ${loop}\n`);
+    // [dans:api]: in that folder of its own (a repository of a project of several, ESC-169), each one named.
+    const into = [...all.matchAll(/\[dans:([^\]]+)\]/g)].map((m) => m[1]);
+    if (!all.includes('[rien]'))
+      for (const dir of into.length ? into : ['.']) fs.writeFileSync(path.join(process.cwd(), dir, file), `Boucle ${loop}\n`);
     if (all.includes('[commite]')) {
       execFileSync('git', ['add', '-A']);
       // The copied .env, which git ignores, forced in.

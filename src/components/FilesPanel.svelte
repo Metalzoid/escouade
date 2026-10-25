@@ -10,6 +10,7 @@
   import Icon from './Icon.svelte';
   import { tip } from '../lib/tip';
   import { worktreeLabel } from '../lib/worktrees';
+  import { agentRepos, groupByRepo, inRepo, isMulti, quietRepos, repoLabel } from '../lib/repos';
 
   // The side panel's uncommitted files. `docked`: right half of the split layout, showing the
   // picked file's diff under the list. `count`: number of files listed, for the panel's tab.
@@ -171,6 +172,29 @@
     };
   }
 
+  // Of several repositories (ESC-169): the list grouped by repository, those without a change on one line.
+  const multi = $derived(isMulti(project));
+  const repos = $derived(scope === 'agent' ? agentRepos(project, agent) : (project.repos ?? []));
+  const groups = $derived(multi ? groupByRepo(listed, repos) : []);
+  const quiet = $derived(multi && listFor !== null ? quietRepos(repos, groupByRepo(files, repos)) : []);
+  let folded = $state<Record<string, boolean>>({});
+  /** The branch a repository's group is on: the agent's, else the repository's own. */
+  function branchOf(repo: string): string {
+    if (scope === 'agent' && agent?.worktree) return agent.worktree.branch;
+    return app.git[project.id]?.repos?.find((r) => r.repo === repo)?.branch ?? '';
+  }
+  /** « Merger dans api et front… »: the repositories its branch changed, as the list shows them. */
+  const mergeInto = $derived(
+    groups.length ? t('repos.files.merge', { repos: groups.map((g) => repoLabel(g.repo)).join(', ') }) : t('repos.files.mergeNone'),
+  );
+  const multiCaption = $derived(
+    !multi
+      ? ''
+      : scope === 'agent' && agent?.worktree
+        ? t('repos.files.folder', { path: worktreeLabel(project.path, agent.worktree.path), count: repos.length })
+        : t('repos.files.project', { count: repos.length }),
+  );
+
   let picked = $state<string | null>(null);
   // The picked file (kept listed by setFiles), once the list matches the selected agent and scope.
   const current = $derived(docked && listFor === wanted ? (files.find((f) => keyOf(f) === picked) ?? null) : null);
@@ -185,9 +209,13 @@
       <button aria-pressed={scope === 'agent'} onclick={() => (app.filesScope = 'agent')}>{t('git.files.scopeAgent')}</button>
       <button aria-pressed={scope === 'project'} onclick={() => (app.filesScope = 'project')}>{t('git.files.scopeProject')}</button>
     </div>
-    <div class="caption" use:tip={{ text: around ? around.join(worktree ?? '') : hint, cut: true }}>
-      {#if around}{around[0]}<span class="mono">{worktree}</span>{around[1]}{:else}{hint}{/if}
-    </div>
+    {#if multi}
+      <div class="caption" use:tip={{ text: multiCaption, cut: true }}>{multiCaption}</div>
+    {:else}
+      <div class="caption" use:tip={{ text: around ? around.join(worktree ?? '') : hint, cut: true }}>
+        {#if around}{around[0]}<span class="mono">{worktree}</span>{around[1]}{:else}{hint}{/if}
+      </div>
+    {/if}
   </div>
   <div class="list">
     {#if error}
@@ -195,9 +223,30 @@
     {:else if !files.length && !loading}
       <div class="empty">{scope === 'agent' ? t('git.files.emptyAgent') : t('git.files.emptyProject')}</div>
     {/if}
-    {#each listed as f (keyOf(f))}
+    {#if multi}
+      {#each groups as g (g.repo)}
+        {@const open = !folded[g.repo]}
+        <button
+          class="repo-h"
+          aria-expanded={open}
+          aria-label={t(open ? 'repos.files.fold' : 'repos.files.unfold', { repo: repoLabel(g.repo) })}
+          onclick={() => (folded[g.repo] = open)}
+          ><Icon name="down" size={14} /><span class="rn">{repoLabel(g.repo)}</span><span class="rb">{branchOf(g.repo)}</span><span
+            class="cnt"><span class="add">+{g.add}</span><span class="del">−{g.del}</span></span
+          ></button
+        >
+        {#if open}
+          {#each g.files as f (keyOf(f))}{@render row(f, g.repo)}{/each}
+        {/if}
+      {/each}
+      {#if quiet.length}<p class="quiet">{t('repos.files.quiet', { repos: quiet.map(repoLabel).join(', ') })}</p>{/if}
+    {:else}
+      {#each listed as f (keyOf(f))}{@render row(f, null)}{/each}
+    {/if}
+    {#snippet row(f: FileChange, repo: string | null)}
       {@const on = current !== null && keyOf(current) === keyOf(f)}
-      <div class="filerow" class:on>
+      {@const shown = repo === null ? f.path : inRepo(f.path, repo)}
+      <div class="filerow" class:on class:in={repo !== null}>
         <button
           class="file"
           aria-current={on ? 'true' : undefined}
@@ -206,7 +255,7 @@
         >
           <span class="letter {f.status.toLowerCase()}">{f.status}</span>
           <span class="fn"
-            ><b>{basename(f.path)}</b>{#if dirname(f.path)}<span class="dir">{dirname(f.path)}</span>{/if}</span
+            ><b>{basename(shown)}</b>{#if dirname(shown)}<span class="dir">{dirname(shown)}</span>{/if}</span
           >
           {#if scope === 'project' && f.agentId}<span class="tag">{agentName(f.agentId)}</span>{/if}
           <span class="cnt"><span class="add">+{f.add}</span><span class="del">−{f.del}</span></span>
@@ -222,7 +271,7 @@
           >
         {/if}
       </div>
-    {/each}
+    {/snippet}
     {#if files.length > SHOWN}<p class="more">
         {t('git.files.more', { count: files.length - SHOWN, n: fInt(files.length - SHOWN) })}
       </p>{/if}
@@ -249,11 +298,12 @@
     </div>
     {#if scope === 'agent' && agent?.worktree}
       {@const wt = agent.worktree}
-      {@const merge = t('git.files.merge', { branch: wt.branch, base: wt.baseBranch })}
+      {@const merge = multi ? mergeInto : t('git.files.merge', { branch: wt.branch, base: wt.baseBranch })}
       <div class="rowb">
         <button class="btn wide" aria-label={merge} use:tip={{ text: merge, cut: true }} onclick={() => agent && mergeAgent(agent)}
           ><Icon name="merge" size={14} /><span class="ell"
-            >{#each mergeParts(wt.branch, wt.baseBranch) as p, i (i)}{#if p.ref}<b>{p.text}</b>{:else}{p.text}{/if}{/each}</span
+            >{#if multi}{merge}{:else}{#each mergeParts(wt.branch, wt.baseBranch) as p, i (i)}{#if p.ref}<b>{p.text}</b
+                  >{:else}{p.text}{/if}{/each}{/if}</span
           ></button
         >
         <!-- Not for an archived agent, as in the sidebar's menu: nothing goes into the worktree of one that is not running. -->
@@ -336,6 +386,55 @@
     position: relative;
     display: flex;
     min-width: 0;
+  }
+  /* A repository's group (ESC-169): its name, its branch, its counts; its files under it. */
+  .repo-h {
+    display: grid;
+    grid-template-columns: 14px auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    height: 30px;
+    margin-top: 4px;
+    padding: 0 8px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--soft);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .repo-h:hover {
+    background: var(--hover);
+  }
+  .repo-h :global(svg) {
+    color: var(--muted);
+    transition: transform 0.2s var(--ease);
+  }
+  .repo-h[aria-expanded='false'] :global(svg) {
+    transform: rotate(-90deg);
+  }
+  .repo-h .rn {
+    color: var(--text);
+    font: 600 12px var(--mono);
+  }
+  .repo-h .rb {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font: 11px var(--mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .filerow.in .file {
+    padding-left: 30px;
+  }
+  .quiet {
+    margin: 0;
+    padding: 10px 8px 4px;
+    color: var(--muted);
+    font-size: 11.5px;
   }
   /* A file: its letter, its name and its folder, its counts. */
   .file {

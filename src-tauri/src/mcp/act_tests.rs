@@ -3405,6 +3405,7 @@ async fn a_conflict_is_not_handed_over_while_its_agents_account_is_held_back_and
         let mut rt = worker.lock();
         rt.meta.status = AgentStatus::Running;
         rt.meta.worktree = Some(Worktree {
+            repos: Vec::new(),
             path: h.dir.join("dem-3").to_string_lossy().into(),
             branch: "ticket/dem-3".into(),
             base_branch: "main".into(),

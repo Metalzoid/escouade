@@ -7,10 +7,10 @@ import type { GitInfo } from './types';
 
 export type SyncOp = 'pull' | 'push' | 'fetch';
 
-const CALLS: Record<SyncOp, (projectId: string) => Promise<string>> = {
-  pull: (id) => api.gitPull(id),
-  push: (id) => api.gitPush(id),
-  fetch: (id) => api.gitFetch(id),
+const CALLS: Record<SyncOp, (projectId: string, repo: string | null) => Promise<string>> = {
+  pull: (id, repo) => api.gitPull(id, repo),
+  push: (id, repo) => api.gitPush(id, repo),
+  fetch: (id, repo) => api.gitFetch(id, repo),
 };
 
 /** What a checkout can sync with: a branch checked out and a remote. Null for a repository that has none of them. */
@@ -23,6 +23,22 @@ export interface SyncInfo {
   ahead: number;
   behind: number;
   lastFetch: number | null;
+}
+
+/** `syncInfo` of the repository `repo` of a project of several (ESC-169); of the project itself when null. */
+export function repoSyncInfo(g: GitInfo | undefined, repo: string | null): SyncInfo | null {
+  if (repo === null) return syncInfo(g);
+  const r = g?.repos?.find((x) => x.repo === repo);
+  if (!r || !r.hasRemote || !r.branch || r.branch === '(detached)') return null;
+  return {
+    branch: r.branch,
+    upstream: r.upstream,
+    tracked: !!r.upstream,
+    upstreamGone: false,
+    ahead: r.ahead,
+    behind: r.behind,
+    lastFetch: g?.lastFetch ?? null,
+  };
 }
 
 export function syncInfo(g: GitInfo | undefined): SyncInfo | null {
@@ -42,11 +58,11 @@ class GitSync {
   /** The sync running, by project. */
   running = $state<Record<string, SyncOp>>({});
 
-  /** Runs `op` on a project's checkout, then says what it did (or why it could not). */
-  async run(op: SyncOp, projectId: string) {
+  /** Runs `op` on a project's checkout (its repository `repo`, of several), then says what it did (or why it could not). */
+  async run(op: SyncOp, projectId: string, repo: string | null = null) {
     if (this.running[projectId]) return;
     this.running[projectId] = op;
-    const summary = await app.run(CALLS[op](projectId));
+    const summary = await app.run(CALLS[op](projectId, repo));
     delete this.running[projectId];
     if (summary) app.toast(summary, 'ok');
   }

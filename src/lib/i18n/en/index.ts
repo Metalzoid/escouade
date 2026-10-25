@@ -19,6 +19,7 @@ import mcp from './mcp';
 import nav from './nav';
 import plan from './plan';
 import prs from './prs';
+import repos from './repos';
 import runs from './runs';
 import settings from './settings';
 import shell from './shell';
@@ -49,6 +50,7 @@ export const en = defineCatalog({
   branches,
   plan,
   prs,
+  repos,
   subagents,
   bgtasks,
   wizard,

@@ -156,10 +156,13 @@ const shots = [
   { name: 'labels-small', ...SMALL, hash: 'labels' },
   { name: 'labels-wide-small-en', ...SMALL, ...EN, hash: 'labels-wide' },
   { name: 'labels-settings-small-en', ...SMALL, ...EN, hash: 'labels-settings' },
+  // A project of several git repositories (ESC-169): the folder holds front, api, infra and docs.
+  ...['repos', 'repos-history', 'repos-branch', 'repos-commit', 'repos-merge', 'repos-pr', 'repos-board', 'repos-wizard', 'repos-settings', 'repos-new-agent', 'repos-editor', 'repos-run', 'repos-overview'].map((h) => ({ name: h, ...BIG, hash: h })),
+  ...['repos', 'repos-two', 'repos-board', 'repos-merge', 'repos-branch'].map((h) => ({ name: h + '-small', ...SMALL, hash: h })),
   // The theme selector, on Système (its default): the window follows the emulated system theme.
   { name: 'settings-app', ...BIG, hash: 'settings-app', system: true },
 ];
-const LIGHT_SMALL = ['kanban-small', 'pr-small-en', 'models-small-en', 'waiting-small-en', 'private-small-en', 'agents-small', 'git-small', 'overview-small', 'settings-small', 'agents-small-en', 'quota-small-en', 'terminal-view-small-en', 'settings-harness-small-en', 'rail-small', 'rail-small-en', 'tile-small', 'tile-settings-small-en', 'labels-small', 'labels-wide-small-en', 'labels-settings-small-en'];
+const LIGHT_SMALL = ['kanban-small', 'pr-small-en', 'models-small-en', 'waiting-small-en', 'private-small-en', 'agents-small', 'git-small', 'overview-small', 'settings-small', 'agents-small-en', 'quota-small-en', 'terminal-view-small-en', 'settings-harness-small-en', 'rail-small', 'rail-small-en', 'tile-small', 'tile-settings-small-en', 'labels-small', 'labels-wide-small-en', 'labels-settings-small-en', 'repos-small', 'repos-two-small', 'repos-board-small', 'repos-merge-small', 'repos-branch-small'];
 shots.push(
   ...shots
     .filter((s) => (s.width === BIG.width && !s.lang) || LIGHT_SMALL.includes(s.name))

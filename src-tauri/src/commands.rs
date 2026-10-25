@@ -423,6 +423,10 @@ pub struct FolderInfo {
     branch: String,
     dirty: u32,
     name: String,
+    /// Its repositories, when it holds several (ESC-169); empty otherwise.
+    repos: Vec<String>,
+    /// Those of `repos` without any commit: no worktree can start from them.
+    repos_without_commit: Vec<String>,
     /// The project closed in this folder, whose history adding a project there gives back.
     history: Option<ClosedProjectInfo>,
 }
@@ -448,12 +452,33 @@ pub async fn inspect_folder(
             dirty: 0,
             name,
             history: None,
+            repos: Vec::new(),
+            repos_without_commit: Vec::new(),
         });
     }
     let path = path.trim().to_string();
     let history = core
         .closed_project_info_for(&path, history_id.as_deref())
         .await;
+    let repos = crate::repos::detect(p, &crate::paths::worktrees_root(&path, "")).await;
+    if !repos.is_empty() {
+        let mut repos_without_commit = Vec::new();
+        for r in &repos {
+            if !crate::git::has_commit(&crate::repos::join(&path, r)).await {
+                repos_without_commit.push(r.clone());
+            }
+        }
+        return Ok(FolderInfo {
+            exists: true,
+            is_repo: true,
+            branch: String::new(),
+            dirty: 0,
+            name,
+            history,
+            repos,
+            repos_without_commit,
+        });
+    }
     Ok(match crate::git::toplevel(&path).await {
         Some(_) => {
             let st = crate::git::status(&path).await.unwrap_or_default();
@@ -464,6 +489,8 @@ pub async fn inspect_folder(
                 dirty: st.entries.len() as u32,
                 name,
                 history,
+                repos: Vec::new(),
+                repos_without_commit: Vec::new(),
             }
         }
         None => FolderInfo {
@@ -473,6 +500,8 @@ pub async fn inspect_folder(
             dirty: 0,
             name,
             history,
+            repos: Vec::new(),
+            repos_without_commit: Vec::new(),
         },
     })
 }
@@ -502,11 +531,38 @@ pub async fn inspect_setup(
     dirs: Vec<String>,
 ) -> Res<SetupInfo> {
     let path = path.trim().to_string();
-    let repo = crate::git::toplevel(&path).await.is_some();
-    let missing_dirs = dirs
-        .into_iter()
+    let missing_dirs: Vec<String> = dirs
+        .iter()
         .filter(|d| !std::path::Path::new(&path).join(d.trim()).is_dir())
+        .cloned()
         .collect();
+    // Of several repositories (ESC-169): tickets start once one of them has a commit; the branches
+    // offered are those of the first that has one.
+    let repos = crate::repos::detect(
+        std::path::Path::new(&path),
+        &crate::paths::worktrees_root(&path, &worktree_dir),
+    )
+    .await;
+    if !repos.is_empty() {
+        for r in &repos {
+            let dir = crate::repos::join(&path, r);
+            if crate::git::has_commit(&dir).await {
+                return Ok(SetupInfo {
+                    has_commit: true,
+                    branches: crate::git::branches(&dir).await.unwrap_or_default(),
+                    missing_dirs,
+                    worktrees_tracked: false,
+                });
+            }
+        }
+        return Ok(SetupInfo {
+            has_commit: false,
+            branches: Vec::new(),
+            missing_dirs,
+            worktrees_tracked: false,
+        });
+    }
+    let repo = crate::git::toplevel(&path).await.is_some();
     Ok(SetupInfo {
         has_commit: repo && crate::git::has_commit(&path).await,
         branches: if repo {
@@ -559,6 +615,19 @@ pub async fn create_project(
         .await
         .map_err(err);
     project_added(&core, r)
+}
+
+/// « Rechercher à nouveau » (ESC-169): the project's repositories looked for again; the project.
+#[tauri::command]
+pub async fn refresh_repos(core: CoreState<'_>, id: String) -> Res<Project> {
+    core.refresh_repos(&id, false).await.map_err(err)?;
+    core.project(&id).map_err(err)
+}
+
+/// « Oublier » a repository gone from the project's folder (ESC-169).
+#[tauri::command(async)]
+pub fn forget_repo(core: CoreState, id: String, repo: String) -> Res<Project> {
+    core.forget_repo(&id, &repo).map_err(err)
 }
 
 /// « Choisir une image… » (`path`) or « Retirer » (None) of the project's logo (ESC-167).
@@ -965,6 +1034,34 @@ pub async fn merge_agent(
     counted(&core, Event::Merged, r)
 }
 
+/// What merging the agent would do in each of its repositories (ESC-169).
+#[tauri::command]
+pub async fn agent_merge_check(
+    core: CoreState<'_>,
+    id: String,
+) -> Res<Vec<crate::multiwt::RepoMerge>> {
+    core.agent_merge_check(&id).await.map_err(err)
+}
+
+/// « Merger api seul » (ESC-169): the merge of some of the agent's repositories.
+#[tauri::command]
+pub async fn merge_agent_repos(
+    core: CoreState<'_>,
+    id: String,
+    squash: bool,
+    switch_to_base: bool,
+    repos: Vec<String>,
+) -> Res<String> {
+    let r = core
+        .merge_agent_repos(&id, squash, switch_to_base, repos)
+        .await
+        .map_err(|e| match e.downcast_ref::<NotOnBase>() {
+            Some(refused) => refused.wire(),
+            None => err(e),
+        });
+    counted(&core, Event::Merged, r)
+}
+
 #[tauri::command]
 pub async fn get_commands(core: CoreState<'_>, id: String) -> Res<Vec<Value>> {
     let h = core.agent(&id).map_err(err)?;
@@ -1013,30 +1110,57 @@ pub async fn git_log(
     core: CoreState<'_>,
     project_id: String,
     agent_id: Option<String>,
+    repo: Option<String>,
 ) -> Res<GitLog> {
-    core.git_log(&project_id, agent_id).await.map_err(err)
+    core.git_log(&project_id, agent_id, repo).await.map_err(err)
 }
 
 #[tauri::command]
-pub async fn git_show(core: CoreState<'_>, project_id: String, hash: String) -> Res<String> {
-    core.git_show(&project_id, &hash).await.map_err(err)
+pub async fn git_show(
+    core: CoreState<'_>,
+    project_id: String,
+    hash: String,
+    repo: Option<String>,
+) -> Res<String> {
+    core.git_show(&project_id, &hash, repo).await.map_err(err)
 }
 
 #[tauri::command]
-pub async fn git_fetch(core: CoreState<'_>, project_id: String) -> Res<String> {
-    let r = core.git_sync(&project_id, SyncOp::Fetch).await.map_err(err);
+pub async fn git_fetch(
+    core: CoreState<'_>,
+    project_id: String,
+    repo: Option<String>,
+) -> Res<String> {
+    let r = core
+        .git_sync_in(&project_id, repo.as_deref(), SyncOp::Fetch)
+        .await
+        .map_err(err);
     counted(&core, Event::GitSync { op: "fetch" }, r)
 }
 
 #[tauri::command]
-pub async fn git_pull(core: CoreState<'_>, project_id: String) -> Res<String> {
-    let r = core.git_sync(&project_id, SyncOp::Pull).await.map_err(err);
+pub async fn git_pull(
+    core: CoreState<'_>,
+    project_id: String,
+    repo: Option<String>,
+) -> Res<String> {
+    let r = core
+        .git_sync_in(&project_id, repo.as_deref(), SyncOp::Pull)
+        .await
+        .map_err(err);
     counted(&core, Event::GitSync { op: "pull" }, r)
 }
 
 #[tauri::command]
-pub async fn git_push(core: CoreState<'_>, project_id: String) -> Res<String> {
-    let r = core.git_sync(&project_id, SyncOp::Push).await.map_err(err);
+pub async fn git_push(
+    core: CoreState<'_>,
+    project_id: String,
+    repo: Option<String>,
+) -> Res<String> {
+    let r = core
+        .git_sync_in(&project_id, repo.as_deref(), SyncOp::Push)
+        .await
+        .map_err(err);
     counted(&core, Event::GitSync { op: "push" }, r)
 }
 
@@ -1055,14 +1179,24 @@ fn branch_err(e: anyhow::Error) -> String {
 pub async fn branch_list(
     core: CoreState<'_>,
     project_id: String,
+    repo: Option<String>,
 ) -> Res<Vec<crate::git::BranchInfo>> {
-    core.branches(&project_id).await.map_err(err)
+    core.branches_in(&project_id, repo.as_deref())
+        .await
+        .map_err(err)
 }
 
 /// Checks a name for a new branch: as git does, and not taken already.
 #[tauri::command]
-pub async fn branch_check(core: CoreState<'_>, project_id: String, name: String) -> Res<()> {
-    core.branch_check(&project_id, &name).await.map_err(err)
+pub async fn branch_check(
+    core: CoreState<'_>,
+    project_id: String,
+    name: String,
+    repo: Option<String>,
+) -> Res<()> {
+    core.branch_check_in(&project_id, repo.as_deref(), &name)
+        .await
+        .map_err(err)
 }
 
 /// Switches the project's folder to a branch; the stash's name when its changes were put aside.
@@ -1072,8 +1206,9 @@ pub async fn branch_switch(
     project_id: String,
     name: String,
     stash: bool,
+    repo: Option<String>,
 ) -> Res<Option<String>> {
-    core.branch_switch(&project_id, &name, stash)
+    core.branch_switch_in(&project_id, repo.as_deref(), &name, stash)
         .await
         .map_err(branch_err)
 }
@@ -1087,9 +1222,10 @@ pub async fn branch_create(
     start: String,
     switch: bool,
     stash: bool,
+    repo: Option<String>,
 ) -> Res<Option<String>> {
     let r = core
-        .branch_create(&project_id, &name, &start, switch, stash)
+        .branch_create_in(&project_id, repo.as_deref(), &name, &start, switch, stash)
         .await
         .map_err(branch_err);
     counted(&core, Event::BranchCreated, r)
@@ -1104,16 +1240,23 @@ pub async fn branch_delete(
     name: String,
     remote: bool,
     force: bool,
+    repo: Option<String>,
 ) -> Res<Option<String>> {
-    core.branch_delete(&project_id, &name, remote, force)
+    core.branch_delete_in(&project_id, repo.as_deref(), &name, remote, force)
         .await
         .map_err(branch_err)
 }
 
 /// The local branches « Branches mergées » offers to delete.
 #[tauri::command]
-pub async fn branches_merged(core: CoreState<'_>, project_id: String) -> Res<Vec<String>> {
-    core.branches_merged(&project_id).await.map_err(err)
+pub async fn branches_merged(
+    core: CoreState<'_>,
+    project_id: String,
+    repo: Option<String>,
+) -> Res<Vec<String>> {
+    core.branches_merged_in(&project_id, repo.as_deref())
+        .await
+        .map_err(err)
 }
 
 /// The diff from `a` to `b`, two branches or commits of the project's repository.
@@ -1123,8 +1266,11 @@ pub async fn git_diff_refs(
     project_id: String,
     a: String,
     b: String,
+    repo: Option<String>,
 ) -> Res<String> {
-    core.diff_refs(&project_id, &a, &b).await.map_err(err)
+    core.diff_refs_in(&project_id, repo.as_deref(), &a, &b)
+        .await
+        .map_err(err)
 }
 
 /// A new agent in a worktree on an existing branch (a local one, or `origin/feat`). Refused for
@@ -1475,7 +1621,12 @@ pub async fn fs_base(
     agent_id: Option<String>,
     path: String,
 ) -> Res<Option<fsedit::Base>> {
-    let (root, base) = core.edit_root(&project_id, agent_id).await.map_err(err)?;
+    let (root, base) = core
+        .edit_root(&project_id, agent_id.clone())
+        .await
+        .map_err(err)?;
+    // Of several repositories (ESC-169): its repository's version.
+    let (root, base, path) = core.edit_route(&project_id, agent_id.as_deref(), root, base, path);
     fsedit::base(&root, base.as_deref(), &path)
         .await
         .map_err(err)

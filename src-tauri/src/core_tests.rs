@@ -4383,7 +4383,7 @@ async fn the_git_log_shows_every_agent_branch_and_which_one_is_the_agents() {
 
     let log = h
         .core
-        .git_log(&p.id, Some(a.meta.id.clone()))
+        .git_log(&p.id, Some(a.meta.id.clone()), None)
         .await
         .unwrap();
     assert_eq!(log.head.as_deref(), Some(wt.branch.as_str()));
@@ -4394,11 +4394,16 @@ async fn the_git_log_shows_every_agent_branch_and_which_one_is_the_agents() {
         .expect("agent commit listed");
     assert!(c.refs.contains(&wt.branch), "{:?}", c.refs);
     assert_eq!(
-        h.core.git_log(&p.id, None).await.unwrap().head.as_deref(),
+        h.core
+            .git_log(&p.id, None, None)
+            .await
+            .unwrap()
+            .head
+            .as_deref(),
         Some("main")
     );
 
-    let patch = h.core.git_show(&p.id, &c.hash).await.unwrap();
+    let patch = h.core.git_show(&p.id, &c.hash, None).await.unwrap();
     assert!(patch.contains("+const a = 2;"), "{patch}");
 }
 

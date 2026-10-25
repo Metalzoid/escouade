@@ -15,6 +15,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - A project can show a label under its tile, its name or a shorter text, and the projects’ rail widens by dragging its right edge: wide enough, it shows each project’s name beside its tile, as a list. The width chosen is kept for the whole app.
 - Settings › About offers to buy a coffee to support Escouade, as do the site, the documentation and the repository’s GitHub page.
 - The Cursor CLI view opens Cursor’s interface on the agent, in a terminal: Escouade follows its messages and the end of each turn there, and its band says what it doesn’t see (permissions waiting, results, tokens). Cursor keeps a conversation of its own there, which Escouade links to the agent’s both ways.
+- A project can be a folder that holds several git repositories, one per subfolder (front, api, infra…): Escouade finds them, shows each one’s branch and changes, and gives every agent a worktree of each repository on one branch. Merge, pull requests and a ticket’s approval happen in each repository changed, and nothing is merged while one of them can’t be.
 
 ### Fixes
 

@@ -54,6 +54,36 @@ struct ProjectRow {
     /// The global one (« Remote control pour tous les agents »), the same on every row. Read
     /// only: no tool changes either.
     remote_control_all: bool,
+    /// Of a project of several repositories (ESC-169): each one and its branch.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    repos: Vec<RepoBranch>,
+}
+
+/// A repository of a project of several, and its branch (ESC-169).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RepoBranch {
+    repo: String,
+    /// Its branch; for an agent, the one its worktree of it is on.
+    branch: String,
+    /// For an agent: where its work goes in that repository.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    base: Option<String>,
+}
+
+/// An agent's repositories, as the tools say them: none for a project of one.
+fn agent_repos(wt: Option<&crate::model::Worktree>) -> Vec<RepoBranch> {
+    wt.map(|w| {
+        w.repos
+            .iter()
+            .map(|r| RepoBranch {
+                repo: r.repo.clone(),
+                branch: w.branch.clone(),
+                base: Some(r.base_branch.clone()),
+            })
+            .collect()
+    })
+    .unwrap_or_default()
 }
 
 /// Where the Remote Control of an agent comes from, as the tools say it: the three sources
@@ -184,6 +214,21 @@ pub(super) async fn projects<R: Runtime>(
             .read()
             .get(&p.id)
             .map(|g| g.is_repo.then(|| g.branch.clone()));
+        let repos: Vec<RepoBranch> = core
+            .git_cache
+            .read()
+            .get(&p.id)
+            .map(|g| {
+                g.repos
+                    .iter()
+                    .map(|r| RepoBranch {
+                        repo: r.repo.clone(),
+                        branch: r.branch.clone(),
+                        base: None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         let branch = match cached {
             Some(branch) => branch,
             None => Some(git::head_branch(&p.path).await),
@@ -194,6 +239,7 @@ pub(super) async fn projects<R: Runtime>(
             tickets: tickets.remove(&p.id).unwrap_or_default(),
             remote_control: p.remote_control,
             remote_control_all: remote_all,
+            repos,
             id: p.id,
             name: p.name,
             path: p.path,
@@ -448,6 +494,9 @@ pub(crate) struct TicketView {
     branch: Option<String>,
     /// Its agent's worktree, kept once the ticket is done even when the cleanup removed it.
     worktree: Option<String>,
+    /// Of a project of several repositories (ESC-169): those its agent's worktree has.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    repos: Vec<RepoBranch>,
     /// Why it no longer moves on by itself.
     blocked: Option<String>,
     /// The block is a merge conflict, which `resolve_conflict` hands to its agent.
@@ -560,6 +609,7 @@ pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView 
             .as_ref()
             .map(|w| w.branch.clone())
             .or_else(|| Some(t.branch.clone()).filter(|b| !b.is_empty())),
+        repos: agent_repos(worktree.as_ref()),
         worktree: worktree.map(|w| w.path),
         blocked: t.blocked.clone(),
         conflict: t.conflict,
@@ -783,6 +833,9 @@ struct Summary {
     waiting_for: Vec<&'static str>,
     #[serde(flatten)]
     work: WorkCounts,
+    /// Of a project of several repositories (ESC-169): its worktree of each, and their bases.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    repos: Vec<RepoBranch>,
     #[serde(flatten)]
     remote: RemoteRead,
 }
@@ -826,6 +879,7 @@ pub(super) fn agent_summary<R: Runtime>(
             requests: asked.len(),
             waiting_for: asked,
             work: WorkCounts::of(rt.meta.plan.as_ref()),
+            repos: agent_repos(rt.meta.worktree.as_ref()),
             remote: RemoteRead::of(
                 &rt.meta,
                 rt.remote_state.as_deref(),

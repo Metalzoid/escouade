@@ -32,6 +32,9 @@
   import CommitModal from './components/modals/CommitModal.svelte';
   import PrModal from './components/modals/PrModal.svelte';
   import ConfirmModal from './components/modals/ConfirmModal.svelte';
+  import MergeReposModal from './components/modals/MergeReposModal.svelte';
+  import CommitReposModal from './components/modals/CommitReposModal.svelte';
+  import { isMulti } from './lib/repos';
   import NewProjectModal from './components/modals/NewProjectModal.svelte';
   import RenameModal from './components/modals/RenameModal.svelte';
   import SettingsModal from './components/modals/SettingsModal.svelte';
@@ -213,6 +216,7 @@
     commit={app.modal.commit}
     refs={app.modal.refs}
     wholeProject={app.modal.wholeProject}
+    repo={app.modal.repo ?? null}
   />
 {:else if app.modal?.kind === 'confirm'}
   <!-- A choice can ask the next question (save, then delete): a dialog of its own, which takes the focus. -->
@@ -237,14 +241,18 @@
   <ConvSearch />
 {:else if app.modal?.kind === 'quickOpen'}
   <QuickOpen projectId={app.modal.projectId} source={app.modal.source} />
+{:else if app.modal?.kind === 'commit' && isMulti(app.projects.find((p) => app.modal?.kind === 'commit' && p.id === app.modal.projectId))}
+  <CommitReposModal projectId={app.modal.projectId} agentId={app.modal.agentId} />
 {:else if app.modal?.kind === 'commit'}
   <CommitModal projectId={app.modal.projectId} agentId={app.modal.agentId} resume={app.modal.resume} />
 {:else if app.modal?.kind === 'pullRequest'}
   <PrModal agentId={app.modal.agentId} />
+{:else if app.modal?.kind === 'mergeRepos'}
+  <MergeReposModal agentId={app.modal.agentId} />
 {:else if app.modal?.kind === 'newBranch'}
-  <NewBranchModal projectId={app.modal.projectId} start={app.modal.start} resume={app.modal.resume} />
+  <NewBranchModal projectId={app.modal.projectId} start={app.modal.start} resume={app.modal.resume} repo={app.modal.repo ?? null} />
 {:else if app.modal?.kind === 'mergedBranches'}
-  <MergedBranchesModal projectId={app.modal.projectId} />
+  <MergedBranchesModal projectId={app.modal.projectId} repo={app.modal.repo ?? null} />
 {:else if app.modal?.kind === 'ticket'}
   <TicketForm projectId={app.modal.projectId} ticket={app.modal.ticket} onsubmit={app.modal.onSubmit} resume={app.modal.resume} />
 {/if}

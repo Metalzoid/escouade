@@ -1167,6 +1167,7 @@ mod tests {
         let meta = AgentMeta {
             cwd: root.clone(),
             worktree: Some(Worktree {
+                repos: Vec::new(),
                 path: root.clone(),
                 branch: "ticket/x".into(),
                 base_branch: "main".into(),
@@ -1263,6 +1264,7 @@ mod worktree_run_tests {
             name: "refacto-auth".into(),
             cwd: path.clone(),
             worktree: Some(Worktree {
+                repos: Vec::new(),
                 path,
                 branch: "refacto-auth".into(),
                 base_branch: "main".into(),

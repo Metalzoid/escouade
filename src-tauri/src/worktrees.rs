@@ -692,6 +692,7 @@ mod tests {
     #[test]
     fn a_worktrees_commands_know_the_project_the_worktree_its_branch_and_its_ports() {
         let wt = Worktree {
+            repos: Vec::new(),
             path: "/p/.claude/worktrees/dem-1".into(),
             branch: "ticket/dem-1".into(),
             base_branch: "main".into(),

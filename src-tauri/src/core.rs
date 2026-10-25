@@ -388,7 +388,7 @@ pub fn branch_kept(lang: i18n::Lang, branch: &str, why: &BranchKept) -> String {
 /// named that is a remote one alone (`origin/x`) starts through the local branch made to track it
 /// (`x`), as « Nouvel agent sur une branche… » takes one up: its base is a local branch, which
 /// « Intégrer », its merge and its pull request go to. No fetch: the agent is made at once.
-async fn start_point(
+pub(crate) async fn start_point(
     project: &Project,
     root: &str,
     over: Option<&str>,
@@ -1472,6 +1472,8 @@ fn worktree_moved(lang: i18n::Lang, from: &str, to: &str) -> String {
 /// `add_project` fills in, or what the new project's assistant asks Claude about before it is made.
 pub(crate) fn blank_project(path: &str) -> Project {
     Project {
+        repos: Vec::new(),
+        repos_gone: Vec::new(),
         id: String::new(),
         name: String::new(),
         path: path.to_string(),
@@ -1837,6 +1839,8 @@ impl<R: Runtime> Core<R> {
         for p in &projects {
             self.watch_project(p);
         }
+        // Repositories added or removed while the app was closed (ESC-169).
+        self.refresh_all_repos();
         let c = self.clone();
         tauri::async_runtime::spawn(async move { c.git_loop(git_rx).await });
         let c = self.clone();
@@ -5287,7 +5291,73 @@ impl<R: Runtime> Core<R> {
         let mut start_notice = None;
         // A branch to start from asks for a worktree.
         let isolated = o.isolated.unwrap_or(project.worktree_per_agent) || o.base.is_some();
+        // Of several repositories (ESC-169): a folder of its own, with a worktree of each.
+        let multi: Option<Result<Worktree>> = if project.is_multi() {
+            use crate::multiwt::Spec;
+            let spec = match (&o.branch, &o.worktree, &o.copy_of) {
+                (Some(branch), _, _) => Some(Ok(Spec {
+                    name: branch.clone(),
+                    branch: Some(branch.clone()),
+                    existing: !o.new_branch,
+                    strict: o.new_branch,
+                    over: o.base.clone(),
+                    ..Default::default()
+                })),
+                (None, Some((branch, base)), _) => Some(Ok(Spec {
+                    name: branch.clone(),
+                    branch: Some(branch.clone()),
+                    over: Some(base.clone()),
+                    ..Default::default()
+                })),
+                (None, None, Some(c)) => match copied_from {
+                    Some(wt) => {
+                        let branch = copy_branch(&project.agent_branch_prefix, &c.name, &name);
+                        Some(Self::copy_spec(wt, &name, &branch).await)
+                    }
+                    None => None,
+                },
+                (None, None, None)
+                    if isolated
+                        && project.worktree_at_first_message
+                        && o.name.is_none()
+                        && !meta.terminal =>
+                {
+                    meta.worktree_pending = true;
+                    meta.worktree_from = o.base.clone();
+                    None
+                }
+                (None, None, None) if isolated => Some(Ok(Spec {
+                    name: name.clone(),
+                    over: o.base.clone(),
+                    ..Default::default()
+                })),
+                (None, None, None) => None,
+            };
+            match spec {
+                Some(Ok(spec)) => Some(
+                    self.multi_worktree(&project, &held, &spec, &mut start_notice)
+                        .await,
+                ),
+                Some(Err(e)) => Some(Err(e)),
+                None => None,
+            }
+        } else {
+            None
+        };
         let made = match (&o.branch, &o.worktree, &o.copy_of) {
+            // Made above, of each repository.
+            _ if project.is_multi() => match multi {
+                Some(Ok(wt)) => {
+                    meta.cwd = wt.path.clone();
+                    if !self.git_watches(&project, &wt.path) {
+                        self.watch_project(&project);
+                    }
+                    meta.worktree = Some(wt);
+                    None
+                }
+                Some(Err(e)) => Some(Err(e)),
+                None => None,
+            },
             // A new branch, named by the user, then the agent on it as on one that exists.
             (Some(branch), _, _) if o.new_branch => Some(
                 self.worktree_on_new_branch(
@@ -5373,6 +5443,7 @@ impl<R: Runtime> Core<R> {
                     self.watch_project(&project);
                 }
                 meta.worktree = Some(Worktree {
+                    repos: Vec::new(),
                     path,
                     branch,
                     base_branch: base,
@@ -5783,9 +5854,28 @@ impl<R: Runtime> Core<R> {
                 let mut notice = None;
                 // The branch chosen at its making, if one was.
                 let from = h.lock().meta.worktree_from.clone();
-                let made = self
-                    .agent_worktree(&project, &held, &slug, from.as_deref(), &mut notice)
-                    .await;
+                let made = if project.is_multi() {
+                    // Of several repositories (ESC-169): a worktree of each, in its folder.
+                    let spec = crate::multiwt::Spec {
+                        name: slug,
+                        over: from,
+                        agent: Some(id.to_string()),
+                        ..Default::default()
+                    };
+                    self.multi_worktree(&project, &held, &spec, &mut notice)
+                        .await
+                } else {
+                    self.agent_worktree(&project, &held, &slug, from.as_deref(), &mut notice)
+                        .await
+                        .map(|(path, branch, base)| Worktree {
+                            repos: Vec::new(),
+                            path,
+                            branch,
+                            base_branch: base,
+                            existing: false,
+                            named_branch: false,
+                        })
+                };
                 Some((project, made, notice))
             }
             Err(e) => {
@@ -5798,30 +5888,24 @@ impl<R: Runtime> Core<R> {
         let mut setup = None;
         if let Some((project, made, notice)) = made {
             match made {
-                Ok((path, branch, base)) => {
-                    if let Err(e) = testlaunch::copy_worktree_files(
-                        &project.path,
-                        &path,
-                        &project.worktree_copy,
-                    )
-                    .await
-                    {
-                        warnings.push(files_not_copied(&e));
+                Ok(wt) => {
+                    // Those of several repositories were copied as they were made.
+                    if !wt.is_multi() {
+                        if let Err(e) = testlaunch::copy_worktree_files(
+                            &project.path,
+                            &wt.path,
+                            &project.worktree_copy,
+                        )
+                        .await
+                        {
+                            warnings.push(files_not_copied(&e));
+                        }
                     }
                     // Out of the project's folder (its « Dossier des worktrees » beside it): watched too.
-                    if !self.git_watches(&project, &path) {
+                    if !self.git_watches(&project, &wt.path) {
                         self.watch_project(&project);
                     }
-                    setup = Some((
-                        project,
-                        Worktree {
-                            path,
-                            branch,
-                            base_branch: base,
-                            existing: false,
-                            named_branch: false,
-                        },
-                    ));
+                    setup = Some((project, wt));
                 }
                 Err(e) => warnings.push(tr!(
                     "Worktree non créé, l'agent travaille dans le dossier du projet : {e}",
@@ -5847,8 +5931,12 @@ impl<R: Runtime> Core<R> {
         // Deleted meanwhile: what was made for it goes too.
         if kept.is_err() {
             if let Some((project, wt)) = setup {
-                let _ = git::worktree_remove_dir(&project.path, &wt.path).await;
-                let _ = git::branch_delete(&project.path, &wt.branch, true).await;
+                if wt.is_multi() {
+                    let _ = crate::multiwt::remove(&project, &wt, false, git::REMOVE_RETRY).await;
+                } else {
+                    let _ = git::worktree_remove_dir(&project.path, &wt.path).await;
+                    let _ = git::branch_delete(&project.path, &wt.branch, true).await;
+                }
             }
             return true;
         }
@@ -5862,7 +5950,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The agent shows `step` of the making of its worktree (`setup`, as its setup's steps).
-    fn show_step(self: &Arc<Self>, id: &str, step: String) {
+    pub(crate) fn show_step(self: &Arc<Self>, id: &str, step: String) {
         let _ = self.with_agent(id, |rt, _| {
             rt.setup = Some(step);
             Ok(())
@@ -5968,6 +6056,30 @@ impl<R: Runtime> Core<R> {
         let (Some(mut wt), Ok(project)) = (wt, self.project(&pid)) else {
             return;
         };
+        // Of several repositories (ESC-169): its folder made again, a worktree of each.
+        if wt.is_multi() {
+            if Path::new(&wt.path).exists() {
+                return;
+            }
+            let problem = match crate::multiwt::restore(&project, &wt).await {
+                Ok(()) => {
+                    self.start_setup(&h, &project, &wt);
+                    None
+                }
+                Err(e) => Some(tr!(
+                    "Worktree non recréé depuis {b} : {e:#}",
+                    "Worktree not recreated from {b}: {e:#}",
+                    b = wt.branch
+                )),
+            };
+            if let Some(p) = problem {
+                let _ = self.with_agent(id, |rt, fx| {
+                    rt.notice("warn", p, fx);
+                    Ok(())
+                });
+            }
+            return;
+        }
         if !git::branch_exists(&project.path, &wt.branch).await {
             if !Path::new(&wt.path).exists() {
                 let text = worktree_gone(self.lang().ui, &wt.branch);
@@ -6466,16 +6578,27 @@ impl<R: Runtime> Core<R> {
         if with_pr {
             return kept(BranchKept::PullRequest);
         }
-        if git::is_pushed(&project.path, &wt.branch).await {
-            return kept(BranchKept::Pushed);
+        // Of several repositories (ESC-169): the branch of each, or of none.
+        let checkouts = wt.checkouts();
+        for c in &checkouts {
+            if git::is_pushed(&c.dir, &wt.branch).await {
+                return kept(BranchKept::Pushed);
+            }
+            if git::branch_exists(&c.dir, &branch).await {
+                return kept(BranchKept::Taken(branch));
+            }
         }
-        if git::branch_exists(&project.path, &branch).await {
-            return kept(BranchKept::Taken(branch));
+        let mut renamed: Vec<&str> = Vec::new();
+        for c in &checkouts {
+            if let Err(e) = git::rename_current_branch(&c.dir, &branch).await {
+                for dir in renamed {
+                    let _ = git::rename_current_branch(dir, &wt.branch).await;
+                }
+                return kept(BranchKept::Failed(format!("{e:#}")));
+            }
+            renamed.push(&c.dir);
         }
-        match git::rename_current_branch(&wt.path, &branch).await {
-            Ok(()) => Ok(Some(branch)),
-            Err(e) => kept(BranchKept::Failed(format!("{e:#}"))),
-        }
+        Ok(Some(branch))
     }
 
     pub async fn archive_agent(self: &Arc<Self>, id: &str, archived: bool) -> Result<()> {
@@ -6679,7 +6802,16 @@ impl<R: Runtime> Core<R> {
                     git::REMOVE_RETRY
                 };
                 let waited = Instant::now();
-                let removed = if wt.existing {
+                let removed = if wt.is_multi() {
+                    // Of several repositories (ESC-169): each judged apart, its work kept.
+                    match self
+                        .clean_multi(&project, &wt, wt.existing, ports, false)
+                        .await
+                    {
+                        None => Ok(()),
+                        Some((_, reason)) => Err(anyhow!(reason)),
+                    }
+                } else if wt.existing {
                     git::worktree_remove_dir_within(&project.path, &wt.path, retry).await
                 } else {
                     git::worktree_remove_within(&project.path, &wt.path, &wt.branch, retry).await
@@ -6751,6 +6883,53 @@ impl<R: Runtime> Core<R> {
             bail!(crate::tickets::Refusal::ApprovingAlready);
         }
         let project = self.project(&pid)?;
+        // Of several repositories (ESC-169): each one's base into its worktree, all checked first.
+        if wt.is_multi() {
+            let checkouts = wt.checkouts();
+            for c in &checkouts {
+                let repo_dir = crate::repos::join(&project.path, &c.repo);
+                if c.base.is_empty() || !git::branch_exists(&repo_dir, &c.base).await {
+                    bail!(integrate_base_gone(lang, &c.base));
+                }
+                if let Some(operation) = git::operation_in_progress(&c.dir).await {
+                    bail!(integrate_under_way(lang, &name, operation));
+                }
+                if git::has_tracked_changes(&c.dir).await? {
+                    bail!(integrate_dirty(lang));
+                }
+            }
+            let rebase = project.board.strategy == "rebase";
+            let (mut files, mut any_done, mut conflict_base) = (Vec::new(), false, String::new());
+            for c in &checkouts {
+                match git::update_branch(&c.dir, &c.base, rebase).await? {
+                    git::Updated::UpToDate => {}
+                    git::Updated::Done => any_done = true,
+                    git::Updated::Conflict(f) => {
+                        if conflict_base.is_empty() {
+                            conflict_base = c.base.clone();
+                        }
+                        files.extend(f.iter().map(|f| crate::repos::prefixed(&c.repo, f)));
+                    }
+                }
+            }
+            self.git.refresh(&pid);
+            if files.is_empty() {
+                return Ok(if any_done {
+                    Integration::Done
+                } else {
+                    Integration::UpToDate
+                });
+            }
+            let claude = self.lang().claude;
+            let text = match (ticketed, rebase) {
+                (true, true) => board::rebase_message(claude, &conflict_base),
+                (true, false) => board::conflict_message(claude, &conflict_base, &files),
+                (false, true) => integrate_rebase_message(claude, &conflict_base),
+                (false, false) => integrate_conflict_message(claude, &conflict_base, &files),
+            };
+            self.send_by_app(id, text).await?;
+            return Ok(Integration::Conflict { files, rebase });
+        }
         if base.is_empty() || !git::branch_exists(&project.path, &base).await {
             bail!(integrate_base_gone(lang, &base));
         }
@@ -6788,7 +6967,7 @@ impl<R: Runtime> Core<R> {
 
     /// The branch the project's work goes into: the board's target while that branch exists, else
     /// the one the folder is on ("" on a detached HEAD). Read only, never fixed.
-    async fn base_of(&self, project: &Project, root: &str) -> String {
+    pub(crate) async fn base_of(&self, project: &Project, root: &str) -> String {
         let target = project.board.target.trim();
         if !target.is_empty() && git::branch_exists(root, target).await {
             target.to_string()
@@ -6939,6 +7118,14 @@ impl<R: Runtime> Core<R> {
         };
         let wt = wt.ok_or_else(agent_without_worktree)?;
         let project = self.project(&pid)?;
+        // Of several repositories (ESC-169): each one's, checked first, all or nothing.
+        if wt.is_multi() {
+            let out = self
+                .merge_multi(&project, &name, &wt, squash, switch_to_base, None)
+                .await;
+            self.git.refresh(&pid);
+            return out;
+        }
         if git::has_tracked_changes(&project.path).await? {
             bail!(tr!(
                 "Le dépôt principal a des modifications non commitées : commite-les ou mets-les de côté avant de merger.",
@@ -7067,7 +7254,11 @@ impl<R: Runtime> Core<R> {
             }
             None => None,
         };
-        if git::toplevel(&path).await.is_none() {
+        // A folder of repositories (ESC-169) is not made one: its repositories are its git.
+        let several = !crate::repos::detect(Path::new(&path), &paths::worktrees_root(&path, ""))
+            .await
+            .is_empty();
+        if !several && git::toplevel(&path).await.is_none() {
             git::init_repo(&path).await.context("git init")?;
         }
         let fresh = Project {
@@ -7144,6 +7335,9 @@ impl<R: Runtime> Core<R> {
         // Its `.escouade.yml` sets it up, and says so (ESC-146): before its folders are watched, the
         // worktrees' one may come from it.
         let project = self.read_shared(&project.id, true).unwrap_or(project);
+        // Its repositories, if it has several (ESC-169): found before anything reads its git.
+        let _ = self.refresh_repos(&project.id, true).await;
+        let project = self.project(&project.id).unwrap_or(project);
         self.watch_project(&project);
         if reopened {
             // Its tickets may start, its agents are counted, its Remote Control ones are
@@ -7541,6 +7735,8 @@ impl<R: Runtime> Core<R> {
             return;
         };
         let info = match self.toplevel(&project.path).await {
+            // Of several repositories (ESC-169): each one's.
+            _ if project.is_multi() => self.multi_git(&project).await,
             None => GitInfo::default(),
             Some(root) => {
                 let (st, remotes) = tokio::join!(git::status(&root), git::remotes(&root));
@@ -7647,6 +7843,9 @@ impl<R: Runtime> Core<R> {
         strict: bool,
     ) -> Result<Vec<FileChange>> {
         let project = self.project(project_id)?;
+        if project.is_multi() {
+            return self.multi_dirty_files(&project, agent_id, strict).await;
+        }
         let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
         let prefix = sub_prefix(&root, &project.path);
         let agents: Vec<(String, Option<Worktree>, Vec<String>)> = self
@@ -7947,6 +8146,10 @@ impl<R: Runtime> Core<R> {
         agent_id: Option<String>,
         paths: Vec<String>,
     ) -> Result<String> {
+        let project = self.project(project_id)?;
+        if let Some(checkouts) = self.multi_checkouts(&project, agent_id.as_deref())? {
+            return Self::multi_diff(&checkouts, &paths).await;
+        }
         let root = self.files_root(project_id, agent_id).await?;
         git::diff(&root, &paths).await
     }
@@ -7977,7 +8180,12 @@ impl<R: Runtime> Core<R> {
                 // As for a worktree, no path to list for the checkout when no agent is credited
                 // with some of its files; else each group lists its own paths.
                 let listed: &[String] = if checkout_groups == 1 { &[] } else { &paths };
-                git::diff(&self.files_root(project_id, None).await?, listed).await?
+                let project = self.project(project_id)?;
+                if project.is_multi() {
+                    Self::multi_diff(&project.checkouts(), &paths).await?
+                } else {
+                    git::diff(&self.files_root(project_id, None).await?, listed).await?
+                }
             };
             out.push(OwnedDiff {
                 agent_id,
@@ -8008,7 +8216,12 @@ impl<R: Runtime> Core<R> {
         }
         // Its group is all of the worktree's dirty files: no path to list. Said with the colon of
         // each language (the French space before it), which a context would not give.
-        git::diff(&worktree.path, &[]).await.map(Some).map_err(|e| {
+        let diff = if worktree.is_multi() {
+            Self::multi_diff(&worktree.checkouts(), &[]).await
+        } else {
+            git::diff(&worktree.path, &[]).await
+        };
+        diff.map(Some).map_err(|e| {
             anyhow!(tr!(
                 "Diff du worktree de « {name} » non lu : {e:#}",
                 "Diff of the worktree of “{name}” not read: {e:#}"
@@ -8023,6 +8236,13 @@ impl<R: Runtime> Core<R> {
         agent_id: Option<String>,
         path: &str,
     ) -> Result<()> {
+        let project = self.project(project_id)?;
+        if let Some(checkouts) = self.multi_checkouts(&project, agent_id.as_deref())? {
+            let (c, rest) = Self::checkout_of(&checkouts, path)?;
+            git::discard(&c.dir, &rest).await?;
+            self.git.refresh(project_id);
+            return Ok(());
+        }
         let root = self.files_root(project_id, agent_id).await?;
         git::discard(&root, path).await?;
         self.git.refresh(project_id);
@@ -8044,6 +8264,24 @@ impl<R: Runtime> Core<R> {
             Some(a) => self.agent(a)?.lock().meta.worktree.is_some(),
             None => false,
         };
+        // Of several repositories (ESC-169): every checkout's, its paths from the project's folder.
+        if let Some(checkouts) = self.multi_checkouts(&project, agent_id.as_deref())? {
+            let (mut scope, unread) = self
+                .multi_commit_scope(&project, &checkouts, in_worktree)
+                .await?;
+            // An agent without a worktree: the files it edited alone.
+            if let (Some(a), false) = (&agent_id, in_worktree) {
+                let touched = self.agent(a)?.lock().meta.touched_files.clone();
+                scope
+                    .files
+                    .retain(|f| touched.iter().any(|t| t.eq_ignore_ascii_case(&f.path)));
+            }
+            return Ok(DirectScope {
+                root: String::new(),
+                scope,
+                unread,
+            });
+        }
         let root = self.files_root(project_id, agent_id.clone()).await?;
         let listed = match agent_id {
             // The project's checkout, whoever edited its files.
@@ -8117,6 +8355,7 @@ impl<R: Runtime> Core<R> {
         let _working = self.working();
         // Asked of the account of the agent whose changes these are.
         let asker = agent_id.clone();
+        let multi = self.multi_checkouts(&self.project(project_id)?, agent_id.as_deref())?;
         let DirectScope {
             root,
             scope,
@@ -8126,6 +8365,24 @@ impl<R: Runtime> Core<R> {
         if files.is_empty() {
             return Err(nothing_to_commit());
         }
+        // Of several repositories (ESC-169): one message per repository, in its style.
+        let root = match &multi {
+            Some(checkouts) => {
+                let repo = &files[0].repo;
+                if files.iter().any(|f| &f.repo != repo) {
+                    bail!(tr!(
+                        "Un message par dépôt : propose-le pour un dépôt à la fois.",
+                        "One message per repository: propose it for one repository at a time."
+                    ));
+                }
+                checkouts
+                    .iter()
+                    .find(|c| &c.repo == repo)
+                    .map(|c| c.dir.clone())
+                    .unwrap_or(root)
+            }
+            None => root,
+        };
         let n = format!("-n{RECENT_SUBJECTS}");
         let subjects: Vec<String> = git::text(&root, &["log", &n, "--format=%s"])
             .await
@@ -8142,6 +8399,8 @@ impl<R: Runtime> Core<R> {
         // Without a path, git would read every change of the checkout.
         let diff = if read.is_empty() {
             String::new()
+        } else if let Some(checkouts) = &multi {
+            Self::multi_diff(checkouts, &read).await.unwrap_or_default()
         } else {
             git::diff(&root, &read).await.unwrap_or_default()
         };
@@ -8180,6 +8439,7 @@ impl<R: Runtime> Core<R> {
         }
         // The app does not restart for an update in the middle of it (a hook may take its time).
         let _working = self.working();
+        let multi = self.multi_checkouts(&self.project(project_id)?, agent_id.as_deref())?;
         let DirectScope { root, scope, .. } = self.commit_scope(project_id, agent_id).await?;
         let files: Vec<String> = committed(scope, &paths)
             .into_iter()
@@ -8187,6 +8447,30 @@ impl<R: Runtime> Core<R> {
             .collect();
         if files.is_empty() {
             return Err(nothing_to_commit());
+        }
+        // Of several repositories (ESC-169): a commit in each repository of `files`, with the
+        // message; one that fails stops none of the others, and is told.
+        if let Some(checkouts) = multi {
+            let repos: Vec<String> = checkouts.iter().map(|c| c.repo.clone()).collect();
+            let (mut hashes, mut failed) = (Vec::new(), Vec::new());
+            for (repo, rel) in crate::repos::by_repo(&repos, &files) {
+                let Some(c) = checkouts.iter().find(|c| c.repo == repo) else {
+                    continue;
+                };
+                match git::commit_paths(&c.dir, &rel, message).await {
+                    Ok(()) => hashes.push(
+                        git::text(&c.dir, &["rev-parse", "--short", "HEAD"])
+                            .await
+                            .unwrap_or_default(),
+                    ),
+                    Err(e) => failed.push(format!("{} : {e:#}", crate::repos::label(&repo))),
+                }
+            }
+            self.git.refresh(project_id);
+            if !failed.is_empty() {
+                bail!(failed.join("\n"));
+            }
+            return Ok(hashes.join(", "));
         }
         let done = git::commit_paths(&root, &files, message).await;
         // Even after a refusal: a hook may have changed files (a formatter) before saying no.
@@ -8201,9 +8485,10 @@ impl<R: Runtime> Core<R> {
         self: &Arc<Self>,
         project_id: &str,
         agent_id: Option<String>,
+        repo: Option<String>,
     ) -> Result<GitLog> {
         let project = self.project(project_id)?;
-        let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
+        let root = self.repo_root(&project, repo.as_deref()).await?;
         let worktree = match &agent_id {
             Some(a) => self.agent(a)?.lock().meta.worktree.clone(),
             None => None,
@@ -8218,13 +8503,18 @@ impl<R: Runtime> Core<R> {
         })
     }
 
-    pub async fn git_show(self: &Arc<Self>, project_id: &str, hash: &str) -> Result<String> {
+    pub async fn git_show(
+        self: &Arc<Self>,
+        project_id: &str,
+        hash: &str,
+        repo: Option<String>,
+    ) -> Result<String> {
         let project = self.project(project_id)?;
-        let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
+        let root = self.repo_root(&project, repo.as_deref()).await?;
         git::show(&root, hash).await
     }
 
-    fn sync_lock(&self, root: &str) -> Arc<tokio::sync::Mutex<()>> {
+    pub(crate) fn sync_lock(&self, root: &str) -> Arc<tokio::sync::Mutex<()>> {
         self.sync_locks
             .lock()
             .entry(root.to_string())
@@ -8240,8 +8530,8 @@ impl<R: Runtime> Core<R> {
             .iter()
             .map(|p| (p.id.clone(), p.path.clone()))
             .collect();
-        for (id, path) in projects {
-            if self.toplevel(&path).await.as_deref() == Some(root) {
+        for (id, _) in projects {
+            if self.project_roots_of(&id).await.iter().any(|r| r == root) {
                 self.git.refresh(&id);
             }
         }
@@ -8250,17 +8540,13 @@ impl<R: Runtime> Core<R> {
     /// Fetches every project's repository that has a remote, one at a time and without ever
     /// asking for credentials, so that the commits to pull show up.
     pub(crate) async fn fetch_all(self: &Arc<Self>) {
-        let paths: Vec<String> = self
-            .projects
-            .read()
-            .iter()
-            .map(|p| p.path.clone())
-            .collect();
+        let ids: Vec<String> = self.projects.read().iter().map(|p| p.id.clone()).collect();
         let mut roots: Vec<String> = Vec::new();
-        for path in paths {
-            match self.toplevel(&path).await {
-                Some(root) if !roots.contains(&root) => roots.push(root),
-                _ => {}
+        for id in ids {
+            for root in self.project_roots_of(&id).await {
+                if !roots.contains(&root) {
+                    roots.push(root);
+                }
             }
         }
         for root in roots {
@@ -8281,9 +8567,21 @@ impl<R: Runtime> Core<R> {
 
     /// Fetch, pull or push of the project's main checkout, asked by the user (so credentials
     /// may be asked for). Returns a summary for the user.
+    /// The project's own repository (the first of several): the tests' way in.
+    #[cfg(test)]
     pub async fn git_sync(self: &Arc<Self>, project_id: &str, op: SyncOp) -> Result<String> {
+        self.git_sync_in(project_id, None, op).await
+    }
+
+    /// `git_sync` of the repository `repo` of a project of several (ESC-169).
+    pub async fn git_sync_in(
+        self: &Arc<Self>,
+        project_id: &str,
+        repo: Option<&str>,
+        op: SyncOp,
+    ) -> Result<String> {
         let project = self.project(project_id)?;
-        let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
+        let root = self.repo_root(&project, repo).await?;
         let lock = self.sync_lock(&root);
         let out = {
             let _guard = lock.lock().await;
@@ -8304,9 +8602,9 @@ impl<R: Runtime> Core<R> {
     // ---------- branches ----------
 
     /// The project and the repository its folder is in.
-    async fn branch_repo(&self, project_id: &str) -> Result<(Project, String)> {
+    async fn branch_repo(&self, project_id: &str, repo: Option<&str>) -> Result<(Project, String)> {
         let project = self.project(project_id)?;
-        let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
+        let root = self.repo_root(&project, repo).await?;
         Ok((project, root))
     }
 
@@ -8332,8 +8630,14 @@ impl<R: Runtime> Core<R> {
             .filter_map(|h| {
                 let rt = h.lock();
                 let wt = rt.meta.worktree.as_ref()?;
-                Some((rt.meta.id.clone(), rt.meta.name.clone(), wt.path.clone()))
+                Some(
+                    wt.checkouts()
+                        .into_iter()
+                        .map(|c| (rt.meta.id.clone(), rt.meta.name.clone(), c.dir))
+                        .collect::<Vec<_>>(),
+                )
             })
+            .flatten()
             .collect()
     }
 
@@ -8374,8 +8678,8 @@ impl<R: Runtime> Core<R> {
             .iter()
             .map(|p| (p.id.clone(), p.path.clone()))
             .collect();
-        for (id, path) in projects {
-            if self.toplevel(&path).await.as_deref() != Some(root) {
+        for (id, _) in projects {
+            if !self.project_roots_of(&id).await.iter().any(|r| r == root) {
                 continue;
             }
             let busy = self.project_agents(&id).iter().find_map(|h| {
@@ -8445,8 +8749,18 @@ impl<R: Runtime> Core<R> {
 
     /// The project's branches, local then remote, each one an agent's worktree holds with that
     /// agent.
+    /// The project's own repository (the first of several): the tests' way in.
+    #[cfg(test)]
     pub async fn branches(&self, project_id: &str) -> Result<Vec<git::BranchInfo>> {
-        let (_, root) = self.branch_repo(project_id).await?;
+        self.branches_in(project_id, None).await
+    }
+
+    pub async fn branches_in(
+        &self,
+        project_id: &str,
+        repo: Option<&str>,
+    ) -> Result<Vec<git::BranchInfo>> {
+        let (_, root) = self.branch_repo(project_id, repo).await?;
         let mut list = git::branch_list(&root).await?;
         let worktrees = self.agent_worktrees();
         for b in &mut list {
@@ -8461,8 +8775,19 @@ impl<R: Runtime> Core<R> {
 
     /// Checks a name for a new branch of the project: as git does, not taken already, and not one
     /// that hides a branch of a remote.
+    /// The project's own repository (the first of several): the tests' way in.
+    #[cfg(test)]
     pub async fn branch_check(&self, project_id: &str, name: &str) -> Result<()> {
-        let (_, root) = self.branch_repo(project_id).await?;
+        self.branch_check_in(project_id, None, name).await
+    }
+
+    pub async fn branch_check_in(
+        &self,
+        project_id: &str,
+        repo: Option<&str>,
+        name: &str,
+    ) -> Result<()> {
+        let (_, root) = self.branch_repo(project_id, repo).await?;
         git::check_new_branch(&root, name).await
     }
 
@@ -8474,15 +8799,27 @@ impl<R: Runtime> Core<R> {
     /// uncommitted changes (`DIRTY`) unless `stash`: they are put aside first, and back if the
     /// switch fails (else the error says which stash holds them). Returns the stash's name when
     /// one was made.
+    /// The project's own repository (the first of several): the tests' way in.
+    #[cfg(test)]
     pub async fn branch_switch(
         self: &Arc<Self>,
         project_id: &str,
         name: &str,
         stash: bool,
     ) -> Result<Option<String>> {
+        self.branch_switch_in(project_id, None, name, stash).await
+    }
+
+    pub async fn branch_switch_in(
+        self: &Arc<Self>,
+        project_id: &str,
+        repo: Option<&str>,
+        name: &str,
+        stash: bool,
+    ) -> Result<Option<String>> {
         // The app does not restart for an update in the middle of it.
         let _working = self.working();
-        let (_, root) = self.branch_repo(project_id).await?;
+        let (_, root) = self.branch_repo(project_id, repo).await?;
         // Not under a pull or a push of the same checkout.
         let lock = self.sync_lock(&root);
         let _guard = lock.lock().await;
@@ -8511,6 +8848,8 @@ impl<R: Runtime> Core<R> {
     /// HEAD when empty), tracking nothing, and with `switch` switches the project's folder to it
     /// under the refusals of `branch_switch` (stash included). A start at HEAD changes no file of
     /// the folder: its uncommitted changes go along. Returns the stash's name when one was made.
+    /// The project's own repository (the first of several): the tests' way in.
+    #[cfg(test)]
     pub async fn branch_create(
         self: &Arc<Self>,
         project_id: &str,
@@ -8519,8 +8858,21 @@ impl<R: Runtime> Core<R> {
         switch: bool,
         stash: bool,
     ) -> Result<Option<String>> {
+        self.branch_create_in(project_id, None, name, start, switch, stash)
+            .await
+    }
+
+    pub async fn branch_create_in(
+        self: &Arc<Self>,
+        project_id: &str,
+        repo: Option<&str>,
+        name: &str,
+        start: &str,
+        switch: bool,
+        stash: bool,
+    ) -> Result<Option<String>> {
         let _working = self.working();
-        let (_, root) = self.branch_repo(project_id).await?;
+        let (_, root) = self.branch_repo(project_id, repo).await?;
         let lock = self.sync_lock(&root);
         let _guard = lock.lock().await;
         // Everything that can be refused is, before anything is put aside.
@@ -8567,6 +8919,8 @@ impl<R: Runtime> Core<R> {
     /// worktree holds (`IN_WORKTREE` for an agent's). A branch whose work the project's base has
     /// (contained or squash-merged) goes at once; another is refused (`UNMERGED:<n>`, its commits
     /// no other branch has) unless `force`.
+    /// The project's own repository (the first of several): the tests' way in.
+    #[cfg(test)]
     pub async fn branch_delete(
         self: &Arc<Self>,
         project_id: &str,
@@ -8574,8 +8928,20 @@ impl<R: Runtime> Core<R> {
         remote: bool,
         force: bool,
     ) -> Result<Option<String>> {
+        self.branch_delete_in(project_id, None, name, remote, force)
+            .await
+    }
+
+    pub async fn branch_delete_in(
+        self: &Arc<Self>,
+        project_id: &str,
+        repo: Option<&str>,
+        name: &str,
+        remote: bool,
+        force: bool,
+    ) -> Result<Option<String>> {
         let _working = self.working();
-        let (project, root) = self.branch_repo(project_id).await?;
+        let (project, root) = self.branch_repo(project_id, repo).await?;
         let lock = self.sync_lock(&root);
         let _guard = lock.lock().await;
         let local = !name.starts_with('-') && git::branch_exists(&root, name).await;
@@ -8661,8 +9027,18 @@ impl<R: Runtime> Core<R> {
     /// The project's local branches whose work its base has (contained or squash-merged), but the
     /// base, the folder's own branch and those a worktree holds: what « Branches mergées » offers
     /// to delete. By name.
+    /// The project's own repository (the first of several): the tests' way in.
+    #[cfg(test)]
     pub async fn branches_merged(&self, project_id: &str) -> Result<Vec<String>> {
-        let (project, root) = self.branch_repo(project_id).await?;
+        self.branches_merged_in(project_id, None).await
+    }
+
+    pub async fn branches_merged_in(
+        &self,
+        project_id: &str,
+        repo: Option<&str>,
+    ) -> Result<Vec<String>> {
+        let (project, root) = self.branch_repo(project_id, repo).await?;
         let bases = self.merge_bases(&project, &root).await;
         let mut merged: Vec<String> = Vec::new();
         for b in &bases {
@@ -8684,8 +9060,20 @@ impl<R: Runtime> Core<R> {
     }
 
     /// What changes from `a` to `b` in the project's repository (`git diff a b`).
+    /// The project's own repository (the first of several): the tests' way in.
+    #[cfg(test)]
     pub async fn diff_refs(&self, project_id: &str, a: &str, b: &str) -> Result<String> {
-        let (_, root) = self.branch_repo(project_id).await?;
+        self.diff_refs_in(project_id, None, a, b).await
+    }
+
+    pub async fn diff_refs_in(
+        &self,
+        project_id: &str,
+        repo: Option<&str>,
+        a: &str,
+        b: &str,
+    ) -> Result<String> {
+        let (_, root) = self.branch_repo(project_id, repo).await?;
         git::diff_refs(&root, a, b).await
     }
 
@@ -8950,6 +9338,7 @@ mod tests {
 
     fn change(path: &str, status: &str) -> FileChange {
         FileChange {
+            repo: String::new(),
             path: path.into(),
             status: status.into(),
             add: 1,

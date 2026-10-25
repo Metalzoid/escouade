@@ -9,7 +9,7 @@
   // « Branches mergées »: the local branches already in the project's base (those of validated tickets, mostly), to
   // delete in one go. Each is deleted as git deletes a merged branch, never forced: one that is not merged any more by
   // now stays, with why.
-  let { projectId }: { projectId: string } = $props();
+  let { projectId, repo = null }: { projectId: string; repo?: string | null } = $props();
 
   /** The merged branches; null while they are read. */
   let merged = $state<string[] | null>(null);
@@ -25,7 +25,7 @@
 
   async function load() {
     try {
-      const names = await api.branchesMerged(projectId);
+      const names = await api.branchesMerged(projectId, repo);
       if (gone) return;
       merged = names;
       // All ticked at first; read again after some failed, a branch keeps the box it had (one the user left alone stays so).
@@ -54,7 +54,7 @@
     let deleted = 0;
     for (const branch of chosen) {
       try {
-        await api.branchDelete(projectId, branch, false, false);
+        await api.branchDelete(projectId, branch, false, false, repo);
         deleted++;
       } catch (e) {
         left.push(t('branches.merged.failed', { branch, reason: refusalText(e, branch) }));

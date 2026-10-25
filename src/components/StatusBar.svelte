@@ -23,6 +23,8 @@
   import type { EngineId } from '../lib/types';
   import AccountsPanel from './AccountsPanel.svelte';
   import BranchPicker from './branches/BranchPicker.svelte';
+  import { branchSummary, isMulti, repoLabel } from '../lib/repos';
+  import { menu } from '../lib/menu.svelte';
   import Icon from './Icon.svelte';
   import QuotaMeter from './QuotaMeter.svelte';
   import { tip } from '../lib/tip';
@@ -152,8 +154,60 @@
   const repo = $derived.by(() => {
     const p = app.ui.view === 'project' ? app.project : null;
     const g = p ? app.git[p.id] : undefined;
-    return p && g?.isRepo && g.branch ? { projectId: p.id, git: g, detached: g.branch === '(detached)' } : null;
+    // Of several repositories (ESC-169): shown even when they are not on one branch.
+    return p && g?.isRepo && (g.branch || isMulti(p))
+      ? { projectId: p.id, git: g, detached: g.branch === '(detached)', multi: isMulti(p) }
+      : null;
   });
+  /** Of several repositories: « main · 4 dépôts », or « 3 branches · 4 dépôts ». */
+  const summary = $derived(repo?.multi ? branchSummary(repo.git) : null);
+  /** The repository whose branch picker is open, of several. */
+  let pickerRepo = $state<string | null>(null);
+  /** Of several repositories: their menu first, each opening its own branch picker. */
+  function openBranches() {
+    if (!repo?.multi) {
+      pickerRepo = null;
+      pickerOpen = !pickerOpen;
+      return;
+    }
+    if (!branchButton) return;
+    const repos = repo.git.repos ?? [];
+    const projectId = repo.projectId;
+    menu.showAt(branchButton, [
+      { label: t('repos.status.menuTitle', { count: repos.length }), heading: true },
+      ...repos.map((r) => {
+        const why = r.gone
+          ? t('repos.status.gone')
+          : !r.hasCommit
+            ? t('repos.status.noCommit')
+            : r.branch === '(detached)'
+              ? t('repos.status.detached')
+              : undefined;
+        const ab =
+          r.ahead || r.behind
+            ? t('repos.status.sync', { branch: r.branch, behind: r.behind, ahead: r.ahead })
+            : `${r.branch} · ${t('repos.status.upToDate')}`;
+        return {
+          label: repoLabel(r.repo),
+          icon: 'branch' as const,
+          detail: why ? undefined : ab,
+          reason: why,
+          disabled: !!r.gone,
+          onClick: () => {
+            pickerRepo = r.repo;
+            pickerOpen = true;
+          },
+        };
+      }),
+      { label: '', separator: true },
+      {
+        label: t('repos.status.rescan'),
+        icon: 'restart' as const,
+        detail: t('repos.status.rescanHint'),
+        onClick: () => void app.run(api.refreshRepos(projectId)),
+      },
+    ]);
+  }
   /** What it can sync with, when it has a remote. */
   const sync = $derived(repo ? syncInfo(repo.git) : null);
   const busy = $derived(repo ? gitSync.running[repo.projectId] : undefined);
@@ -283,12 +337,27 @@
           disabled={!!busy}
           aria-haspopup="dialog"
           aria-expanded={pickerOpen}
-          onclick={() => (pickerOpen = !pickerOpen)}
-          use:tip={branchTitle}
+          onclick={openBranches}
+          use:tip={summary ? summary.text : branchTitle}
         >
           <Icon name="branch" size={14} />
-          <b class="name mono">{repo.detached ? t('branches.picker.detached') : repo.git.branch}</b>
-          {#if busy}
+          {#if summary}
+            {#if summary.branch}<b class="name mono">{summary.branch}</b>{/if}<span class="d repos"
+              >{summary.branch ? '· ' : ''}{summary.text}</span
+            >
+            {#if repo.git.ahead || repo.git.behind}<span class="ahead some"
+                ><Icon name="up" size={12} /><span aria-hidden="true">{repo.git.ahead}</span><span class="sr"
+                  >{t('shell.status.sync.aheadShort', { count: repo.git.ahead })}</span
+                ></span
+              ><span class="ahead some"
+                ><Icon name="pull" size={12} /><span aria-hidden="true">{repo.git.behind}</span><span class="sr"
+                  >{t('shell.status.sync.behindShort', { count: repo.git.behind })}</span
+                ></span
+              >{/if}
+          {:else}
+            <b class="name mono">{repo.detached ? t('branches.picker.detached') : repo.git.branch}</b>
+          {/if}
+          {#if summary}<!-- each repository's state is in its menu -->{:else if busy}
             <span>{runningLabel(busy)}</span>
           {:else if sync?.tracked}
             <!-- The commits to push, then to pull, as in the picker: an arrow and a number, said in words to a screen reader. -->
@@ -323,8 +392,8 @@
 {/if}
 
 {#if pickerOpen && repo}
-  {#key repo.projectId}
-    <BranchPicker projectId={repo.projectId} anchor={branchButton} onclose={() => (pickerOpen = false)} />
+  {#key repo.projectId + '|' + (pickerRepo ?? '')}
+    <BranchPicker projectId={repo.projectId} repo={pickerRepo} anchor={branchButton} onclose={() => (pickerOpen = false)} />
   {/key}
 {/if}
 

@@ -743,6 +743,7 @@ async fn each_agent_follows_the_pull_requests_of_the_worktree_it_works_in_never_
         ],
     );
     h.core.agent(&d).unwrap().lock().meta.worktree = Some(crate::model::Worktree {
+        repos: Vec::new(),
         path: wt_d.to_string_lossy().into(),
         branch: "feat/d".into(),
         base_branch: "main".into(),

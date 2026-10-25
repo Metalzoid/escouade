@@ -493,6 +493,7 @@ fn pr_of_graphql(p: &Value) -> Option<PullRequest> {
         .filter_map(|r| r["state"].as_str())
         .collect();
     Some(PullRequest {
+        repo: String::new(),
         number,
         url: p["url"].as_str().unwrap_or("").to_string(),
         title: p["title"].as_str().unwrap_or("").to_string(),

@@ -672,6 +672,10 @@ export interface Project {
   name: string;
   path: string;
   color: string;
+  /** Its repositories (ESC-169), from its folder with `/`, the root's own as `""`: absent for a project of one repository. */
+  repos?: string[];
+  /** Those found once and gone since (« retiré »), until forgotten. */
+  reposGone?: string[];
   /** « Lettres de la tuile » (ESC-167): empty is the initials of the name. Absent from a project of the window’s tests made before it. */
   tileLetters?: string;
   /** « Logo » (ESC-167): the file of its copy in the app’s data folder, empty for none; set by `setProjectLogo` alone. */
@@ -1034,6 +1038,43 @@ export interface Worktree {
   existing?: boolean;
   /** The branch was made for the agent under the name the user typed (ESC-155): the agent's, never renamed. */
   namedBranch?: boolean;
+  /** Of a project of several repositories (ESC-169): `path` is its folder, with a worktree of each of these at `path/<repo>`, all on `branch`. */
+  repos?: RepoWorktree[];
+}
+
+/** The worktree of one repository in an agent's folder (ESC-169). */
+export interface RepoWorktree {
+  repo: string;
+  baseBranch: string;
+}
+
+/** The state of one repository of a project of several (ESC-169). */
+export interface RepoGit {
+  repo: string;
+  /** "(detached)" for a detached HEAD; empty when its folder is gone. */
+  branch: string;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  hasRemote: boolean;
+  hasCommit: boolean;
+  modified: number;
+  added: number;
+  deleted: number;
+  gone: boolean;
+}
+
+/** What merging an agent would do in one of its repositories (ESC-169). */
+export interface RepoMerge {
+  repo: string;
+  base: string;
+  /** Commits of its branch not in the base: none, nothing to merge there. */
+  commits: number;
+  add: number;
+  del: number;
+  /** Why it can't be merged. */
+  problem: string | null;
+  conflicts: string[];
 }
 
 /** A worktree of the project's repository an agent without one of its own went into by itself (ESC-161: `EnterWorktree`, a `cd`), as its session last said. */
@@ -1428,6 +1469,8 @@ export interface GitInfo {
   deleted: number;
   total: number;
   agents: Record<string, number>;
+  /** Of a project of several repositories (ESC-169): each one's; the fields above are their sums, `branch` theirs when they share it (empty otherwise). */
+  repos?: RepoGit[];
 }
 
 export interface Commit {
@@ -1478,6 +1521,8 @@ export interface FileChange {
   agentId: string | null;
   /** Listed from the worktree of `agentId` rather than the project's repository. */
   inWorktree: boolean;
+  /** Its repository, in a project of several (ESC-169): `path` starts with it. */
+  repo?: string;
 }
 
 /** The unified diff of the listed files that one agent owns in one checkout (null: no agent). */
@@ -2073,6 +2118,10 @@ export interface FolderInfo {
   name: string;
   /** The closed project this folder was (its history, kept), if it was one. */
   history: ClosedProject | null;
+  /** Its repositories when it holds several (ESC-169); empty otherwise. */
+  repos?: string[];
+  /** Those of `repos` without any commit. */
+  reposWithoutCommit?: string[];
 }
 
 /** What the new project's assistant found in the folder (`inspect_setup`). */
@@ -2162,6 +2211,8 @@ export interface PullRequest {
   /** Null when it has no check. */
   checks: CheckState | null;
   fork: boolean;
+  /** Of an agent of several repositories (ESC-169): the repository it was opened in. */
+  repo?: string;
 }
 
 /** « Ouvrir une PR »: what the model proposes, which the user reads and edits (`agentprs::PrProposal`). */
@@ -2177,6 +2228,17 @@ export interface PrProposal {
   uncommitted: number;
   /** The model did not answer: made from the commits. */
   fallback: boolean;
+  /** Of an agent of several repositories (ESC-169): one pull request in each. */
+  repos?: PrRepo[];
+}
+
+/** One repository of an agent's pull requests (ESC-169). */
+export interface PrRepo {
+  repo: string;
+  /** Its repository on the host (`acme/api`). */
+  remote: string;
+  base: string;
+  commits: number;
 }
 
 /** What a correction hands the agent: the failed checks, or the review's feedback. */

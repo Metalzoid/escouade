@@ -53,6 +53,16 @@
 
   const st = $derived(app.editor[project.id]);
   const source = $derived(st?.source ?? 'project');
+  /** Of a project of several repositories (ESC-169): each repository's folder and its branch, in the tree. */
+  const repoBranches = $derived.by(() => {
+    const out: Record<string, string> = {};
+    const wt = source !== 'project' ? app.agents[source]?.worktree : null;
+    for (const r of project.repos ?? []) {
+      if (!r) continue;
+      out[r] = wt?.repos?.some((x) => x.repo === r) ? wt.branch : (app.git[project.id]?.repos?.find((g) => g.repo === r)?.branch ?? '');
+    }
+    return out;
+  });
   const place = $derived(st?.places[source]);
   const tree = $derived(trees.get(project.id, source));
   const srcAgent = $derived(source === 'project' ? null : (app.agents[source] ?? null));
@@ -826,6 +836,7 @@
           <FileTree
             bind:this={fileTree}
             {rows}
+            {repoBranches}
             active={activePath}
             ontoggle={(d) => {
               lastDir = { source, dir: d };

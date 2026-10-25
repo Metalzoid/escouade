@@ -2,6 +2,8 @@
   import { open } from '@tauri-apps/plugin-dialog';
   import { fDate, tildify } from '../../lib/format';
   import { t } from '../../lib/i18n';
+  import { tip } from '../../lib/tip';
+  import { repoLabel } from '../../lib/repos';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import { knowLogo, logoUrl, pickLogo } from '../../lib/project-logo.svelte';
@@ -132,14 +134,17 @@
       ? { text: t('shell.newProject.git.choose'), color: 'var(--dim)' }
       : !info.exists
         ? { text: t('shell.newProject.git.missing'), color: 'var(--del)' }
-        : info.isRepo
-          ? {
-              text: info.dirty
-                ? t('shell.newProject.git.repoDirty', { branch: info.branch || '—', count: info.dirty })
-                : t('shell.newProject.git.repoClean', { branch: info.branch || '—' }),
-              color: 'var(--ok)',
-            }
-          : { text: t('shell.newProject.git.none'), color: 'var(--muted)' },
+        : info.repos?.length
+          ? // Of several repositories (ESC-169): « 4 dépôts git : front, api, infra, docs ».
+            { text: t('repos.wizard.found', { count: info.repos.length, repos: info.repos.map(repoLabel).join(', ') }), color: 'var(--ok)' }
+          : info.isRepo
+            ? {
+                text: info.dirty
+                  ? t('shell.newProject.git.repoDirty', { branch: info.branch || '—', count: info.dirty })
+                  : t('shell.newProject.git.repoClean', { branch: info.branch || '—' }),
+                color: 'var(--ok)',
+              }
+            : { text: t('shell.newProject.git.none'), color: 'var(--muted)' },
   );
 
   const STARTS = $derived<{ id: Start; label: string; desc: string }[]>(
@@ -293,7 +298,17 @@
               />
               <button class="btn" onclick={browse}><Icon name="folder" size={14} />{t('shell.newProject.browse')}</button>
             </div>
-            <span class="git" style:color={gitLine.color}><span class="gd" style:background={gitLine.color}></span>{gitLine.text}</span>
+            <span class="git" style:color={gitLine.color} use:tip={info?.repos?.length ? t('repos.wizard.foundHint') : undefined}
+              ><span class="gd" style:background={gitLine.color}></span>{gitLine.text}</span
+            >
+            {#if info?.reposWithoutCommit?.length}
+              <span class="git" style:color="var(--wait)" use:tip={t('repos.wizard.noCommitHint')}
+                ><span class="gd" style:background="var(--wait)"></span>{t('repos.wizard.noCommit', {
+                  count: info.reposWithoutCommit.length,
+                  repos: info.reposWithoutCommit.map(repoLabel).join(', '),
+                })}</span
+              >
+            {/if}
           </div>
         {/if}
         {#if history}

@@ -60,6 +60,10 @@ mod leftovers;
 mod mcp;
 mod menus;
 mod model;
+#[cfg(test)]
+mod multi_repo_tests;
+mod multiticket;
+mod multiwt;
 mod navigation;
 mod notify;
 #[cfg(test)]
@@ -84,6 +88,9 @@ mod projectfile;
 mod projectfile_tests;
 mod projectlogo;
 mod pty;
+mod repos;
+#[cfg(test)]
+mod repos_tests;
 mod resources;
 mod search;
 mod selfupdate;
@@ -407,6 +414,8 @@ pub fn run() {
             if let WindowEvent::Focused(true) = event {
                 if let Some(core) = window.try_state::<Arc<Core>>() {
                     core.declare_on_focus();
+                    // A repository added or removed in a project's folder meanwhile (ESC-169).
+                    core.refresh_all_repos();
                 }
             }
             if let WindowEvent::CloseRequested { api, .. } = event {
@@ -448,6 +457,10 @@ pub fn run() {
             commands::tui_asks_trust,
             commands::paste_image,
             commands::inspect_folder,
+            commands::refresh_repos,
+            commands::agent_merge_check,
+            commands::merge_agent_repos,
+            commands::forget_repo,
             commands::inspect_setup,
             commands::first_commit,
             commands::create_project,

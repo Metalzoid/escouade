@@ -662,12 +662,44 @@ pub struct Project {
     /// as last read.
     #[serde(default)]
     pub shared: crate::projectfile::ProjectShared,
+    /// Its repositories (ESC-169), from its folder with `/` (`repos::detect`): empty for a project
+    /// of one repository (or none), as before; the root's own as `""`, first, when it holds others.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub repos: Vec<String>,
+    /// Those found once and gone since (« retiré »), until the user forgets them: the worktrees
+    /// agents have of them stay until the cleaning.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub repos_gone: Vec<String>,
 }
 
 impl Project {
     /// The harness of its new agents and tickets that do not say theirs.
     pub fn engine(&self) -> EngineId {
         self.engine.unwrap_or_default()
+    }
+
+    /// A project of several repositories (ESC-169).
+    pub fn is_multi(&self) -> bool {
+        !self.repos.is_empty()
+    }
+
+    /// Its checkouts in its own folder: each repository, or the folder itself.
+    pub fn checkouts(&self) -> Vec<Checkout> {
+        if self.repos.is_empty() {
+            return vec![Checkout {
+                repo: String::new(),
+                dir: self.path.clone(),
+                base: String::new(),
+            }];
+        }
+        self.repos
+            .iter()
+            .map(|r| Checkout {
+                repo: r.clone(),
+                dir: crate::repos::join(&self.path, r),
+                base: String::new(),
+            })
+            .collect()
     }
 
     /// The folder its new worktrees go to.
@@ -1200,6 +1232,56 @@ pub struct Worktree {
     /// branche… », ESC-155): the agent's, it goes with its worktree, but Haiku never renames it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub named_branch: bool,
+    /// Of a project of several repositories (ESC-169): `path` is the agent's folder, and these the
+    /// repositories it has a worktree of, each at `path/<repo>` on `branch`. Empty: `path` is the
+    /// worktree, as before.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub repos: Vec<RepoWorktree>,
+}
+
+/// The worktree of one repository in an agent's folder (`Worktree::repos`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RepoWorktree {
+    /// From the project's folder, with `/`; `""` for the root's own.
+    pub repo: String,
+    /// What it started from, and what its merge and its pull request go to.
+    pub base_branch: String,
+}
+
+/// One checkout of some code: a repository's folder or worktree, or the only one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Checkout {
+    /// From the project's folder; `""` for a project of one repository (and the root's own).
+    pub repo: String,
+    pub dir: String,
+    /// The branch it goes to (an agent's worktree); empty for the project's own folders.
+    pub base: String,
+}
+
+impl Worktree {
+    /// Its checkouts: each repository's worktree, or itself.
+    pub fn checkouts(&self) -> Vec<Checkout> {
+        if self.repos.is_empty() {
+            return vec![Checkout {
+                repo: String::new(),
+                dir: self.path.clone(),
+                base: self.base_branch.clone(),
+            }];
+        }
+        self.repos
+            .iter()
+            .map(|r| Checkout {
+                repo: r.repo.clone(),
+                dir: crate::repos::join(&self.path, &r.repo),
+                base: r.base_branch.clone(),
+            })
+            .collect()
+    }
+
+    pub fn is_multi(&self) -> bool {
+        !self.repos.is_empty()
+    }
 }
 
 /// A worktree of the project's repository that an agent without one of Escouade's went into by
@@ -1725,6 +1807,29 @@ pub struct GitInfo {
     pub total: u32,
     /// Dirty file count attributed to each agent of the project.
     pub agents: HashMap<String, u32>,
+    /// Of a project of several repositories (ESC-169), each one's: the fields above are then
+    /// their sums, and `branch` theirs when they share it (empty otherwise).
+    pub repos: Vec<RepoGit>,
+}
+
+/// The state of one repository of a project of several (`GitInfo::repos`).
+#[derive(Debug, Clone, Serialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RepoGit {
+    pub repo: String,
+    /// "(detached)" for a detached HEAD; empty when the folder is gone.
+    pub branch: String,
+    pub upstream: Option<String>,
+    pub ahead: u32,
+    pub behind: u32,
+    pub has_remote: bool,
+    pub has_commit: bool,
+    /// Its own changes (`modified + added + deleted`), the agents' worktrees apart.
+    pub modified: u32,
+    pub added: u32,
+    pub deleted: u32,
+    /// Its folder is no longer there (« retiré »).
+    pub gone: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1737,6 +1842,8 @@ pub struct FileChange {
     pub agent_id: Option<String>,
     /// Listed from `agent_id`'s worktree rather than the project's repository.
     pub in_worktree: bool,
+    /// Its repository, in a project of several (ESC-169): `path` starts with it.
+    pub repo: String,
 }
 
 /// The unified diff of the files of the files panel that one agent owns in one checkout (the

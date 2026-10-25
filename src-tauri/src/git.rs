@@ -448,6 +448,7 @@ pub async fn file_changes(root: &str) -> Result<Vec<FileChange>> {
                 }
             });
             FileChange {
+                repo: String::new(),
                 path: e.path,
                 status: e.status.to_string(),
                 add,
@@ -6165,4 +6166,40 @@ sleep {seconds}
         }
         assert_eq!(git_in(Path::new(&wt), &["rev-parse", "HEAD"]), head);
     }
+}
+
+/// The files a merge of `branch` into `base` would conflict on, without touching any checkout
+/// (`git merge-tree`): empty when it would merge cleanly.
+pub async fn merge_conflicts(repo: &str, base: &str, branch: &str) -> Result<Vec<String>> {
+    let args = [
+        "merge-tree",
+        "--write-tree",
+        "--name-only",
+        "--no-messages",
+        base,
+        branch,
+    ];
+    let out = output(command(repo, &args), &args).await?;
+    match out.status.code() {
+        Some(0) => Ok(Vec::new()),
+        // 1: conflicts; the tree's id first, then the files.
+        Some(1) => Ok(String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .skip(1)
+            .filter(|l| !l.is_empty())
+            .map(str::to_string)
+            .collect()),
+        _ => checked(out, &args).map(|_| Vec::new()),
+    }
+}
+
+/// What a diff from `base` to `branch` adds and removes (lines), for a merge's window.
+pub async fn diff_counts(repo: &str, base: &str, branch: &str) -> (u32, u32) {
+    let range = format!("{base}...{branch}");
+    let out = run(repo, &["diff", "--numstat", &range])
+        .await
+        .unwrap_or_default();
+    parse_numstat(&out)
+        .values()
+        .fold((0, 0), |(a, d), (x, y)| (a + x, d + y))
 }
