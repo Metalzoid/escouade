@@ -32,6 +32,14 @@ Un cinquième harness, par ACP, à côté de Claude Code, Codex, OpenCode et Cop
 - [ ] **Wispr Flow** pour la transcription vocale, comme service en ligne et comme app de bureau (ESC-164).
 - [ ] **GitLab Issues** comme source de synchro du Kanban, sur gitlab.com et les instances auto-hébergées (ESC-165).
 
+## Plugins (demandé le 2026-10-25)
+
+« Pour la v2.1.0, planifie pour plus tard un système de plugins, permettant à tout le monde d'apporter des fonctionnalités à Escouade, fais une analyse poussée pour voir tout ce qu'on pourrait manipuler via ces plugins, et planifie une documentation étendue sur le sujet. »
+
+- [ ] **L'analyse et le plan** (ESC-170) : ce qu'un plugin pourrait manipuler, point d'extension par point d'extension, depuis le code ; l'architecture (process, WASM, JS dans la WebView) ; le modèle de confiance et de distribution ; le découpage en versions ; le plan de la documentation étendue (section « Plugins » du site en français et en anglais, SDK, plugins d'exemple). Résultat : `docs/PLUGINS.md` et ce chapitre, complété avec les tickets de construction.
+- [ ] Les questions qui décident, posées à l'utilisateur avec la relecture d'ESC-170.
+- [ ] La construction et la documentation, en tickets créés d'après l'analyse.
+
 ## Restes du redesign
 
 Notés par la revue finale (ESC-84, `design/app-redesign/final/REVUE.md`) :
