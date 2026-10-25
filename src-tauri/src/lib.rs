@@ -33,6 +33,8 @@ mod core;
 mod core_tests;
 #[cfg(test)]
 mod cursor_tests;
+#[cfg(test)]
+mod cursor_tui_tests;
 mod engine;
 #[cfg(test)]
 mod engines_tests;

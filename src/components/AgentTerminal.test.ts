@@ -712,6 +712,53 @@ describe('the band above the harness’s terminal', () => {
     expect(band.textContent).toContain('Escouade ne répond pas à ta place');
   });
 
+  it('says it for Cursor CLI too, with the answer its interface waits for', async () => {
+    const a = agent({ terminal: true, engine: 'cursor' });
+    resetApp({ projects: [project()], agents: [a] });
+    fakeBackend({ tui_asks_trust: () => true });
+    render(AgentTerminal, { agent: a });
+    const band = await screen.findByRole('status');
+    expect(band).toHaveClass('trust');
+    expect(band.textContent).toContain('Cursor CLI demande s’il peut faire confiance au dossier de l’agent.');
+    expect(band.textContent).toContain('« Trust this workspace »');
+    expect(band.textContent).toContain('Escouade ne répond pas à ta place');
+  });
+
+  it('says in Cursor’s view that its following is limited, and what Escouade does not know, once the folder is trusted', async () => {
+    let asks = true;
+    const a = agent({ terminal: true, engine: 'cursor' });
+    resetApp({ projects: [project()], agents: [a] });
+    fakeBackend({ tui_asks_trust: () => asks });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    render(AgentTerminal, { agent: a });
+    await screen.findByRole('status');
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    asks = false;
+    await vi.advanceTimersByTimeAsync(1600);
+    const note = await screen.findByRole('note');
+    expect(note).toHaveClass('limited');
+    expect(note.querySelector('b')?.textContent).toBe('Suivi limité');
+    expect(note.querySelector('[data-icon="info"]')).not.toBeNull();
+    // What it sees, then what it does not know.
+    expect(note.textContent).toContain('Escouade voit tes messages, les réponses de Cursor et la fin de chaque tour');
+    expect(note.textContent).toContain('mais pas ses permissions ni ses questions en attente');
+    expect(note.textContent).toContain('ni le résultat de ses outils, ni les tokens');
+    // Its conversation apart, which Escouade links to the agent's.
+    expect(note.textContent).toContain('Escouade la relie à celle de l’agent');
+  });
+
+  it('says it in English too', async () => {
+    setLang('en');
+    const a = agent({ terminal: true, engine: 'cursor' });
+    resetApp({ projects: [project()], agents: [a] });
+    fakeBackend({ tui_asks_trust: () => false });
+    render(AgentTerminal, { agent: a });
+    const note = await screen.findByRole('note');
+    expect(note.textContent?.trim()).toBe(
+      'Limited following: Escouade sees your messages, Cursor’s replies and the end of each turn, but not its permissions or questions waiting, nor the results of its tools, nor the tokens: look at the terminal. This conversation is Cursor’s own: Escouade links it to the agent’s.',
+    );
+  });
+
   it('says in OpenCode’s view that Escouade keeps the thread, and asks nothing of Claude Code’s', async () => {
     const oc = agent({ terminal: true, engine: 'opencode' });
     resetApp({ projects: [project()], agents: [oc] });

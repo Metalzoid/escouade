@@ -36,7 +36,7 @@ Quel que soit le harness, l’agent a la même conversation : la réponse et le 
 | Message pendant un tour | attend la fin du tour | entre dans le tour | attend la fin du tour | entre dans le tour | attend la fin du tour |
 | Coût | exact | estimé | exact (0 en local) | exact, en crédits d’IA | non donné |
 | Quota | fenêtres 5 h et 7 jours | fenêtres 5 h et 7 jours (30 jours en offre gratuite) | aucun : budget par jour | crédits du mois | lien vers son tableau de bord |
-| Vue terminal | « Vue Claude Code » | « Vue Codex » | « Vue OpenCode » | « Vue Copilot CLI » | aucune |
+| Vue terminal | « Vue Claude Code » | « Vue Codex » | « Vue OpenCode » | « Vue Copilot CLI » | « Vue Cursor CLI », suivi limité |
 | PDF joints | oui | non | non | non | non |
 | Remote control, tâches de fond | oui | non | non | non | non |
 
@@ -166,7 +166,7 @@ Les skills, commandes, agents et hooks de Claude Code de ton compte et du projet
 
 ### Coût, quota et ce que Cursor ne fait pas
 
-Cursor ne dit ni les tokens ni le coût d’un tour quand Escouade le pilote : la conversation n’en montre pas, et les statistiques comptent ses tours et leur durée. Il ne dit pas non plus son usage du mois : pas de barre dans la barre d’état, mais « Usage sur cursor.com » dans Réglages › Comptes et dans le panneau des quotas, qui ouvre son tableau de bord. Une limite atteinte (« Upgrade your plan to continue ») arrête le tour sur une carte ambre qui le dit, avec, s’il y en a, le compte ou le harness où continuer. Pas de vue terminal, pas de « Dupliquer la conversation » (Cursor ne copie pas une session), pas de PDF joints, pas de commandes `/` dans Escouade, ni remote control ni tâches de fond. Il reçoit le serveur MCP d’Escouade par sa session ; l’interrupteur ne le déclare pas encore dans la config de Cursor.
+Cursor ne dit ni les tokens ni le coût d’un tour quand Escouade le pilote : la conversation n’en montre pas, et les statistiques comptent ses tours et leur durée. Il ne dit pas non plus son usage du mois : pas de barre dans la barre d’état, mais « Usage sur cursor.com » dans Réglages › Comptes et dans le panneau des quotas, qui ouvre son tableau de bord. Une limite atteinte (« Upgrade your plan to continue ») arrête le tour sur une carte ambre qui le dit, avec, s’il y en a, le compte ou le harness où continuer. Pas de « Dupliquer la conversation » (Cursor ne copie pas une session), pas de PDF joints, pas de commandes `/` dans Escouade, ni remote control ni tâches de fond. Il reçoit le serveur MCP d’Escouade par sa session ; l’interrupteur ne le déclare pas encore dans la config de Cursor. La « Vue Cursor CLI » fait tourner l’agent dans l’interface de Cursor, avec un suivi limité (voir [la vue terminal](claude-code-view#avec-cursor-cli)).
 
 ## Le serveur MCP
 

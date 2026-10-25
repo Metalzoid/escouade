@@ -109,6 +109,18 @@ Un agent sur Copilot CLI a la même vue : le bouton s’appelle « Vue Copilot 
 - **Interrompre** envoie `Échap` deux fois, comme Copilot le demande (« esc again to interrupt »).
 - **Ce qui n’est pas suivi dans cette vue** : le bandeau « Plan » (les tâches de Copilot).
 
+## Avec Cursor CLI
+
+Un agent sur Cursor CLI a aussi sa vue : le bouton s’appelle « Vue Cursor CLI » et lance l’interface de Cursor (`agent`) dans le dossier de l’agent, avec son modèle et son mode, dans le dossier de configuration de l’agent : ses règles « Pour cet agent » valent dans les deux vues. Ce qui change par rapport à Claude Code :
+
+- **Deux conversations reliées.** Cursor tient les conversations de son interface à part de celles qu’Escouade pilote : l’interface ne reprend pas l’historique de la session de l’agent, ni l’inverse. Escouade les relie : en ouvrant la vue, il écrit ce qui s’est dit jusque-là dans une règle que l’interface lit (`.cursor/rules/escouade-relais.mdc` dans le dossier de l’agent, gardée hors de git et retirée au retour) ; au retour dans la vue Escouade, ce qui s’est dit dans l’interface part avec ton message suivant. L’interface garde sa propre conversation d’une ouverture à l’autre (`agent --resume`).
+- **Un suivi limité.** Cursor ne prévient pas Escouade par des hooks fiables : Escouade lit le journal de l’interface (`~/.cursor/projects/<dossier>/agent-transcripts/`). La carte de l’agent dit quand il travaille et quand il a fini, avec la notification de fin de tour, et sa conversation montre tes messages, ses réponses et ses outils. Escouade ne sait pas quand Cursor attend ton autorisation ou ta réponse, ni le résultat de ses commandes et de ses modifications, ni les tokens : la bande « Suivi limité », au-dessus du terminal, le rappelle. Regarde le terminal.
+- **La confiance du dossier.** Sur un dossier qu’il ne connaît pas, Cursor demande d’abord si tu lui fais confiance (« Trust this workspace »). Escouade ne répond jamais à ta place, et ne tape aucun message tant que la question est posée.
+- **Les modes.** « Plan » lance l’interface en mode plan, « Bypass » en « Run Everything » (`--force`) ; « Demander » et « Accepter les modifications » laissent Cursor demander ses commandes.
+- **Le shell** de Cursor reste PowerShell sous Windows, même si Escouade a été lancé depuis Git Bash.
+- **Interrompre** envoie `Ctrl+C`, comme dans l’interface.
+- **Ce qui n’est pas suivi dans cette vue** : le bandeau « Plan », les sous-agents, les permissions et les questions en attente, le résultat des outils, les tokens.
+
 ## Sous Windows avec WSL
 
 Quand Claude Code est installé dans WSL, Escouade le lance par `wsl.exe` (voir [les réglages des harness](settings-claude-code)). Le suivi en direct de la vue Claude Code demande alors le réseau miroir de WSL : sans lui, les hooks de l’interface n’atteignent pas l’app. Les réglages le signalent sous le chemin de `claude` (« Le réseau de WSL est en NAT… »). Pour passer en mode miroir, ajoute ceci à `%UserProfile%\.wslconfig`, puis lance `wsl --shutdown` :

@@ -188,6 +188,9 @@ pub struct Spawn {
     pub effort: String,
     pub mode: String,
     pub append_prompt: Option<String>,
+    /// What was said in its harness's own interface, which its session does not have: told with its
+    /// next message (`AgentMeta::relay`, Cursor).
+    pub relay: Option<String>,
     pub start: Start,
     /// Folders it reads without a question: those of the files joined to its messages and of its
     /// ticket's files.
@@ -218,6 +221,7 @@ impl Spawn {
             effort: meta.effort.clone(),
             mode: meta.mode.clone(),
             append_prompt: meta.append_prompt.clone(),
+            relay: meta.relay.clone(),
             start: Start::of(meta),
             read_dirs: Vec::new(),
             escouade: Escouade::Denied { file: None },

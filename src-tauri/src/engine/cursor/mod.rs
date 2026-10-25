@@ -18,6 +18,7 @@
 pub(crate) mod bench;
 mod locate;
 mod process;
+pub(crate) mod terminal;
 
 #[cfg(test)]
 pub(crate) use bench::fake_cursor;
@@ -150,7 +151,8 @@ pub fn caps() -> EngineCaps {
         quota_windows: Vec::new(),
         // Neither tokens nor cost in ACP.
         cost: CostKind::None,
-        terminal_view: false,
+        // Its interface, with what its transcript tells (`terminal`): ESC-49.
+        terminal_view: true,
         remote_control: false,
         background_tasks: false,
         todo_tools: false,
@@ -291,6 +293,17 @@ pub(crate) fn mcp_servers(escouade: Option<&(String, String)>) -> Value {
 /// ACP has no system message, and `session/load` keeps them (tried).
 pub(crate) fn preamble(instructions: &str) -> String {
     format!("<instructions>\n{}\n</instructions>", instructions.trim())
+}
+
+/// What was said in the agent's interface (« Vue Cursor », `handover::relay`), as it goes before its
+/// next message.
+pub(crate) fn relayed(relay: &str) -> String {
+    format!(
+        "<relais_escouade>
+{}
+</relais_escouade>",
+        relay.trim()
+    )
 }
 
 /// The option of a permission (`session/request_permission`) of `kind` (`allow_once`,
@@ -550,6 +563,7 @@ async fn one_shot(ask: OneShot<'_>) -> Result<String> {
             mode: "ask".into(),
         },
         instructions: Some(ask.system.to_string()).filter(|s| !s.trim().is_empty()),
+        relay: None,
         escouade: None,
         fence: Vec::new(),
     };
@@ -673,7 +687,7 @@ impl Engine for Cursor {
     }
 
     fn terminal(&self) -> Option<&'static dyn super::TerminalView> {
-        None
+        Some(&terminal::CURSOR_TERMINAL)
     }
 
     fn install(&self) -> Install {
@@ -736,6 +750,7 @@ impl Engine for Cursor {
                 mode: spawn.mode,
             },
             instructions: spawn.append_prompt,
+            relay: spawn.relay,
             escouade,
             fence,
         };

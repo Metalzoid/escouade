@@ -2853,6 +2853,8 @@ impl<R: Runtime> Core<R> {
                 .then(|| self.takes_effort(rt.meta.engine, &account.id, &rt.meta.model));
             (spawn, rt.gen, engine::of(&rt.meta))
         };
+        // A relay its interface left in its folder (the app stopped in « Vue Cursor »).
+        self.clear_stale_relay(h);
         // A configuration folder of the agent's own (Cursor: what its « Toujours » keeps).
         if let Some(var) = engine.agent_home_var() {
             let home = self.data.agent_home(id);
@@ -4365,6 +4367,10 @@ impl<R: Runtime> Core<R> {
             let uid = uuid::Uuid::new_v4().to_string();
             if proc.send_message(&uid, content).is_err() {
                 return Ok(false);
+            }
+            // What was said in its interface (« Vue Cursor ») went with it.
+            if rt.meta.relay.take().is_some() {
+                fx.save = true;
             }
             let (images, files): (Vec<_>, Vec<_>) = attachments.iter().partition(|a| a.is_image());
             let files: Vec<String> = files.into_iter().map(|a| a.name.clone()).collect();

@@ -46,7 +46,7 @@ pub(super) const PROTOCOL: u64 = 1;
 
 /// The variables that make Cursor's shell Git Bash (Escouade started from Git Bash): its hooks,
 /// wrapped in PowerShell, then fail and block every turn (tried on 2026.10.22).
-const GIT_BASH_VARS: [&str; 2] = ["MSYSTEM", "EXEPATH"];
+pub(super) const GIT_BASH_VARS: [&str; 2] = ["MSYSTEM", "EXEPATH"];
 
 /// The requests of Cursor that wait for the user's answer.
 const ASKED: [&str; 3] = [
@@ -79,6 +79,9 @@ pub(super) struct State {
     /// The instructions added to the agent, still to go with its next prompt (a new session's
     /// first: `session/load` keeps them, tried).
     pub instructions: Option<String>,
+    /// What was said in the agent's interface (« Vue Cursor »), which the session does not have:
+    /// still to go with its next prompt, after the instructions.
+    pub relay: Option<String>,
     pub settings: Settings,
     /// The models of the account, as `session/new` listed them.
     pub models: Vec<ToldOf>,
@@ -119,6 +122,7 @@ pub(super) struct Opts {
     pub start: Start,
     pub settings: Settings,
     pub instructions: Option<String>,
+    pub relay: Option<String>,
     pub escouade: Option<(String, String)>,
     pub fence: Vec<String>,
 }
@@ -162,6 +166,7 @@ impl CursorProcess {
             start,
             settings,
             instructions,
+            relay,
             escouade,
             fence,
         } = opts;
@@ -225,6 +230,7 @@ impl CursorProcess {
         let state = Arc::new(Mutex::new(State {
             settings,
             instructions: instructions.filter(|i| !i.trim().is_empty()),
+            relay: relay.filter(|r| !r.trim().is_empty()),
             ..Default::default()
         }));
         let on_frame = Arc::new(on_frame);
@@ -434,14 +440,20 @@ impl CursorProcess {
         }
     }
 
-    /// The blocks of a prompt, the instructions still to give put before them.
+    /// The blocks of a prompt, the instructions and the relay still to give put before them.
     fn with_instructions(&self, mut blocks: Value) -> Value {
-        let Some(i) = self.state.lock().instructions.take() else {
-            return blocks;
+        let (instructions, relay) = {
+            let mut s = self.state.lock();
+            (s.instructions.take(), s.relay.take())
         };
-        let head = json!({ "type": "text", "text": super::preamble(&i) });
+        let heads = [
+            instructions.map(|i| super::preamble(&i)),
+            relay.map(|r| super::relayed(&r)),
+        ];
         if let Some(list) = blocks.as_array_mut() {
-            list.insert(0, head);
+            for (at, text) in heads.into_iter().flatten().enumerate() {
+                list.insert(at, json!({ "type": "text", "text": text }));
+            }
         }
         blocks
     }

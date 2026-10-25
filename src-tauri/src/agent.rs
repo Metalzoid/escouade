@@ -24,6 +24,7 @@ mod codex_tui;
 mod copilot;
 mod copilot_tui;
 mod cursor;
+mod cursor_tui;
 mod localcmd;
 // The translation of the minimal fake engine of the conformance bench (`engine/minimal/`).
 #[cfg(test)]

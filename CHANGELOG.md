@@ -14,6 +14,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Les textes rédigés (nom d’un agent, message de commit…) peuvent passer par Cursor CLI, et une écriture de Cursor refusée par un hook se dit en échec dans la conversation au lieu de passer pour faite.
 - Un projet peut afficher un libellé sous sa tuile, son nom ou un texte plus court, et la barre des projets s’élargit en tirant son bord droit : assez large, elle montre le nom de chaque projet à côté de sa tuile, comme une liste. La largeur choisie est gardée pour toute l’app.
 - Réglages › À propos propose d’offrir un café pour soutenir Escouade, comme le site, la documentation et la page GitHub du dépôt.
+- La vue Cursor CLI ouvre l’interface de Cursor sur l’agent, dans un terminal : Escouade y suit ses messages et la fin de chaque tour, et sa bande dit ce qu’il ne voit pas (permissions en attente, résultats, tokens). Cursor y tient une conversation à part, qu’Escouade relie à celle de l’agent dans les deux sens.
 
 ## [2.0.0] — 2026-10-24
 

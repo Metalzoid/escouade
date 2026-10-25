@@ -36,7 +36,7 @@ Whatever the harness, the agent has the same conversation: the answer and the re
 | Message during a turn | waits for the end of the turn | enters the turn | waits for the end of the turn | enters the turn | waits for the end of the turn |
 | Cost | exact | estimated | exact (0 when local) | exact, in AI credits | not told |
 | Quota | 5-hour and 7-day windows | 5-hour and 7-day windows (30 days on the free plan) | none: daily budget | monthly credits | a link to its dashboard |
-| Terminal view | “Claude Code view” | “Codex view” | “OpenCode view” | “Copilot CLI view” | none |
+| Terminal view | “Claude Code view” | “Codex view” | “OpenCode view” | “Copilot CLI view” | “Cursor CLI view”, limited following |
 | Attached PDFs | yes | no | no | no | no |
 | Remote control, background tasks | yes | no | no | no | no |
 
@@ -166,7 +166,7 @@ The Claude Code skills, commands, agents and hooks of your account and of the pr
 
 ### Cost, quota and what Cursor doesn’t do
 
-Cursor tells neither the tokens nor the cost of a turn when Escouade drives it: the conversation shows none, and the statistics count its turns and their length. Nor does it tell its usage of the month: no bar in the status bar, but “Usage on cursor.com” in Settings › Accounts and in the quota panel, which opens its dashboard. A limit reached (“Upgrade your plan to continue”) stops the turn on an amber card that says so, with, when there is one, the account or harness to go on with. No terminal view, no “Duplicate the conversation” (Cursor doesn’t copy a session), no attached PDFs, no `/` commands in Escouade, no remote control or background tasks. It gets Escouade’s MCP server through its session; the switch doesn’t declare it in Cursor’s config yet.
+Cursor tells neither the tokens nor the cost of a turn when Escouade drives it: the conversation shows none, and the statistics count its turns and their length. Nor does it tell its usage of the month: no bar in the status bar, but “Usage on cursor.com” in Settings › Accounts and in the quota panel, which opens its dashboard. A limit reached (“Upgrade your plan to continue”) stops the turn on an amber card that says so, with, when there is one, the account or harness to go on with. No “Duplicate the conversation” (Cursor doesn’t copy a session), no attached PDFs, no `/` commands in Escouade, no remote control or background tasks. It gets Escouade’s MCP server through its session; the switch doesn’t declare it in Cursor’s config yet. The “Cursor CLI view” runs the agent in Cursor’s interface, with a limited following (see [the terminal view](claude-code-view#with-cursor-cli)).
 
 ## The MCP server
 

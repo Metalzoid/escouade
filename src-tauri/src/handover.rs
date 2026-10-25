@@ -433,6 +433,127 @@ pub fn dossier(d: &Dossier) -> String {
     clip(&out, d.budget)
 }
 
+/// Which way a relay goes (« Vue Cursor »): Cursor keeps the conversations of its interface apart
+/// from its sessions over ACP, so that each is told what was said in the other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Relay {
+    /// Into its interface, as the view opens: the conversation so far, in Escouade.
+    ToInterface,
+    /// Into its session, back in Escouade's view: what was said in its interface meanwhile.
+    ToSession,
+}
+
+/// How much a relay may weigh, in characters.
+pub const RELAY_BUDGET: usize = 24_000;
+
+/// The exchange of `items` in its order, the user's messages and the agent's (its own, not its
+/// subagents'), its tools as one line each; the latest that fit in `max`, the ones left out
+/// counted. Empty when nobody said anything.
+fn exchange(lang: Lang, items: &[Value], max: usize) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    let mut tools: Vec<String> = Vec::new();
+    let flush = |tools: &mut Vec<String>, lines: &mut Vec<String>| {
+        if !tools.is_empty() {
+            let line = tr_in!(
+                lang,
+                "  (outils : {t})\n",
+                "  (tools: {t})\n",
+                t = tools.join(" ; ")
+            );
+            lines.push(line);
+            tools.clear();
+        }
+    };
+    for i in items.iter().filter(|i| i["parent"].is_null()) {
+        let text = i["text"].as_str().unwrap_or_default().trim();
+        match i["kind"].as_str() {
+            Some("user") if !text.is_empty() && !is_dossier(i) => {
+                flush(&mut tools, &mut lines);
+                let said = clip(text, 4_000).replace('\n', "\n  ");
+                lines.push(tr_in!(lang, "- Utilisateur : {said}\n", "- User: {said}\n"));
+            }
+            Some("text") if !text.is_empty() => {
+                flush(&mut tools, &mut lines);
+                let said = clip(text, 4_000).replace('\n', "\n  ");
+                lines.push(tr_in!(lang, "- Agent : {said}\n", "- Agent: {said}\n"));
+            }
+            Some("tool") => tools.push(call_line(i)),
+            _ => {}
+        }
+    }
+    flush(&mut tools, &mut lines);
+    if !lines.iter().any(|l| !l.starts_with("  ")) {
+        return String::new();
+    }
+    let mut room = max;
+    let mut kept: Vec<&String> = Vec::new();
+    for line in lines.iter().rev() {
+        let n = line.chars().count();
+        if n > room {
+            break;
+        }
+        room -= n;
+        kept.push(line);
+    }
+    let mut out = String::new();
+    let left = lines.len() - kept.len();
+    if left > 0 {
+        out.push_str(&tr_in!(
+            lang,
+            "- ({left} ligne(s) plus ancienne(s) omise(s))\n",
+            "- ({left} older line(s) left out)\n"
+        ));
+    }
+    for line in kept.iter().rev() {
+        out.push_str(line);
+    }
+    out
+}
+
+/// What Cursor is told of the other side of its conversation (`Relay`), from the agent's
+/// conversation `items` (for its interface, all of it; for its session, what came since it went to
+/// the interface) and the tasks of its plan; None when nothing was said there.
+pub fn relay(
+    lang: Lang,
+    way: Relay,
+    items: &[Value],
+    plan: Option<&PlanState>,
+    max: usize,
+) -> Option<String> {
+    let mut out = match way {
+        Relay::ToInterface => tr_in!(
+            lang,
+            "# Conversation d’avant, dans Escouade\n\nTu continues le travail d’un agent que l’utilisateur pilotait dans Escouade, par une autre session de Cursor : cette conversation n’en a pas l’historique. Voici ce qui s’y est dit, du plus ancien au plus récent. Continue à partir de là, sans refaire ce qui est fait ; vérifie l’état des fichiers avant de les modifier.\n\n",
+            "# The conversation before, in Escouade\n\nYou go on with the work of an agent the user drove in Escouade, through another session of Cursor: this conversation does not have its history. Here is what was said there, oldest first. Go on from there, without redoing what is done; check the files before you change them.\n\n"
+        ),
+        Relay::ToSession => tr_in!(
+            lang,
+            "# Ce qui s’est dit dans l’interface de Cursor\n\nEntre-temps, l’utilisateur a continué ce travail dans l’interface de Cursor, une autre conversation dont cette session n’a pas l’historique. Voici ce qui s’y est dit, du plus ancien au plus récent : tiens-en compte pour la suite.\n\n",
+            "# What was said in Cursor’s interface\n\nMeanwhile, the user went on with this work in Cursor’s interface, another conversation whose history this session does not have. Here is what was said there, oldest first: keep it in mind from now on.\n\n"
+        ),
+    };
+    if way == Relay::ToInterface {
+        if let Some(plan) = plan.filter(|p| !p.tasks.is_empty()) {
+            out.push_str(&tr_in!(lang, "Tâches du plan :\n", "Plan tasks:\n"));
+            for t in &plan.tasks {
+                let mark = match t.status {
+                    TaskStatus::Done => "[x]",
+                    TaskStatus::InProgress => "[~]",
+                    TaskStatus::Pending => "[ ]",
+                };
+                out.push_str(&format!("- {mark} {}\n", clip(&t.title, 300)));
+            }
+            out.push('\n');
+        }
+    }
+    let said = exchange(lang, items, max.saturating_sub(out.chars().count()));
+    if said.is_empty() {
+        return None;
+    }
+    out.push_str(&said);
+    Some(clip(&out, max))
+}
+
 /// Why no handover goes to `engine` (`name`): no account of it serves the project.
 fn not_served(lang: Lang, name: &str) -> anyhow::Error {
     anyhow!(tr_in!(

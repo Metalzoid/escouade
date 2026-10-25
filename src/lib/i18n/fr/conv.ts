@@ -62,7 +62,16 @@ export default {
       title: '{engine} demande s’il peut faire confiance au dossier de l’agent.',
       codex: 'Réponds dans le terminal : sans confiance, il s’arrête. Escouade a déjà approuvé ses hooks pour ce seul process.',
       copilot: 'Réponds dans le terminal : Escouade ne répond pas à ta place et ne tape rien tant que la question est posée.',
+      cursor:
+        'Réponds dans le terminal (« Trust this workspace ») : Escouade ne répond pas à ta place et ne tape rien tant que la question est posée.',
     },
+    /**
+     * The band of Cursor's view (ESC-49): what Escouade reads of its transcript, what it does not know, and the two
+     * conversations Cursor keeps apart. `{title}`: `limitedTitle`, in bold.
+     */
+    limited:
+      '{title} : Escouade voit tes messages, les réponses de Cursor et la fin de chaque tour, mais pas ses permissions ni ses questions en attente, ni le résultat de ses outils, ni les tokens : regarde le terminal. Cette conversation est celle de Cursor : Escouade la relie à celle de l’agent.',
+    limitedTitle: 'Suivi limité',
     /** The green band of OpenCode's view (choice 37): its conversation stays up to date. `{title}`: `keepsTitle`, in bold. */
     keeps:
       '{title} : la conversation, la carte, les notifications et le coût restent à jour pendant que tu travailles ici. Revenir à la vue Escouade n’arrête que l’interface.',

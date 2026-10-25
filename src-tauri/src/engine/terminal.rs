@@ -146,6 +146,22 @@ pub trait TerminalView: Send + Sync {
     /// Escouade names a new session before the interface starts (its log is then known before any
     /// hook); false: the interface names its own, which its first hook tells.
     fn names_its_session(&self) -> bool;
+    /// Its interface opens any session it is given, a new one under that id when it has none
+    /// (Cursor): the session to resume is not looked for first, nor ever lost.
+    fn resumes_any(&self) -> bool {
+        false
+    }
+    /// Where its interface, started in the agent's folder `cwd`, reads what Escouade tells it of
+    /// the conversation so far, when it keeps the conversations of its interface apart from its
+    /// session's (Cursor): a file in that folder, written as the view opens, kept out of git and
+    /// taken away on the way back. None: the interface resumes the conversation itself.
+    fn relay_path(&self, _cwd: &Path) -> Option<PathBuf> {
+        None
+    }
+    /// What that file holds for the relay `text` (`handover::relay`).
+    fn relay_file(&self, text: &str) -> Vec<u8> {
+        text.as_bytes().to_vec()
+    }
 
     // ----- the state -----
 

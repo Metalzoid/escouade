@@ -75,9 +75,20 @@
   /** It stopped as soon as it started, the session not found, and the view has yet to start it again by itself. */
   const retrying = $derived(!!stop?.quick && stop.sessionLost && !retried);
 
-  /** Its harness: Codex and Copilot CLI ask about the trust of the folder, OpenCode's view keeps the thread (choice 37). */
+  /**
+   * Its harness: Codex, Copilot CLI and Cursor CLI ask about the trust of the folder, OpenCode's view keeps the thread
+   * (choice 37), Cursor's follows less (ESC-49).
+   */
   const engineId = $derived(agent.engine);
-  const asksAboutFolders = $derived(engineId === 'codex' || engineId === 'copilot');
+  const asksAboutFolders = $derived(engineId === 'codex' || engineId === 'copilot' || engineId === 'cursor');
+  /** What to do about it, in its words. */
+  const trustText = $derived(
+    engineId === 'codex'
+      ? t('conv.terminal.trust.codex')
+      : engineId === 'cursor'
+        ? t('conv.terminal.trust.cursor')
+        : t('conv.terminal.trust.copilot'),
+  );
   /** The interface asks whether to trust the agent's folder: the amber band above the terminal says it. */
   let asksTrust = $state(false);
 
@@ -223,8 +234,14 @@
       <Icon name="shield" size={14} />
       <span class="grow"
         ><b>{t('conv.terminal.trust.title', { engine })}</b>
-        {engineId === 'codex' ? t('conv.terminal.trust.codex') : t('conv.terminal.trust.copilot')}</span
+        {trustText}</span
       >
+    </div>
+  {:else if engineId === 'cursor'}
+    <!-- What its transcript tells, and what it does not: the band says it until the view goes. -->
+    <div class="band limited" role="note">
+      <Icon name="info" size={14} />
+      <span class="grow"><Rich k="conv.terminal.limited">{#snippet title()}<b>{t('conv.terminal.limitedTitle')}</b>{/snippet}</Rich></span>
     </div>
   {:else if engineId === 'opencode'}
     <div class="band keeps" role="note">
@@ -318,7 +335,8 @@
     flex: none;
     color: var(--wait);
   }
-  .keeps {
+  .keeps,
+  .limited {
     margin: 10px 0 0;
     padding: 8px 10px 8px 12px;
     background: rgba(var(--fg-rgb), 0.035);
@@ -327,6 +345,10 @@
   .keeps > :global(.icon) {
     flex: none;
     color: var(--run);
+  }
+  .limited > :global(.icon) {
+    flex: none;
+    color: var(--muted);
   }
   /* Over the top right corner of the terminal, above its layers. */
   .voice {

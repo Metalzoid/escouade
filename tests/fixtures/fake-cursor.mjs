@@ -46,8 +46,14 @@ log({
   },
 });
 if (argv[0] !== 'acp') {
-  process.stderr.write('fake cursor: only `agent acp` is played\n');
-  process.exit(1);
+  if (argv.includes('-p') || argv.includes('--print')) {
+    process.stderr.write('fake cursor: only `agent acp` and its interface are played\n');
+    process.exit(1);
+  }
+  // Its interface (« Vue Cursor »): fake-cursor-tui.mjs, which ends the process itself.
+  const { tui } = await import('./fake-cursor-tui.mjs');
+  tui(argv);
+  await new Promise(() => {});
 }
 const sessionsDir = path.join(home, 'acp-sessions');
 fs.mkdirSync(sessionsDir, { recursive: true });
@@ -587,8 +593,11 @@ async function onMessage(msg) {
       running = run;
       // A turn takes a moment, as a real one does: the app shows the message sent before its end.
       await sleep(40);
+      // What it plays is picked by the user's own words: not those of Escouade's blocks before them (the instructions,
+      // what was said in its interface).
+      const own = text.replace(/<(instructions|relais_escouade)>[\s\S]*?<\/\1>\n?/g, '').trim();
       try {
-        await turn(s, images ? `${text} (avec ${images} image)` : text, () => run.cancelled);
+        await turn(s, images ? `${own} (avec ${images} image)` : own, () => run.cancelled);
       } finally {
         running = null;
         save(s);

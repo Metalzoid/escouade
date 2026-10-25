@@ -9,6 +9,95 @@ use crate::stats::{EngineShare, Labels};
 use std::path::Path;
 use std::sync::atomic::Ordering;
 
+// ---------- the relay of « Vue Cursor » ----------
+
+fn line_of(kind: &str, text: &str) -> Value {
+    json!({ "kind": kind, "id": crate::model::new_id(), "text": text })
+}
+
+#[test]
+fn a_relay_tells_the_exchange_in_its_order_with_the_tools_and_never_a_subagents_words() {
+    let items = vec![
+        line_of("user", "Ajoute un test"),
+        json!({ "kind": "tool", "name": "Bash", "input": { "command": "npm test" } }),
+        json!({ "kind": "tool", "name": "Read", "input": { "file_path": "src/a.ts" } }),
+        json!({ "kind": "text", "text": "Le rapport du sous-agent", "parent": "call-1" }),
+        line_of("text", "Test ajouté."),
+        json!({ "kind": "turn", "cost": 0.0 }),
+        line_of("user", "Merci"),
+    ];
+    let text = relay(Lang::Fr, Relay::ToInterface, &items, None, RELAY_BUDGET).unwrap();
+    assert!(
+        text.starts_with("# Conversation d’avant, dans Escouade"),
+        "{text}"
+    );
+    let at = |s: &str| text.find(s).unwrap_or_else(|| panic!("{s} in {text}"));
+    assert!(at("- Utilisateur : Ajoute un test") < at("(outils : Bash npm test ; Read src/a.ts)"));
+    assert!(at("(outils :") < at("- Agent : Test ajouté."));
+    assert!(at("- Agent : Test ajouté.") < at("- Utilisateur : Merci"));
+    assert!(!text.contains("sous-agent"));
+    // The other way, in English: its own words, the same exchange.
+    let back = relay(Lang::En, Relay::ToSession, &items, None, RELAY_BUDGET).unwrap();
+    assert!(
+        back.starts_with("# What was said in Cursor’s interface"),
+        "{back}"
+    );
+    assert!(back.contains("- User: Ajoute un test") && back.contains("- Agent: Test ajouté."));
+}
+
+#[test]
+fn a_relay_of_nothing_said_is_none_and_a_long_one_keeps_the_latest_lines() {
+    let tools = [json!({ "kind": "tool", "name": "Bash", "input": { "command": "ls" } })];
+    assert_eq!(
+        relay(Lang::Fr, Relay::ToSession, &tools, None, RELAY_BUDGET),
+        None
+    );
+    assert_eq!(
+        relay(Lang::Fr, Relay::ToInterface, &[], None, RELAY_BUDGET),
+        None
+    );
+    let many: Vec<Value> = (0..200)
+        .map(|n| line_of("user", &format!("Message numéro {n} {}", "x".repeat(100))))
+        .collect();
+    let text = relay(Lang::Fr, Relay::ToSession, &many, None, 3_000).unwrap();
+    assert!(text.chars().count() <= 3_000);
+    assert!(text.contains("Message numéro 199"));
+    assert!(!text.contains("Message numéro 0 "));
+    assert!(text.contains("ligne(s) plus ancienne(s) omise(s)"));
+}
+
+#[test]
+fn a_relay_into_the_interface_gives_the_tasks_of_the_plan() {
+    let mut plan = PlanState::default();
+    plan.tasks.push(PlanTask {
+        title: "Écrire le test".into(),
+        status: TaskStatus::Done,
+        ..Default::default()
+    });
+    let items = [line_of("user", "Go")];
+    let text = relay(
+        Lang::Fr,
+        Relay::ToInterface,
+        &items,
+        Some(&plan),
+        RELAY_BUDGET,
+    )
+    .unwrap();
+    assert!(
+        text.contains("Tâches du plan :\n- [x] Écrire le test"),
+        "{text}"
+    );
+    let back = relay(
+        Lang::Fr,
+        Relay::ToSession,
+        &items,
+        Some(&plan),
+        RELAY_BUDGET,
+    )
+    .unwrap();
+    assert!(!back.contains("Tâches du plan"));
+}
+
 // ---------- the mode ----------
 
 #[test]

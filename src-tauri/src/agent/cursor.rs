@@ -38,7 +38,7 @@ pub(crate) struct CursorState {
     /// The diff of a write, from its permission, by its call: its file, before and after.
     diffs: HashMap<String, (String, Option<String>, String)>,
     /// What went wrong in the turn.
-    error: Option<String>,
+    pub(super) error: Option<String>,
     /// A recorded stream: the `session/load` under way (its request's id), whose replay is left
     /// out.
     loading: Option<Value>,
@@ -270,7 +270,7 @@ impl AgentRt {
 
     /// A piece of text or reasoning of `parent` (None: the agent): into the item being written, or
     /// a new one.
-    fn cu_write(
+    pub(super) fn cu_write(
         &mut self,
         parent: Option<String>,
         kind: &'static str,
@@ -309,7 +309,7 @@ impl AgentRt {
 
     /// The text or reasoning `who` was writing is whole: its item ends, the agent's text kept as
     /// its reply so far, a subagent's as its report.
-    fn cu_close(&mut self, who: &str, fx: &mut Effects) {
+    pub(super) fn cu_close(&mut self, who: &str, fx: &mut Effects) {
         let Some((id, kind)) = self.cursor.writing.remove(who) else {
             return;
         };
@@ -785,7 +785,7 @@ impl AgentRt {
     /// The end of the agent's turn (the answer to its prompt): a turn Cursor refused (its limit, a
     /// model out of the account's plan, a sign-in or key refused: `refusal`) ends in error with what
     /// to do, « limité » at the account's limit.
-    fn cu_turn_end(&mut self, fx: &mut Effects) {
+    pub(super) fn cu_turn_end(&mut self, fx: &mut Effects) {
         for who in self.cursor.writing.keys().cloned().collect::<Vec<_>>() {
             self.cu_close(&who, fx);
         }

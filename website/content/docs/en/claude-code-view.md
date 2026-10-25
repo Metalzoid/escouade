@@ -109,6 +109,18 @@ An agent on Copilot CLI has the same view: the button is called “Copilot CLI v
 - **Interrupting** sends `Esc` twice, as Copilot asks (“esc again to interrupt”).
 - **Not tracked in this view**: the “Plan” banner (Copilot’s tasks).
 
+## With Cursor CLI
+
+An agent on Cursor CLI has its view too: the button is called “Cursor CLI view” and starts Cursor’s interface (`agent`) in the agent’s folder, with its model and mode, in the agent’s own configuration folder: its “For this agent” rules hold in both views. What differs from Claude Code:
+
+- **Two conversations, linked.** Cursor keeps the conversations of its interface apart from those Escouade drives: the interface doesn’t pick up the history of the agent’s session, nor the other way round. Escouade links them: when the view opens, it writes what was said so far in a rule the interface reads (`.cursor/rules/escouade-relais.mdc` in the agent’s folder, kept out of git and taken away on the way back); back in the Escouade view, what was said in the interface goes with your next message. The interface keeps its own conversation from one opening to the next (`agent --resume`).
+- **A limited following.** Cursor doesn’t tell Escouade through reliable hooks: Escouade reads the interface’s log (`~/.cursor/projects/<folder>/agent-transcripts/`). The agent’s card says when it works and when it’s done, with the end-of-turn notification, and its conversation shows your messages, its replies and its tools. Escouade doesn’t know when Cursor waits for your permission or your answer, nor the results of its commands and edits, nor the tokens: the “Limited following” band above the terminal says so. Watch the terminal.
+- **Folder trust.** On a folder it doesn’t know, Cursor first asks whether you trust it (“Trust this workspace”). Escouade never answers for you, and types no message while the question is asked.
+- **Modes.** “Plan” starts the interface in plan mode, “Bypass” in “Run Everything” (`--force`); “Ask” and “Accept edits” leave Cursor asking for its commands.
+- **Cursor’s shell** stays PowerShell on Windows, even when Escouade was started from Git Bash.
+- **Interrupting** sends `Ctrl+C`, as in the interface.
+- **Not tracked in this view**: the “Plan” banner, subagents, permissions and questions waiting, tool results, tokens.
+
 ## On Windows with WSL
 
 When Claude Code is installed in WSL, Escouade launches it through `wsl.exe` (see [the harness settings](settings-claude-code)). Live tracking of the Claude Code view then requires WSL’s mirrored networking: without it, the interface’s hooks don’t reach the app. The settings point it out under the `claude` path (“WSL’s network is NAT…”). To switch to mirrored mode, add this to `%UserProfile%\.wslconfig`, then run `wsl --shutdown`:

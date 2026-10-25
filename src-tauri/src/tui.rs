@@ -24,6 +24,7 @@ use crate::engine::terminal::{HookServer, TerminalLaunch};
 use crate::engine::TerminalView;
 #[cfg(test)]
 use crate::engine::{claude_terminal, Engine, Escouade};
+use crate::handover::{self, Relay};
 use crate::model::*;
 use crate::pty::{PtyManager, TermInfo};
 use anyhow::{anyhow, bail, Context, Result};
@@ -762,6 +763,18 @@ fn before(e: &Value, since: i64) -> bool {
         .is_some_and(|t| t.timestamp_millis() < since)
 }
 
+/// The relay written for the interface of the agent of `meta` taken away from its folder, then the
+/// folders Escouade made for it, innermost first, those that are empty (`remove_dir` leaves one
+/// with something in it).
+pub(crate) fn take_relay_away(view: &dyn TerminalView, meta: &mut AgentMeta) {
+    if let Some(path) = view.relay_path(Path::new(&meta.cwd)) {
+        let _ = std::fs::remove_file(path);
+    }
+    for dir in std::mem::take(&mut meta.relay_made).iter().rev() {
+        let _ = std::fs::remove_dir(dir);
+    }
+}
+
 /// `NO_PROXY` with the loopback in it: the hooks' calls never go through a proxy.
 pub(crate) fn no_proxy(env: &mut Vec<(String, String)>) {
     const LOOPBACK: &str = "127.0.0.1,localhost,::1";
@@ -915,6 +928,17 @@ impl<R: Runtime> Core<R> {
             let (name, link) = {
                 let mut rt = h.lock();
                 rt.meta.terminal = true;
+                // Cursor: what is said from now on is its interface's, told to its session on the
+                // way back (`relay_back`).
+                let relays = view_of(&rt.meta)
+                    .is_ok_and(|(v, _)| v.relay_path(Path::new(&rt.meta.cwd)).is_some());
+                if relays {
+                    let last = rt
+                        .conv
+                        .last_where(|_| true)
+                        .and_then(|i| i["id"].as_str().map(str::to_string));
+                    rt.meta.relay_from = Some(last.unwrap_or_default());
+                }
                 // The user chose this view: the interface it starts is a fresh try.
                 rt.tui_quick_exits = 0;
                 rt.tui_exit = None;
@@ -933,6 +957,7 @@ impl<R: Runtime> Core<R> {
             }
         } else {
             self.read_transcript(id);
+            self.relay_back(id).await;
             let term = {
                 let mut fx = Effects::default();
                 let mut rt = h.lock();
@@ -965,6 +990,132 @@ impl<R: Runtime> Core<R> {
         // Remote Control (it stays up with no window to show it).
         self.warm(id);
         Ok(())
+    }
+
+    /// « Vue Cursor » (`TerminalView::relay_path`): the conversation of the agent until it went to
+    /// its interface, written where the interface reads it (a rule in its folder, kept out of git);
+    /// the file taken away when nothing was said yet.
+    async fn relay_to_interface(&self, view: &dyn TerminalView, h: &AgentHandle) {
+        let lang = self.lang().claude;
+        let (cwd, text) = {
+            let mut rt = h.lock();
+            let items = rt.conv.items();
+            let upto = match rt.meta.relay_from.as_deref() {
+                Some("") => 0,
+                Some(mark) => items
+                    .iter()
+                    .position(|i| i["id"] == mark)
+                    .map_or(items.len(), |at| at + 1),
+                None => items.len(),
+            };
+            let text = handover::relay(
+                lang,
+                Relay::ToInterface,
+                &items[..upto],
+                rt.meta.plan.as_ref(),
+                handover::RELAY_BUDGET,
+            );
+            (rt.meta.cwd.clone(), text)
+        };
+        let Some(path) = view.relay_path(Path::new(&cwd)) else {
+            return;
+        };
+        let Some(text) = text else {
+            let _ = std::fs::remove_file(&path);
+            return;
+        };
+        // The folders made for it (not there before), kept to be taken away with it.
+        let made: Vec<String> = path
+            .ancestors()
+            .skip(1)
+            .take_while(|d| d.starts_with(&cwd) && *d != Path::new(&cwd))
+            .filter(|d| !d.exists())
+            .map(|d| d.to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        if !made.is_empty() {
+            let mut rt = h.lock();
+            for d in made {
+                if !rt.meta.relay_made.contains(&d) {
+                    rt.meta.relay_made.push(d);
+                }
+            }
+        }
+        let written = path
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|()| std::fs::write(&path, view.relay_file(&text)));
+        if let Err(e) = written {
+            log::warn!("{}: relay not written: {e}", path.display());
+            return;
+        }
+        let rel = path.strip_prefix(&cwd).unwrap_or(&path);
+        let pattern = format!("**/{}", rel.to_string_lossy().replace('\\', "/"));
+        if let Err(e) = crate::git::ensure_excluded(&cwd, &pattern).await {
+            log::debug!("{cwd}: relay not kept out of git: {e:#}");
+        }
+    }
+
+    /// Back in Escouade's view from Cursor's: what was said in its interface since it went there,
+    /// kept to be told to its session with the next message (`AgentMeta::relay`), and the rule
+    /// written for the interface taken away.
+    async fn relay_back(&self, id: &str) {
+        let Ok(h) = self.agent(id) else { return };
+        let lang = self.lang().claude;
+        let mut rt = h.lock();
+        let Ok((view, _)) = view_of(&rt.meta) else {
+            return;
+        };
+        if view.relay_path(Path::new(&rt.meta.cwd)).is_none() {
+            return;
+        }
+        take_relay_away(view, &mut rt.meta);
+        // No mark: born in the view, all it said is its interface's.
+        let mark = rt.meta.relay_from.take().unwrap_or_default();
+        let items = rt.conv.items();
+        let from = items
+            .iter()
+            .position(|i| i["id"] == mark.as_str())
+            .map_or(0, |at| at + 1);
+        let said = handover::relay(
+            lang,
+            Relay::ToSession,
+            &items[from..],
+            None,
+            handover::RELAY_BUDGET,
+        );
+        if let Some(said) = said {
+            // Added to what was not told yet (the view opened and left twice without a message).
+            rt.meta.relay = Some(match rt.meta.relay.take() {
+                Some(before) => format!("{before}\n\n{said}"),
+                None => said,
+            });
+        }
+        drop(rt);
+        self.request_save();
+    }
+
+    /// Before the agent's process starts, out of its harness's view: a relay left in its folder
+    /// (the app stopped while the view was open) is taken away, and the folders made for it.
+    pub(crate) fn clear_stale_relay(&self, h: &AgentHandle) {
+        let mut rt = h.lock();
+        if rt.meta.terminal {
+            return;
+        }
+        let Ok((view, _)) = view_of(&rt.meta) else {
+            return;
+        };
+        let stale = view
+            .relay_path(Path::new(&rt.meta.cwd))
+            .is_some_and(|p| p.exists());
+        if stale || !rt.meta.relay_made.is_empty() {
+            log::info!("agent {}: relay of its interface taken away", rt.meta.id);
+            take_relay_away(view, &mut rt.meta);
+            drop(rt);
+            self.request_save();
+        }
     }
 
     /// The user closes the terminal `term` (the window's « × » or « Relancer »). When it is an
@@ -1252,8 +1403,10 @@ impl<R: Runtime> Core<R> {
         std::fs::create_dir_all(&dir)?;
         let settings_file = dir.join(format!("{id}.json"));
         let config_dir = accounts::config_dir(&account, &settings);
-        self.settle_session(view, id, &settings, &account, &program, &config_dir)
-            .await;
+        if !view.resumes_any() {
+            self.settle_session(view, id, &settings, &account, &program, &config_dir)
+                .await;
+        }
         self.copy_first(view, h, id, &program, &settings, &account)
             .await;
         // A model its Claude account does not list: the default one, said (ESC-124).
@@ -1368,8 +1521,20 @@ impl<R: Runtime> Core<R> {
             }
             return Err(e);
         }
+        // Cursor: the conversation so far, where its interface reads it.
+        self.relay_to_interface(view, h).await;
         let token = self.hooks.grant(id);
         let mut env = [settings.agent_env(), accounts::launch_env(&account)].concat();
+        // A configuration folder of the agent's own, the one of its process (Cursor: what its
+        // « Toujours » keeps, and its model).
+        if let Some(var) = harness.agent_home_var() {
+            let home = self.data.agent_home(id);
+            if let Err(e) = std::fs::create_dir_all(&home) {
+                log::warn!("agent {id}: {} not made: {e}", home.display());
+            }
+            env.retain(|(k, _)| k != var);
+            env.push((var.to_string(), home.to_string_lossy().into_owned()));
+        }
         env.push((TOKEN_VAR.into(), token));
         env.extend(started_from.env);
         env.extend(launch.env);

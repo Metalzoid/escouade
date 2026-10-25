@@ -360,6 +360,9 @@ export const test = base.extend<{
       ESCOUADE_CURSOR: 'none',
       ESCOUADE_CURSOR_AUTH: cursorAuth(root),
       FAKE_CURSOR_LOG: path.join(root, 'fake-cursor.jsonl'),
+      // Its folder of the workspaces (`~/.cursor/projects`: transcripts and trust of its interface, « Vue Cursor CLI »), a
+      // folder of the test's, never the user's.
+      ESCOUADE_CURSOR_PROJECTS: path.join(root, 'cursor-projects'),
       ...appEnv,
     };
     // The launch the test is on (the last one, after a restart): the one the end of the test must kill.

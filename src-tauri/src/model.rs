@@ -1395,6 +1395,17 @@ pub struct AgentMeta {
     /// How far the transcript its interface writes was read: the file and the offset (bytes),
     /// so that what was written while the app was not reading it is read when it starts again.
     pub transcript_read: Option<(String, u64)>,
+    /// « Vue Cursor » (`TerminalView::relay_path`): the conversation's last item when the agent
+    /// went to its harness's interface ("" when there was none). Cursor keeps the conversations of
+    /// its interface apart from its session's: what came after is told to the session on the way
+    /// back (`relay`).
+    pub relay_from: Option<String>,
+    /// What was said in its harness's interface, still to be told to its session with its next
+    /// message (`handover::relay`).
+    pub relay: Option<String>,
+    /// The folders Escouade made in the agent's folder for its relay (`.cursor`, `.cursor/rules`),
+    /// outermost first: taken away with it once empty, never one that was there before.
+    pub relay_made: Vec<String>,
     /// The files joined to its messages by their own path (no copy), as its Claude Code reads
     /// them: the only files outside its folders that its `Read` is allowed without asking
     /// (`attachfiles::granted`). The `MAX_GRANTED_FILES` last.

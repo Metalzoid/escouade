@@ -265,3 +265,78 @@ test.describe('an agent on Cursor CLI at its limit', () => {
     await expect(tool).toContainText('Cursor n’a rien écrit');
   });
 });
+
+test.describe('« Vue Cursor CLI » (ESC-49)', () => {
+  // Started from Git Bash, Escouade would pass MSYSTEM on: the interface's shell would be Git Bash.
+  test.use({ appEnv: { ESCOUADE_CURSOR: FAKE_CURSOR, MSYSTEM: 'MINGW64' } });
+
+  /** The launches of the fake interface, in the agent's own configuration folder. */
+  const launches = (app: App): any[] => {
+    const homes = path.join(app.data, 'agent-homes');
+    if (!fs.existsSync(homes)) return [];
+    return fs
+      .readdirSync(homes)
+      .map((id) => path.join(homes, id, 'fake-tui-launches.jsonl'))
+      .filter((f) => fs.existsSync(f))
+      .flatMap((f) => fs.readFileSync(f, 'utf8').split('\n').filter(Boolean))
+      .map((l) => JSON.parse(l));
+  };
+
+  test('opens Cursor’s interface on the agent’s session, says its following is limited, and each side is told what the other said', async ({
+    app,
+  }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    await newCursorAgent(page);
+    await send(page, 'bonjour Cursor');
+    await expect(page.getByText('Cursor a reçu : bonjour Cursor')).toBeVisible();
+    const session = sent(app, 'session/new').length;
+    expect(session).toBe(1);
+
+    await page.getByRole('button', { name: 'Vue Cursor CLI' }).click();
+    const view = page.locator('main .tui');
+    await expect(view.locator('.xterm')).toBeVisible({ timeout: 20_000 });
+    await expect.poll(() => launches(app).length, { timeout: 20_000 }).toBe(1);
+    // Its interface on the session's id, never Git Bash, with the conversation so far in a rule of the agent's folder,
+    // kept out of git.
+    const launch = launches(app)[0];
+    expect(launch.argv).toContain('--resume');
+    expect(launch.msystem ?? '').toBe('');
+    expect(launch.relay).toContain('bonjour Cursor');
+    const rule = path.join(app.repo, '.cursor', 'rules', 'escouade-relais.mdc');
+    expect(fs.existsSync(rule)).toBe(true);
+
+    // Its question about the folder, in amber, answered in the terminal; then the band of its limited following.
+    await expect(view.getByRole('status')).toContainText('Cursor CLI demande s’il peut faire confiance au dossier de l’agent.');
+    await view.locator('.xterm').click();
+    await page.keyboard.press('a');
+    const note = view.getByRole('note');
+    await expect(note).toContainText('Suivi limité', { timeout: 20_000 });
+    await expect(note).toContainText('mais pas ses permissions ni ses questions en attente');
+    await expect(view.getByRole('status')).toHaveCount(0);
+
+    // A message typed there: the card says it works, then that it is done. The terminal is drawn on a canvas: what the
+    // fake does is read from the conversation.
+    await page.keyboard.type('Bonjour la vue');
+    await page.keyboard.press('Enter');
+    await expect
+      .poll(() => page.locator('.card').allTextContents(), { timeout: 20_000 })
+      .toContainEqual(expect.stringMatching(/Terminé.*Cursor/s));
+
+    // Back in Escouade's view: the turn of the interface in the conversation, the rule gone, and what was said there goes
+    // with the next message to the same session.
+    await page.getByRole('button', { name: 'Vue Escouade' }).click();
+    await expect(page.getByText('Fini : Bonjour la vue')).toBeVisible();
+    await expect(page.locator('main.conv .bubble', { hasText: /^\s*Bonjour la vue\s*$/ })).toHaveCount(1);
+    expect(fs.existsSync(rule)).toBe(false);
+    await send(page, 'encore');
+    await expect.poll(() => sent(app, 'session/prompt').length, { timeout: 20_000 }).toBe(2);
+    const prompt = sent(app, 'session/prompt')[1]
+      .prompt.map((b: any) => b.text)
+      .join('\n');
+    expect(prompt).toContain('<relais_escouade>');
+    expect(prompt).toContain('Bonjour la vue');
+    expect(sent(app, 'session/new')).toHaveLength(1);
+    expect(sent(app, 'session/load').at(-1).sessionId).toBe(launch.argv[launch.argv.indexOf('--resume') + 1]);
+  });
+});
