@@ -1,0 +1,17 @@
+Hook blocked with message: --: eval: line 1: syntax error near unexpected token `('
+  --: eval: line 1: `$OutputEncoding = [System.Text.UTF8Encoding]::new($false); try {
+  $global:cursorHookConsoleInputEncoding = [Console]::InputEncoding; $null = Register-EngineEvent -SourceIdentifier     
+  PowerShell.Exiting -Action { try { [Console]::InputEncoding = $global:cursorHookConsoleInputEncoding } catch { } };   
+  [Console]::InputEncoding = $OutputEncoding } catch { }; Get-Content -LiteralPath 
+  'C:\Users\user\AppData\Local\Temp\cursor-hooks-CfFo6K\payload.json' -Raw -Encoding UTF8 | & { $input | node 
+  "C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs" beforeSubmitPrompt }; if ($null -ne $LASTEXITCODE -and 
+  $LASTEXITCODE -ne 0) { exit $LASTEXITCODE } elseif ($null -eq $LASTEXITCODE -and @($Error | Where-Object { 
+  $_.Exception -is [System.Management.Automation.CommandNotFoundException] }).Count -gt 0) { exit 127 }'  ---  Hook blocked with message: --: eval: line 1: syntax error near unexpected token `('
+  --: eval: line 1: `$OutputEncoding = [System.Text.UTF8Encoding]::new($false); try { 
+  $global:cursorHookConsoleInputEncoding = [Console]::InputEncoding; $null = Register-EngineEvent -SourceIdentifier 
+  PowerShell.Exiting -Action { try { [Console]::InputEncoding = $global:cursorHookConsoleInputEncoding } catch { } }; 
+  [Console]::InputEncoding = $OutputEncoding } catch { }; Get-Content -LiteralPath 
+  'C:\Users\user\AppData\Local\Temp\cursor-hooks-4oKzvC\payload.json' -Raw -Encoding UTF8 | & { $input | node 
+  "C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs" beforeSubmitPrompt }; if ($null -ne $LASTEXITCODE -and 
+  $LASTEXITCODE -ne 0) { exit $LASTEXITCODE } elseif ($null -eq $LASTEXITCODE -and @($Error | Where-Object { 
+  $_.Exc

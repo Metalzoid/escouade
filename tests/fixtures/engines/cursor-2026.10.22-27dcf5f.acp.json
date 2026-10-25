@@ -1,0 +1,192 @@
+{
+  "source": "Cursor CLI 2026.10.22-27dcf5f, `agent acp` : relevé dans le code du CLI (module ./src/acp/*) et vérifié par les essais d'ESC-24 (tests/fixtures/cursor). Cursor ne publie pas de schéma de ses extensions.",
+  "protocolVersion": 1,
+  "agentCapabilities": {
+    "loadSession": true,
+    "mcpCapabilities": { "http": true, "sse": true },
+    "promptCapabilities": { "audio": false, "embeddedContext": false, "image": true },
+    "sessionCapabilities": {
+      "list": {},
+      "subagents": "seulement si le client annonce clientCapabilities.subagents ou clientCapabilities._meta.subagents (true ou un objet)"
+    }
+  },
+  "authMethods": ["cursor_login"],
+  "clientToAgent": {
+    "initialize": {},
+    "authenticate": { "methodId": "cursor_login" },
+    "session/new": {
+      "params": ["cwd", "mcpServers"],
+      "result": ["sessionId", "modes", "models", "configOptions"]
+    },
+    "session/load": {
+      "params": ["sessionId", "cwd", "mcpServers"],
+      "result": ["modes", "models", "configOptions"],
+      "note": "rejoue l'historique (user_message_chunk, agent_message_chunk, agent_thought_chunk, tool_call avec des toolCallId replay-<n>-<m>) avant de répondre"
+    },
+    "session/list": { "params": ["cwd"], "note": "pas de pagination (cursor refusé)" },
+    "session/set_mode": { "params": ["sessionId", "modeId"], "modeId": ["agent", "plan", "ask"] },
+    "session/set_config_option": {
+      "params": ["sessionId", "configId", "value"],
+      "configId": ["mode", "model", "<option d'un modèle paramétré>"],
+      "result": ["configOptions"],
+      "note": "le modèle est écrit dans le cli-config.json du dossier de config et vaut pour toutes les sessions du process et les process suivants"
+    },
+    "session/set_model": { "params": ["sessionId", "modelId"], "note": "unstable, passe par set_config_option model" },
+    "session/prompt": { "params": ["sessionId", "prompt"], "result": { "stopReason": ["end_turn", "cancelled"] } },
+    "session/cancel": { "params": ["sessionId"], "kind": "notification" },
+    "cursor/list_available_models": {
+      "kind": "extMethod",
+      "result": {
+        "models": [
+          { "value": "string", "name": "string", "configOptions": "[{id, name, description, category, type, currentValue, options}]" }
+        ]
+      }
+    }
+  },
+  "agentToClient": {
+    "session/request_permission": {
+      "toolCall": ["toolCallId", "title", "kind", "status", "content"],
+      "options": [
+        { "optionId": "allow-once", "kind": "allow_once" },
+        {
+          "optionId": "allow-always",
+          "kind": "allow_always",
+          "note": "écrit la règle (Shell(<commande>), Mcp(<serveur>:<outil>)…) dans permissions.allow du cli-config.json du dossier de config"
+        },
+        { "optionId": "reject-once", "kind": "reject_once" }
+      ],
+      "result": { "outcome": { "outcome": "selected | cancelled", "optionId": "string" } }
+    },
+    "cursor/ask_question": {
+      "kind": "extMethod, attend la réponse",
+      "params": {
+        "toolCallId": "string",
+        "title": "string?",
+        "questions": [
+          { "id": "string", "prompt": "string", "options": [{ "id": "string", "label": "string" }], "allowMultiple": "boolean" }
+        ]
+      },
+      "result": {
+        "outcome": {
+          "outcome": "answered | skipped | cancelled",
+          "answers": [{ "questionId": "string", "selectedOptionIds": ["string"] }],
+          "reason": "string? (skipped)"
+        }
+      },
+      "repli": "si le client répond -32601, chaque question à choix unique passe par session/request_permission (une option allow_once par choix, plus __ask_question_skip__ en reject_once)",
+      "note": "jamais reçu pendant les essais : l'outil AskQuestion n'a pas été proposé au modèle (Auto, offre Free)"
+    },
+    "cursor/create_plan": {
+      "kind": "extMethod, attend la réponse",
+      "params": {
+        "toolCallId": "string",
+        "name": "string?",
+        "overview": "string?",
+        "plan": "string",
+        "todos": [{ "id": "string", "content": "string", "status": "pending | in_progress | completed | cancelled" }],
+        "isProject": "boolean?",
+        "phases": "[{name, todos}]?"
+      },
+      "result": { "outcome": { "outcome": "accepted | rejected | cancelled", "planUri": "string?", "reason": "string? (rejected)" } },
+      "avant": "un session/update plan (entries: content, priority, status) part avant la requête",
+      "repli": "sans réponse du client (-32601), le CLI écrit le plan dans un fichier et le considère accepté",
+      "note": "jamais reçu pendant les essais : l'outil CreatePlan n'a pas été proposé au modèle (Auto, offre Free)"
+    },
+    "cursor/update_todos": {
+      "kind": "extMethod, réponse ignorée",
+      "params": {
+        "toolCallId": "string",
+        "todos": [{ "id": "string", "content": "string", "status": "pending | in_progress | completed" }],
+        "merge": "boolean"
+      }
+    },
+    "cursor/task": {
+      "kind": "extMethod, réponse ignorée, envoyé à la fin du sous-agent",
+      "params": {
+        "toolCallId": "string",
+        "description": "string",
+        "prompt": "string",
+        "subagentType": "string",
+        "model": "string?",
+        "agentId": "string?",
+        "durationMs": "number?"
+      }
+    },
+    "cursor/generate_image": {
+      "kind": "extMethod, réponse ignorée",
+      "params": { "toolCallId": "string", "description": "string", "filePath": "string?", "referenceImagePaths": "string[]?" }
+    }
+  },
+  "sessionUpdates": [
+    "agent_message_chunk",
+    "agent_thought_chunk",
+    "user_message_chunk",
+    "tool_call",
+    "tool_call_update",
+    "plan",
+    "available_commands_update",
+    "current_mode_update",
+    "session_info_update",
+    "subagent_spawned",
+    "subagent_state_update"
+  ],
+  "toolKinds": {
+    "shellToolCall": "execute",
+    "deleteToolCall": "delete",
+    "globToolCall": "search",
+    "grepToolCall": "search",
+    "readToolCall": "read",
+    "updateTodosToolCall": "other",
+    "readTodosToolCall": "read",
+    "editToolCall": "edit",
+    "lsToolCall": "search",
+    "readLintsToolCall": "read",
+    "mcpToolCall": "other",
+    "semSearchToolCall": "search",
+    "createPlanToolCall": "other",
+    "webSearchToolCall": "search",
+    "taskToolCall": "other",
+    "listMcpResourcesToolCall": "read",
+    "readMcpResourceToolCall": "read",
+    "applyAgentDiffToolCall": "edit",
+    "askQuestionToolCall": "think",
+    "fetchToolCall": "fetch",
+    "switchModeToolCall": "switch_mode",
+    "generateImageToolCall": "other",
+    "generateVideoToolCall": "other",
+    "recordScreenToolCall": "other",
+    "computerUseToolCall": "execute",
+    "writeShellStdinToolCall": "execute",
+    "reflectToolCall": "think",
+    "setupVmEnvironmentToolCall": "execute",
+    "replaceEnvToolCall": "execute",
+    "truncatedToolCall": "other",
+    "startGrindExecutionToolCall": "execute",
+    "startGrindPlanningToolCall": "think",
+    "webFetchToolCall": "fetch",
+    "reportBugfixResultsToolCall": "other"
+  },
+  "hookEvents": [
+    "beforeShellExecution",
+    "beforeMCPExecution",
+    "afterShellExecution",
+    "afterMCPExecution",
+    "beforeReadFile",
+    "afterFileEdit",
+    "beforeTabFileRead",
+    "afterTabFileEdit",
+    "stop",
+    "beforeSubmitPrompt",
+    "afterAgentResponse",
+    "afterAgentThought",
+    "sessionStart",
+    "sessionEnd",
+    "preCompact",
+    "subagentStart",
+    "subagentStop",
+    "preToolUse",
+    "postToolUse",
+    "postToolUseFailure",
+    "workspaceOpen"
+  ]
+}

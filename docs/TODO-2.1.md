@@ -22,7 +22,7 @@ GitHub, GitLab, Bitbucket et Gitea : les pull requests des tickets suivies jusqu
 
 Un cinquième harness, par ACP, à côté de Claude Code, Codex, OpenCode et Copilot CLI. Plan : `docs/TODO-1.8.md`, chapitre 1.
 
-- [ ] Essais réels (ESC-24).
+- [x] Essais réels (ESC-24, 2026-10-25) : réponses dans `docs/TODO-1.8.md`, point 0, « Cursor CLI », flux dans `tests/fixtures/cursor/`.
 - [ ] L'adaptateur (ESC-42), puis ses comptes, son usage et son coût (ESC-43).
 - [ ] Sa vue terminal (ESC-49).
 

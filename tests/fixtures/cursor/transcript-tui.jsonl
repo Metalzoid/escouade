@@ -1,0 +1,4 @@
+{"role":"user","message":{"content":[{"type":"text","text":"<timestamp>Sunday, Oct 25, 2026, 11:29 AM (UTC+1)</timestamp>\n<user_query>\nRéponds seulement : OK VUE\n</user_query>"}]}}
+{"role":"assistant","message":{"content":[{"type":"text","text":"OK VUE\nBANANE"}]}}
+{"role":"assistant","message":{"content":[{"type":"text","text":"OK CURSOR\nBANANE"}]}}
+{"type":"turn_ended","status":"aborted","error":"User aborted/interrupted manually."}

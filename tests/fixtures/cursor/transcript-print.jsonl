@@ -1,0 +1,5 @@
+{"role":"user","message":{"content":[{"type":"text","text":"<timestamp>Sunday, Oct 25, 2026, 11:22 AM (UTC+1)</timestamp>\n<user_query>\nDonne en trois mots le titre du README.\n</user_query>"}]}}
+{"role":"assistant","message":{"content":[{"type":"text","text":"Je lis le README pour en extraire le titre."},{"type":"tool_use","name":"Glob","input":{"glob_pattern":"**/README*"}},{"type":"tool_use","name":"Read","input":{"path":"C:\\Users\\user\\.claude\\plugins\\cache\\claude-plugins-official\\superpowers\\7.0.0\\skills\\using-superpowers\\SKILL.md","limit":50}}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"path":"C:\\Users\\user\\AppData\\Local\\Temp\\esc24\\wt-agent1\\README.md","limit":20}}]}}
+{"role":"assistant","message":{"content":[{"type":"text","text":"Essai\n\nBANANE"}]}}
+{"type":"turn_ended","status":"success"}

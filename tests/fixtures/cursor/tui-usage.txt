@@ -1,0 +1,10 @@
+Usage • FreeResets 2 nov.   
+ Monthly plan and on-demand usage
+
+ Category        CurrentUsage
+ Included        12% used█████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   
+   Auto23% used██████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   
+   API0% used░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   
+ On-Demand       Disabled————————————————————————————————————————————————————————————————————————————————   
+
+ On-demand usage is off View in dashboard: cursor.com/dashboard?tab=usage Esc to close

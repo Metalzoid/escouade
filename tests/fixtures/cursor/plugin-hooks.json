@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" beforeShellExecution"
+      }
+    ],
+    "beforeMCPExecution": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" beforeMCPExecution"
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" afterShellExecution"
+      }
+    ],
+    "afterMCPExecution": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" afterMCPExecution"
+      }
+    ],
+    "beforeReadFile": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" beforeReadFile"
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" afterFileEdit"
+      }
+    ],
+    "stop": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" stop"
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" beforeSubmitPrompt"
+      }
+    ],
+    "afterAgentResponse": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" afterAgentResponse"
+      }
+    ],
+    "afterAgentThought": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" afterAgentThought"
+      }
+    ],
+    "sessionStart": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" sessionStart"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" sessionEnd"
+      }
+    ],
+    "preCompact": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" preCompact"
+      }
+    ],
+    "subagentStart": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" subagentStart"
+      }
+    ],
+    "subagentStop": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" subagentStop"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" preToolUse"
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" postToolUse"
+      }
+    ],
+    "postToolUseFailure": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" postToolUseFailure"
+      }
+    ],
+    "workspaceOpen": [
+      {
+        "command": "node \"C:/Users/user/AppData/Local/Temp/esc24/scripts/hook.mjs\" workspaceOpen"
+      }
+    ]
+  }
+}
