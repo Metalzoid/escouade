@@ -37,8 +37,8 @@ Un cinquième harness, par ACP, à côté de Claude Code, Codex, OpenCode et Cop
 « Pour la v2.1.0, planifie pour plus tard un système de plugins, permettant à tout le monde d'apporter des fonctionnalités à Escouade, fais une analyse poussée pour voir tout ce qu'on pourrait manipuler via ces plugins, et planifie une documentation étendue sur le sujet. »
 
 - [x] **L'analyse et le plan** (ESC-170, 2026-10-25) : `docs/PLUGINS.md` (l'inventaire de ce qu'un plugin pourrait manipuler, depuis le code ; l'architecture comparée, avec trois expériences jetables ; le modèle de confiance et de distribution), et ce chapitre (le découpage en tickets, le plan de la documentation, les questions).
-- [ ] Les questions qui décident (plus bas, « Les questions »), posées à l'utilisateur avec la relecture d'ESC-170.
-- [ ] Les tickets ci-dessous, créés par le chef d'escouade d'après ses réponses.
+- [x] Les questions qui décident, répondues par l'utilisateur le 2026-10-25 (plus bas, « Les décisions »).
+- [x] Les tickets, créés le 2026-10-25 : ESC-172 puis ESC-173 à ESC-184 (plus bas, « Les tickets »), pour plus tard.
 
 ### Ce qui est recommandé
 
@@ -156,16 +156,33 @@ Chaque exemple montre son code entier, tiré du dépôt `escouade-plugins` (pas 
 - **Les plugins proposés par un projet** (2.2, `plugins.recommended` de `.escouade.yml`) : une bande dans l'onglet Projet, qui renvoie à l'installation.
 - **Le mode développeur** : charger un dossier en place, le relire quand il change, ouvrir son journal en direct.
 
-### Les questions
+### Les décisions (2026-10-25)
 
-Posées à l'utilisateur avec la relecture, chacune avec la recommandation :
+L'utilisateur a retenu chaque recommandation :
+1. **L'architecture** : un process à côté en JSON-RPC en 2.1, avec une interface déclarée et un niveau déclaratif sans code ; le WASM du même protocole en 2.2 ; les vues libres en iframe isolée en 2.3.
+2. **La 2.1.0** : le socle (PLG-1 à PLG-4, PLG-9), les événements (PLG-5), les harness ACP décrits (PLG-6) et les thèmes (PLG-7) ; PLG-8 en tête de la 2.1.x s'il retarde la 2.1.0.
+3. **Le registre** : aucun en 2.1.0 ; un dépôt public avec revue par PR et signature par Escouade en 2.2 ; l'installation depuis un dépôt git toujours permise, marquée « non vérifié ».
+4. **La licence** : le SDK et le schéma sous MIT, une licence libre exigée dans le registre (au choix de l'auteur), pas de vente par Escouade.
+5. **Un projet qui propose un plugin** : il propose, il n'installe jamais seul ; en 2.2 avec le WASM.
+6. **Les autorisations décidées par un plugin** : permises, comme une permission rouge (jamais donnée par un projet, journalisée), un refus qui l'emporte et un délai court qui rend la demande à l'utilisateur.
 
-1. **L'architecture.** Process à côté en JSON-RPC avec une interface déclarée en 2.1, WASM du même protocole en 2.2, vues libres en iframe en 2.3 ; ou WASM d'emblée (le seul vrai bac à sable, mais 11 Mo, des auteurs limités à Rust et Go ou à un interpréteur embarqué, et un socle plus long) ; ou du JS dans la WebView (rien sans fenêtre, et WebKit à essayer) ? **Recommandé : le process en 2.1, le WASM ensuite**, pour la raison du §2.4 de `docs/PLUGINS.md` : les points qui valent le plus ont besoin du réseau et des process.
-2. **Ce qui entre dans la 2.1.0.** Le socle (PLG-1 à 4, PLG-9) et les événements, les harness ACP décrits et les thèmes (PLG-5 à 7) ; les règles d'autorisation (PLG-8) si la place, sinon en 2.1.x ? Ou moins (le socle et les événements seuls), ou d'autres points (les sources du Kanban à la place des thèmes) ? **Recommandé : le socle, PLG-5, PLG-6, PLG-7 ; PLG-8 en tête de la 2.1.x** s'il retarde la 2.1.0.
-3. **Le registre.** Pas de registre en 2.1.0 (un dossier ou un dépôt git) ; en 2.2, un dépôt public avec revue par PR et signature par Escouade (comme Raycast et les places de marché de Claude Code) ; ou un registre ouvert sans revue (comme npm) ; ou jamais ? **Recommandé : un dépôt public avec revue en 2.2**, et l'installation depuis un dépôt git toujours permise, marquée « non vérifié ».
-4. **La licence et le modèle des plugins.** Escouade est sous GPL v3. Un plugin en process qui parle JSON-RPC est un programme à part : il peut avoir sa licence. Publier le SDK et le schéma sous MIT (ou Apache 2.0) pour que tout auteur puisse s'en servir, quelle que soit sa licence ? Exiger une licence libre dans le registre (Raycast exige MIT) ? Accepter des plugins payants (hors du registre, ou dedans) ? **Recommandé : le SDK et le schéma sous MIT, une licence libre exigée dans le registre (au choix de l'auteur), pas de vente par Escouade.**
-5. **Un projet qui propose un plugin** (`plugins.recommended` de `.escouade.yml`). Proposer seulement, l'accord complet pour un plugin avec un programme, un clic pour un plugin déclaratif (ou WASM) ? Ou rien de tel ? **Recommandé : proposer, jamais installer seul**, comme les extensions recommandées de VS Code ; en 2.2 avec le WASM.
-6. **Les autorisations décidées par un plugin.** Une permission permise (rouge, jamais par un projet, journalisée), ou trop proche d'un mode Bypass caché pour l'offrir ? **Recommandé : la permettre**, avec un refus qui l'emporte et un délai court qui rend la demande à l'utilisateur.
+### Les tickets (créés le 2026-10-25, pour plus tard)
+
+| Plan | Ticket | Dépend de |
+| --- | --- | --- |
+| Renommage des anciens jetons (avant PLG-7) | ESC-172 | — |
+| PLG-1. Le manifeste et le chargement | ESC-173 | — |
+| PLG-2. Le protocole et le runtime en process | ESC-174 | ESC-173 |
+| PLG-3. Le banc de conformité et le faux Escouade | ESC-175 | ESC-174 |
+| PLG-4. Réglages › Plugins | ESC-176 | ESC-173, ESC-174 |
+| PLG-5. Les événements | ESC-177 | ESC-174 |
+| PLG-6. Les harness ACP décrits | ESC-178 | ESC-173 |
+| PLG-7. Les thèmes | ESC-179 | ESC-173, ESC-172 |
+| PLG-8. Les règles d'autorisation | ESC-180 | ESC-174, ESC-177 |
+| PLG-9. Le SDK | ESC-181 | ESC-174, ESC-175 |
+| PLG-10. Les plugins d'exemple | ESC-182 | ESC-177, ESC-178, ESC-179, ESC-181 |
+| PLG-11. La documentation du site | ESC-183 | PLG-1 à PLG-10 |
+| PLG-12. Les docs internes et l'essai réel | ESC-184 | le reste de la 2.1.0 |
 
 ## Restes du redesign
 
