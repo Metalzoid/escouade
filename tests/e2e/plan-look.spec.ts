@@ -84,6 +84,16 @@ async function unfold(plan: Locator) {
   const fold = plan.locator('.fold');
   if ((await fold.getAttribute('aria-expanded')) !== 'true') await fold.click();
   await expect(plan.locator('.list')).toBeVisible();
+  // The chevron turns as the banner opens (0.25 s): measured midway, its 14 px square tilted takes 16 and overflows the head
+  // by a pixel. Its finite animations ended (the subagents' dots breathe for ever).
+  await plan.evaluate((el) =>
+    Promise.all(
+      el
+        .getAnimations({ subtree: true })
+        .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+        .map((a) => a.finished),
+    ),
+  );
 }
 
 test('the plan looks as the preview draws it, open and folded, in both themes, at both sizes', async ({ app }) => {

@@ -3,16 +3,22 @@
   import { launchStatus, restartLaunch, runHere, runIn, startAll, stopAll, stopLaunch } from '../lib/launch-actions';
   import { menu } from '../lib/menu.svelte';
   import { inWorktree, isolaCommand, parseWorktreeRunId, recipeCommands } from '../lib/recipe';
+  import { shortWindow } from '../lib/short-window.svelte';
   import { app } from '../lib/state.svelte';
   import type { Project, RunCommand } from '../lib/types';
   import { tip } from '../lib/tip';
+  import FoldTitle from './FoldTitle.svelte';
   import Icon from './Icon.svelte';
 
   // « Lancement » in the sidebar (2.0 design): a row per launch command with its state, relaunch and stop on hover, ▶ for
   // one at rest (a menu « Dans le projet / Dans le worktree de … » once an agent has a worktree, choice 30), then each
-  // agent's launches under its name. In a short window it folds to its header, a crash still said (choice 9).
+  // agent's launches under its name. In a short window it folds to its header, a crash still said (choice 9), and its title
+  // unfolds it.
 
   let { project }: { project: Project } = $props();
+
+  let unfolded = $state(false);
+  const folded = $derived(shortWindow.now && !unfolded);
 
   const cmds = $derived(project.runCommands);
   const running = $derived(cmds.filter((c) => app.launches[c.id]?.status === 'running').length);
@@ -124,9 +130,9 @@
   </div>
 {/snippet}
 
-<section class="sec runs" aria-label={t('runs.section.title')}>
+<section class="sec runs" class:folded aria-label={t('runs.section.title')}>
   <div class="sec-h">
-    {t('runs.section.title')}
+    <FoldTitle title={t('runs.section.title')} short={shortWindow.now} {folded} ontoggle={() => (unfolded = !unfolded)} />
     {#if cmds.length}<span class="n">{running}/{cmds.length}</span>{/if}
     {#if crashed}<span class="sec-bad">{t('runs.section.crashed', { count: crashed })}</span>{/if}
     <span class="acts">
@@ -341,14 +347,13 @@
     text-decoration: underline;
   }
 
-  /* A short window (820 px and less): the section folds to its header, a crash still said (choice 9). */
-  @media (max-height: 820px) {
-    .rows,
-    .mini-btn {
-      display: none;
-    }
-    .sec {
-      padding-bottom: 2px;
-    }
+  /* A short window (820 px and less): the section folds to its header, a crash still said (choice 9), until its title
+     unfolds it. */
+  .folded .rows,
+  .folded .mini-btn {
+    display: none;
+  }
+  .sec.folded {
+    padding-bottom: 2px;
   }
 </style>

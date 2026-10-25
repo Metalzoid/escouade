@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium, type Browser, type Locator, type Page } from '@playwright/test';
-import { addProject, expect, FAKE_COPILOT, FAKE_OPENCODE, test } from './fixture';
+import { addProject, expect, FAKE_COPILOT, FAKE_OPENCODE, test, unfoldSections } from './fixture';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const PREVIEW = path.join(ROOT, 'design', 'app-redesign', 'index.html');
@@ -107,7 +107,8 @@ async function shots(page: Page, preview: Page, screen: string, size: (typeof SI
 
 /** The launch commands of the project, as Réglages › Projets writes them. */
 async function commands(page: Page, list: { name: string; command: string; dir?: string }[]) {
-  await page.getByRole('button', { name: 'Configurer', exact: true }).click();
+  // The header's « Commandes de lancement… »: in a short window (the runner's), the section folds and « Configurer » with it.
+  await page.getByRole('button', { name: 'Commandes de lancement…', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   for (const [i, c] of list.entries()) {
     await dialog.getByRole('button', { name: 'Ajouter une commande', exact: true }).click();
@@ -118,6 +119,7 @@ async function commands(page: Page, list: { name: string; command: string; dir?:
   }
   await dialog.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(dialog).toBeHidden();
+  await unfoldSections(page);
 }
 
 /** A colour as `page` paints it, in 8-bit sRGB (an oklch() of the preview as an rgb() of xterm.js). */
@@ -560,7 +562,8 @@ test.describe('in English', () => {
     const { page } = app;
     fs.mkdirSync(path.join(app.repo, 'web'));
     await addProject(page, app.repo, { lang: 'en' });
-    await page.getByRole('button', { name: 'Configure', exact: true }).click();
+    // The header's « Launch commands… »: in a short window (the runner's), the section folds and « Configure » with it.
+    await page.getByRole('button', { name: 'Launch commands…', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Settings' });
     await dialog.getByRole('button', { name: 'Add a command', exact: true }).click();
     const cfg = dialog.getByRole('group', { name: 'Command 1' });
@@ -569,6 +572,7 @@ test.describe('in English', () => {
     await cfg.getByLabel(/Subfolder/).fill('web');
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(dialog).toBeHidden();
+    await unfoldSections(page);
     const front = page.locator('.run').filter({ has: page.locator('.name', { hasText: /^Front$/ }) });
     await page.getByRole('button', { name: 'Run all', exact: true }).click();
     await expect(front).toContainText('running');

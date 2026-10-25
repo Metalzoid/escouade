@@ -41,6 +41,7 @@
   import { estimateHint, spent } from '../lib/spend';
   import { drivenAgents, pendingFor, pendingLabel, pendingText } from '../lib/later';
   import { app, type HeaderFolded } from '../lib/state.svelte';
+  import { shortWindow } from '../lib/short-window.svelte';
   import { closeTerminal, newTerminal, terminalIn } from '../lib/term-actions';
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
   import { backTarget, forwardTargets } from '../lib/handover';
@@ -48,6 +49,7 @@
   import RunsSection from './RunsSection.svelte';
   import EngineMark from './EngineMark.svelte';
   import StatusDot from './StatusDot.svelte';
+  import FoldTitle from './FoldTitle.svelte';
   import Icon from './Icon.svelte';
   import BranchPicker from './branches/BranchPicker.svelte';
   import { tip } from '../lib/tip';
@@ -60,6 +62,9 @@
   const kbd = (s: string) => keyLabel(s).split('+').join(' ');
 
   let termMenuBtn = $state<HTMLButtonElement>();
+  // Terminaux, folded to its header in a short window (choice 9) until its title unfolds it.
+  let termsUnfolded = $state(false);
+  const termsFolded = $derived(shortWindow.now && !termsUnfolded);
   let moreBtn = $state<HTMLButtonElement>();
   /** The branch picker is open, to choose the branch of a new agent. */
   let pickingBranch = $state(false);
@@ -1138,9 +1143,15 @@
 
   <RunsSection {project} />
 
-  <section class="sec terms" aria-label={t('nav.sidebar.terminals')}>
+  <section class="sec terms" class:folded={termsFolded} aria-label={t('nav.sidebar.terminals')}>
     <div class="sec-h">
-      {t('nav.sidebar.terminals')} <span class="n">{terms.length}</span>
+      <FoldTitle
+        title={t('nav.sidebar.terminals')}
+        short={shortWindow.now}
+        folded={termsFolded}
+        ontoggle={() => (termsUnfolded = !termsUnfolded)}
+      />
+      <span class="n">{terms.length}</span>
       <span class="acts">
         <button
           class="icon-btn"
@@ -2147,11 +2158,12 @@
     color: var(--del);
   }
 
-  /* A short window (820 px and less): Terminaux folds to its header, the agents get the room (choice 9). */
+  /* A short window (820 px and less): Terminaux folds to its header, the agents get the room (choice 9), until its title
+     unfolds it. */
+  .terms.folded .rows {
+    display: none;
+  }
   @media (max-height: 820px) {
-    .terms .rows {
-      display: none;
-    }
     .sec {
       padding-bottom: 2px;
     }

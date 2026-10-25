@@ -397,6 +397,16 @@ test('nothing of the board moves with prefers-reduced-motion', async ({ app }) =
   expect(await durations()).toEqual(['0.15s', '0.25s']);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   expect((await durations()).map((d) => parseFloat(d) < 0.001)).toEqual([true, true]);
+  // A transition already under way when the preference changes ends at its own pace (CSS Transitions): the knob's colour
+  // was, in the runner's small window. Its end waited for; one that starts now lasts 0.01 ms, and nothing may run after.
+  await page.locator('main.board').evaluate((b) =>
+    Promise.all(
+      b
+        .getAnimations({ subtree: true })
+        .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+        .map((a) => a.finished),
+    ),
+  );
   // Nothing runs on the board: no animation, endless or not.
   expect(
     await page.locator('main.board').evaluate((b) => b.getAnimations({ subtree: true }).filter((a) => a.playState === 'running').length),

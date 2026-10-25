@@ -100,7 +100,7 @@ Tous les choix ci-dessous ont été validés sur les captures : c'est le design 
 6. **Menu de l'agent aussi par « … »** dans l'en-tête (aujourd'hui au clic droit seulement).
 7. **Barre d'état : un groupe de jauges par harness** au lieu de celui du seul harness des nouveaux agents ; le total du jour prend « ≈ » dès qu'il contient de l'estimé.
 8. **Bac à sable affiché** dans l'en-tête d'un agent Codex (mot nouveau dans l'interface : « Bac à sable » / « Sandbox »).
-9. **Lancement et Terminaux repliés** sur leur titre dans une fenêtre de 820 px de haut ou moins.
+9. **Lancement et Terminaux repliés** sur leur titre dans une fenêtre de 820 px de haut ou moins. Le titre les déplie d’un clic et les replie (précisé le 2026-10-25 : sans lui, rien ne lançait plus une commande depuis la barre sur un écran de portable).
 10. **Sous-agents et tâches de fond** : deux compteurs sur la carte, la liste dépliée seulement pour l'agent ouvert.
 11. **Pièces jointes du ticket** en une seule rangée (images et fichiers ensemble), et le trombone avec le nombre sur la carte du Kanban.
 12. **Accueil sans harness** : « Chercher à nouveau » relance la détection sans redémarrer l'app.

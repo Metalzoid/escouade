@@ -476,6 +476,16 @@ export async function addProject(
   await expect(dialog).toBeHidden();
 }
 
+/**
+ * Lancement and Terminaux, folded to their header in a short window (choice 9 of the 2.0 design; the runner's screen is
+ * 768 px tall): unfolded by their title, for a test that uses their rows. Nothing to do in a taller window.
+ */
+export async function unfoldSections(page: Page) {
+  // One at a time: the list shrinks as each one unfolds (`all()` would look for an nth that is gone).
+  const folded = page.locator('.sec-h > .fold[aria-expanded="false"]');
+  while ((await folded.count()) > 0) await folded.first().click();
+}
+
 export async function send(page: Page, text: string) {
   const box = page.getByRole('textbox').last();
   await box.fill(text);

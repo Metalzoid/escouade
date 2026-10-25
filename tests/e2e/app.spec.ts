@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator } from '@playwright/test';
-import { addProject, expect, send, test } from './fixture';
+import { addProject, expect, send, test, unfoldSections } from './fixture';
 
 test('a new project opens an agent that streams Claude’s reply', async ({ app }) => {
   const { page } = app;
@@ -405,7 +405,8 @@ test('a deleted agent leaves the list for good', async ({ app }) => {
 test('a new worktree is set up before its agent takes a message, and torn down before it goes', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo, { worktrees: true, firstAgent: false });
-  await page.getByRole('button', { name: 'Configurer', exact: true }).click();
+  // The header's « Commandes de lancement… »: in a short window (the runner's), the section folds and « Configurer » with it.
+  await page.getByRole('button', { name: 'Commandes de lancement…', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   await dialog.getByRole('button', { name: 'Ajouter une commande de préparation' }).click();
   await dialog
@@ -447,7 +448,8 @@ test('a new agent’s worktree is made at its first message, under the name the 
 }) => {
   const { page } = app;
   await addProject(page, app.repo, { worktrees: true, atFirstMessage: true, firstAgent: false });
-  await page.getByRole('button', { name: 'Configurer', exact: true }).click();
+  // The header's « Commandes de lancement… »: in a short window (the runner's), the section folds and « Configurer » with it.
+  await page.getByRole('button', { name: 'Commandes de lancement…', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   await expect(dialog.getByRole('switch', { name: 'Créer le worktree au premier message, au nom de l’agent' })).toBeChecked();
   await dialog.getByRole('button', { name: 'Ajouter une commande de préparation' }).click();
@@ -481,7 +483,8 @@ test('a new agent’s worktree is made at its first message, under the name the 
 test('a project’s worktrees go to the folder and on the branch prefix its settings name', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo, { worktrees: true, firstAgent: false });
-  await page.getByRole('button', { name: 'Configurer', exact: true }).click();
+  // The header's « Commandes de lancement… »: in a short window (the runner's), the section folds and « Configurer » with it.
+  await page.getByRole('button', { name: 'Commandes de lancement…', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   // Beside the repository, as the repositories that want no worktree in them have it.
   await dialog.getByRole('textbox', { name: 'Dossier des worktrees' }).fill('../demo-api-worktrees');
@@ -639,7 +642,8 @@ test('launch commands run in their own terminals, with their status live', async
   await addProject(page, app.repo);
 
   // The project's settings, on its tab.
-  await page.getByRole('button', { name: 'Configurer', exact: true }).click();
+  // The header's « Commandes de lancement… »: in a short window (the runner's), the section folds and « Configurer » with it.
+  await page.getByRole('button', { name: 'Commandes de lancement…', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   await expect(dialog.getByRole('tab', { name: 'Projets' })).toHaveAttribute('aria-selected', 'true');
   await dialog.getByRole('button', { name: 'Ajouter une commande', exact: true }).click();
@@ -653,6 +657,8 @@ test('launch commands run in their own terminals, with their status live', async
   await buildCfg.getByLabel('Commande').fill('exit 2');
   await dialog.getByRole('button', { name: 'Enregistrer' }).click();
 
+  await expect(dialog).toBeHidden();
+  await unfoldSections(page);
   const serveur = page.locator('.run', { hasText: 'Serveur' });
   const build = page.locator('.run', { hasText: 'Build' });
   await expect(serveur).toContainText('prêt');
@@ -694,7 +700,8 @@ test('a launch command runs in the worktree of an agent, with its ports, and sto
   // A folder of the project only, not of the agent's branch.
   fs.mkdirSync(path.join(app.repo, 'docs'));
 
-  await page.getByRole('button', { name: 'Configurer', exact: true }).click();
+  // The header's « Commandes de lancement… »: in a short window (the runner's), the section folds and « Configurer » with it.
+  await page.getByRole('button', { name: 'Commandes de lancement…', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   await dialog.getByRole('button', { name: 'Ajouter une commande', exact: true }).click();
   const serveurCfg = dialog.getByRole('group', { name: 'Commande 1' });
@@ -710,6 +717,7 @@ test('a launch command runs in the worktree of an agent, with its ports, and sto
   await expect(dialog).toBeHidden();
 
   // ▶ asks where (on hover).
+  await unfoldSections(page);
   const serveur = page.locator('.run').filter({ has: page.locator('.name', { hasText: /^Serveur$/ }) });
   await serveur.hover();
   await serveur.getByRole('button', { name: 'Lancer' }).click();

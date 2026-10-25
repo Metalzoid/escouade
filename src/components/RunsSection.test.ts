@@ -5,6 +5,7 @@ import { setLang } from '../lib/i18n';
 import { forgetAgentTests, runIn, startLaunch, stopAgentTests, testLaunchIds } from '../lib/launch-actions';
 import { menu } from '../lib/menu.svelte';
 import { inWorktree } from '../lib/recipe';
+import { shortWindow } from '../lib/short-window.svelte';
 import { app } from '../lib/state.svelte';
 import type { LaunchState, RunCommand, TestRecipe } from '../lib/types';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
@@ -43,6 +44,35 @@ describe('RunsSection', () => {
     render(RunsSection, { project: P });
     expect(within(row('Front')).getByText('prêt')).toBeInTheDocument();
     expect(within(row('API')).getByText('planté (code 2)')).toBeInTheDocument();
+  });
+
+  it('folds to its header in a short window, a crash still said, and its title unfolds and folds it (choice 9)', async () => {
+    fakeBackend();
+    app.launches.c2 = state({ status: 'crashed', code: 2, ptyId: null, name: 'API' });
+    shortWindow.now = true;
+    try {
+      render(RunsSection, { project: P });
+      const section = screen.getByRole('region', { name: 'Lancement' });
+      const title = within(section).getByRole('button', { name: 'Lancement' });
+      expect(title).toHaveAttribute('aria-expanded', 'false');
+      expect(section).toHaveClass('folded');
+      expect(section).toHaveTextContent('1 planté');
+      await userEvent.click(title);
+      expect(title).toHaveAttribute('aria-expanded', 'true');
+      expect(section).not.toHaveClass('folded');
+      await userEvent.click(title);
+      expect(section).toHaveClass('folded');
+    } finally {
+      shortWindow.now = false;
+    }
+  });
+
+  it('keeps a plain title, never folded, in a taller window', () => {
+    fakeBackend();
+    render(RunsSection, { project: P });
+    const section = screen.getByRole('region', { name: 'Lancement' });
+    expect(within(section).queryByRole('button', { name: 'Lancement' })).toBeNull();
+    expect(section).not.toHaveClass('folded');
   });
 
   it('shows a command’s log when it is clicked', async () => {
