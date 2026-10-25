@@ -142,6 +142,23 @@ pub(crate) async fn close_remote_session(
     true
 }
 
+/// How long the models an account listed serve before its menu reads them again (ESC-186).
+const MODELS_KEPT_MS: i64 = 24 * 3600 * 1000;
+
+/// Whether the models of an account of `engine` are read by account, without an agent: Claude
+/// Code's (`initialize`, ESC-124), and since ESC-186 Codex's (`model/list`), Copilot CLI's
+/// (`models.list`), Cursor CLI's (`cursor/list_available_models`) and OpenCode's (`opencode models`).
+fn reads_account_models(engine: EngineId) -> bool {
+    matches!(
+        engine,
+        EngineId::Claude
+            | EngineId::Codex
+            | EngineId::Copilot
+            | EngineId::Cursor
+            | EngineId::Opencode
+    )
+}
+
 /// Refused: the app is quitting, no agent process starts any more.
 pub(crate) fn quitting_refusal() -> anyhow::Error {
     anyhow!(tr!(
@@ -816,6 +833,8 @@ pub struct Core<R: Runtime = Wry> {
     pub engine_models: RwLock<BTreeMap<EngineId, Vec<crate::engine::registry::ToldModel>>>,
     /// What the `claude` of each account told of its models (`PersistedState::account_models`).
     pub account_models: RwLock<BTreeMap<String, crate::model::AccountModels>>,
+    /// The accounts whose models are being read (`read_account_models`): one reading at a time.
+    models_reading: Mutex<HashSet<String>>,
     pub git: GitService,
     pub git_cache: RwLock<HashMap<String, GitInfo>>,
     pub pty: PtyManager,
@@ -1735,9 +1754,18 @@ impl<R: Runtime> Core<R> {
                 state
                     .account_models
                     .into_iter()
-                    .map(|(id, m)| (id, crate::model::AccountModels::new(m.version, m.models)))
+                    .map(|(id, m)| {
+                        // A Codex account's keeps no models of Claude Code's, its menu alone.
+                        if m.models.is_empty() {
+                            return (id, m);
+                        }
+                        let read_at = m.read_at;
+                        let made = crate::model::AccountModels::new(m.version, m.models);
+                        (id, crate::model::AccountModels { read_at, ..made })
+                    })
                     .collect(),
             ),
+            models_reading: Mutex::default(),
             git,
             git_cache: RwLock::default(),
             pty: PtyManager::default(),
@@ -2967,11 +2995,16 @@ impl<R: Runtime> Core<R> {
                 if !ready.models.is_null() {
                     self.set_models(&ready.models);
                     if engine.id() == EngineId::Claude {
-                        self.set_account_models(&account.id, version, &ready.models);
+                        self.set_account_models(&account.id, version.clone(), &ready.models);
                     }
                 }
                 if let Some(models) = ready.catalog {
-                    self.set_engine_models(engine.id(), models);
+                    // Kept by account too where its harness lists them so (Codex, ESC-186).
+                    if engine.id() != EngineId::Claude && reads_account_models(engine.id()) {
+                        self.set_listed_models(&account.id, version, models);
+                    } else {
+                        self.set_engine_models(engine.id(), models);
+                    }
                 }
                 if h.lock().meta.remote_control {
                     if let Err(e) = self.link_remote(h, &proc).await {
@@ -3011,12 +3044,21 @@ impl<R: Runtime> Core<R> {
             return;
         }
         let model = h.lock().meta.model.clone();
-        let known = self
+        // Codex's stand-in (GPT-6-Luna) serves only while nothing was listed (ESC-186); the others
+        // declare aliases their lists lack (Copilot's `auto`, Cursor's `default`).
+        let told: Vec<String> = self
             .engine_models
             .read()
             .get(&harness.id())
-            .is_some_and(|told| told.iter().any(|m| m.id == model))
-            || harness.models().iter().any(|m| m.id == model);
+            .map(|t| t.iter().map(|m| m.id.clone()).collect())
+            .unwrap_or_default();
+        let listed = told.contains(&model);
+        let declared = harness.models().iter().any(|m| m.id == model);
+        let known = if harness.id() == EngineId::Codex && !told.is_empty() {
+            listed
+        } else {
+            listed || declared
+        };
         if known {
             return;
         }
@@ -3066,10 +3108,15 @@ impl<R: Runtime> Core<R> {
     fn set_account_models(&self, account: &str, version: String, reported: &Value) {
         let models = crate::model::AccountModels::new(version, ModelInfo::list(reported));
         let mut all = self.account_models.write();
-        if all.get(account) == Some(&models) {
+        // When it was read aside (`read_at`): unchanged, the window is not told again.
+        let same = all
+            .get(account)
+            .is_some_and(|m| m.version == models.version && m.models == models.models);
+        all.insert(account.to_string(), models.clone());
+        if same {
+            self.request_save();
             return;
         }
-        all.insert(account.to_string(), models.clone());
         self.hub.emit(UiEvent::AccountModels {
             account: account.to_string(),
             models,
@@ -3219,19 +3266,152 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// `read_claude_models` of every active Claude account, in the background.
-    pub fn read_all_claude_models(self: &Arc<Self>) {
+    /// What the harness of the account `id` lists of its models, read without an agent and kept by
+    /// account: Claude Code's by `read_claude_models`, Codex's by an app-server of its own
+    /// (`Engine::list_models`, every page of `model/list`, ESC-186). At the start of the app, once
+    /// an account is made or signed in, and when the menu of its models opens on a list a day old
+    /// (`refresh_account_models`). Nothing for another harness, an account switched off, or whose
+    /// harness is not found; one reading of an account at a time.
+    pub async fn read_account_models(self: &Arc<Self>, id: &str) {
+        let Some(account) = self
+            .settings
+            .read()
+            .accounts
+            .iter()
+            .find(|a| a.id == id)
+            .cloned()
+        else {
+            return;
+        };
+        if !account.active || !reads_account_models(account.engine) {
+            return;
+        }
+        if !self.models_reading.lock().insert(id.to_string()) {
+            return;
+        }
+        if account.engine == EngineId::Claude {
+            self.read_claude_models(id).await;
+        } else {
+            self.read_harness_models(&account).await;
+        }
+        self.models_reading.lock().remove(id);
+    }
+
+    /// `read_account_models` of a harness that lists its models by a process of its own (Codex).
+    async fn read_harness_models(self: &Arc<Self>, account: &Account) {
+        let settings = self.settings.read().clone();
+        let found = {
+            let (account, settings) = (account.clone(), settings.clone());
+            tokio::task::spawn_blocking(move || accounts::program(&account, &settings))
+                .await
+                .ok()
+                .flatten()
+        };
+        let Some(program) = found else { return };
+        let harness = crate::engine::by_id(account.engine);
+        // Read even from a version older than the tested ones (`registry::check`): `model/list`
+        // reads and starts nothing, and the menu would say its list is being read for good.
+        let version = engine::registry::version(harness, &program)
+            .await
+            .unwrap_or_default();
+        let env = [settings.agent_env(), accounts::launch_env(account)].concat();
+        let started = std::time::Instant::now();
+        match harness
+            .list_models(program, env, &std::env::temp_dir())
+            .await
+        {
+            Ok(Some(models)) => {
+                log::info!(
+                    "account {}: {} models of {} read in {} ms",
+                    account.id,
+                    models.len(),
+                    harness.name(),
+                    started.elapsed().as_millis()
+                );
+                self.set_listed_models(&account.id, version, models);
+            }
+            Ok(None) => {}
+            Err(e) => log::warn!("account {}: models not read: {e:#}", account.id),
+        }
+    }
+
+    /// Keeps the models the harness of `account` (at `version`) listed, by an agent's start or a
+    /// reading of its own: the menu of its agents, and of its harness while none says its account.
+    fn set_listed_models(
+        &self,
+        account: &str,
+        version: String,
+        models: Vec<crate::engine::registry::ToldModel>,
+    ) {
+        let engine = accounts::get(&self.settings.read(), account).engine;
+        self.set_engine_models(engine, models.clone());
+        // As the harness-wide list has them (OpenCode's providers by their names, `set_engine_models`).
+        let models = self
+            .engine_models
+            .read()
+            .get(&engine)
+            .cloned()
+            .unwrap_or(models);
+        let catalog = {
+            let settings = self.settings.read();
+            let account = accounts::get(&settings, account);
+            match engine {
+                // The model its `config.toml` names, its own (ESC-186).
+                EngineId::Codex => crate::engine::codex::with_config_model(
+                    models,
+                    &accounts::config_dir(&account, &settings),
+                ),
+                _ => models,
+            }
+        };
+        let told = crate::model::AccountModels {
+            version,
+            models: Vec::new(),
+            catalog,
+            read_at: chrono::Utc::now().timestamp_millis(),
+        };
+        let mut all = self.account_models.write();
+        let same = all
+            .get(account)
+            .is_some_and(|m| m.version == told.version && m.catalog == told.catalog);
+        all.insert(account.to_string(), told.clone());
+        if !same {
+            self.hub.emit(UiEvent::AccountModels {
+                account: account.to_string(),
+                models: told,
+            });
+        }
+        self.request_save();
+    }
+
+    /// The menu of the models of the account `id` opened (ESC-186): its models read again when
+    /// none were, or a day ago or more.
+    pub async fn refresh_account_models(self: &Arc<Self>, id: &str) {
+        let now = chrono::Utc::now().timestamp_millis();
+        let fresh = self
+            .account_models
+            .read()
+            .get(id)
+            .is_some_and(|m| !m.catalog.is_empty() && now - m.read_at < MODELS_KEPT_MS);
+        if !fresh {
+            self.read_account_models(id).await;
+        }
+    }
+
+    /// `read_account_models` of every active account whose harness lists its models so, in the
+    /// background.
+    pub fn read_all_account_models(self: &Arc<Self>) {
         let ids: Vec<String> = self
             .settings
             .read()
             .accounts
             .iter()
-            .filter(|a| a.engine == EngineId::Claude && a.active)
+            .filter(|a| reads_account_models(a.engine) && a.active)
             .map(|a| a.id.clone())
             .collect();
         for id in ids {
             let c = self.clone();
-            tauri::async_runtime::spawn(async move { c.read_claude_models(&id).await });
+            tauri::async_runtime::spawn(async move { c.read_account_models(&id).await });
         }
     }
 
@@ -3407,7 +3587,15 @@ impl<R: Runtime> Core<R> {
             .cloned()
             .unwrap_or_default();
         let declared = crate::engine::by_id(engine).models();
-        if told.iter().any(|m| m.id == wanted) || declared.iter().any(|m| m.id == wanted) {
+        // Codex's stand-in serves only while nothing was listed (ESC-186, as `settle_model`).
+        let listed = told.iter().any(|m| m.id == wanted);
+        let declared_one = declared.iter().any(|m| m.id == wanted);
+        let ok = if engine == EngineId::Codex && !told.is_empty() {
+            listed
+        } else {
+            listed || declared_one
+        };
+        if ok {
             return wanted;
         }
         told.iter()

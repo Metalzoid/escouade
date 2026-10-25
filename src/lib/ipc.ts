@@ -169,6 +169,8 @@ export const api = {
   dataDir: () => invoke<string>('data_dir'),
   /** Every harness with what is found of it here: its program, version and state (versions read again). */
   engines: () => invoke<EngineInfo[]>('engines'),
+  /** The harnesses found now, the PATH of today read first (ESC-186). */
+  enginesFoundNow: () => invoke<EngineId[]>('engines_found_now'),
   /** The items of Principal's folder a new account may share (those it has), files first. */
   accountShareable: (engine?: EngineId) => invoke<string[]>('account_shareable', engine ? { engine } : {}),
   /** A new account of `engine` (Claude Code's by default), its folder made with the items `share` of its Principal's linked or copied, saved last. */
@@ -189,6 +191,8 @@ export const api = {
   /** The account removed, its folder left on the disk; refused while an agent not archived runs on it. */
   accountRemove: (id: string) => invoke<Account[]>('account_remove', { id }),
   accountStatus: (id: string) => invoke<AccountStatus>('account_status', { id }),
+  /** The menu of the models of an account opened: they are read again when a day old (ESC-186), told by `accountModels`. */
+  accountModelsRefresh: (id: string) => invoke<void>('account_models_refresh', { id }),
   /** The API key of a Cursor account other than its machine's (ESC-43), kept in the system's keychain; its status as it then is. */
   accountCursorKey: (id: string, key: string) => invoke<AccountStatus>('account_cursor_key', { id, key }),
   /** What stopped the account's sign-in before it was signed in, when it is known (its program not found, an installation cut half-way); null otherwise. */

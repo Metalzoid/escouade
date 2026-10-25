@@ -1761,7 +1761,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// An account added: the window told the accounts (and « Ordre des harness », which gains its
-    /// harness), the models of a Claude Code one read (ESC-124).
+    /// harness), the models of a Claude Code or Codex one read (ESC-124, ESC-186).
     fn account_added(self: &Arc<Self>, made: &Account) {
         let (accounts, engine_order) = {
             let s = self.settings.read();
@@ -1771,10 +1771,8 @@ impl<R: Runtime> Core<R> {
             accounts,
             engine_order,
         });
-        if made.engine == EngineId::Claude {
-            let (c, id) = (self.clone(), made.id.clone());
-            tauri::async_runtime::spawn(async move { c.read_claude_models(&id).await });
-        }
+        let (c, id) = (self.clone(), made.id.clone());
+        tauri::async_runtime::spawn(async move { c.read_account_models(&id).await });
     }
 
     /// What « Ajouter un compte… » says of the machine's account of `engine`: whether its harness
@@ -2412,7 +2410,7 @@ impl<R: Runtime> Core<R> {
             );
         }
         let (me, term) = (Arc::downgrade(self), info.id.clone());
-        let (signed, engine) = (account.id.clone(), account.engine);
+        let signed = account.id.clone();
         self.pty.spawn_program(
             info.clone(),
             &program,
@@ -2427,12 +2425,10 @@ impl<R: Runtime> Core<R> {
                 if let Some(core) = me.upgrade() {
                     core.hub
                         .emit(crate::model::UiEvent::TerminalExit { id: term, code });
-                    // Signed in: the models of its account (ESC-124).
-                    if engine == EngineId::Claude {
-                        tauri::async_runtime::spawn(async move {
-                            core.read_claude_models(&signed).await
-                        });
-                    }
+                    // Signed in: the models of its account (ESC-124, ESC-186).
+                    tauri::async_runtime::spawn(
+                        async move { core.read_account_models(&signed).await },
+                    );
                 }
             },
         )?;

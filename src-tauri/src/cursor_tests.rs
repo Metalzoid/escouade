@@ -431,3 +431,66 @@ async fn real_cursor_writes_a_text() {
     println!("answer in {:?}: {answer}", started.elapsed());
     assert!(!answer.trim().is_empty() && answer.len() < 200, "{answer}");
 }
+
+/// The menu the account `id` keeps (`Core::account_models`): its models' ids.
+fn menu_of(core: &crate::core::Core<tauri::test::MockRuntime>, id: &str) -> Vec<String> {
+    core.account_models
+        .read()
+        .get(id)
+        .map(|m| m.catalog.iter().map(|m| m.id.clone()).collect())
+        .unwrap_or_default()
+}
+
+#[tokio::test]
+async fn the_models_of_a_cursor_account_are_read_without_an_agent_and_kept_after_a_restart() {
+    let h = harness("esc186-cursor-models");
+    cursor_account(&h, &crate::engine::fake_cursor());
+    assert!(menu_of(&h.core, "principal-cursor").is_empty());
+    h.core.read_account_models("principal-cursor").await;
+    // Those of `cursor/list_available_models`, with their names and efforts; Auto by default.
+    assert_eq!(
+        menu_of(&h.core, "principal-cursor"),
+        ["default", "claude-opus-5-5", "gpt-5.5", "composer-2.5"]
+    );
+    let told = h.core.account_models.read()["principal-cursor"].clone();
+    let opus = told
+        .catalog
+        .iter()
+        .find(|m| m.id == "claude-opus-5-5")
+        .unwrap();
+    assert_eq!(opus.label, "Claude Opus 5.5");
+    assert_eq!(opus.efforts, ["low", "medium", "high"]);
+    assert!(told.catalog[0].default);
+    // No agent, no session.
+    assert!(h.core.agents.read().is_empty());
+    h.core.save_now();
+    let app = tauri::test::mock_app();
+    let (reloaded, _rx) = crate::core::Core::load(app.handle().clone(), h.core.data.clone());
+    assert_eq!(menu_of(&reloaded, "principal-cursor").len(), 4);
+    h.core.stop_for_good();
+}
+
+/// ESC-186, by hand: the models of the real Cursor CLI (`ESCOUADE_TEST_REAL_CURSOR`, its launcher),
+/// read as Escouade reads them without an agent: an `agent acp` in a folder of its own, never the
+/// user's `cli-config.json` (to be checked byte for byte after).
+#[tokio::test]
+#[ignore = "the real Cursor CLI: run by hand"]
+async fn real_cursor_models() {
+    use crate::engine::Engine;
+    let program = std::env::var("ESCOUADE_TEST_REAL_CURSOR").expect("ESCOUADE_TEST_REAL_CURSOR");
+    let program = crate::engine::Program::Native(program.into());
+    let started = std::time::Instant::now();
+    let listed = crate::engine::CURSOR
+        .list_models(program, Vec::new(), &std::env::temp_dir())
+        .await
+        .unwrap()
+        .expect("models listed");
+    eprintln!(
+        "{} models in {} ms, {} with efforts, default {:?}",
+        listed.len(),
+        started.elapsed().as_millis(),
+        listed.iter().filter(|m| !m.efforts.is_empty()).count(),
+        listed.iter().find(|m| m.default).map(|m| m.id.clone())
+    );
+    assert!(listed.len() > 1);
+}

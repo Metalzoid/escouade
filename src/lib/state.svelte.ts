@@ -775,6 +775,15 @@ class AppState {
   }
 
   /** The agent on screen has been seen (called whenever what is on screen may have changed). */
+  /**
+   * The harnesses looked for again, the PATH of today read first (ESC-186): one installed while the app runs is offered
+   * without a restart. The window back in front, the menu « Harness » opened. Nothing said when it fails: what was found stays.
+   */
+  async refreshEngines(): Promise<void> {
+    const found = await api.enginesFoundNow().catch(() => null);
+    if (found && found.join() !== this.enginesFound.join()) this.enginesFound = found;
+  }
+
   markSeen() {
     const id = this.agent?.id;
     if (id && this.attention[id] && this.onScreen(id)) delete this.attention[id];

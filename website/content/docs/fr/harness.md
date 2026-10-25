@@ -62,7 +62,7 @@ Le coût d’un tour est celui que donne Claude Code. Le quota, ce sont la fenê
 
 ### Modèles et modes
 
-Les modèles et leurs efforts sont ceux que Codex liste pour ton compte. Les modes passent par le bac à sable de Codex :
+Les modèles et leurs efforts sont ceux que Codex liste pour chaque compte : Escouade les lit au démarrage et à l’ajout d’un compte, sans lancer d’agent ni rien consommer, les garde d’un démarrage à l’autre et les relit quand le menu « Modèle » s’ouvre sur une liste de plus d’un jour. Avant la première lecture, le menu ne propose que GPT-6-Luna, marqué « liste en cours de lecture ». Le modèle que choisit la `config.toml` du compte (`model = …`) y est aussi, marqué « de config.toml », même quand Codex ne le liste pas. Les modes passent par le bac à sable de Codex :
 
 | Mode | Chez Codex |
 |---|---|
@@ -90,7 +90,7 @@ Il ne lit pas les PDF (le bouton les refuse en le disant) et ne propose pas de c
 
 ### Modèles et modes
 
-Le menu « Modèle » liste les modèles des fournisseurs connectés, avec une recherche, leur fournisseur et des favoris (★) en tête, aussi réglables dans Réglages › Harness › OpenCode › « Modèles ». L’effort est la variante du modèle quand il en a. Escouade donne toujours le modèle, pour qu’OpenCode n’en choisisse pas un de lui-même.
+Ses modèles, comme ceux de Codex, Copilot CLI et Cursor CLI, sont lus au démarrage et à l’ajout d’un compte, sans lancer d’agent, gardés d’un démarrage à l’autre et relus quand le menu s’ouvre sur une liste de plus d’un jour. Le menu « Modèle » liste les modèles des fournisseurs connectés, avec une recherche, leur fournisseur et des favoris (★) en tête, aussi réglables dans Réglages › Harness › OpenCode › « Modèles ». L’effort est la variante du modèle quand il en a. Escouade donne toujours le modèle, pour qu’OpenCode n’en choisisse pas un de lui-même.
 
 OpenCode n’a pas de bac à sable : ce sont ses règles de permission qui suivent le mode, et une commande acceptée peut tout faire.
 

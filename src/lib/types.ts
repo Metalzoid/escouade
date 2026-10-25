@@ -634,6 +634,8 @@ export interface ToldModel {
   multiplier?: string;
   /** Its tier of price, when its harness tells no multiplier (Copilot). */
   price?: 'low' | 'medium' | 'high' | 'very_high';
+  /** Not listed by its harness: the model the account's config names (Codex's `config.toml`, ESC-186). */
+  fromConfig?: boolean;
 }
 
 /** What a harness declares, as the window gets it at its start. */
@@ -1440,6 +1442,8 @@ export interface AccountModels {
   models: ModelInfo[];
   /** The composer's menu of the account's agents, in its order (`default` aside, marking the one it runs): empty while it told none, when the declared models serve (`engine::claude::catalog`). */
   catalog?: ToldModel[];
+  /** When they were last read (ms since the epoch), 0 when unknown (ESC-186). */
+  readAt?: number;
 }
 
 export interface UiState {

@@ -1734,6 +1734,9 @@ pub struct AccountModels {
     /// The composer's menu of the account's agents, as `claude` told them: empty while it told
     /// none (a list read before ESC-124, which kept no names), when the fixed one serves.
     pub catalog: Vec<crate::engine::registry::ToldModel>,
+    /// When they were last read (ms since the epoch), 0 when unknown: the menu of a Codex agent
+    /// reads its account's again once they are a day old (ESC-186).
+    pub read_at: i64,
 }
 
 impl AccountModels {
@@ -1744,6 +1747,7 @@ impl AccountModels {
             version,
             models,
             catalog,
+            read_at: chrono::Utc::now().timestamp_millis(),
         }
     }
 }

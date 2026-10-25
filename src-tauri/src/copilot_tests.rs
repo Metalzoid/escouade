@@ -733,3 +733,95 @@ async fn a_copilot_agent_gets_its_worktree_at_its_first_message_under_the_name_c
     .await;
     h.core.stop_for_good();
 }
+
+/// The menu the account `id` keeps (`Core::account_models`): its models' ids.
+fn menu_of(core: &crate::core::Core<tauri::test::MockRuntime>, id: &str) -> Vec<String> {
+    core.account_models
+        .read()
+        .get(id)
+        .map(|m| m.catalog.iter().map(|m| m.id.clone()).collect())
+        .unwrap_or_default()
+}
+
+#[tokio::test]
+async fn the_models_of_a_copilot_account_are_read_without_an_agent_and_kept_after_a_restart() {
+    let h = harness("esc186-copilot-models");
+    let work = copilot_accounts(&h, json!({}));
+    assert!(menu_of(&h.core, "work").is_empty());
+    h.core.read_account_models("work").await;
+    // Those of `models.list`, with what the menu says of them.
+    assert_eq!(
+        menu_of(&h.core, "work"),
+        ["gpt-6-luna", "claude-sonnet-4.5", "gpt-5-mini"]
+    );
+    let told = h.core.account_models.read()["work"].clone();
+    let sonnet = told
+        .catalog
+        .iter()
+        .find(|m| m.id == "claude-sonnet-4.5")
+        .unwrap();
+    assert_eq!(sonnet.multiplier.as_deref(), Some("3"));
+    let luna = &told.catalog[0];
+    assert!(luna.default && luna.images);
+    assert_eq!(luna.efforts, ["low", "medium", "high"]);
+    // A server of its own, stopped: no session, nothing spent.
+    assert_eq!(noted(&work, "launches.jsonl").len(), 1);
+    let calls: Vec<String> = noted(&work, "calls.jsonl")
+        .iter()
+        .map(|c| c["method"].as_str().unwrap().to_string())
+        .collect();
+    assert!(calls.contains(&"models.list".to_string()), "{calls:?}");
+    assert!(
+        !calls.iter().any(|c| c.starts_with("session.")),
+        "{calls:?}"
+    );
+    // Opening the menu within a day reads nothing again.
+    h.core.refresh_account_models("work").await;
+    assert_eq!(noted(&work, "launches.jsonl").len(), 1);
+    // Kept by account through a restart.
+    h.core.save_now();
+    let app = tauri::test::mock_app();
+    let (reloaded, _rx) = crate::core::Core::load(app.handle().clone(), h.core.data.clone());
+    assert_eq!(
+        menu_of(&reloaded, "work"),
+        ["gpt-6-luna", "claude-sonnet-4.5", "gpt-5-mini"]
+    );
+    h.core.stop_for_good();
+}
+
+#[tokio::test]
+async fn a_free_copilot_account_keeps_the_models_it_has_today_never_auto() {
+    let h = harness("esc186-copilot-free");
+    copilot_accounts(&h, json!({ "free": true }));
+    h.core.read_account_models("work").await;
+    // `models.list` gives none on Free (ESC-122): its declared models, as an agent of it has them.
+    assert_eq!(menu_of(&h.core, "work"), ["gpt-6-luna", "gpt-5-mini"]);
+    h.core.stop_for_good();
+}
+
+/// ESC-186, by hand: the models of the real `copilot` of the machine (`ESCOUADE_TEST_REAL_COPILOT`,
+/// its program), read as Escouade reads them without an agent (`models.list` of a server of its
+/// own, its usual `~/.copilot`). Its files are to be checked byte for byte after.
+#[tokio::test]
+#[ignore = "the real copilot: run by hand"]
+async fn real_copilot_models() {
+    use crate::engine::Engine;
+    let program = std::env::var("ESCOUADE_TEST_REAL_COPILOT").expect("ESCOUADE_TEST_REAL_COPILOT");
+    let program = crate::engine::Program::Native(program.into());
+    let started = std::time::Instant::now();
+    let listed = crate::engine::COPILOT
+        .list_models(program, Vec::new(), &std::env::temp_dir())
+        .await
+        .unwrap()
+        .expect("models listed");
+    let ids: Vec<String> = listed
+        .iter()
+        .map(|m| format!("{} ×{}", m.id, m.multiplier.as_deref().unwrap_or("?")))
+        .collect();
+    eprintln!(
+        "{} models in {} ms: {ids:?}",
+        ids.len(),
+        started.elapsed().as_millis()
+    );
+    assert!(!listed.is_empty());
+}

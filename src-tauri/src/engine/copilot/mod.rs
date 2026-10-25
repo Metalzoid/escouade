@@ -239,6 +239,7 @@ pub(crate) fn catalog(
                 _ => None,
             };
             Some(ToldModel {
+                from_config: false,
                 id: id.to_string(),
                 label: m["name"].as_str().unwrap_or(id).to_string(),
                 efforts: m["supportedReasoningEfforts"]
@@ -263,6 +264,7 @@ pub(crate) fn catalog(
         models = MODELS
             .iter()
             .map(|&(id, label)| ToldModel {
+                from_config: false,
                 id: id.to_string(),
                 label: label.to_string(),
                 efforts: Vec::new(),
@@ -757,6 +759,20 @@ impl Engine for Copilot {
 
     fn install(&self) -> Install {
         INSTALL
+    }
+
+    /// `models.list` of a server of its own (`terminal::models_list`, ESC-186), as `catalog` makes
+    /// the menu of it: a Free account's lists none, and keeps the declared models.
+    fn list_models<'a>(
+        &'a self,
+        program: Program,
+        env: Vec<(String, String)>,
+        dir: &'a std::path::Path,
+    ) -> BoxFuture<'a, Result<Option<Vec<ToldModel>>>> {
+        Box::pin(async move {
+            let listed = terminal::models_list(&program, &dir.to_string_lossy(), &env).await?;
+            Ok(catalog(Some(&listed), None))
+        })
     }
 
     fn models(&self) -> Vec<ModelDecl> {

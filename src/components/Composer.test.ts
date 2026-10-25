@@ -1187,6 +1187,83 @@ describe('Composer: the menus come from the agent’s harness (ESC-29)', () => {
     unmount();
     render(Composer, { agent: app.agents.cx });
     await userEvent.click(screen.getByRole('button', { name: /^Modèle/ }));
-    expect(screen.getAllByRole('menuitemradio').map((m) => m.textContent?.trim())).toEqual(['GPT-5.5', 'GPT-5.5 mini']);
+    expect(screen.getAllByRole('menuitemradio').map((m) => m.querySelector('.ml')?.textContent)).toEqual(['GPT-5.5', 'GPT-5.5 mini']);
+  });
+});
+
+describe('Composer: the models of a Codex account (ESC-186)', () => {
+  const told = (id: string, label: string, isDefault = false) => ({
+    id,
+    label,
+    efforts: ['low', 'medium'],
+    defaultEffort: 'medium',
+    images: false,
+    default: isDefault,
+  });
+
+  function codex() {
+    const a = agent({ id: 'cx', engine: 'codex', model: 'gpt-5.5', account: 'travail' });
+    resetApp({ agents: [a] });
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    const backend = fakeBackend({ get_conversation: () => [], account_models_refresh: () => null });
+    render(Composer, { agent: app.agents.cx });
+    return backend;
+  }
+  const menu = () => screen.getAllByRole('menuitemradio');
+
+  it('says its stand-in is no more than that while the account’s list is being read, and asks for it as the menu opens', async () => {
+    const backend = codex();
+    await userEvent.click(screen.getByRole('button', { name: /^Modèle/ }));
+    expect(menu().map((m) => m.textContent?.trim())).toEqual([
+      'GPT-5.5 liste en cours de lecture',
+      'GPT-5.5 mini liste en cours de lecture',
+    ]);
+    expect(backend.called('account_models_refresh').map((c) => c.args)).toEqual([{ id: 'travail' }]);
+  });
+
+  it('offers every model its account listed, kept by account', async () => {
+    codex();
+    app.accountModels = {
+      travail: {
+        version: '0.163.0',
+        models: [],
+        catalog: [told('gpt-6-luna', 'GPT-6-Luna', true), told('gpt-5.6-terra', 'GPT-5.6-Terra')],
+      },
+      perso: { version: '0.163.0', models: [], catalog: [told('gpt-6-sol', 'GPT-6-Sol')] },
+    };
+    await userEvent.click(screen.getByRole('button', { name: /^Modèle/ }));
+    expect(menu().map((m) => m.textContent?.trim())).toEqual(['GPT-6-Luna', 'GPT-5.6-Terra']);
+  });
+
+  it('reads the models of a Copilot, Cursor or OpenCode account as the menu opens, its list said being read until then', async () => {
+    for (const engine of ['copilot', 'cursor', 'opencode'] as const) {
+      const a = agent({ id: `m-${engine}`, engine, model: '', account: `compte-${engine}` });
+      resetApp({ agents: [a] });
+      app.engines = [CLAUDE_ENGINE, { ...BARE_ENGINE, id: engine, models: [] }];
+      const backend = fakeBackend({ get_conversation: () => [], account_models_refresh: () => null });
+      const { unmount } = render(Composer, { agent: app.agents[a.id] });
+      await userEvent.click(screen.getByRole('button', { name: /^Modèle/ }));
+      // No stand-in (OpenCode's): one greyed line says the list is being read.
+      const line = screen.getByRole('menuitemradio', { name: /liste en cours de lecture/ });
+      expect(line).toBeDisabled();
+      expect(backend.called('account_models_refresh').map((c) => c.args)).toEqual([{ id: `compte-${engine}` }]);
+      unmount();
+    }
+  });
+
+  it('marks the model its config.toml names, which Codex does not list, and lets it be picked', async () => {
+    const backend = codex();
+    backend.calls.length = 0;
+    app.accountModels = {
+      travail: {
+        version: '0.163.0',
+        models: [],
+        catalog: [told('gpt-6-luna', 'GPT-6-Luna', true), { ...told('gpt-5.6-sol', 'gpt-5.6-sol'), efforts: [], fromConfig: true }],
+      },
+    };
+    await userEvent.click(screen.getByRole('button', { name: /^Modèle/ }));
+    expect(menu().map((m) => m.textContent?.trim())).toEqual(['GPT-6-Luna', 'gpt-5.6-sol de config.toml']);
+    await userEvent.click(screen.getByRole('menuitemradio', { name: /gpt-5.6-sol/ }));
+    expect(backend.calls.some((c) => JSON.stringify(c.args).includes('gpt-5.6-sol'))).toBe(true);
   });
 });

@@ -35,6 +35,9 @@
     modelsOf,
     modelTakes,
     modesOf,
+    fromConfig,
+    readingModels,
+    refreshModels,
     searchesModels,
     setFavorite,
     speakerOf,
@@ -109,15 +112,24 @@
     manyModels
       ? modelMenu(agent).map((m) => {
           const cost = modelCost(agent, m.id);
-          const detail = (m.favorite ? m.provider : undefined) ?? cost?.label;
+          const detail =
+            (m.favorite ? m.provider : undefined) ?? cost?.label ?? (fromConfig(agent, m.id) ? t('composer.model.fromConfig') : undefined);
           return { value: m.id, label: m.label, detail, title: cost?.title, favorite: m.favorite, group: m.group };
         })
       : // Claude Code's aliases (`default`, `opus`…) are read for its own agents only: Cursor's Auto is `default` too.
         modelOptions((agent.engine ?? 'claude') === 'claude' ? app.models : [], modelsOf(agent)).map((o) => {
           // What it costs beside the others, when its harness bills by model (Copilot: `×3`).
           const cost = modelCost(agent, o.value);
-          return cost ? { ...o, detail: cost.label, title: cost.title } : o;
+          if (cost) return { ...o, detail: cost.label, title: cost.title };
+          // Codex's model of its config.toml, which it does not list (ESC-186).
+          if (fromConfig(agent, o.value)) return { ...o, detail: t('composer.model.fromConfig') };
+          // Codex's stand-in while its account's list is being read (ESC-186).
+          return o.value && readingModels(agent) ? { ...o, detail: t('composer.model.reading') } : o;
         }),
+  );
+  // A harness with no stand-in (OpenCode) while its account's list is being read: one greyed line that says so (ESC-186).
+  const modelOptionsShown = $derived(
+    modelChoices.length || !readingModels(agent) ? modelChoices : [{ value: '', label: t('composer.model.reading'), disabled: true }],
   );
   // The modes its harness takes, each with what it means there when that is not what Escouade's menu says.
   const caps = $derived(capsOf(agent.engine));
@@ -558,6 +570,8 @@
 
   function toggleMenu(m: 'model' | 'effort' | 'mode' | 'account') {
     menu = menu === m ? null : m;
+    // Its account's models read again when a day old (ESC-186).
+    if (menu === 'model') refreshModels(agent);
   }
 
   function pick(o: { model?: string; effort?: string; mode?: string }) {
@@ -680,7 +694,7 @@
       <Dropdown
         caption={t('common.model')}
         value={agent.model}
-        options={modelChoices}
+        options={modelOptionsShown}
         searchable={manyModels}
         onFavorite={manyModels ? (v, fav) => void setFavorite(agent.engine ?? 'claude', v, fav) : undefined}
         open={menu === 'model'}

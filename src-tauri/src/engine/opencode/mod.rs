@@ -224,6 +224,7 @@ pub(crate) fn catalog(providers: &Value, config: &Value) -> Catalog {
                 contexts.insert(format!("{pid}/{mid}"), n);
             }
             models.push(ToldModel {
+                from_config: false,
                 id: format!("{pid}/{mid}"),
                 label: m["name"].as_str().unwrap_or(mid).to_string(),
                 efforts,

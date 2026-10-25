@@ -504,3 +504,229 @@ async fn a_codex_agent_gets_its_worktree_at_its_first_message_under_the_name_cod
     h.wait("its thread renamed", renamed).await;
     h.core.stop_for_good();
 }
+
+/// What the fake `codex` of the account « Work » was sent (`requests.jsonl`): the methods, in order.
+fn sent(h: &Harness) -> Vec<String> {
+    std::fs::read_to_string(h.dir.join("work").join("requests.jsonl"))
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .filter_map(|r| r["in"]["method"].as_str().map(str::to_string))
+        .collect()
+}
+
+/// The menu the account `id` keeps (`Core::account_models`): its models' ids.
+fn menu_of(core: &crate::core::Core<tauri::test::MockRuntime>, id: &str) -> Vec<String> {
+    core.account_models
+        .read()
+        .get(id)
+        .map(|m| m.catalog.iter().map(|m| m.id.clone()).collect())
+        .unwrap_or_default()
+}
+
+#[tokio::test]
+async fn the_models_of_a_codex_account_are_read_on_every_page_without_an_agent_and_kept_after_a_restart(
+) {
+    let h = harness("esc186-codex-models");
+    codex_accounts(&h);
+    signed_in(&h, None);
+    // Before anything read: nothing but the menu's stand-in (GPT-6-Luna, ESC-186).
+    assert!(menu_of(&h.core, "work").is_empty());
+    h.core.read_account_models("work").await;
+    // Each page of `model/list` (the fake gives one model a page), the hidden one left out.
+    assert_eq!(menu_of(&h.core, "work"), ["gpt-6-luna", "gpt-5.6-terra"]);
+    // An app-server of its own, gone after: no thread, no turn.
+    let started = launches(&h);
+    assert_eq!(started.len(), 1);
+    assert_eq!(started[0]["argv"], serde_json::json!(["app-server"]));
+    let methods = sent(&h);
+    assert_eq!(
+        methods,
+        ["initialize", "initialized", "model/list", "model/list"]
+    );
+    // The window is told, and the harness's list follows (a new agent's model, the writer's).
+    assert!(h
+        .events
+        .lock()
+        .iter()
+        .any(|e| e["type"] == "accountModels" && e["account"] == "work"));
+    assert_eq!(h.core.engine_models.read()[&EngineId::Codex].len(), 2);
+    // Opening the menu within a day reads nothing again; a day after, it reads again.
+    h.core.refresh_account_models("work").await;
+    assert_eq!(launches(&h).len(), 1);
+    h.core
+        .account_models
+        .write()
+        .get_mut("work")
+        .unwrap()
+        .read_at -= 2 * 86_400_000;
+    h.core.refresh_account_models("work").await;
+    assert_eq!(launches(&h).len(), 2);
+    // Kept by account through a restart.
+    h.core.save_now();
+    let app = tauri::test::mock_app();
+    let (reloaded, _rx) = crate::core::Core::load(app.handle().clone(), h.core.data.clone());
+    assert_eq!(menu_of(&reloaded, "work"), ["gpt-6-luna", "gpt-5.6-terra"]);
+    assert!(menu_of(&reloaded, "principal-codex").is_empty());
+    h.core.stop_for_good();
+}
+
+#[tokio::test]
+async fn a_codex_agent_lists_every_page_of_model_list_for_its_account() {
+    let h = harness("esc186-codex-agent-models");
+    let (p, _) = h.project(false).await;
+    codex_accounts(&h);
+    signed_in(&h, None);
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(EngineId::Codex),
+                account: Some("work".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    h.turn(&id, "Bonjour").await;
+    assert_eq!(menu_of(&h.core, "work"), ["gpt-6-luna", "gpt-5.6-terra"]);
+    let listed: Vec<String> = h.core.engine_models.read()[&EngineId::Codex]
+        .iter()
+        .map(|m| m.id.clone())
+        .collect();
+    assert_eq!(listed, ["gpt-6-luna", "gpt-5.6-terra"]);
+    h.core.stop_for_good();
+}
+
+/// ESC-186, by hand: the models of the real `codex` of the machine (`ESCOUADE_TEST_REAL_CODEX`, its
+/// program), read as Escouade reads them without an agent (every page of `model/list`, its own
+/// `~/.codex`: nothing but `initialize` and `model/list` asked). Its `config.toml` is to be copied
+/// before and checked byte for byte after (the app-server may write in it, ESC-37).
+#[tokio::test]
+#[ignore = "the real codex: run by hand"]
+async fn real_codex_models() {
+    let program = std::env::var("ESCOUADE_TEST_REAL_CODEX").expect("ESCOUADE_TEST_REAL_CODEX");
+    let program = crate::engine::Program::Native(program.into());
+    let started = std::time::Instant::now();
+    let listed = crate::engine::by_id(EngineId::Codex)
+        .list_models(program, Vec::new(), &std::env::temp_dir())
+        .await
+        .unwrap()
+        .expect("models listed");
+    let ids: Vec<&str> = listed.iter().map(|m| m.id.as_str()).collect();
+    eprintln!(
+        "{} models in {} ms: {ids:?}",
+        ids.len(),
+        started.elapsed().as_millis()
+    );
+    assert!(!listed.is_empty());
+    assert_eq!(listed.iter().filter(|m| m.default).count(), 1);
+}
+
+#[test]
+fn codexs_stand_in_model_serves_only_until_its_account_listed_its_own() {
+    let h = harness("esc186-stand-in");
+    // Nothing listed yet: GPT-6-Luna, the one it declares.
+    assert_eq!(
+        h.core.model_for(EngineId::Codex, "gpt-6-luna".into()),
+        "gpt-6-luna"
+    );
+    // Its account lists others (the real one of ESC-186: GPT-5.6-Terra by default, GPT-5.6-Luna).
+    let told = |id: &str, default: bool| crate::engine::registry::ToldModel {
+        from_config: false,
+        id: id.into(),
+        label: id.into(),
+        efforts: Vec::new(),
+        default_effort: None,
+        images: false,
+        default,
+        provider: None,
+        multiplier: None,
+        price: None,
+    };
+    h.core.engine_models.write().insert(
+        EngineId::Codex,
+        vec![told("gpt-5.6-terra", true), told("gpt-5.6-luna", false)],
+    );
+    assert_eq!(
+        h.core.model_for(EngineId::Codex, "gpt-6-luna".into()),
+        "gpt-5.6-terra"
+    );
+    assert_eq!(
+        h.core.model_for(EngineId::Codex, "gpt-5.6-luna".into()),
+        "gpt-5.6-luna"
+    );
+}
+
+#[test]
+fn the_model_of_an_accounts_config_toml_comes_after_those_listed_when_they_lack_it() {
+    use crate::engine::codex::{config_model, with_config_model};
+    let dir = crate::paths::test_dir("esc186-config-model");
+    let told = |id: &str| crate::engine::registry::ToldModel {
+        from_config: false,
+        id: id.into(),
+        label: id.into(),
+        efforts: vec!["medium".into()],
+        default_effort: None,
+        images: false,
+        default: false,
+        provider: None,
+        multiplier: None,
+        price: None,
+    };
+    let listed = || vec![told("gpt-5.6-terra"), told("gpt-5.6-luna")];
+    let ids = |m: &[crate::engine::registry::ToldModel]| -> Vec<String> {
+        m.iter().map(|m| m.id.clone()).collect()
+    };
+    // No config.toml, or one without `model`: those listed alone.
+    assert_eq!(
+        ids(&with_config_model(listed(), &dir)),
+        ["gpt-5.6-terra", "gpt-5.6-luna"]
+    );
+    std::fs::write(
+        dir.join("config.toml"),
+        "model_reasoning_effort = \"high\"\n",
+    )
+    .unwrap();
+    assert_eq!(with_config_model(listed(), &dir).len(), 2);
+    // A model it does not list: after them, from the config, with no effort of its own.
+    std::fs::write(
+        dir.join("config.toml"),
+        "model = \"gpt-5.6-sol\"\nmodel_reasoning_effort = \"high\"\n\n[profiles.x]\nmodel = \"autre\"\n",
+    )
+    .unwrap();
+    let menu = with_config_model(listed(), &dir);
+    assert_eq!(ids(&menu), ["gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-sol"]);
+    assert!(menu[2].from_config && menu[2].efforts.is_empty() && !menu[2].default);
+    assert!(!menu[0].from_config);
+    // One it lists: not twice.
+    std::fs::write(dir.join("config.toml"), "model = \"gpt-5.6-luna\"\n").unwrap();
+    let menu = with_config_model(listed(), &dir);
+    assert_eq!(ids(&menu), ["gpt-5.6-terra", "gpt-5.6-luna"]);
+    assert!(menu.iter().all(|m| !m.from_config));
+    assert_eq!(config_model("pas du toml = ="), None);
+    assert_eq!(config_model("model = \"\""), None);
+}
+
+#[tokio::test]
+async fn the_menu_of_a_codex_account_has_the_model_its_config_toml_names() {
+    let h = harness("esc186-config-menu");
+    codex_accounts(&h);
+    signed_in(&h, None);
+    std::fs::write(
+        h.dir.join("work").join("config.toml"),
+        "model = \"gpt-5.6-sol\"\n",
+    )
+    .unwrap();
+    h.core.read_account_models("work").await;
+    assert_eq!(
+        menu_of(&h.core, "work"),
+        ["gpt-6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]
+    );
+    // The harness-wide list keeps those listed alone: the config is the account's.
+    assert_eq!(h.core.engine_models.read()[&EngineId::Codex].len(), 2);
+    h.core.stop_for_good();
+}

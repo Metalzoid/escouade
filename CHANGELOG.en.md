@@ -20,6 +20,9 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### Fixes
 
 - The images and files an agent sends you now show in its conversation: its caption, the images as thumbnails to see full size in a click, the other files to open or find in their folder. The images stay visible even once their folder is gone, and those of a message in Markdown show too.
+- The models menu of a Codex, Copilot CLI, Cursor CLI or OpenCode agent offers every model of its account from the start, no longer a stand-in model alone: they are read as soon as the account is added and at startup, without starting an agent, kept from one start to the next and read again every day. Until they are read, the menu says so.
+- The model a Codex account’s `config.toml` picks shows in its menu, marked “from config.toml”, even when Codex doesn’t list it.
+- A harness installed while Escouade runs (`npm install -g @openai/codex`…) is found without restarting it: when the window comes back to the front, when the “Harness” menu opens or with “Search again”.
 
 ## [2.0.0] — 2026-10-24
 

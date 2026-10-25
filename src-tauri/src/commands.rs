@@ -205,10 +205,30 @@ pub fn save_settings(
 /// server (« Les agents peuvent piloter Escouade », `declare_in_harnesses`).
 #[tauri::command]
 pub async fn engines(core: CoreState<'_>) -> Res<Vec<crate::engine::registry::EngineInfo>> {
+    // One installed since the app started is found (ESC-186).
+    tokio::task::spawn_blocking(crate::syspath::refresh)
+        .await
+        .ok();
     crate::engine::registry::forget();
     let engines = core.engines().await;
     core.declare_in_harnesses();
     Ok(engines)
+}
+
+/// The harnesses found now, the PATH of today read first (ESC-186): the window back in front, the
+/// menu « Harness » opened. A harness found since gets Escouade's server, and its accounts' models
+/// are read.
+#[tauri::command(async)]
+pub fn engines_found_now(core: CoreState) -> Vec<crate::model::EngineId> {
+    let before = core.engines_found();
+    crate::syspath::refresh();
+    let now = core.engines_found();
+    if now != before {
+        log::info!("harnesses found now: {now:?} (before: {before:?})");
+        core.declare_in_harnesses();
+        core.read_all_account_models();
+    }
+    now
 }
 
 /// What stopped the sign-in of an account before it was signed in, when it is known (ESC-133).
@@ -251,8 +271,10 @@ pub struct ClaudeFound {
 
 #[tauri::command(async)]
 pub fn claude_found(core: CoreState) -> ClaudeFound {
-    // Asked once a path is saved: every `claude` of WSL is looked for again (installed, removed).
+    // Asked once a path is saved: every `claude` of WSL is looked for again (installed, removed),
+    // and the PATH of today read (ESC-186: « Chercher à nouveau »).
     crate::wsl::forget(true);
+    crate::syspath::refresh();
     let settings = core.settings.read().clone();
     ClaudeFound {
         claude_found: core.claude_found(),
@@ -337,6 +359,14 @@ pub fn favorite_model_set(
 #[tauri::command(async)]
 pub fn account_remove(core: CoreState, id: String) -> Res<Vec<ClaudeAccount>> {
     core.remove_claude_account(&id).map_err(err)
+}
+
+/// The menu of the models of the account `id` opened (ESC-186): read again when none were, or a
+/// day ago (`Core::refresh_account_models`), in the background; the window is told by an event.
+#[tauri::command]
+pub fn account_models_refresh(core: CoreState, id: String) {
+    let core = core.inner().clone();
+    tauri::async_runtime::spawn(async move { core.refresh_account_models(&id).await });
 }
 
 /// Whether the account is signed in, with which email, and its folder.

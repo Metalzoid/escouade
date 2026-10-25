@@ -206,6 +206,43 @@ pub(crate) fn is_plan_approval(request_id: &str) -> bool {
     request_id.starts_with("plan:")
 }
 
+/// The model the `config.toml` of an account names (`model = "…"`, at its top), read only: None
+/// when it names none, or is no TOML.
+pub(crate) fn config_model(text: &str) -> Option<String> {
+    let doc: toml_edit::DocumentMut = text.parse().ok()?;
+    let model = doc.get("model")?.as_str()?.trim();
+    (!model.is_empty()).then(|| model.to_string())
+}
+
+/// `listed` (`model/list`) and, after them, the model of the account's `config.toml` (in its folder
+/// `home`) when they lack it (ESC-186: one Codex runs by its name, `gpt-5.6-sol`, that its picker
+/// does not list): marked as coming from there, with no effort of its own (its config's serves).
+pub(crate) fn with_config_model(mut listed: Vec<ToldModel>, home: &Path) -> Vec<ToldModel> {
+    let Some(model) = std::fs::read_to_string(home.join("config.toml"))
+        .ok()
+        .as_deref()
+        .and_then(config_model)
+    else {
+        return listed;
+    };
+    if listed.iter().any(|m| m.id == model) {
+        return listed;
+    }
+    listed.push(ToldModel {
+        from_config: true,
+        label: model.clone(),
+        id: model,
+        efforts: Vec::new(),
+        default_effort: None,
+        images: false,
+        default: false,
+        provider: None,
+        multiplier: None,
+        price: None,
+    });
+    listed
+}
+
 /// The models of `model/list`, as the composer's menu offers them.
 pub(crate) fn catalog(list: &Value) -> Option<Vec<ToldModel>> {
     let models: Vec<ToldModel> = list["data"]
@@ -215,6 +252,7 @@ pub(crate) fn catalog(list: &Value) -> Option<Vec<ToldModel>> {
         .filter_map(|m| {
             let id = m["model"].as_str().or_else(|| m["id"].as_str())?;
             Some(ToldModel {
+                from_config: false,
                 id: id.to_string(),
                 label: m["displayName"].as_str().unwrap_or(id).to_string(),
                 efforts: m["supportedReasoningEfforts"]
@@ -601,6 +639,20 @@ impl Engine for Codex {
             let cwd = std::env::temp_dir().to_string_lossy().into_owned();
             let limits = process::read_limits(program, env, cwd).await?;
             Ok(Some(crate::usage::Reading::Windows(meters(&limits))))
+        })
+    }
+
+    /// Every page of `model/list`, by an app-server of its own (`process::read_models`, ESC-186).
+    fn list_models<'a>(
+        &'a self,
+        program: Program,
+        env: Vec<(String, String)>,
+        dir: &'a Path,
+    ) -> BoxFuture<'a, Result<Option<Vec<ToldModel>>>> {
+        Box::pin(async move {
+            let list =
+                process::read_models(program, env, dir.to_string_lossy().into_owned()).await?;
+            Ok(catalog(&list))
         })
     }
 

@@ -260,20 +260,30 @@ pub(crate) async fn listed_models(
     cwd: &str,
     env: &[(String, String)],
 ) -> Result<Vec<String>> {
+    let listed = models_list(program, cwd, env).await?;
+    Ok(listed["models"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|m| m["id"].as_str().map(str::to_string))
+        .collect())
+}
+
+/// The answer to `models.list` (one page: it has no cursor, schema 1.0.98) of a server of its own
+/// for the account of `env`, started then stopped in `cwd`: the menu of the account read without
+/// an agent (ESC-186), and the models of the view (`listed_models`).
+pub(crate) async fn models_list(
+    program: &Program,
+    cwd: &str,
+    env: &[(String, String)],
+) -> Result<Value> {
     let mut server = Server::start(program, cwd, env)?;
     let talk = async {
         let mut rpc = server.rpc();
         rpc.ask("connect", json!({})).await?;
         let listed = rpc.ask("models.list", json!({})).await?;
         let _ = rpc.ask("runtime.shutdown", json!({})).await;
-        Ok::<_, anyhow::Error>(
-            listed["models"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|m| m["id"].as_str().map(str::to_string))
-                .collect(),
-        )
+        Ok::<_, anyhow::Error>(listed)
     };
     let answer = tokio::time::timeout(LIST_LIMIT, talk)
         .await

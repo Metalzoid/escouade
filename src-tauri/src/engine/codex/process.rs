@@ -33,6 +33,9 @@ type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value, String>>>>>;
 /// How long a request of the process to Codex may take.
 const REQUEST_LIMIT: Duration = Duration::from_secs(60);
 
+/// How many pages of `model/list` are read at most (a cursor that never ends ends there).
+const MODEL_PAGES: usize = 50;
+
 /// What the process knows of its conversation.
 #[derive(Default)]
 pub(super) struct State {
@@ -238,6 +241,27 @@ impl CodexProcess {
         self.next_id.fetch_add(1, Ordering::Relaxed)
     }
 
+    /// Every page of `model/list` (ESC-186: it gives them by pages, `nextCursor`), as one answer
+    /// (`data`), up to `MODEL_PAGES` of them.
+    pub async fn list_models(&self) -> Result<Value> {
+        let mut data = Vec::new();
+        let mut cursor: Option<String> = None;
+        for _ in 0..MODEL_PAGES {
+            let params = match &cursor {
+                Some(c) => json!({ "cursor": c }),
+                None => json!({}),
+            };
+            let page = self.request("model/list", params, REQUEST_LIMIT).await?;
+            data.extend(page["data"].as_array().cloned().unwrap_or_default());
+            cursor = page["nextCursor"].as_str().map(str::to_string);
+            if cursor.is_none() {
+                return Ok(json!({ "data": data }));
+            }
+        }
+        log::warn!("codex: model/list: more than {MODEL_PAGES} pages, the rest left out");
+        Ok(json!({ "data": data }))
+    }
+
     /// A request to Codex, its result.
     pub async fn request(&self, method: &str, params: Value, timeout: Duration) -> Result<Value> {
         let id = self.id();
@@ -399,6 +423,42 @@ pub(super) async fn read_limits(
     p.kill();
     p.wait_gone(Duration::from_secs(5)).await;
     Ok(read?["rateLimits"].clone())
+}
+
+/// The models of an account none of whose agents runs (`model/list`, every page): an app-server of
+/// its own (`env`: its `CODEX_HOME`), started in `cwd` for that and stopped once it answered, as
+/// `read_limits` (ESC-186). It starts no thread: nothing is spent.
+pub(super) async fn read_models(
+    program: Program,
+    env: Vec<(String, String)>,
+    cwd: String,
+) -> Result<Value> {
+    let opts = Opts {
+        program,
+        cwd,
+        args: vec!["app-server".into()],
+        env,
+        start: Start::New,
+        settings: Settings::default(),
+        instructions: None,
+    };
+    let p = CodexProcess::spawn(opts, Box::new(|_| {}), Box::new(|_, _| {}))?;
+    let read = async {
+        p.request(
+            "initialize",
+            json!({
+                "clientInfo": { "name": "escouade", "title": "Escouade", "version": env!("CARGO_PKG_VERSION") },
+            }),
+            REQUEST_LIMIT,
+        )
+        .await?;
+        p.write(&json!({ "method": "initialized" }))?;
+        p.list_models().await
+    };
+    let read = read.await;
+    p.kill();
+    p.wait_gone(Duration::from_secs(5)).await;
+    read
 }
 
 /// One message of Codex: an answer to one of the process's requests (resolved here), or what goes
@@ -571,7 +631,7 @@ impl EngineProcess for CodexProcess {
             self.state.lock().thread = Some(id);
             // The translation learns the agent's session from it (a resumed thread says none).
             (self.on_frame)(json!({ "method": "thread/started", "params": { "thread": thread } }));
-            let models = match self.request("model/list", json!({}), REQUEST_LIMIT).await {
+            let models = match self.list_models().await {
                 Ok(list) => super::catalog(&list),
                 Err(e) => {
                     log::warn!("codex: model/list: {e}");

@@ -126,7 +126,10 @@
   onkeydowncapture={onKeyCapture}
   onkeyupcapture={onKeyCapture}
   onkeydown={onKeydown}
-  onfocus={() => app.markSeen()}
+  onfocus={() => {
+    app.markSeen();
+    void app.refreshEngines();
+  }}
   onblur={() => dictation.release()}
   bind:innerWidth={railWidth.window}
 />

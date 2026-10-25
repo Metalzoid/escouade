@@ -14,6 +14,11 @@ type Entry = {
 };
 
 /** What the fake agent was told and said, launch by launch. */
+/** The launch of an agent's process: not the `agent acp` that read its account's models, in a folder of its own (ESC-186). */
+function agentLaunch(app: App) {
+  return cursorLog(app).find((e) => e.launch && !path.basename(e.launch.configDir ?? '').startsWith('escouade-cursor-'))!.launch!;
+}
+
 function cursorLog(app: App): Entry[] {
   const file = path.join(app.root, 'fake-cursor.jsonl');
   if (!fs.existsSync(file)) return [];
@@ -58,12 +63,13 @@ test.describe('an agent on Cursor CLI', () => {
     await expect(page.getByText('Cursor a reçu : bonjour Cursor')).toBeVisible();
     // Started as Escouade drives Cursor: `agent acp`, without MSYSTEM, in a configuration folder of the agent's own
     // (its rules, model and sessions), asking for its subagents.
-    const launch = cursorLog(app).find((e) => e.launch)!.launch!;
+    const launch = agentLaunch(app);
     expect(launch.argv).toEqual(['acp']);
     expect(launch.msystem).toBeNull();
     const homes = path.join(app.data, 'agent-homes');
     expect(path.dirname(launch.configDir!).toLowerCase()).toBe(homes.toLowerCase());
-    expect(sent(app, 'initialize')[0].clientCapabilities._meta.subagents).toBe(true);
+    // The agent's (the reading of its account's models asks for no subagent, ESC-186).
+    expect(sent(app, 'initialize').some((p) => p.clientCapabilities?._meta?.subagents === true)).toBe(true);
     const opened = sent(app, 'session/new')[0];
     expect(path.resolve(opened.cwd).toLowerCase()).toBe(path.resolve(app.repo).toLowerCase());
 
@@ -239,7 +245,7 @@ test.describe('a Cursor account added by its API key', () => {
     await newCursorAgent(page);
     await send(page, 'compte');
     await expect(page.getByText('Compte : clé …abcd')).toBeVisible();
-    const launch = cursorLog(app).find((e) => e.launch)!.launch!;
+    const launch = agentLaunch(app);
     expect(launch.apiKey).toBe('cle-essai-e2e-00000abcd');
     expect(launch.argv.join(' ')).not.toContain('cle-essai');
   });

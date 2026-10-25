@@ -17,6 +17,7 @@ import {
   modelTakes,
   modesOf,
   offered,
+  readingModels,
   searchesModels,
   setFavorite,
   showsCost,
@@ -257,6 +258,35 @@ describe('the models a harness lists for its account (ESC-37)', () => {
     expect(modelLabel('gpt-6-luna')).toBe('GPT-6-Luna');
     // Claude Code's menu is its own still.
     expect(modelsOf({ engine: 'claude' }).map((m) => m.id)).toEqual(['fable', 'opus', 'sonnet', 'haiku']);
+  });
+});
+
+describe('the models of a Codex account (ESC-186)', () => {
+  const told = (id: string, label: string) => ({ id, label, efforts: [], defaultEffort: null, images: false, default: false });
+  beforeEach(() => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.settings.accounts = [
+      { ...app.settings.accounts[0], id: 'travail', engine: 'codex', active: true },
+      { ...app.settings.accounts[0], id: 'perso', engine: 'codex', active: true },
+    ];
+  });
+
+  it('are its account’s once read, the stand-in until then, and those of every account where none is said', () => {
+    const work = { engine: 'codex' as const, account: 'travail' };
+    expect(readingModels(work)).toBe(true);
+    expect(modelsOf(work).map((m) => m.id)).toEqual(['gpt-5.5', 'gpt-5.5-mini']);
+    app.accountModels = {
+      travail: { version: '0.163.0', models: [], catalog: [told('gpt-6-luna', 'GPT-6-Luna'), told('gpt-5.6-terra', 'GPT-5.6-Terra')] },
+      perso: { version: '0.163.0', models: [], catalog: [told('gpt-6-luna', 'GPT-6-Luna'), told('gpt-6-sol', 'GPT-6-Sol')] },
+    };
+    expect(readingModels(work)).toBe(false);
+    expect(modelsOf(work).map((m) => m.id)).toEqual(['gpt-6-luna', 'gpt-5.6-terra']);
+    expect(modelsOf({ engine: 'codex', account: 'perso' }).map((m) => m.id)).toEqual(['gpt-6-luna', 'gpt-6-sol']);
+    // The Kanban, a ticket: each model of its accounts once.
+    expect(modelsOf({ engine: 'codex' }).map((m) => m.id)).toEqual(['gpt-6-luna', 'gpt-5.6-terra', 'gpt-6-sol']);
+    // Claude Code is not concerned.
+    expect(readingModels({ engine: 'claude' })).toBe(false);
   });
 });
 

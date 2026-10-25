@@ -91,6 +91,36 @@ test.describe('an agent on Codex', () => {
     expect(start.collaborationMode.mode).toBe('plan');
   });
 
+  test('offers every model of its account before any agent, read without a turn on every page, in the runner’s window (ESC-186)', async ({
+    app,
+  }) => {
+    const { page } = app;
+    // The runner's screen is 1024 × 768.
+    await page.setViewportSize({ width: 1024, height: 728 });
+    await addProject(page, app.repo);
+    // Read at the start of the app: each page of model/list (the fake gives one model a page), no thread, no turn.
+    await expect.poll(() => requests(app, 'model/list').map((r) => r?.params.cursor ?? null)).toEqual([null, '1']);
+    expect(requests(app, 'thread/start')).toEqual([]);
+    expect(requests(app, 'turn/start')).toEqual([]);
+    // The fiche of the account offers them all.
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Réglages' });
+    await dialog.getByRole('tab', { name: 'Comptes' }).click();
+    const codex = dialog.getByRole('list', { name: 'Comptes Codex' }).getByRole('listitem', { name: 'Principal' });
+    const model = codex.getByRole('group', { name: 'Nouveaux agents' }).getByRole('combobox', { name: 'Modèle' });
+    await expect(model.getByRole('option')).toHaveText(['Celui du harness (GPT-6-Luna)', 'GPT-6-Luna', 'GPT-5.6-Terra']);
+    await page.keyboard.press('Escape');
+    // So does the menu of a new agent's, before its first message: no stand-in « liste en cours de lecture ».
+    await newCodexAgent(page);
+    await page.getByRole('button', { name: /^Modèle/ }).click();
+    const terra = page.getByRole('menuitemradio', { name: /GPT-5\.6-Terra/ });
+    await expect(terra).toBeVisible();
+    await expect(terra).toBeInViewport();
+    await expect(page.getByRole('menuitemradio', { name: /GPT-6-Luna/ })).toBeVisible();
+    await expect(page.getByText('liste en cours de lecture')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+  });
+
   test('answers live, runs a command once allowed, changes a file with its diff, plans, steers, resumes and is copied', async ({ app }) => {
     const { page } = app;
     await addProject(page, app.repo);
@@ -100,9 +130,11 @@ test.describe('an agent on Codex', () => {
     await send(page, 'bonjour Codex');
     await expect(page.getByText('Bonjour, tu as dit : bonjour Codex')).toBeVisible();
     // Started as Escouade drives Codex: its app-server, the plan tool given to the model, a thread in the agent's folder.
-    const launch = codexLog(app).find((e) => e.launch)!.launch!;
+    // The agent's, not the bare app-servers that read its account's models and quota (ESC-186).
+    const launch = codexLog(app).find((e) => e.launch && e.launch.argv.join(' ') !== 'app-server')!.launch!;
     expect(launch.argv.slice(0, 3)).toEqual(['app-server', '-c', 'tools.update_plan.enabled=true']);
-    expect(requests(app, 'initialize')[0]?.params.capabilities.experimentalApi).toBe(true);
+    // The agent's (the readings of its account's models and quota ask for no capability).
+    expect(requests(app, 'initialize').some((r) => r?.params.capabilities?.experimentalApi === true)).toBe(true);
     const start = requests(app, 'turn/start')[0]!.params;
     expect(start.approvalPolicy).toBe('on-request');
     expect(start.sandboxPolicy.type).toBe('workspaceWrite');
@@ -310,5 +342,44 @@ test.describe('a voice conversation with an agent on Codex', () => {
     const list = page.getByRole('dialog', { name: 'Réglages' }).getByRole('list', { name: 'Comptes Codex' });
     await expect(list.getByRole('listitem')).toHaveCount(2);
     await expect(list.getByRole('listitem', { name: 'Travail' })).toContainText('Connecté · codex@example.com');
+  });
+});
+
+// A harness installed while the app runs (ESC-186): no Codex on the PATH at the start, then a `codex` put in a folder the
+// PATH of the user gains (a file of the test's stands for the registry: `ESCOUADE_TEST_PATH_FILE`; never the real one).
+const installed = fs.mkdtempSync(path.join(os.tmpdir(), 'esc186-bin-'));
+const registryPath = `${installed}.path`;
+fs.writeFileSync(registryPath, '');
+const FAKE_CODEX_MJS = path.join(path.dirname(FAKE_CODEX), 'fake-codex.mjs');
+// The PATH of the tests without the folders a `codex` of the machine is in.
+const withoutCodex = (process.env.PATH ?? '')
+  .split(path.delimiter)
+  .filter((d) => !['codex', 'codex.cmd', 'codex.exe'].some((n) => d && fs.existsSync(path.join(d, n))))
+  .join(path.delimiter);
+
+test.describe('a harness installed while the app runs (ESC-186)', () => {
+  test.use({ appEnv: { ESCOUADE_CODEX: 'path', ESCOUADE_TEST_PATH_FILE: registryPath, PATH: withoutCodex } });
+
+  test('is offered by the menu « Harness » without a restart, and its agent runs, in the runner’s window', async ({ app }) => {
+    test.skip(process.platform !== 'win32', 'the PATH of the registry is Windows’');
+    const { page } = app;
+    await page.setViewportSize({ width: 1024, height: 728 });
+    await addProject(page, app.repo);
+    const more = page.getByRole('button', { name: 'Autres façons de créer un agent' });
+    await more.click();
+    await expect(page.getByRole('menuitem', { name: /^Codex/ })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    // `npm install -g @openai/codex` meanwhile: its program, and its folder in the PATH of the user.
+    fs.writeFileSync(path.join(installed, 'codex.cmd'), `@echo off\r\nnode "${FAKE_CODEX_MJS}" %*\r\n`);
+    fs.writeFileSync(registryPath, `${installed}\n`);
+    await more.click();
+    const codex = page.getByRole('menuitemradio', { name: /^Codex/ });
+    await expect(codex).toBeEnabled();
+    await expect(codex).toBeInViewport();
+    await codex.click();
+    await expect(page.getByRole('textbox', { name: 'Décris la tâche à confier à Codex…' })).toBeVisible();
+    // Its agent's process finds it by the same PATH.
+    await send(page, 'bonjour Codex');
+    await expect(page.getByText('Bonjour, tu as dit : bonjour Codex')).toBeVisible();
   });
 });

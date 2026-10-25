@@ -243,6 +243,7 @@ pub(crate) fn catalog(told: &[ToldOf]) -> Vec<ToldModel> {
     let mut models: Vec<ToldModel> = told
         .iter()
         .map(|m| ToldModel {
+            from_config: false,
             id: m.base.clone(),
             label: m.name.clone(),
             efforts: m.efforts.clone(),
@@ -258,6 +259,7 @@ pub(crate) fn catalog(told: &[ToldOf]) -> Vec<ToldModel> {
         models = MODELS
             .iter()
             .map(|&(id, label)| ToldModel {
+                from_config: false,
                 id: id.into(),
                 label: label.into(),
                 efforts: Vec::new(),
@@ -627,9 +629,89 @@ async fn one_shot(ask: OneShot<'_>) -> Result<String> {
     got
 }
 
+/// The models of an account none of whose agents runs (ESC-186): an `agent acp` of its own, in a
+/// configuration folder of its own removed after (Cursor writes its model and its privacy in its
+/// `cli-config.json` as it starts, seen on the real 2026.10.22: never the user's), asked
+/// `initialize` then `cursor/list_available_models`, which answers without a session (tried on
+/// 2026.10.22: 46 models): no conversation is left in its store. Killed once it answered.
+async fn read_models(
+    program: Program,
+    env: Vec<(String, String)>,
+    cwd: &std::path::Path,
+) -> Result<Value> {
+    let home =
+        std::env::temp_dir().join(format!("escouade-cursor-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&home)?;
+    let mut env = env;
+    env.retain(|(k, _)| k != CONFIG_VAR);
+    env.push((CONFIG_VAR.into(), home.to_string_lossy().into_owned()));
+    let opts = process::Opts {
+        program,
+        cwd: cwd.to_string_lossy().into_owned(),
+        args: vec!["acp".into()],
+        env,
+        start: super::Start::New,
+        settings: Settings::default(),
+        instructions: None,
+        relay: None,
+        escouade: None,
+        fence: Vec::new(),
+    };
+    let p = CursorProcess::spawn(opts, Box::new(|_| {}), Box::new(|_, _| {}))?;
+    let limit = std::time::Duration::from_secs(60);
+    let asked = async {
+        p.request(
+            "initialize",
+            json!({
+                "protocolVersion": process::PROTOCOL,
+                "clientCapabilities": {
+                    "fs": { "readTextFile": false, "writeTextFile": false },
+                    "terminal": false,
+                },
+                "clientInfo": { "name": "escouade", "version": env!("CARGO_PKG_VERSION") },
+            }),
+            limit,
+        )
+        .await?;
+        p.request("cursor/list_available_models", json!({}), limit)
+            .await
+    };
+    let got = asked.await;
+    p.kill();
+    p.wait_gone(std::time::Duration::from_secs(5)).await;
+    let _ = std::fs::remove_dir_all(&home);
+    got
+}
+
+/// The models of `cursor/list_available_models` (`options`) as those of `session/new` would be
+/// (`availableModels`, by their base ids), for `models_of`.
+pub(crate) fn listed_of(options: &Value) -> Value {
+    let models: Vec<Value> = options["models"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|m| Some(json!({ "modelId": m["value"].as_str()?, "name": m["name"] })))
+        .collect();
+    json!({ "availableModels": models })
+}
+
 impl Engine for Cursor {
     fn id(&self) -> EngineId {
         EngineId::Cursor
+    }
+
+    /// `cursor/list_available_models` of an `agent acp` of its own (`read_models`, ESC-186).
+    fn list_models<'a>(
+        &'a self,
+        program: Program,
+        env: Vec<(String, String)>,
+        dir: &'a std::path::Path,
+    ) -> BoxFuture<'a, Result<Option<Vec<ToldModel>>>> {
+        Box::pin(async move {
+            let options = read_models(program, env, dir).await?;
+            let told = models_of(&listed_of(&options), Some(&options));
+            Ok(Some(catalog(&told)))
+        })
     }
 
     fn name(&self) -> &'static str {

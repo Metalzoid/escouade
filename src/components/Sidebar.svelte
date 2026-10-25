@@ -507,7 +507,10 @@
    * with « Ajouter un compte… »; one not found greyed, with where to set it. Then the agent the other way round from « Un
    * worktree par agent », the one on a branch, and the project's default harness.
    */
-  function newAgentMenu() {
+  async function newAgentMenu() {
+    if (!moreBtn) return;
+    // A harness installed since is offered (ESC-186).
+    await app.refreshEngines();
     if (!moreBtn) return;
     const own = project.engine ?? defaultEngine();
     const harnesses: MenuItem[] = app.engines.map((e, i) => {

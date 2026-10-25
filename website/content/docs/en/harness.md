@@ -62,7 +62,7 @@ A turn’s cost is the one Claude Code gives. The quota is your account’s 5-ho
 
 ### Models and modes
 
-The models and their efforts are those Codex lists for your account. The modes go through Codex’s sandbox:
+The models and their efforts are those Codex lists for each account: Escouade reads them at startup and when an account is added, without starting an agent or using anything, keeps them from one start to the next and reads them again when the “Model” menu opens on a list more than a day old. Before the first reading, the menu offers GPT-6-Luna alone, marked “list being read”. The model the account’s `config.toml` picks (`model = …`) is there too, marked “from config.toml”, even when Codex doesn’t list it. The modes go through Codex’s sandbox:
 
 | Mode | With Codex |
 |---|---|
@@ -90,7 +90,7 @@ It doesn’t read PDFs (the button refuses them and says so) and offers no `/` c
 
 ### Models and modes
 
-The “Model” menu lists the models of the connected providers, with a search, their provider and favorites (★) first, also set in Settings › Harness › OpenCode › “Models”. The effort is the model’s variant when it has one. Escouade always gives the model, so that OpenCode doesn’t pick one by itself.
+Its models, like those of Codex, Copilot CLI and Cursor CLI, are read at startup and when an account is added, without starting an agent, kept from one start to the next and read again when the menu opens on a list more than a day old. The “Model” menu lists the models of the connected providers, with a search, their provider and favorites (★) first, also set in Settings › Harness › OpenCode › “Models”. The effort is the model’s variant when it has one. Escouade always gives the model, so that OpenCode doesn’t pick one by itself.
 
 OpenCode has no sandbox: its permission rules are what follows the mode, and an accepted command can do anything.
 

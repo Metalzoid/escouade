@@ -211,6 +211,10 @@ pub struct ToldModel {
     /// `high`, `very_high`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub price: Option<String>,
+    /// Not listed by its harness, but the model the account's config names (Codex's `model` of
+    /// its `config.toml`, ESC-186): offered after the listed ones, marked as coming from there.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub from_config: bool,
 }
 
 /// A version number (`2.1.301`), compared number by number (a missing one counts as 0).

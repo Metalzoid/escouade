@@ -236,8 +236,9 @@ async fn each_turn_keeps_the_harness_that_ran_it_and_a_copy_takes_the_one_its_or
         rt.meta.session_id = None;
     }
     h.turn(&id, "Second").await;
-    // Codex tells no cost, and its model here is a Claude one, which OpenAI's grid does not price
-    // (`pricing::estimate_openai`): its tokens count the turn.
+    // Its Claude model is none of Codex's: it goes on the one its account lists by default
+    // (`settle_model`, read by an app-server of its own since ESC-186), which OpenAI's grid prices
+    // (`pricing::estimate_openai`, Codex telling no cost).
     let codex_counted = |h: &Harness| {
         h.core
             .stats
@@ -247,7 +248,8 @@ async fn each_turn_keeps_the_harness_that_ran_it_and_a_copy_takes_the_one_its_or
             .any(|s| s.engine == "codex")
     };
     h.wait("the second turn counted", codex_counted).await;
-    assert_eq!(h.core.stats.today_cost(), first_cost);
+    assert_eq!(h.agent(&id).model, "gpt-6-luna");
+    assert!(h.core.stats.today_cost() > first_cost);
     let turns: Vec<Value> = h
         .items(&id)
         .into_iter()

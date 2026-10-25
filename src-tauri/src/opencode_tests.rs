@@ -1593,3 +1593,32 @@ async fn an_opencode_agent_gets_its_worktree_at_its_first_message_under_the_name
     .await;
     h.core.stop_for_good();
 }
+
+#[tokio::test]
+async fn the_models_of_an_opencode_account_are_read_without_an_agent_and_kept_after_a_restart() {
+    let h = harness("esc186-opencode-models");
+    opencode_account(&h);
+    let menu = |core: &crate::core::Core<tauri::test::MockRuntime>| -> Vec<String> {
+        core.account_models
+            .read()
+            .get("principal-opencode")
+            .map(|m| m.catalog.iter().map(|m| m.id.clone()).collect())
+            .unwrap_or_default()
+    };
+    assert!(menu(&h.core).is_empty());
+    h.core.read_account_models("principal-opencode").await;
+    assert_eq!(
+        menu(&h.core),
+        [
+            "ollama/gpt-oss:20b-32k",
+            "ollama/qwen3-coder:30b-32k",
+            "lmstudio/devstral-small"
+        ]
+    );
+    assert!(h.core.agents.read().is_empty());
+    h.core.save_now();
+    let app = tauri::test::mock_app();
+    let (reloaded, _rx) = crate::core::Core::load(app.handle().clone(), h.core.data.clone());
+    assert_eq!(menu(&reloaded).len(), 3);
+    h.core.stop_for_good();
+}

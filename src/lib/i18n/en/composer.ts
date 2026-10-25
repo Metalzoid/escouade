@@ -111,6 +111,8 @@ export default defineZone('composer', {
   model: {
     multiplier: '×{n}',
     multiplierTitle: 'Costs {n} times the base rate',
+    reading: 'list being read',
+    fromConfig: 'from config.toml',
     price: {
       low: 'low cost',
       medium: 'medium cost',

@@ -21,6 +21,10 @@ pub(super) fn find(configured: &str) -> Option<Program> {
     let forced = from_env();
     let configured = match (configured.is_empty(), forced.as_deref()) {
         (true, Some("none")) => return None,
+        // A program on the PATH alone, never the desktop app's (ESC-186: one installed meanwhile).
+        (true, Some("path")) => {
+            return crate::which::find("codex").map(|p| Program::Native(native_of(&p)));
+        }
         (true, Some(path)) => path,
         _ => configured,
     };
@@ -75,7 +79,7 @@ fn native_of(path: &Path) -> PathBuf {
 }
 
 /// In a debug build, `ESCOUADE_CODEX` when set (end-to-end tests): the program found where none
-/// is set, `none` for none. Never in the unit tests, nor in a release.
+/// is set, `none` for none, `path` for the one of the PATH alone. Never in the unit tests, nor in a release.
 fn from_env() -> Option<String> {
     if cfg!(test) || !cfg!(debug_assertions) {
         return None;

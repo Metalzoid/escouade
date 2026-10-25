@@ -351,6 +351,7 @@ pub fn catalog(told: &[crate::model::ModelInfo]) -> Vec<ToldModel> {
             Vec::new()
         };
         out.push(ToldModel {
+            from_config: false,
             id: m.value.clone(),
             label: if m.display_name.is_empty() {
                 m.value.clone()

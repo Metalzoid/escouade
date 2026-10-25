@@ -106,6 +106,7 @@ mod stats;
 mod switching;
 #[cfg(test)]
 mod switching_tests;
+mod syspath;
 mod taskout;
 mod telemetry;
 #[cfg(test)]
@@ -276,6 +277,9 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
 pub fn run() {
     #[cfg(unix)]
     shellenv::adopt_login_path();
+    // Started by a process whose PATH is older than the user's (ESC-186): today's, before any thread.
+    #[cfg(windows)]
+    syspath::refresh();
     paths::migrate_app_folders();
     // What the last stop for an update left: the window comes back as it was then.
     let after_update = updates::take_note(
@@ -356,8 +360,8 @@ pub fn run() {
             // thread, which neither the window nor the board then waits for (`wsl::find` keeps it).
             let warm = core.clone();
             tauri::async_runtime::spawn_blocking(move || warm.warm_claude());
-            // What the `claude` of each account tells of its models, without a turn (ESC-124).
-            core.read_all_claude_models();
+            // What the harness of each account lists of its models, without a turn (ESC-124, ESC-186).
+            core.read_all_account_models();
             // Claude Code updated by Escouade, apart from its agents (ESC-133).
             selfupdate::watch(core.clone());
             updates::watch(app.handle().clone());
@@ -450,6 +454,8 @@ pub fn run() {
             commands::favorite_model_set,
             commands::account_remove,
             commands::account_status,
+            commands::account_models_refresh,
+            commands::engines_found_now,
             commands::account_cursor_key,
             commands::account_login,
             commands::set_agent_view,

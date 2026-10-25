@@ -12,14 +12,20 @@ const MARKER: &str = "__ESCOUADE_PATH__";
 /// Merges the login shell's PATH into the process environment, before anything is spawned.
 pub fn adopt_login_path() {
     let current = std::env::var_os("PATH").unwrap_or_default();
-    let shell = std::env::var_os("SHELL")
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "/bin/zsh".into());
-    let login = login_shell_path(Path::new(&shell));
+    let login = login_path();
     let home = dirs::home_dir();
     let merged = merge_paths(login.as_deref(), &current, home.as_deref());
     // Called first thing in `run`, before any other thread exists.
     std::env::set_var("PATH", merged);
+}
+
+/// The PATH the user's login shell (`SHELL`, zsh by default) ends up with today: at the start, and
+/// at each detection of the harnesses (`syspath::refresh`, ESC-186).
+pub fn login_path() -> Option<String> {
+    let shell = std::env::var_os("SHELL")
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "/bin/zsh".into());
+    login_shell_path(Path::new(&shell))
 }
 
 /// The PATH an interactive login shell ends up with, or None if it fails or hangs.

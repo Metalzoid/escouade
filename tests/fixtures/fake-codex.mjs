@@ -209,6 +209,17 @@ const MODELS = [
     inputModalities: ['text'],
     isDefault: false,
   },
+  {
+    id: 'gpt-6-luna-review',
+    model: 'gpt-6-luna-review',
+    displayName: 'GPT-6-Luna Review',
+    description: 'Hidden from the picker.',
+    hidden: true,
+    supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: 'medium' }],
+    defaultReasoningEffort: 'medium',
+    inputModalities: ['text'],
+    isDefault: false,
+  },
 ];
 
 const RATE = (used) => ({
@@ -599,8 +610,15 @@ function handle(msg) {
       reply({ thread: threadObject(thread, { forkedFromId: of }) });
       return notify('thread/started', { thread: threadObject(thread, { forkedFromId: of }) });
     }
-    case 'model/list':
-      return reply({ data: MODELS, nextCursor: null });
+    case 'model/list': {
+      // By pages, as the real one may (`nextCursor`): one model a page unless `limit` says more; the hidden ones only
+      // when asked (`includeHidden`), as Codex keeps them out of its picker.
+      const all = MODELS.filter((m) => p.includeHidden || !m.hidden);
+      const from = Number(p.cursor ?? 0);
+      const size = p.limit || 1;
+      const next = from + size < all.length ? String(from + size) : null;
+      return reply({ data: all.slice(from, from + size), nextCursor: next });
+    }
     case 'account/rateLimits/read':
       return reply({ rateLimits: (!usage && ownQuota()) || RATE(usage || 12), rateLimitsByLimitId: {} });
     case 'hooks/list': {

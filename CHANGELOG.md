@@ -20,6 +20,9 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Corrections
 
 - Les images et les fichiers qu’un agent t’envoie apparaissent enfin dans sa conversation : sa légende, les images en vignettes à voir en grand d’un clic, les autres fichiers à ouvrir ou à retrouver dans leur dossier. Les images restent visibles même une fois leur dossier effacé, et celles d’un message en Markdown s’affichent aussi.
+- Le menu des modèles d’un agent Codex, Copilot CLI, Cursor CLI ou OpenCode propose tous les modèles de son compte dès le départ, et plus seulement un modèle de repli : ils sont lus dès l’ajout du compte et au démarrage, sans lancer d’agent, gardés d’un démarrage à l’autre et relus chaque jour. Tant qu’ils ne sont pas lus, le menu le dit.
+- Le modèle que la `config.toml` d’un compte Codex choisit apparaît dans son menu, marqué « de config.toml », même quand Codex ne le liste pas.
+- Un harness installé pendant qu’Escouade tourne (`npm install -g @openai/codex`…) est trouvé sans la redémarrer : au retour de la fenêtre au premier plan, à l’ouverture du menu « Harness » ou par « Chercher à nouveau ».
 
 ## [2.0.0] — 2026-10-24
 

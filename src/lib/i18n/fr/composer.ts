@@ -128,6 +128,10 @@ export default {
   model: {
     multiplier: '×{n}',
     multiplierTitle: 'Coûte {n} fois le tarif de base',
+    /** Beside the stand-in model while the account's are being read (Codex, ESC-186). */
+    reading: 'liste en cours de lecture',
+    /** Beside a model the account's config names, its harness not listing it (Codex's config.toml, ESC-186). */
+    fromConfig: 'de config.toml',
     price: {
       low: 'coût bas',
       medium: 'coût moyen',

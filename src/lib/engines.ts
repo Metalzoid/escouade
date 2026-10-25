@@ -120,27 +120,61 @@ export function showsMark(): boolean {
 }
 
 /**
- * The models the harness of `who` listed for its account (Codex: `model/list`), none until it has. Claude Code: those the
- * `claude` of the account of `who` told (ESC-124); without an account (the Kanban, a ticket, the settings), those of its
- * active accounts, each once, in their order.
+ * The harnesses whose models are read by account, without an agent (`Core::read_account_models`): Claude Code (ESC-124),
+ * Codex, Copilot CLI, Cursor CLI and OpenCode (ESC-186).
+ */
+const BY_ACCOUNT: EngineId[] = ['claude', 'codex', 'copilot', 'cursor', 'opencode'];
+
+/**
+ * The models the harness of `who` listed for its account, none until it has. Claude Code and Codex: those its account
+ * listed (ESC-124, ESC-186; Codex's harness-wide list while its account has none); without an account (the Kanban, a
+ * ticket, the settings), those of its active accounts, each once, in their order.
  */
 function toldOf(who: { engine: EngineId | null | undefined; account?: string }): ToldModel[] {
   const id = who.engine ?? engineOf(null)?.id;
-  if (id === 'claude') return claudeTold(who.account);
+  if (id === 'claude') return accountTold('claude', who.account);
+  if (id && BY_ACCOUNT.includes(id)) {
+    const own = accountTold(id, who.account);
+    if (own.length) return own;
+  }
   return (id && app.engineModels[id]) || [];
+}
+
+/** Whether `model` is in the menu of `who` because its account's config names it, its harness not listing it (ESC-186). */
+export function fromConfig(who: { engine: EngineId | null | undefined; account?: string }, model: string): boolean {
+  return !!toldOf(who).find((m) => m.id === model)?.fromConfig;
+}
+
+/**
+ * Whether the menu of the models of `who` is its harness's stand-in (Codex's GPT-6-Luna), its account's not read yet
+ * (ESC-186): the menu says the list is being read.
+ */
+export function readingModels(who: { engine: EngineId | null | undefined; account?: string }): boolean {
+  const id = who.engine ?? engineOf(null)?.id;
+  return !!id && id !== 'claude' && BY_ACCOUNT.includes(id) && toldOf(who).length === 0;
+}
+
+/**
+ * The menu of the models of `who` opened: its account's read again when they are a day old (`Core::refresh_account_models`,
+ * ESC-186). Not Claude Code's, read at each start of its agents.
+ */
+export function refreshModels(who: { engine: EngineId | null | undefined; account?: string }): void {
+  const id = who.engine ?? engineOf(null)?.id;
+  if (!id || id === 'claude' || !BY_ACCOUNT.includes(id) || !who.account) return;
+  void api.accountModelsRefresh(who.account).catch(() => {});
 }
 
 /** The models of Claude Code the `claude` of its active accounts told (ESC-124), each once: the Kanban's, a ticket's, the settings' menu. */
 export function claudeToldModels(): { id: string; label: string }[] {
-  return claudeTold(undefined).map((m) => ({ id: m.id, label: m.label }));
+  return accountTold('claude', undefined).map((m) => ({ id: m.id, label: m.label }));
 }
 
-/** The models the `claude` of `account` told (ESC-124), or of every active Claude account when none is said. */
-function claudeTold(account: string | undefined): ToldModel[] {
+/** The models `account` listed (ESC-124, ESC-186), or every active account of `engine` when none is said. */
+function accountTold(engine: EngineId, account: string | undefined): ToldModel[] {
   if (account) return app.accountModels[account]?.catalog ?? [];
   const out: ToldModel[] = [];
   for (const a of app.settings.accounts ?? []) {
-    if ((a.engine ?? 'claude') !== 'claude' || !a.active) continue;
+    if ((a.engine ?? 'claude') !== engine || !a.active) continue;
     for (const m of app.accountModels[a.id]?.catalog ?? []) if (!out.some((o) => o.id === m.id)) out.push(m);
   }
   return out;
