@@ -5,6 +5,14 @@ import { LANGS, type Lang } from './language';
 export const REPO = 'https://github.com/guillaume-gagnaire/escouade';
 /** The Discord server of Escouade's community. */
 export const DISCORD = 'https://discord.gg/m3KYtN8gxP';
+/**
+ * The page to offer a coffee to support Escouade (a Stripe payment link, any amount), in the page’s language: in the
+ * footer, the FAQ and the documentation.
+ */
+export const SUPPORT: Record<Lang, string> = {
+  fr: 'https://buy.stripe.com/8x2fZh20z7rM87067200001',
+  en: 'https://buy.stripe.com/00w7sLcFdaDYaf8cvq00000',
+};
 export const DOWNLOAD = `${REPO}/releases/latest`;
 /** The version the roadmap announces, whose detailed plan is `docs/TODO-<it>.md`. A test fails once it is out. */
 export const NEXT = '2.1';

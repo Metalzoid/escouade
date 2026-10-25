@@ -8,7 +8,7 @@ Ouvre les réglages avec `Ctrl+,` (`⌘,` sous macOS), puis choisis « À propo
 
 ## Escouade
 
-L’onglet n’a qu’un groupe, « Escouade », avec sept lignes.
+L’onglet n’a qu’un groupe, « Escouade », avec huit lignes.
 
 | Ligne | Ce qu’elle montre ou fait | Par défaut |
 |---|---|---|
@@ -19,6 +19,7 @@ L’onglet n’a qu’un groupe, « Escouade », avec sept lignes.
 | « Crédits et licences » | Les composants et les voix qu’Escouade embarque, avec leur licence. Le bouton « Ouvrir » affiche la liste dans ton navigateur. | — |
 | « Site web » | « escouade.dev : la documentation, les nouveautés et la feuille de route ». Le bouton « Ouvrir » ouvre le site dans ton navigateur, dans la langue de l’interface. | — |
 | « Discord » | « Poser une question, signaler un problème, suivre ce qui arrive ». Le bouton « Rejoindre » ouvre l’invitation au serveur Discord d’Escouade. | — |
+| « Soutenir Escouade » | « Escouade est gratuite et open source : un café aide à la faire avancer ». Le bouton « Offrir un café » ouvre dans ton navigateur la [page de paiement](support:), au montant de ton choix (voir [« Soutenir Escouade »](introduction#soutenir-escouade)). | — |
 
 Si un harness installé n’est pas trouvé, indique son chemin dans l’onglet [« Harness »](settings-claude-code).
 

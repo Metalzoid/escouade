@@ -259,6 +259,9 @@ export default defineZone('settings', {
     discordDesc: 'Ask a question, report a problem, follow what’s coming',
     discordJoin: 'Join',
     discordJoinLabel: 'Join the Discord server',
+    support: 'Support Escouade',
+    supportDesc: 'Escouade is free and open source: a coffee helps it move forward',
+    supportOpen: 'Buy a coffee',
   },
 
   project: {

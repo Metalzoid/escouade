@@ -96,3 +96,7 @@ The interface comes in French and English. By default it follows the system lang
 - **Accounts and usage**: [Claude accounts](accounts), then quotas, cost and statistics.
 - **Settings**: every tab of the settings window, option by option, starting with [Application](settings-application).
 - **Reference**: the [keyboard shortcuts](shortcuts), local data, updates and [troubleshooting](troubleshooting).
+
+## Support Escouade
+
+Escouade is free and open source. If it helps you, you can [buy a coffee](support:) to help it move forward, for the amount you choose: the “Buy a coffee” button of [Settings › About](settings-about) opens the same page.

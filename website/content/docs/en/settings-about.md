@@ -8,7 +8,7 @@ Open the settings with `Ctrl+,` (`⌘,` on macOS), then choose “About” (“V
 
 ## Escouade
 
-The tab has a single group, “Escouade”, with seven lines.
+The tab has a single group, “Escouade”, with eight lines.
 
 | Line | What it shows or does | Default |
 |---|---|---|
@@ -19,6 +19,7 @@ The tab has a single group, “Escouade”, with seven lines.
 | “Credits and licenses” | The components and voices Escouade ships, with their licenses. The “Open” button shows the list in your browser. | — |
 | “Website” | “escouade.dev: the documentation, what’s new and the roadmap”. The “Open” button opens the site in your browser, in the language of the interface. | — |
 | “Discord” | “Ask a question, report a problem, follow what’s coming”. The “Join” button opens the invitation to Escouade’s Discord server. | — |
+| “Support Escouade” | “Escouade is free and open source: a coffee helps it move forward”. The “Buy a coffee” button opens the [payment page](support:) in your browser, for the amount you choose (see [“Support Escouade”](introduction#support-escouade)). | — |
 
 If an installed harness isn’t found, give its path in the [“Harness”](settings-claude-code) tab.
 

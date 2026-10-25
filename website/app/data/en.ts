@@ -1,6 +1,6 @@
 // Everything the English page says. fr.ts says the same, key for key.
 import type { Catalog } from './catalog';
-import { DOWNLOAD } from './site';
+import { DOWNLOAD, SUPPORT } from './site';
 import { docPath } from './docs';
 
 export const en: Catalog = {
@@ -281,7 +281,8 @@ export const en: Catalog = {
       },
       {
         q: 'Is it free?',
-        a: 'Yes, and open source, under the GPL-3.0 license (or later). Escouade uses your own harness and your own account, with no middleman.',
+        a: 'Yes, and open source, under the GPL-3.0 license (or later). Escouade uses your own harness and your own account, with no middleman. If it helps you, you can support the project:',
+        link: { label: 'buy a coffee', href: SUPPORT.en },
       },
       {
         q: 'Where does my data go?',
@@ -323,6 +324,7 @@ export const en: Catalog = {
   footer: {
     github: 'GitHub',
     discord: 'Discord',
+    support: 'Buy a coffee',
     license: 'GPL-3.0 license',
     privacy: 'Privacy',
     legal: 'Legal notice',

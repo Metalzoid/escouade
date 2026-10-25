@@ -3,6 +3,7 @@
 import { Marked, type Token, type Tokens } from 'marked';
 import { docPath, isDocSlug, type DocSlug } from './docs';
 import type { Lang } from './language';
+import { SUPPORT } from './site';
 
 export interface DocHeading {
   /** Its anchor. */
@@ -149,6 +150,8 @@ export function renderDoc(source: string, o: RenderOptions): RenderedDoc {
   /** Where a link written in a page leads: another page by its slug, a section of this one, or another site. */
   const resolve = (href: string): { href: string; external?: boolean } => {
     if (/^(?:https?|mailto):/i.test(href)) return { href, external: true };
+    // `support:`, the page to offer a coffee in the page’s language, kept in site.ts alone.
+    if (href === 'support:') return { href: SUPPORT[o.lang], external: true };
     if (/^[a-z][a-z0-9+.-]*:|^\/\//i.test(href)) throw new Error(`“${title}”: a link that is neither a page nor a web address, “${href}”`);
     if (href.startsWith('#')) {
       anchors.push(href.slice(1));

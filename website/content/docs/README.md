@@ -24,6 +24,7 @@ Du texte, des listes, des tableaux.
 
 - Vers une autre page de la doc : son slug seul, `[le pilote auto](autopilot)`, ou avec une section, `[les modes de permission](managing-agents#modes-de-permission)`. L’ancre d’une section est son titre en minuscules, sans accents, chaque suite de caractères qui ne sont ni lettres ni chiffres remplacée par un `-` (« Modes de permission » → `modes-de-permission`, « Données locales » → `donnees-locales`). Le site en fait de vraies adresses ; un lien vers une page ou une section qui n’existe pas fait échouer les tests.
 - Vers l’extérieur : l’adresse complète (`https://…`).
+- Vers la page « Offrir un café » : `[offrir un café](support:)`, que le site remplace par celle de la langue de la page (`SUPPORT` de `app/data/site.ts`).
 
 ## Images
 

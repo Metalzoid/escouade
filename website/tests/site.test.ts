@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { CATALOGS, featuresFor } from '../app/data/catalogs';
@@ -6,7 +6,7 @@ import { fmt } from '../app/data/catalog';
 import { DOC_GROUPS, DOC_SLUGS, docPath, docSource, type DocSlug } from '../app/data/docs';
 import { LANG_KEY, type Lang } from '../app/data/language';
 import { renderDoc } from '../app/data/render';
-import { FEATURE_SHOTS, HERO_SHOT, NEXT, REPO, SITE, STAGES, VIDEO, imageOf } from '../app/data/site';
+import { FEATURE_SHOTS, HERO_SHOT, NEXT, REPO, SITE, STAGES, SUPPORT, VIDEO, imageOf } from '../app/data/site';
 import { SNAPSHOT, squadAt } from '../app/data/squad';
 import { escapeText, headOf, leaves, tags } from './helpers';
 
@@ -600,5 +600,61 @@ describe.each(DOC_PAGES)('the documentation ($lang, $slug)', ({ lang, slug, othe
     expect(header).toContain(escapeText(text.docs.title));
     expect(header).toContain(escapeText(text.docs.search.button));
     expect(html).not.toContain(escapeText(CATALOGS[other].docs.toc));
+  });
+});
+
+describe('the page to offer a coffee', () => {
+  /** Every page the site generates, but the empty one the server shows for an unknown address. */
+  const pages = () =>
+    (readdirSync(OUT, { recursive: true }) as string[])
+      .map((f) => f.replaceAll('\\', '/'))
+      .filter((f) => f.endsWith('.html') && !/^(404|200)\.html$/.test(f));
+  const langOf = (html: string) => html.match(/<html[^>]*lang="(\w+)"/)?.[1] as Lang;
+  const stripe = (part: string) =>
+    tags(part, 'a')
+      .filter((a) => a.href?.startsWith('https://buy.stripe.com/'))
+      .map((a) => a.href);
+
+  beforeAll(() => {
+    if (!existsSync(new URL('index.html', OUT))) throw new Error('Génère d’abord le site : npm run generate');
+  });
+
+  it('is in the footer of every page, the one of its language', () => {
+    const all = pages();
+    expect(all.length).toBeGreaterThan(80);
+    for (const file of all) {
+      const html = readFileSync(new URL(file, OUT), 'utf8');
+      const footer = html.match(/<footer class="foot[\s\S]*?<\/footer>/)?.[0];
+      expect(footer, file).toBeDefined();
+      expect(stripe(footer!), file).toEqual([SUPPORT[langOf(html)]]);
+      expect(langOf(html), file).toBe(file.startsWith('en/') ? 'en' : 'fr');
+    }
+  });
+
+  it.each(PAGES)('is in the answer of the FAQ that says it is free ($lang)', ({ lang, file }) => {
+    const html = readFileSync(new URL(file, OUT), 'utf8');
+    const faq = html.match(/<section id="faq"[\s\S]*?<\/section>/)?.[0] ?? '';
+    expect(stripe(faq)).toEqual([SUPPORT[lang]]);
+    // The answer that says it is free and open source, and that one alone.
+    const linked = CATALOGS[lang].faq.items.filter((q) => q.link);
+    expect(linked.map((q) => q.link!.href)).toEqual([SUPPORT[lang]]);
+    expect(linked[0].a).toContain('GPL-3.0');
+  });
+
+  it.each(['fr', 'en'] as const)('has its section in the introduction of the documentation (%s)', (lang) => {
+    const html = readFileSync(new URL(`${docPath(lang, 'introduction').slice(1)}index.html`, OUT), 'utf8');
+    const article = html.split(/<footer class="foot/)[0];
+    expect(article).toContain(lang === 'fr' ? 'id="soutenir-escouade"' : 'id="support-escouade"');
+    expect(stripe(article)).toEqual([SUPPORT[lang]]);
+  });
+
+  it('is written in site.ts alone: the pages and the documentation name it support:', () => {
+    const SOURCES = ['app/', 'content/'].map((d) => new URL(`../${d}`, import.meta.url));
+    for (const dir of SOURCES)
+      for (const f of readdirSync(dir, { recursive: true }) as string[]) {
+        const path = f.replaceAll('\\', '/');
+        if (!/\.(ts|vue|md)$/.test(path) || path === 'data/site.ts') continue;
+        expect(readFileSync(new URL(path, dir), 'utf8'), path).not.toContain('buy.stripe.com');
+      }
   });
 });

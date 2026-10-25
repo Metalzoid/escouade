@@ -1134,6 +1134,23 @@ describe('SettingsModal', () => {
     setLang('fr');
   });
 
+  it('offers a coffee, on the Stripe page of the language of the interface, in the browser', async () => {
+    const backend = fakeBackend({ 'plugin:opener|open_url': () => null });
+    render(SettingsModal, { tab: 'about' });
+    expect(screen.getByText('Soutenir Escouade')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Offrir un café' }));
+    expect(backend.called('plugin:opener|open_url').map((c) => c.args.url)).toEqual(['https://buy.stripe.com/8x2fZh20z7rM87067200001']);
+    // Said once, in its row: nothing opens by itself.
+    expect(screen.queryAllByRole('dialog')).toHaveLength(1);
+    cleanup();
+    setLang('en');
+    render(SettingsModal, { tab: 'about' });
+    expect(screen.getByText('Support Escouade')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Buy a coffee' }));
+    expect(backend.called('plugin:opener|open_url').at(-1)?.args.url).toBe('https://buy.stripe.com/00w7sLcFdaDYaf8cvq00000');
+    setLang('fr');
+  });
+
   it('says where the local data is, and opens its folder', async () => {
     const backend = fakeBackend({ data_dir: () => 'C:\\Users\\moi\\.escouade', 'plugin:opener|open_path': () => null });
     render(SettingsModal, { tab: 'about' });

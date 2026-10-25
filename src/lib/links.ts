@@ -10,6 +10,11 @@ export const siteUrl = () => (locale.ui === 'en' ? 'https://escouade.dev/en/' : 
 /** The Discord server of Escouade's community (Réglages › À propos; also on the site and in the README). */
 export const DISCORD_URL = 'https://discord.gg/m3KYtN8gxP';
 
+/** The page to offer a coffee to support Escouade (a Stripe payment link, any amount), in the language of the interface
+ * (Réglages › À propos). */
+export const supportUrl = () =>
+  locale.ui === 'fr' ? 'https://buy.stripe.com/8x2fZh20z7rM87067200001' : 'https://buy.stripe.com/00w7sLcFdaDYaf8cvq00000';
+
 /** What the system opens for the app: a page of the web, or a mail address. Any other address is not trusted to it. */
 const OUTSIDE = /^(https?:|mailto:)/i;
 

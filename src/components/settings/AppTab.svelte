@@ -9,7 +9,7 @@
   import { app } from '../../lib/state.svelte';
   import { privacyUrl } from '../../lib/telemetry';
   import { CREDITS_URL } from '../../lib/conversation';
-  import { DISCORD_URL, siteUrl } from '../../lib/links';
+  import { DISCORD_URL, siteUrl, supportUrl } from '../../lib/links';
   import type { ClaudeLocated, ClaudeUpdateStatus, EngineDecl, EngineInfo } from '../../lib/types';
   import { checkForUpdate } from '../../lib/updater';
   import Chips from './Chips.svelte';
@@ -467,6 +467,12 @@
         aria-label={t('settings.about.discordJoinLabel')}
         onclick={() => openUrl(DISCORD_URL).catch((e) => app.toast(String(e), 'error'))}
         ><Icon name="ext" size={14} />{t('settings.about.discordJoin')}</button
+      >
+    </Row>
+    <!-- Support, said once here and never pushed: no window, no reminder (ESC-185). -->
+    <Row label={t('settings.about.support')} desc={t('settings.about.supportDesc')}>
+      <button class="btn" onclick={() => openUrl(supportUrl()).catch((e) => app.toast(String(e), 'error'))}
+        ><Icon name="ext" size={14} />{t('settings.about.supportOpen')}</button
       >
     </Row>
     <Row label={t('settings.about.localData')}>

@@ -12,7 +12,10 @@ const { text } = useLang();
             {{ f.q }}
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9" /></svg>
           </summary>
-          <p>{{ f.a }}</p>
+          <p>
+            {{ f.a }}
+            <a v-if="f.link" :href="f.link.href">{{ f.link.label }}</a>
+          </p>
         </details>
       </div>
     </div>
@@ -72,6 +75,13 @@ summary:hover svg {
   color: var(--muted);
   font-size: 15.5px;
   line-height: 1.6;
+}
+.item p a {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--brand) 55%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
 @media (max-width: 900px) {

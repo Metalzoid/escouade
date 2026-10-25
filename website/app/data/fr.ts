@@ -1,7 +1,7 @@
 // Everything the French page says. en.ts says the same, key for key.
 // The French guillemets hold non-breaking spaces ( ), so that « Importer » never splits over two lines.
 import type { Catalog } from './catalog';
-import { DOWNLOAD } from './site';
+import { DOWNLOAD, SUPPORT } from './site';
 import { docPath } from './docs';
 
 export const fr: Catalog = {
@@ -285,7 +285,8 @@ export const fr: Catalog = {
       },
       {
         q: 'C’est gratuit ?',
-        a: 'Oui, et open source, sous licence GPL-3.0 (ou ultérieure). Escouade utilise ton propre harness et ton propre compte, sans intermédiaire.',
+        a: 'Oui, et open source, sous licence GPL-3.0 (ou ultérieure). Escouade utilise ton propre harness et ton propre compte, sans intermédiaire. Si elle t’est utile, tu peux soutenir le projet :',
+        link: { label: 'offrir un café', href: SUPPORT.fr },
       },
       {
         q: 'Où vont mes données ?',
@@ -327,6 +328,7 @@ export const fr: Catalog = {
   footer: {
     github: 'GitHub',
     discord: 'Discord',
+    support: 'Offrir un café',
     license: 'Licence GPL-3.0',
     privacy: 'Confidentialité',
     legal: 'Mentions légales',

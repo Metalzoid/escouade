@@ -260,6 +260,10 @@ Il existe en français (à la racine) et en anglais (sous `/en/`) ; ses textes s
 - `design/` : maquette de référence.
 - `docs/SPEC.md` : spécification.
 
+## Soutenir
+
+Escouade est gratuite et open source. Si elle t'est utile, tu peux offrir un café pour aider à la faire avancer, au montant de ton choix : [en français](https://buy.stripe.com/8x2fZh20z7rM87067200001) ou [in English](https://buy.stripe.com/00w7sLcFdaDYaf8cvq00000). Le bouton « Offrir un café » de Réglages › À propos ouvre la page de la langue de l'interface.
+
 ## Licence
 
 GPL-3.0 ou ultérieure (`GPL-3.0-or-later`), voir [LICENSE](LICENSE).

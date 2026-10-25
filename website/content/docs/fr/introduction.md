@@ -96,3 +96,7 @@ L’interface existe en français et en anglais. Par défaut, elle suit la langu
 - **Comptes et consommation** : les [comptes Claude](accounts), puis les quotas, le coût et les statistiques.
 - **Réglages** : chaque onglet de la fenêtre des réglages, option par option, à partir de [Application](settings-application).
 - **Référence** : les [raccourcis clavier](shortcuts), les données locales, les mises à jour et le [dépannage](troubleshooting).
+
+## Soutenir Escouade
+
+Escouade est gratuite et open source. Si elle t’est utile, tu peux [offrir un café](support:) pour aider à la faire avancer, au montant de ton choix : le bouton « Offrir un café » de [Réglages › À propos](settings-about) ouvre la même page.

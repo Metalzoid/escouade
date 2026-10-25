@@ -301,6 +301,9 @@ export default {
     discordDesc: 'Poser une question, signaler un problème, suivre ce qui arrive',
     discordJoin: 'Rejoindre',
     discordJoinLabel: 'Rejoindre le Discord',
+    support: 'Soutenir Escouade',
+    supportDesc: 'Escouade est gratuite et open source : un café aide à la faire avancer',
+    supportOpen: 'Offrir un café',
   },
 
   // The « Projets » tab: one project's own settings.
