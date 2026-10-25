@@ -1476,6 +1476,8 @@ pub(crate) fn blank_project(path: &str) -> Project {
         name: String::new(),
         path: path.to_string(),
         color: String::new(),
+        tile_letters: String::new(),
+        logo: String::new(),
         worktree_per_agent: false,
         created_at: 0,
         run_commands: Vec::new(),
@@ -7176,6 +7178,8 @@ impl<R: Runtime> Core<R> {
         cur.remote_control = p.remote_control;
         cur.name = p.name;
         cur.color = p.color;
+        // Its logo is `set_project_logo`'s: the window's copy may be older.
+        cur.tile_letters = crate::projectlogo::clean_letters(&p.tile_letters);
         cur.worktree_per_agent = p.worktree_per_agent;
         cur.worktree_at_first_message = p.worktree_at_first_message;
         cur.worktree_base = p.worktree_base;
@@ -7223,6 +7227,44 @@ impl<R: Runtime> Core<R> {
             self.rename_remote_sessions(&updated.id);
         }
         Ok(())
+    }
+
+    /// « Logo » (ESC-167): the image of the file `source` copied under the project in place of its
+    /// letters, or (None) no logo. A file refused (too heavy, unreadable, of another format) leaves
+    /// the project as it was. Returns the project.
+    pub fn set_project_logo(&self, id: &str, source: Option<&str>) -> Result<Project> {
+        self.project(id)?;
+        let file = match source {
+            Some(path) => {
+                crate::projectlogo::import(i18n::ui(), &self.data, id, Path::new(path.trim()))?
+            }
+            None => String::new(),
+        };
+        let updated = {
+            let mut projects = self.projects.write();
+            let Some(cur) = projects.iter_mut().find(|x| x.id == id) else {
+                drop(projects);
+                // Closed meanwhile: its copy goes with it.
+                crate::projectlogo::remove(&self.data, id);
+                return Err(project_not_found());
+            };
+            cur.logo = file;
+            cur.clone()
+        };
+        if updated.logo.is_empty() {
+            crate::projectlogo::clear(&self.data, id);
+        }
+        self.request_save();
+        Ok(updated)
+    }
+
+    /// The project's logo as a `data:` URL, for its tile; None when it has none (or its copy is
+    /// gone).
+    pub fn project_logo(&self, id: &str) -> Option<String> {
+        let logo = self.project(id).ok()?.logo;
+        (!logo.is_empty())
+            .then(|| crate::projectlogo::url_of(&self.data, id, &logo))
+            .flatten()
     }
 
     /// The sessions on claude.ai of the project's agents linked through their stream's process
@@ -7403,6 +7445,7 @@ impl<R: Runtime> Core<R> {
             // Nothing of it stays, not even a history a stop left half way (see `closed_list`).
             let tickets: Vec<String> = tickets.iter().map(|t| t.id.clone()).collect();
             self.erase_history_files(&agents, &tickets);
+            crate::projectlogo::remove(&self.data, id);
             if !self.forget_closed_file(id) {
                 // Not listed again, tried again at the next start.
                 self.note_leftover(id);

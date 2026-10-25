@@ -368,6 +368,17 @@ impl DataDir {
         self.closed_projects().join(format!("{name}.json"))
     }
 
+    /// The files of an open or closed project of this machine (its logo, `projectlogo`), a folder
+    /// each. An id that is no name of its own never names another project's folder, nor one above.
+    pub fn project_files(&self, project_id: &str) -> PathBuf {
+        let name = if is_plain_id(project_id) {
+            project_id
+        } else {
+            "_"
+        };
+        self.0.join("projects").join(name)
+    }
+
     /// The tickets' files, a folder each: the images pasted in their form.
     pub fn tickets(&self) -> PathBuf {
         self.0.join("tickets")

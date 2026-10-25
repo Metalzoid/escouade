@@ -143,10 +143,15 @@ const shots = [
   { name: 'rail-small-en', ...SMALL, ...EN, hash: 'rail' },
   { name: 'rail-menu-small-en', ...SMALL, ...EN, hash: 'rail-menu' },
   { name: 'rail-add-small-en', ...SMALL, ...EN, hash: 'rail-add' },
+  // The tile made one's own (ESC-167): letters chosen, an opaque logo, a transparent one, an emoji, then the setting.
+  { name: 'tile', ...BIG, hash: 'tile' },
+  { name: 'tile-settings', ...BIG, hash: 'tile-settings' },
+  { name: 'tile-small', ...SMALL, hash: 'tile' },
+  { name: 'tile-settings-small-en', ...SMALL, ...EN, hash: 'tile-settings' },
   // The theme selector, on Système (its default): the window follows the emulated system theme.
   { name: 'settings-app', ...BIG, hash: 'settings-app', system: true },
 ];
-const LIGHT_SMALL = ['kanban-small', 'pr-small-en', 'models-small-en', 'waiting-small-en', 'private-small-en', 'agents-small', 'git-small', 'overview-small', 'settings-small', 'agents-small-en', 'quota-small-en', 'terminal-view-small-en', 'settings-harness-small-en', 'rail-small', 'rail-small-en'];
+const LIGHT_SMALL = ['kanban-small', 'pr-small-en', 'models-small-en', 'waiting-small-en', 'private-small-en', 'agents-small', 'git-small', 'overview-small', 'settings-small', 'agents-small-en', 'quota-small-en', 'terminal-view-small-en', 'settings-harness-small-en', 'rail-small', 'rail-small-en', 'tile-small', 'tile-settings-small-en'];
 shots.push(
   ...shots
     .filter((s) => (s.width === BIG.width && !s.lang) || LIGHT_SMALL.includes(s.name))

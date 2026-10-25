@@ -4,7 +4,9 @@
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
-  import { initials } from '../../lib/project-rail';
+  import { knowLogo, logoUrl, pickLogo } from '../../lib/project-logo.svelte';
+  import { cleanLetters, initials, tileText } from '../../lib/project-rail';
+  import TileFace from '../TileFace.svelte';
   import { PROJECT_COLORS } from '../../lib/theme';
   import type { Start, StepId } from '../../lib/wizard';
   import { WizardForm } from '../../lib/wizard-form.svelte';
@@ -37,6 +39,35 @@
   const freeColor = PROJECT_COLORS.find((c) => !used.has(c)) ?? PROJECT_COLORS[0];
   let color = $state(existing?.color ?? freeColor);
   let colorTouched = !!existing;
+  /** « Lettres de la tuile » (ESC-167): empty is the initials of the name. */
+  let letters = $state(existing?.tileLetters ?? '');
+  /** « Logo »: an image chosen (copied once the project is saved), or the existing one's removed. */
+  let logoPick = $state<{ path: string; url: string } | null>(null);
+  let logoRemoved = $state(false);
+  const logo = $derived(logoPick?.url ?? (existing && !logoRemoved ? logoUrl(existing) : null));
+  const hasLogo = $derived(!!logoPick || (!!existing?.logo && !logoRemoved));
+
+  async function chooseLogo() {
+    const picked = await pickLogo();
+    if (picked) logoPick = picked;
+  }
+
+  /** The tile's letters and logo set in the window, saved into the project made or edited; the project as it is then. */
+  async function saveTile(p: import('../../lib/types').Project) {
+    let out = p;
+    if ((out.tileLetters ?? '') !== letters.trim()) {
+      const next = { ...out, tileLetters: letters.trim() };
+      if (await app.run(api.updateProject(next).then(() => true))) out = next;
+    }
+    if (logoPick || (logoRemoved && out.logo)) {
+      const saved = await app.run(api.setProjectLogo(out.id, logoPick?.path ?? null));
+      if (saved) {
+        if (logoPick) knowLogo(saved, logoPick.url);
+        out = { ...out, logo: saved.logo };
+      }
+    }
+    return out;
+  }
   /** The folder `info` was read for: until the one typed is, nothing is created or reopened with another's history. */
   let infoPath = $state('');
   /** « Partir d'un projet vierge »: the folder's history stays where it is, the project is a new one. */
@@ -151,9 +182,14 @@
     busy = true;
     try {
       if (existing) {
-        const saved = await form.save({ ...$state.snapshot(existing), name: name.trim() || existing.name, color });
+        const saved = await form.save({
+          ...$state.snapshot(existing),
+          name: name.trim() || existing.name,
+          color,
+          tileLetters: letters.trim(),
+        });
         if (saved) {
-          app.replaceProject(saved);
+          app.replaceProject(await saveTile(saved));
           app.modal = null;
         }
         return;
@@ -175,10 +211,12 @@
         }),
       );
       if (!p) return;
-      if (restoring || !withSettings) return void show(p, null);
+      // Its history's letters and logo come back unless others were set here.
+      if (restoring) return void show(letters.trim() || logoPick ? await saveTile(p) : p, null);
+      if (!withSettings) return void show(await saveTile(p), null);
       // Made: shown even if its settings were refused (said by a toast), to be set in Réglages › Projets.
       const saved = await form.save(p);
-      await show(saved ?? p, agent);
+      await show(await saveTile(saved ?? p), agent);
     } finally {
       busy = false;
     }
@@ -280,7 +318,9 @@
           <div class="w-fld">
             <span class="lab">{t('common.name')}</span>
             <div class="row">
-              <span class="tile" style:--c={color} aria-hidden="true">{initials(name || t('shell.newProject.untitled'))}</span>
+              <span class="tile" style:--c={color} aria-hidden="true"
+                ><TileFace text={tileText({ name: name || t('shell.newProject.untitled'), tileLetters: letters })} {logo} /></span
+              >
               <input class="field name" bind:value={name} oninput={() => (nameTouched = true)} />
             </div>
           </div>
@@ -298,6 +338,37 @@
                   }}
                 ></button>
               {/each}
+            </div>
+          </div>
+        </div>
+        <div class="two">
+          <div class="w-fld">
+            <span class="lab">{t('settings.project.lettersLabel')}</span>
+            <input
+              class="field letters"
+              aria-label={t('settings.project.lettersLabel')}
+              spellcheck="false"
+              autocomplete="off"
+              placeholder={initials(name || t('shell.newProject.untitled'))}
+              value={letters}
+              oninput={(e) => {
+                const v = cleanLetters(e.currentTarget.value);
+                e.currentTarget.value = v;
+                letters = v;
+              }}
+            />
+          </div>
+          <div class="w-fld">
+            <span class="lab">{t('settings.project.logoLabel')}</span>
+            <div class="row">
+              <button class="btn" onclick={chooseLogo}><Icon name="image" size={14} />{t('settings.project.logoChoose')}</button>
+              {#if hasLogo}<button
+                  class="btn"
+                  onclick={() => {
+                    logoPick = null;
+                    logoRemoved = true;
+                  }}>{t('settings.project.logoRemove')}</button
+                >{/if}
             </div>
           </div>
         </div>
@@ -565,6 +636,7 @@
   }
   /* The project's tile as the rail will show it: its initials on its colour. */
   .tile {
+    position: relative;
     display: grid;
     place-items: center;
     flex: none;
@@ -574,6 +646,11 @@
     background: var(--c);
     color: var(--on-tile);
     font: 650 12px/1 var(--font);
+  }
+  .letters {
+    width: 96px;
+    height: 32px;
+    text-align: center;
   }
   .name {
     flex: 1;

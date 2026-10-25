@@ -210,6 +210,12 @@ export const api = {
   /** « Faire un premier commit »: the folder made a repository if need be, with an empty first commit. */
   firstCommit: (path: string) => invoke<void>('first_commit', { path }),
   updateProject: (project: Project) => invoke<void>('update_project', { project }),
+  /** « Choisir une image… » (`path`, copied under the project) or « Retirer » (null) of its logo (ESC-167). */
+  setProjectLogo: (id: string, path: string | null) => invoke<Project>('set_project_logo', { id, path }),
+  /** The project’s logo as a `data:` URL, for its tile; null when it has none. */
+  projectLogo: (id: string) => invoke<string | null>('project_logo', { id }),
+  /** The image of `path` as a logo would be taken (`data:` URL), or why it would be refused. */
+  readLogo: (path: string) => invoke<string>('read_logo', { path }),
   /** « Faire confiance à ces commandes »: those of the project’s `.escouade.yml` read (`hash`). */
   sharedTrust: (projectId: string, hash: string) => invoke<Project>('shared_trust', { projectId, hash }),
   /** « Exporter vers .escouade.yml » (no `keys`), or « Écrire dans .escouade.yml » of the keys given. */

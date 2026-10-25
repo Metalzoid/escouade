@@ -1,6 +1,6 @@
 # Réglages : Projets
 
-L’onglet « Projets » règle un projet à la fois : son nom et sa couleur, son remote control, ses worktrees, la façon dont ses commits sont rédigés et ses commandes de préparation, de démontage et de lancement.
+L’onglet « Projets » règle un projet à la fois : son nom, sa couleur et sa tuile, son remote control, ses worktrees, la façon dont ses commits sont rédigés et ses commandes de préparation, de démontage et de lancement.
 
 ## Choisir le projet
 
@@ -13,7 +13,11 @@ L’onglet agit sur le projet choisi dans la rangée « Projet », sous l’en
 | « Nom » | Le nom du projet, tel que le montrent la barre de titre, l’infobulle de sa tuile et le sélecteur de projet. Il ne peut pas rester vide : « Enregistrer » est alors bloqué. | Le nom donné à la création, celui du dossier si tu n’en as pas donné |
 | « Dossier » | Le dossier du projet, affiché sans pouvoir être modifié. Le bouton « Ouvrir » l’ouvre avec le gestionnaire de fichiers du système. | — |
 | « Couleur » | Une pastille parmi 14 (13 teintes et un ton neutre). La couleur repère le projet et teinte l’interface quand il est affiché. | La première couleur qu’aucun projet n’a prise, à la création |
+| « Lettres de la tuile » | Ce que dit la tuile du projet dans la barre des projets : une à trois lettres ou chiffres (« API », « v2 »), ou un emoji seul. Le reste de ce que tu tapes (espaces, signes, une quatrième lettre) ne s’écrit pas. La tuile est montrée à côté du champ, telle que la barre la dessinera. | Vide : les initiales du nom (`demo-api` → « DA », `infra` → « In »), montrées en indication dans le champ |
+| « Logo » | Une image à la place des lettres : « Choisir une image… » la prend (PNG, JPEG, WebP, SVG ou ICO, 1 Mo au plus), « Retirer » revient aux lettres. Elle prend la forme de la tuile, entière, sur la couleur du projet là où elle est transparente ; les agents qui attendent, ceux qui travaillent, le cadenas d’un projet privé et l’alerte restent dessinés par-dessus. | Aucun |
 | « Compte préféré » | Le compte sur lequel partent les nouveaux agents et les tickets du projet. Visible seulement avec plusieurs comptes. Choix : « Automatique » (le premier compte actif sous le seuil de pause, dans l’ordre des comptes) ou un des comptes actifs qui servent ce projet. | « Automatique » |
+
+Le logo est reconnu par son contenu, quelle que soit son extension. Une image trop lourde, illisible ou d’un autre format est refusée avec un message qui dit pourquoi (« « big.png » pèse 3 Mo : un logo pèse 1 Mo au plus. »), et la tuile reste comme elle était. Escouade en garde une copie dans son dossier de données, sous le projet : déplacer ou effacer le fichier d’origine ne change rien. Un SVG est affiché comme une image : rien de ce qu’il contient ne s’exécute. Les lettres et le logo restent sur ce poste, comme le nom et la couleur : ils ne vont pas dans `.escouade.yml`. Un projet fermé puis rouvert les retrouve ; fermé en effaçant son historique (ou son historique effacé plus tard), il efface sa copie du logo. Les mêmes champs sont dans l’assistant « Nouveau projet », sous le nom et la couleur.
 
 Les comptes sont décrits dans [les comptes](accounts) et réglés dans l’onglet [« Comptes »](settings-accounts). Un compte désactivé depuis qu’il a été choisi reste affiché avec « (inactif) » tant qu’il est choisi, et il est ignoré en attendant.
 

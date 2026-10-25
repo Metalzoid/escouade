@@ -666,6 +666,10 @@ export interface Project {
   name: string;
   path: string;
   color: string;
+  /** « Lettres de la tuile » (ESC-167): empty is the initials of the name. Absent from a project of the window’s tests made before it. */
+  tileLetters?: string;
+  /** « Logo » (ESC-167): the file of its copy in the app’s data folder, empty for none; set by `setProjectLogo` alone. */
+  logo?: string;
   worktreePerAgent: boolean;
   /** « Créer le worktree au premier message, au nom de l’agent » (ESC-156): on unless switched off. Absent from a project of the window’s tests made before it. */
   worktreeAtFirstMessage?: boolean;

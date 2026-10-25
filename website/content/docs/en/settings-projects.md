@@ -1,6 +1,6 @@
 # Settings: Projects
 
-The “Projects” tab sets one project at a time: its name and color, its remote control, its worktrees, how its commits are written, and its setup, teardown, and launch commands.
+The “Projects” tab sets one project at a time: its name, color and tile, its remote control, its worktrees, how its commits are written, and its setup, teardown, and launch commands.
 
 ## Choosing the project
 
@@ -13,7 +13,11 @@ The tab acts on the project chosen in the “Project” row, under the header of
 | “Name” | The project’s name, as the title bar, its tile’s tooltip and the project picker show it. It can’t be left empty: “Save” is blocked until it has a name. | The name given at creation, the folder’s name if you gave none |
 | “Folder” | The project’s folder, shown but not editable. The “Open” button opens it with the system’s file manager. | — |
 | “Color” | One swatch out of 14 (13 hues and a neutral tone). The color identifies the project and tints the interface while it is shown. | The first color no project has taken, at creation |
+| “Tile letters” | What the project’s tile says in the projects’ rail: one to three letters or digits (“API”, “v2”), or a single emoji. The rest of what you type (spaces, signs, a fourth letter) isn’t written. The tile is shown beside the field, as the rail will draw it. | Empty: the initials of the name (`demo-api` → “DA”, `infra` → “In”), shown as a hint in the field |
+| “Logo” | An image in place of the letters: “Choose an image…” takes it (PNG, JPEG, WebP, SVG or ICO, 1 MB at most), “Remove” goes back to the letters. It takes the tile’s shape, whole, on the project’s color where it is transparent; the agents waiting, those at work, a private project’s lock and the alert stay drawn over it. | None |
 | “Preferred account” | The account new agents and tickets of the project start on. Only visible with several accounts. Choices: “Automatic” (the first active account under the pause threshold, in the order of the accounts) or one of the active accounts that serve this project. | “Automatic” |
+
+The logo is recognized by its content, whatever its extension. An image that is too heavy, unreadable or of another format is refused with a message that says why, for example: “big.png” weighs 3 MB: a logo weighs 1 MB at most., and the tile stays as it was. Escouade keeps a copy of it in its data folder, under the project: moving or deleting the original file changes nothing. An SVG is shown as an image: nothing it holds runs. The letters and the logo stay on this machine, like the name and the color: they don’t go into `.escouade.yml`. A project closed then reopened finds them again; closed with its history erased (or its history erased later), it erases its copy of the logo. The same fields are in the “New project” assistant, under the name and the color.
 
 Accounts are described in [accounts](accounts) and set in the [“Accounts”](settings-accounts) tab. An account switched off after it was chosen stays shown with “(inactive)” as long as it is chosen, and is ignored in the meantime.
 

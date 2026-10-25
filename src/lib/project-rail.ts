@@ -25,6 +25,40 @@ export function initials(name: string): string {
 /** The first letter of a word, an accented or astral one whole. */
 const first = (word: string) => [...word][0] ?? '';
 
+/**
+ * The most letters « Lettres de la tuile » takes (ESC-167): three still fit in the tile's 36 px, at 11 px; a fourth
+ * would touch its edges.
+ */
+export const MAX_TILE_LETTERS = 3;
+
+const graphemes = (text: string) => [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].map((s) => s.segment);
+const EMOJI = /\p{Extended_Pictographic}/u;
+/** A letter or a digit, with its accents (a keycap too). */
+const LETTER = /^[\p{L}\p{N}][\p{M}‍]*$/u;
+
+/**
+ * « Lettres de la tuile » as it may be: up to three letters or digits, or one emoji alone; the rest of what is typed
+ * is left out (spaces, signs, a fourth letter).
+ */
+export function cleanLetters(text: string): string {
+  const gs = graphemes(text.normalize('NFC')).filter((g) => g.trim());
+  if (gs[0] && EMOJI.test(gs[0])) return gs[0];
+  return gs
+    .filter((g) => LETTER.test(g))
+    .slice(0, MAX_TILE_LETTERS)
+    .join('');
+}
+
+/** What a project's tile says: the letters chosen, else the initials of its name. */
+export const tileText = (p: Pick<Project, 'name' | 'tileLetters'>) => p.tileLetters?.trim() || initials(p.name);
+
+/** How the tile's letters are drawn: an emoji bigger, three letters smaller, else as the initials. */
+export function tileSize(text: string): 'emoji' | 'three' | null {
+  const gs = graphemes(text);
+  if (gs.length === 1 && EMOJI.test(gs[0])) return 'emoji';
+  return gs.length >= 3 ? 'three' : null;
+}
+
 /** What a project's tile says: its agents waiting and at work, its changes, and the blink of an agent to look at. */
 export interface TileState {
   waiting: number;

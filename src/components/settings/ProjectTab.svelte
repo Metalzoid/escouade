@@ -13,6 +13,8 @@
   import { settingsForm, worktreesProblems } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import { PROJECT_COLORS } from '../../lib/theme';
+  import { cleanLetters, initials, tileText } from '../../lib/project-rail';
+  import TileFace from '../TileFace.svelte';
   import type { Account, CommitMode, LeftoverReport, Project, WorktreeStep } from '../../lib/types';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
@@ -253,6 +255,38 @@
           onclick={() => (draft.color = c)}
         ></button>
       {/each}
+    </div>
+  </Row>
+  <!-- The project's tile (ESC-167): as the rail will show it, its letters or its logo. -->
+  <Row label={t('settings.project.lettersLabel')} desc={t('settings.project.lettersDesc')}>
+    <div class="tile-set">
+      <span class="tile-prev" style:--c={draft.color} role="img" aria-label={t('settings.project.tilePreview')}
+        ><TileFace
+          text={tileText({ name: draft.name.trim() || project.name, tileLetters: draft.tileLetters })}
+          logo={settingsForm.logoOf(project.id)}
+        /></span
+      >
+      <input
+        class="field letters"
+        aria-label={t('settings.project.lettersLabel')}
+        spellcheck="false"
+        autocomplete="off"
+        placeholder={initials(draft.name.trim() || project.name)}
+        value={draft.tileLetters}
+        oninput={(e) => {
+          const v = cleanLetters(e.currentTarget.value);
+          e.currentTarget.value = v;
+          draft.tileLetters = v;
+        }}
+      />
+    </div>
+  </Row>
+  <Row label={t('settings.project.logoLabel')} desc={t('settings.project.logoDesc')}>
+    <div class="tile-set">
+      <button class="btn" onclick={() => settingsForm.chooseLogo(project.id)}
+        ><Icon name="image" size={14} />{t('settings.project.logoChoose')}</button
+      >
+      {#if draft.logo}<button class="btn" onclick={() => (draft.logo = '')}>{t('settings.project.logoRemove')}</button>{/if}
     </div>
   </Row>
 </Group>
@@ -590,6 +624,30 @@
     box-shadow:
       0 0 0 2px var(--raise),
       0 0 0 4px var(--c);
+  }
+  /* The project's tile as the rail shows it (36 px), beside its letters. */
+  .tile-set {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .tile-prev {
+    position: relative;
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--c);
+    color: var(--on-tile);
+    font: 650 13px/1 var(--font);
+    letter-spacing: 0.01em;
+  }
+  .letters {
+    width: 96px;
+    text-align: center;
   }
   /* A title inside a group, its explanation beside it. */
   .sub-h {

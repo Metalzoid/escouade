@@ -2168,3 +2168,118 @@ async fn a_validation_does_not_start_on_a_project_being_closed() {
     assert_eq!(h.core.ticket(&t.id).unwrap().column, Column::Review);
     assert_eq!(back.id, p.id);
 }
+
+// ---------- the tile's letters and logo (ESC-167) ----------
+
+const LOGO_PNG: &[u8] = b"\x89PNG\r\n\x1a\n-logo";
+
+/// A logo of the project chosen from a file of `dir`, which goes once copied.
+fn logo_from(h: &Harness, id: &str, dir: &Path) -> Project {
+    let source = dir.join("logo.png");
+    std::fs::write(&source, LOGO_PNG).unwrap();
+    let p = h
+        .core
+        .set_project_logo(id, Some(&source.to_string_lossy()))
+        .unwrap();
+    std::fs::remove_file(&source).unwrap();
+    p
+}
+
+#[tokio::test]
+async fn the_tiles_letters_and_logo_are_saved_and_come_back_with_the_project() {
+    let h = harness("closed-tile");
+    let (p, r) = h.project(false).await;
+    // The letters are cut as the window cuts them; the logo the window sends is not taken.
+    h.core
+        .update_project(Project {
+            tile_letters: " apiX ".into(),
+            logo: "../../secret.png".into(),
+            ..p.clone()
+        })
+        .unwrap();
+    let saved = h.core.project(&p.id).unwrap();
+    assert_eq!(saved.tile_letters, "api");
+    assert!(saved.logo.is_empty());
+    assert!(h.core.project_logo(&p.id).is_none());
+
+    let with = logo_from(&h, &p.id, &h.dir);
+    assert!(with.logo.starts_with("logo-") && with.logo.ends_with(".png"));
+    assert_eq!(h.core.project(&p.id).unwrap().logo, with.logo);
+    let url = h.core.project_logo(&p.id).unwrap();
+    assert!(url.starts_with("data:image/png;base64,"), "{url}");
+    // A file refused keeps the logo there is.
+    let gif = h.dir.join("anim.gif");
+    std::fs::write(&gif, b"GIF89a").unwrap();
+    let e = h
+        .core
+        .set_project_logo(&p.id, Some(&gif.to_string_lossy()))
+        .unwrap_err();
+    assert!(e.to_string().contains("n’est pas une image"), "{e}");
+    assert_eq!(h.core.project_logo(&p.id), Some(url.clone()));
+    // Saved in the state, not in its `.escouade.yml`.
+    h.core.save_state().unwrap();
+    let state: Value =
+        serde_json::from_slice(&std::fs::read(h.core.data.state_file()).unwrap()).unwrap();
+    let kept = state["projects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|x| x["id"] == p.id.as_str());
+    assert_eq!(kept.unwrap()["tileLetters"], "api");
+    assert_eq!(kept.unwrap()["logo"], with.logo.as_str());
+    assert!(!r.join(".escouade.yml").exists());
+
+    // Closed then added again: both come back, the copy readable.
+    close(&h, &p.id).await;
+    assert!(h.core.data.project_files(&p.id).join(&with.logo).exists());
+    let back = add_again(&h, &r).await;
+    assert_eq!(back.id, p.id);
+    assert_eq!(back.tile_letters, "api");
+    assert_eq!(back.logo, with.logo);
+    assert_eq!(h.core.project_logo(&p.id), Some(url));
+
+    // « Retirer »: no logo, its copy gone.
+    let without = h.core.set_project_logo(&p.id, None).unwrap();
+    assert!(without.logo.is_empty());
+    assert!(h.core.project_logo(&p.id).is_none());
+    assert!(!h.core.data.project_files(&p.id).join(&with.logo).exists());
+    assert!(h.core.set_project_logo("inconnu", None).is_err());
+}
+
+#[tokio::test]
+async fn a_project_gone_for_good_erases_its_logo() {
+    let h = harness("closed-tile-erase");
+    let (p, _) = h.project(false).await;
+    let (q, r2) = {
+        let dir = repo(&h.dir.join("b"));
+        let q = h
+            .core
+            .create_project(&dir.to_string_lossy(), "autre", COLOR, false, None, true)
+            .await
+            .unwrap();
+        (q, dir)
+    };
+    logo_from(&h, &p.id, &h.dir);
+    logo_from(&h, &q.id, &r2);
+    // Closed with its history erased: its copy goes, the other project's stays.
+    h.core.remove_project(&p.id, true).await.unwrap();
+    assert!(!h.core.data.project_files(&p.id).exists());
+    assert!(h.core.project_logo(&q.id).is_some());
+    // Closed with its history kept, then the history erased.
+    close(&h, &q.id).await;
+    assert!(h.core.data.project_files(&q.id).exists());
+    h.core.erase_closed_project(&q.id).unwrap();
+    assert!(!h.core.data.project_files(&q.id).exists());
+}
+
+#[test]
+fn a_project_saved_before_the_tiles_settings_has_its_initials_and_no_logo() {
+    let p: Project = serde_json::from_value(json!({
+        "id": "p1", "name": "demo", "path": "C:/demo", "color": "red"
+    }))
+    .unwrap();
+    assert!(p.tile_letters.is_empty() && p.logo.is_empty());
+    let back = as_json(&p);
+    assert_eq!(back["tileLetters"], "");
+    assert_eq!(back["logo"], "");
+}

@@ -839,7 +839,7 @@ fn the_tickets_agents_model_effort_and_mode_are_keys_of_the_file() {
 
 /// What is a person's or a machine's never goes into the file (ESC-163): the account, the accounts
 /// reserved to a private project, Remote Control, the agents in parallel, the autopilot, the
-/// tickets' key and number, the name, the color.
+/// tickets' key and number, the name, the color, the tile's letters and logo (ESC-167).
 #[test]
 fn nothing_of_one_machine_or_person_is_exported() {
     let mut p = full_project();
@@ -851,6 +851,8 @@ fn nothing_of_one_machine_or_person_is_exported() {
     p.board.prefix = "ZED".into();
     p.board.next_number = 42;
     p.color = "#ff0000".into();
+    p.tile_letters = "QZX".into();
+    p.logo = "logo-abc.png".into();
     let text = pf::write(None, &pf::export_values(&p)).unwrap();
     for local in [
         "account",
@@ -863,6 +865,9 @@ fn nothing_of_one_machine_or_person_is_exported() {
         "next_number",
         "#ff0000",
         "name: app",
+        "QZX",
+        "logo",
+        "tile",
     ] {
         assert!(!text.contains(local), "{local} in\n{text}");
     }
@@ -885,7 +890,9 @@ fn nothing_of_one_machine_or_person_is_exported() {
                     "parallel",
                     "autopilot",
                     "number",
-                    "shared_on_limit"
+                    "shared_on_limit",
+                    "logo",
+                    "tile"
                 ]
                 .iter()
                 .any(|l| k.path.contains(l)),

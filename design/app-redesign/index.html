@@ -544,6 +544,56 @@
         background: color-mix(in oklch, var(--c) 88%, var(--text));
         color: var(--on-tile);
       }
+      /* ESC-167: the letters chosen (three smaller, an emoji bigger) or the logo in their place, in the tile's shape, on its
+         colour where the image is transparent; the badges stay over it. In the app the logo is an <img>. */
+      .tile .ini.three {
+        font-size: 11px;
+        letter-spacing: -0.02em;
+      }
+      .tile .ini.emoji {
+        font-size: 18px;
+        font-weight: 400;
+      }
+      .tile .logo {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: inherit;
+        pointer-events: none;
+      }
+      .tile.proj:hover .logo {
+        filter: brightness(1.08);
+      }
+      /* An agent to look at: a ring in the colour of what happened, which breathes until it is seen (as the app). */
+      .tile.proj.alert {
+        box-shadow:
+          0 0 0 2px var(--frame),
+          0 0 0 4px var(--alert);
+        animation: tile-alert 1.1s ease-in-out infinite alternate;
+      }
+      @keyframes tile-alert {
+        from {
+          box-shadow:
+            0 0 0 2px var(--frame),
+            0 0 0 4px color-mix(in oklch, var(--alert) 35%, transparent);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .tile.proj.alert {
+          animation: none;
+        }
+      }
+      .tile-set {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .tile-set .letters {
+        width: 96px;
+        text-align: center;
+      }
       .app.global .tile.proj[aria-selected='true'] {
         box-shadow: none;
       }
@@ -9263,6 +9313,25 @@ If your browser did not open, navigate to this URL to authenticate:
                     </div>
                   </div>
                 </div>
+                <!-- ESC-167: the tile as the rail shows it, its letters, its logo. -->
+                <div class="sr" id="sr-tile">
+                  <div class="lab"><b>Lettres de la tuile</b><span>Une à trois lettres ou chiffres, ou un emoji. Vide : les initiales du nom.</span></div>
+                  <div class="ctl">
+                    <div class="tile-set">
+                      <span class="tile proj" id="tile-prev" style="--h: 48" role="img" aria-label="Tuile du projet"><span class="ini three">API</span></span>
+                      <input class="inp letters" id="tile-letters" value="API" placeholder="DA" aria-label="Lettres de la tuile" />
+                    </div>
+                  </div>
+                </div>
+                <div class="sr">
+                  <div class="lab"><b>Logo</b><span>PNG, JPEG, WebP, SVG ou ICO, 1 Mo au plus. Il remplace les lettres ; Escouade en garde une copie.</span></div>
+                  <div class="ctl">
+                    <div class="tile-set">
+                      <button class="btn"><svg class="i s14"><use href="#i-image" /></svg>Choisir une image…</button>
+                      <button class="btn" id="tile-remove" hidden>Retirer</button>
+                    </div>
+                  </div>
+                </div>
               </section>
               <section class="sg" id="sg-private">
                 <h2>Confidentialité</h2>
@@ -9591,6 +9660,9 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
         ['Vue d’ensemble : tous les agents de tous les projets (Ctrl+Maj+A)', 'Overview: all agents of all projects (Ctrl+Shift+A)'],
         ['Renommer…', 'Rename…'], ['Couleur', 'Color'], ['Désactiver le worktree par agent', 'Turn off a worktree per agent'], ['nouveaux agents', 'new agents'],
         ['Réglages du projet…', 'Project settings…'], ['Ouvrir le dossier', 'Open the folder'], ['Monter', 'Move up'], ['Descendre', 'Move down'],
+        ['Lettres de la tuile', 'Tile letters'], ['Une à trois lettres ou chiffres, ou un emoji. Vide : les initiales du nom.', 'One to three letters or digits, or an emoji. Empty: the initials of the name.'],
+        ['PNG, JPEG, WebP, SVG ou ICO, 1 Mo au plus. Il remplace les lettres ; Escouade en garde une copie.', 'PNG, JPEG, WebP, SVG or ICO, 1 MB at most. It takes the place of the letters; Escouade keeps a copy of it.'],
+        ['Choisir une image…', 'Choose an image…'], ['Retirer', 'Remove'], ['Tuile du projet', 'Project tile'],
         ['Fermer le projet…', 'Close the project…'], ['Son historique est gardé : « + » le rouvre', 'Its history is kept: “+” reopens it'],
         ['Ajouter un projet…', 'Add a project…'], ['Un dossier, un dépôt à cloner ou un projet vide, par l’assistant', 'A folder, a repository to clone or an empty project, through the assistant'],
         ['Projets fermés · leur historique est gardé', 'Closed projects · their history is kept'], ['Fermé le 18 oct. · 23 agents', 'Closed on Oct 18 · 23 agents'],
@@ -10581,6 +10653,42 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
       }
       if (route === 'rail-menu') projMenuAt($('#r-list .tile[aria-selected="true"]'));
       if (route === 'rail-add') (pop('#add-menu', true), addMenuAt());
+
+      // The tile made one's own (ESC-167): #tile, the rail with letters chosen (demo-api, active), an opaque logo
+      // (studio-web, its agents waiting over it), a transparent one on the project's colour (mobile-app, at work), an emoji
+      // (infra, private, an agent to look at); #tile-settings, the setting with a logo chosen. The logos are drawn here
+      // in the tokens; the app shows the user's image in an <img>.
+      const LOGO_OPAQUE =
+        '<svg class="logo" viewBox="0 0 36 36" aria-hidden="true"><rect width="36" height="36" style="fill: var(--text)" /><path d="M10 25V11h7.5a5 5 0 0 1 0 10H14v4z" style="fill: var(--frame)" /><circle cx="25" cy="24" r="3" style="fill: var(--wait)" /></svg>';
+      const LOGO_CLEAR =
+        '<svg class="logo" viewBox="0 0 36 36" aria-hidden="true"><path d="M18 8l11 19H7z" style="fill: none; stroke: var(--on-tile); stroke-width: 3; stroke-linejoin: round" /><circle cx="18" cy="21" r="2.5" style="fill: var(--on-tile)" /></svg>';
+      function customTiles() {
+        const byName = (n) => projTiles().find((t) => t.getAttribute('aria-label') === n || t.dataset.name === n);
+        const own = (t, html) => {
+          const ini = t.querySelector('.ini');
+          ini.insertAdjacentHTML('beforebegin', html);
+          ini.remove();
+        };
+        own(byName('demo-api'), '<span class="ini three">API</span>');
+        const studio = byName('studio-web');
+        own(studio, LOGO_OPAQUE);
+        studio.insertAdjacentHTML('beforeend', '<span class="ask">2</span>');
+        PROJ['studio-web'] = { ...PROJ['studio-web'], wait: 2 };
+        own(byName('mobile-app'), LOGO_CLEAR);
+        const infra = byName('infra');
+        own(infra, '<span class="ini emoji">🚀</span>');
+        infra.insertAdjacentHTML('beforeend', '<svg class="i lock"><use href="#i-lock" /></svg>');
+        infra.classList.add('alert');
+        infra.style.setProperty('--alert', 'var(--del)');
+        PROJ.infra = { ...PROJ.infra, priv: true };
+      }
+      if (route === 'tile') (customTiles(), tipFor(projTiles().find((t) => t.dataset.hue === '300')));
+      if (route === 'tile-settings') {
+        customTiles();
+        $('#tile-prev').innerHTML = LOGO_OPAQUE;
+        $('#tile-remove').hidden = false;
+        settingsAt('projects', 'sr-tile');
+      }
 
       /** A conversation of the panel: whose, on which harness, which thread. */
       const VARIANTS = {

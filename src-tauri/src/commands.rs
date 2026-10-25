@@ -550,6 +550,27 @@ pub async fn create_project(
     project_added(&core, r)
 }
 
+/// « Choisir une image… » (`path`) or « Retirer » (None) of the project's logo (ESC-167).
+#[tauri::command(async)]
+pub fn set_project_logo(core: CoreState, id: String, path: Option<String>) -> Res<Project> {
+    core.set_project_logo(&id, path.as_deref()).map_err(err)
+}
+
+/// The project's logo for its tile, as a `data:` URL; null when it has none.
+#[tauri::command(async)]
+pub fn project_logo(core: CoreState, id: String) -> Option<String> {
+    core.project_logo(&id)
+}
+
+/// The image of `path` as a logo would be taken, as a `data:` URL: the preview of a logo chosen
+/// before it is saved, or why it would be refused.
+#[tauri::command(async)]
+pub fn read_logo(path: String) -> Res<String> {
+    crate::projectlogo::read_in(crate::i18n::ui(), std::path::Path::new(path.trim()))
+        .map(|l| crate::projectlogo::data_url(l.media_type, &l.bytes))
+        .map_err(err)
+}
+
 #[tauri::command(async)]
 pub fn update_project(core: CoreState, project: Project) -> Res<()> {
     let remote_was_on = core.project(&project.id).is_ok_and(|p| p.remote_control);

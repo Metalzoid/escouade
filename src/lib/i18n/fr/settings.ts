@@ -311,6 +311,16 @@ export default {
     colorDesc: 'Elle teinte toute la fenêtre quand le projet est ouvert.',
     engineDesc: 'Celui des nouveaux agents et des tickets du projet, sauf s’ils en choisissent un autre.',
     colorN: 'Couleur {n}',
+    /** ESC-167: what the project's tile on the rail shows. */
+    lettersLabel: 'Lettres de la tuile',
+    lettersDesc: 'Une à trois lettres ou chiffres, ou un emoji. Vide : les initiales du nom.',
+    logoLabel: 'Logo',
+    logoDesc: 'PNG, JPEG, WebP, SVG ou ICO, 1 Mo au plus. Il remplace les lettres ; Escouade en garde une copie.',
+    logoChoose: 'Choisir une image…',
+    logoRemove: 'Retirer',
+    logoTitle: 'Logo du projet',
+    logoFilter: 'Images',
+    tilePreview: 'Tuile du projet',
     /** The group of the remote control of the project’s agents, after its identity. */
     remoteTitle: 'Remote control',
     remote: 'Remote control pour les agents de ce projet',

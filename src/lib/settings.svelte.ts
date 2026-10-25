@@ -4,6 +4,7 @@
 import { t } from './i18n';
 import { api } from './ipc';
 import { forgetLaunches, runsOfCommand } from './launch-actions';
+import { knowLogo, logoUrl, pickLogo } from './project-logo.svelte';
 import type { IconName } from './icons';
 import { app } from './state.svelte';
 import type {
@@ -115,6 +116,8 @@ type ProjectFields = Pick<
   Project,
   | 'name'
   | 'color'
+  | 'tileLetters'
+  | 'logo'
   | 'worktreePerAgent'
   | 'worktreeAtFirstMessage'
   | 'worktreeBase'
@@ -139,6 +142,10 @@ export type StepKind = 'setup' | 'teardown';
 export interface ProjectDraft {
   name: string;
   color: string;
+  /** « Lettres de la tuile » (ESC-167): empty is the initials of the name. */
+  tileLetters: string;
+  /** « Logo »: the project's file, or the path of the image chosen (copied once saved), or empty for none. */
+  logo: string;
   worktreePerAgent: boolean;
   /** « Créer le worktree au premier message, au nom de l’agent ». */
   worktreeAtFirstMessage: boolean;
@@ -176,6 +183,8 @@ function draftOf(p: Project): ProjectDraft {
   const {
     name,
     color,
+    tileLetters,
+    logo,
     worktreePerAgent,
     worktreeAtFirstMessage,
     worktreeBase,
@@ -198,6 +207,9 @@ function draftOf(p: Project): ProjectDraft {
   return {
     name,
     color,
+    // Absent from a project of the window's tests made before ESC-167.
+    tileLetters: tileLetters ?? '',
+    logo: logo ?? '',
     worktreePerAgent,
     // Absent from a project of the window's tests made before ESC-156: on, as the backend has it.
     worktreeAtFirstMessage: worktreeAtFirstMessage ?? true,
@@ -252,6 +264,8 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
   return {
     name: d.name.trim(),
     color: d.color,
+    tileLetters: d.tileLetters.trim(),
+    logo: d.logo,
     worktreePerAgent: d.worktreePerAgent,
     worktreeAtFirstMessage: d.worktreeAtFirstMessage,
     // A branch not chosen yet (« Une branche… » with no name) leaves it as the folder's.
@@ -524,7 +538,9 @@ class SettingsForm {
 
   async #saveProject(id: string): Promise<boolean> {
     let ok = true;
-    const fields = this.#projectChanges(id);
+    // The logo goes its own way (ESC-167): the image chosen is copied by the backend.
+    const { logo, ...fields } = this.#projectChanges(id);
+    if (logo !== undefined && !(await this.#saveLogo(id, logo))) ok = false;
     const links = this.#linksChanged(id) ? linksOf($state.snapshot(this.projects[id])) : null;
     const current = () => app.projects.find((p) => p.id === id);
     let p = current();
@@ -555,6 +571,41 @@ class SettingsForm {
       } else ok = false;
     }
     return ok;
+  }
+
+  /** The images chosen as logos, by path: their preview until they are saved. */
+  logoPreviews = $state<Record<string, string>>({});
+
+  /** « Choisir une image… »: the image read as a logo would be (a refusal said), then in the draft. */
+  async chooseLogo(projectId: string) {
+    const picked = await pickLogo();
+    const d = this.projects[projectId];
+    if (!picked || !d) return;
+    this.logoPreviews[picked.path] = picked.url;
+    d.logo = picked.path;
+  }
+
+  /** What the tile of the draft's project shows as its logo: the image chosen, else its own. */
+  logoOf(projectId: string): string | null {
+    const d = this.projects[projectId];
+    const p = app.projects.find((x) => x.id === projectId);
+    if (!d?.logo) return null;
+    if (p && d.logo === p.logo) return logoUrl(p);
+    return this.logoPreviews[d.logo] ?? null;
+  }
+
+  async #saveLogo(id: string, logo: string): Promise<boolean> {
+    const saved = await app.run(api.setProjectLogo(id, logo || null));
+    const p = app.projects.find((x) => x.id === id);
+    if (!saved) return false;
+    const url = this.logoPreviews[logo];
+    if (url) knowLogo(saved, url);
+    if (p) p.logo = saved.logo;
+    // The path chosen becomes the copy's name, in the draft too unless another was chosen meanwhile.
+    const d = this.projects[id];
+    if (d && d.logo === logo) d.logo = saved.logo ?? '';
+    this.#rebase(id, (b) => ({ ...b, logo: saved.logo ?? '' }));
+    return true;
   }
 
   /** The draft's own values for the fields saved: the patterns as typed, the commands as edited. */

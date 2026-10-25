@@ -667,6 +667,10 @@ impl<R: Runtime> Core<R> {
         } else {
             read_history(&self.data, id)
         };
+        // Its logo's copy (ESC-167), whatever its file says; not that of a project open by that id.
+        if !self.projects.read().iter().any(|p| p.id == id) {
+            crate::projectlogo::remove(&self.data, id);
+        }
         let Some(closed) = history else {
             // Nothing to know of its agents and tickets: its file is all there is to erase.
             return match std::fs::remove_file(&file) {

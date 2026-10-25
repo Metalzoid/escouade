@@ -78,6 +78,7 @@ mod process_tests;
 mod projectfile;
 #[cfg(test)]
 mod projectfile_tests;
+mod projectlogo;
 mod pty;
 mod resources;
 mod search;
@@ -443,6 +444,9 @@ pub fn run() {
             commands::first_commit,
             commands::create_project,
             commands::update_project,
+            commands::set_project_logo,
+            commands::project_logo,
+            commands::read_logo,
             commands::shared_trust,
             commands::shared_write,
             commands::shared_unkeep,

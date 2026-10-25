@@ -268,3 +268,28 @@ L'app suit `#settings` et ses onglets, et les adresses du lot 0 bis (`#private`,
 
 - À 1028, 1280 et 1440 px, en français et en anglais, chaque onglet (un projet privé compris) : rien ne déborde, rien ne se chevauche, aucun bouton, onglet ou titre ne passe sur deux lignes (`settings-look.spec.ts`, « nothing of the settings overflows »).
 - Restent pour plus tard : « Données locales » n'a pas le bouton « Ouvrir le dossier » de l'aperçu (le chemin du dossier de l'app n'est pas connu de la fenêtre) ; les comptes n'ont pas la ligne « Aujourd'hui 0,42 $ » d'OpenCode à la place des jauges (son budget a sa ligne) ; le Harness de l'aperçu montre une ligne « Coût » pour Codex que l'app n'a pas.
+
+# La tuile d'un projet à soi (ESC-167, 2026-10-25) : ses lettres, son logo
+
+Demandé par l'utilisateur le 2026-10-25 : « pouvoir personnaliser les lettres dans les icônes de chaque projet et aussi de pouvoir mettre le logo qu'on veut (qui remplacerait les lettres) ». Fait dans l'app (`ProjectTile.svelte`, `TileFace.svelte`, Réglages › Projets, l'assistant) et dans l'aperçu ; les choix 59 à 64 sont **à valider**.
+
+## Adresses
+
+- `#tile` : la barre des projets avec des lettres choisies (`demo-api`, « API », l'actif), un logo opaque (`studio-web`, deux agents qui attendent par-dessus, son infobulle), un logo transparent sur la couleur du projet (`mobile-app`, un agent au travail), un emoji (`infra`, privé, un agent à voir). Les logos de l'aperçu sont dessinés avec les jetons ; l'app montre l'image de l'utilisateur dans un `<img>`.
+- `#tile-settings` : Réglages › Projets, « Lettres de la tuile » et « Logo », un logo choisi.
+- Captures : `tile`, `tile-settings` et leurs jumelles `-light` à 1440×900 ; `tile-small`, `tile-small-light`, `tile-settings-small-en`, `tile-settings-small-light-en` à 1028×779.
+
+## Choix
+
+59. **Trois lettres au plus, ou un emoji seul** : une à trois lettres ou chiffres (« API », « v2 »), ou un seul emoji ; le reste de ce qui est tapé (espaces, signes, une quatrième lettre) ne s'écrit pas. Vide, la tuile garde les initiales du nom, montrées en indication dans le champ. Raison : dans la tuile de 36 px (la barre en fait 52), trois lettres tiennent à 11 px, une quatrième touche les bords ; deux lettres restent à 13 px comme les initiales, un emoji passe à 18 px.
+60. **Le logo remplace les lettres, entier, dans la forme de la tuile** : coins arrondis de la tuile, l'image contenue (`object-fit: contain`, jamais rognée), sur la couleur du projet là où elle est transparente. Raison : un logo large (un nom écrit) reste lisible, et un logo transparent garde la couleur qui teinte la fenêtre.
+61. **L'état de la tuile reste par-dessus le logo** : la pastille ambre des agents qui attendent, le point vert du travail, le cadenas d'un projet privé, l'anneau de l'alerte qui respire, l'anneau et le trait de l'actif ; tous sont détourés du cadre (`--frame`), lisibles sur n'importe quelle image et dans les deux thèmes. Le Δ reste dans l'infobulle (choix 41). Au survol, le logo s'éclaircit un peu, comme la couleur d'une tuile sans logo.
+62. **Le réglage, dans Identité, après la couleur** : « Lettres de la tuile » avec la tuile telle que la barre la montrera, puis « Logo » avec « Choisir une image… » et « Retirer » ; les mêmes champs dans l'assistant, sous le nom et la couleur. Comme le reste des réglages, un logo choisi ne s'applique qu'à « Enregistrer ». Raison : la tuile se règle là où se règlent son nom et sa couleur.
+63. **PNG, JPEG, WebP, SVG ou ICO, 1 Mo au plus**, reconnu par son contenu et non par son extension ; au-delà, ou pour un fichier illisible ou d'un autre format, un message dit pourquoi (« « big.png » pèse 3 Mo : un logo pèse 1 Mo au plus. ») et la tuile reste comme elle était. Raison : un logo de 512 px pèse bien moins, une icône ICO avec toutes ses tailles aussi.
+64. **Local au poste, copié dans les données d'Escouade** : lettres et logo ne vont pas dans `.escouade.yml` (comme le nom et la couleur) ; le logo est copié sous le projet (`projects/<id>/` du dossier de données), il ne dépend plus du fichier choisi ; fermé puis rouvert, le projet les garde ; fermé avec son historique effacé (ou son historique effacé plus tard), la copie s'en va. L'assistant ne copie pas la couleur d'un projet existant (« Copier la configuration d'un projet ») : il n'en copie pas non plus les lettres ni le logo.
+
+## Vérifié
+
+- Un SVG n'exécute rien : affiché par `<img>` (une URL `data:`), jamais mis dans le DOM ; `tests/e2e/project-tile.spec.ts` choisit un SVG avec un `<script>` et un `onload` et vérifie qu'ils n'ont pas tourné.
+- La tuile d'un projet n'est dessinée que dans la barre des projets et dans l'assistant (et désormais dans Réglages › Projets) ; ailleurs (barre de titre, Vue d'ensemble, Stats, liste des projets des réglages, projets fermés), un projet se dit par une pastille de sa couleur, qui ne change pas.
+- `node design/app-redesign/contrast.mjs` : 0 paire sous le seuil, dans les deux thèmes.

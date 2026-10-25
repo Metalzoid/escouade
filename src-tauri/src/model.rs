@@ -558,6 +558,15 @@ pub struct Project {
     pub name: String,
     pub path: String,
     pub color: String,
+    /// « Lettres de la tuile » (ESC-167): what its tile on the rail says; empty is the initials of
+    /// its name. Of this machine, as its colour.
+    #[serde(default)]
+    pub tile_letters: String,
+    /// « Logo » (ESC-167): the file of its copy under the project in the app's data folder
+    /// (`projectlogo`), shown in place of the letters; empty for none. Set by `set_project_logo`
+    /// alone, never by `update_project`.
+    #[serde(default)]
+    pub logo: String,
     #[serde(default)]
     pub worktree_per_agent: bool,
     #[serde(default)]

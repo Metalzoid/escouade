@@ -1,11 +1,13 @@
 <script lang="ts">
   import { t } from '../lib/i18n';
-  import { initials, type TileState } from '../lib/project-rail';
+  import { logoUrl } from '../lib/project-logo.svelte';
+  import { tileText, type TileState } from '../lib/project-rail';
   import { tip, type TipRow } from '../lib/tip';
   import type { Project } from '../lib/types';
   import Icon from './Icon.svelte';
+  import TileFace from './TileFace.svelte';
 
-  // A project's tile on the rail (ESC-158): its colour and its two letters; its agents waiting in an amber pill, at work in
+  // A project's tile on the rail (ESC-158): its colour and its two letters, or those chosen, or its logo (ESC-167); its agents waiting in an amber pill, at work in
   // a green dot, the lock of a private project; its name, its shortcut, its changes and the rest in a tooltip beside it.
   // The rail handles the clicks, the menu, the keys and the drag (ProjectRail).
   let {
@@ -80,7 +82,7 @@
   use:tip={{ title: project.name, kbd: shortcut ?? undefined, rows, side: 'right', aria: false }}
   {...handlers}
 >
-  <span class="ini" aria-hidden="true">{initials(project.name)}</span>
+  <TileFace text={tileText(project)} logo={logoUrl(project)} />
   {#if project.private}<span class="lock" aria-hidden="true"><Icon name="lock" size={12} /></span>{/if}
   {#if state.waiting}<span class="ask" aria-hidden="true">{state.waiting}</span>{/if}
   {#if state.running}<span class="busy" aria-hidden="true"></span>{/if}
@@ -108,6 +110,9 @@
   }
   .tile:hover {
     background: color-mix(in oklch, var(--c) 88%, var(--text));
+  }
+  .tile:hover :global(.logo) {
+    filter: brightness(1.08);
   }
   /* The trait on the rail's edge: short when hovered, long when active. */
   .tile::before {
