@@ -66,15 +66,15 @@ test('the images and the file an agent sends show in its conversation, and the i
   await expect(said.locator('img[alt="rendu"]')).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => said.locator('img[alt="rendu"]').evaluate((i) => (i as HTMLImageElement).naturalWidth)).toBe(160);
   await expect(said.locator('[data-img-off]')).toHaveText('web');
+  await said.locator('img[alt="rendu"]').click();
+  await expect(page.getByRole('dialog', { name: 'Images envoyées' }).getByRole('img')).toHaveAttribute('alt', 'rendu');
+  await page.keyboard.press('Escape');
   // One of the web is never loaded by itself: its label, and the core downloads it on « Afficher l’image » alone.
   await send(page, 'aussi ![plan](https://example.com/plan.png?d=secret)');
   const web = page.locator('.assistant .md').filter({ hasText: 'aussi' }).locator('[data-remote-src]');
   await expect(web).toContainText('plan · image de example.com');
   await expect(web.getByRole('button', { name: 'Afficher l’image' })).toBeVisible();
   await expect(page.locator('.assistant .md img[src^="https:"]')).toHaveCount(0);
-  await said.locator('img[alt="rendu"]').click();
-  await expect(page.getByRole('dialog', { name: 'Images envoyées' }).getByRole('img')).toHaveAttribute('alt', 'rendu');
-  await page.keyboard.press('Escape');
 
   // The temporary folder goes, as it does with the agent's worktree: the images were copied, the PDF is said gone.
   const tmp = path.join(app.repo, '.impeccable', 'tmp');
