@@ -131,7 +131,7 @@ fn system() -> Vec<PathBuf> {
             return kept.clone();
         }
     }
-    let read = crate::shellenv::login_path()
+    let read: Vec<PathBuf> = crate::shellenv::login_path()
         .map(|p| std::env::split_paths(&p).collect())
         .unwrap_or_default();
     *last = Some((Instant::now(), read.clone()));
