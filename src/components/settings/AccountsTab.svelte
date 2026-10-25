@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { openUrl } from '@tauri-apps/plugin-opener';
   import { onMount } from 'svelte';
   import {
     accountDefaults,
@@ -15,7 +16,17 @@
     privateSharing,
     projectsWithoutAccount,
   } from '../../lib/accounts';
-  import { capsOf, defaultModelOf, effortsOf, engineName, modelsOf, modesOf, offered } from '../../lib/engines';
+  import {
+    byKey as goesByKey,
+    capsOf,
+    defaultModelOf,
+    effortsOf,
+    engineName,
+    modelsOf,
+    modesOf,
+    offered,
+    usagePage,
+  } from '../../lib/engines';
   import { EFFORTS, MODES } from '../../lib/models';
   import { fList, fPct, fUsd, tildify } from '../../lib/format';
   import { t } from '../../lib/i18n';
@@ -196,8 +207,8 @@
     };
   }
 
-  /** A harness without a quota (OpenCode): a budget of the day stands in for it. */
-  const noQuota = (engine: EngineId) => capsOf(engine)?.quota === 'none';
+  /** A harness without a quota (OpenCode): a budget of the day stands in for it; not for one whose usage is on its own page (Cursor CLI, which tells no cost). */
+  const noQuota = (engine: EngineId) => capsOf(engine)?.quota === 'none' && !usagePage(engine);
 
   /** « Budget par jour ($) » left: empty (or 0) for none; refused, as it was. */
   async function commitBudget(a: Account, input: HTMLInputElement) {
@@ -240,6 +251,9 @@
   function setDefault(a: Account, field: 'defaultModel' | 'defaultEffort' | 'defaultMode', value: string) {
     void save({ ...plain(a), [field]: value });
   }
+
+  /** An account of Cursor CLI other than its machine's: signed in by its API key (ESC-43). */
+  const byKey = (a: Account) => goesByKey(engineOfAccount(a)) && !isPrincipal(a);
 
   const blurOnEnter = (e: KeyboardEvent) => {
     if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
@@ -301,6 +315,14 @@
                 <i aria-hidden="true"></i><span>{stateOf(a, status)}</span>
               </span>
               <span class="quota">
+                {#if a.active && usagePage(g.engine)}
+                  <!-- Neither quota nor cost told to Escouade (Cursor CLI): its dashboard says its usage (ESC-43). -->
+                  <button
+                    class="btn ghost small usage"
+                    use:tip={t('accounts.tab.usageHint', { harness })}
+                    onclick={() => app.run(openUrl(usagePage(g.engine)!))}><Icon name="ext" size={12} />{t('accounts.tab.usage')}</button
+                  >
+                {/if}
                 {#each meters as m (m.minutes ?? 'credits')}
                   <QuotaMeter minutes={m.minutes} usage={m.usage} now={app.now} />
                 {/each}
@@ -354,7 +376,11 @@
                 {#if status}
                   <!-- Not signed in, or out of date: to sign in. Signed in: to sign in again (another claude.ai account, say). -->
                   <button class="btn" onclick={() => (app.modal = { kind: 'account', accountId: a.id })}>
-                    {status.connected && !late ? t('accounts.tab.signInAgain') : t('accounts.tab.signIn')}
+                    {byKey(a)
+                      ? t('accounts.tab.changeKey')
+                      : status.connected && !late
+                        ? t('accounts.tab.signInAgain')
+                        : t('accounts.tab.signIn')}
                   </button>
                 {/if}
                 <button class="btn danger" onclick={() => remove(a)}>{t('accounts.tab.remove')}</button>

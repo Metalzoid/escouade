@@ -29,7 +29,9 @@
     "backgroundTasks": true,
     "todoTools": true,
     "defaultRefusal": true,
-    "sandbox": false
+    "sandbox": false,
+    "usagePage": null,
+    "accountsByKey": false
   },
   "install": {
     "windows": "irm https://claude.ai/install.ps1 | iex",

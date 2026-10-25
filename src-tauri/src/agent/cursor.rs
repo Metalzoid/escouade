@@ -400,7 +400,17 @@ impl AgentRt {
             return;
         }
         let out = &u["rawOutput"];
-        let failed = status == "failed" || out["exitCode"].as_i64().is_some_and(|c| c != 0);
+        let mut failed = status == "failed" || out["exitCode"].as_i64().is_some_and(|c| c != 0);
+        // A write done ends with its diff (or had it in the permission it asked): one without wrote
+        // nothing (a hook refused it, say), and Cursor tells no more (ESC-43).
+        let unwritten = !failed
+            && matches!(name.as_str(), "Edit" | "Write")
+            && diff_of(&u["content"]).is_none()
+            && !self.cursor.diffs.contains_key(&call);
+        if unwritten {
+            failed = true;
+            self.cursor.diffs.remove(&call);
+        }
         let mut text = out["content"]
             .as_str()
             .or(out["error"].as_str())
@@ -408,6 +418,9 @@ impl AgentRt {
             .to_string();
         if text.is_empty() {
             text = content_text(&u["content"]);
+        }
+        if unwritten {
+            text = crate::engine::cursor::write_not_done(i18n::ui());
         }
         // A write done says its diff as it ends (`content` of type `diff`: Cursor asks for none of
         // them by default, tried on 2026.10.22), else the permission it asked had it.
@@ -769,19 +782,26 @@ impl AgentRt {
         self.plan_tool_use(None, &block, fx);
     }
 
-    /// The end of the agent's turn (the answer to its prompt): a model out of the account's plan,
-    /// whose only reply is « Upgrade your plan to continue », ends it in error with what to do.
+    /// The end of the agent's turn (the answer to its prompt): a turn Cursor refused (its limit, a
+    /// model out of the account's plan, a sign-in or key refused: `refusal`) ends in error with what
+    /// to do, « limité » at the account's limit.
     fn cu_turn_end(&mut self, fx: &mut Effects) {
         for who in self.cursor.writing.keys().cloned().collect::<Vec<_>>() {
             self.cu_close(&who, fx);
         }
         let interrupted = std::mem::take(&mut self.interrupted);
-        let upgrade = self.turn_text.trim() == crate::engine::cursor::UPGRADE;
+        let refused = crate::engine::cursor::refusal(&self.turn_text).filter(|_| !interrupted);
         let mut error = std::mem::take(&mut self.cursor.error).filter(|_| !interrupted);
-        if upgrade && error.is_none() && !interrupted {
-            error = Some(crate::engine::cursor::upgrade_error(
+        let mut limited = false;
+        if let (Some(refusal), None) = (refused, &error) {
+            let by_key =
+                self.meta.account != crate::accounts::principal_id(crate::model::EngineId::Cursor);
+            limited = crate::engine::cursor::at_limit(refusal);
+            error = Some(crate::engine::cursor::refusal_error(
                 i18n::ui(),
+                refusal,
                 &self.meta.model,
+                by_key,
             ));
         }
         let failed = error.is_some();
@@ -793,6 +813,9 @@ impl AgentRt {
         let reply = std::mem::take(&mut self.final_text);
         let end = if interrupted {
             TurnEnd::Interrupted
+        } else if limited {
+            // No reset Escouade knows of: no resume planned (`fx.limited`), the card says it.
+            TurnEnd::Limited
         } else if let Some(reason) = error.clone() {
             TurnEnd::Error(reason)
         } else {
@@ -811,7 +834,7 @@ impl AgentRt {
         let item = json!({
             "kind": "turn", "id": new_id(), "ts": now_ms(), "durationMs": took,
             // ACP tells neither: nothing is shown of them (`CostKind::None`).
-            "cost": 0.0, "tokens": 0, "isError": failed, "interrupted": interrupted, "error": error, "limited": false,
+            "cost": 0.0, "tokens": 0, "isError": failed, "interrupted": interrupted, "error": error, "limited": limited,
             "engine": self.meta.engine,
         });
         self.append(item, fx);

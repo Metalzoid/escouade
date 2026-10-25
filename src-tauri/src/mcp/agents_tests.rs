@@ -914,3 +914,71 @@ async fn a_copilot_agent_is_given_the_server_by_a_file_naming_its_token_or_refus
         .any(|c| c["method"] == "session.mcp.disable" && c["params"]["serverName"] == "escouade"));
     h.core.stop_for_good();
 }
+
+/// ESC-43: a Cursor CLI agent is given Escouade's server by its session (`mcpServers` of
+/// `session/new`, its token in the header, never on its command line), and reaches it as itself;
+/// the switch off, its session is given none.
+#[tokio::test]
+async fn a_cursor_agent_reaches_escouade_by_the_server_its_session_is_given() {
+    let h = harness("esc43-cursor-mcp");
+    let (p, _) = h.project(false).await;
+    let program = crate::engine::fake_cursor();
+    h.set_settings(|s| {
+        s.accounts.push(Account {
+            id: "principal-cursor".into(),
+            name: "Principal".into(),
+            engine: EngineId::Cursor,
+            claude_path: program.clone(),
+            active: true,
+            ..Default::default()
+        });
+    });
+    let said = |h: &Harness, id: &str, start: &str| {
+        h.items(id)
+            .iter()
+            .filter(|i| i["kind"] == "text")
+            .filter_map(|i| i["text"].as_str().map(str::to_string))
+            .find(|t| t.starts_with(start))
+    };
+    let agent = |h: &Harness| {
+        let (c, p) = (h.core.clone(), p.id.clone());
+        async move {
+            c.create_agent_with(
+                &p,
+                crate::core::AgentOptions {
+                    engine: Some(EngineId::Cursor),
+                    model: Some("default".into()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap()
+            .meta
+            .id
+        }
+    };
+    drives(&h, true);
+    let id = agent(&h).await;
+    h.core
+        .send_message(&id, format!("outil escouade {TEST_TOOL}"), vec![])
+        .await
+        .unwrap();
+    h.wait("its answer", |h| said(h, &id, "Escouade a").is_some())
+        .await;
+    let answer = said(&h, &id, "Escouade a").unwrap();
+    let who: Value = serde_json::from_str(answer.trim_start_matches("Escouade a répondu : "))
+        .unwrap_or_else(|_| panic!("{answer}"));
+    assert_eq!(who, json!({ "caller": "agent", "agent": id }));
+
+    // The switch off: a new agent's session is given no server.
+    drives(&h, false);
+    let other = agent(&h).await;
+    h.core
+        .send_message(&other, format!("outil escouade {TEST_TOOL}"), vec![])
+        .await
+        .unwrap();
+    h.wait("its answer", |h| {
+        said(h, &other, "Pas de serveur").is_some()
+    })
+    .await;
+}

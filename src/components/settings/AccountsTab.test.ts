@@ -4,11 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The settings' other tabs have logs (xterm.js): none in jsdom.
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
+// Links open in the user's browser: noted instead.
+const opened = vi.hoisted(() => [] as string[]);
+vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn(async (u: string) => void opened.push(u)), openPath: vi.fn() }));
 
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { Account, AccountStatus, ClosedProject } from '../../lib/types';
-import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, project, resetApp, SETTINGS, usageOf } from '../../test/ipc';
+import { agent, BARE_ENGINE, CURSOR_ENGINE, CLAUDE_ENGINE, fakeBackend, project, resetApp, SETTINGS, usageOf } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
@@ -195,6 +198,40 @@ describe('AccountsTab', () => {
     await userEvent.tab();
     await waitFor(() => expect(b.called('account_update')).toHaveLength(2));
     expect(b.called('account_update')[1].args.account.dailyBudget).toBeNull();
+  });
+
+  it('links a Cursor account to its dashboard, with neither cost nor budget, and gives its key again (ESC-43)', async () => {
+    const CURSOR_MAIN: Account = {
+      id: 'principal-cursor',
+      name: 'Principal',
+      engine: 'cursor',
+      configDir: '',
+      claudePath: '',
+      active: true,
+    };
+    const TEAM: Account = { id: 'equipe', name: 'Équipe', engine: 'cursor', configDir: 'C:\equipe', claudePath: '', active: true };
+    app.engines = [CLAUDE_ENGINE, CURSOR_ENGINE];
+    app.settings = { ...SETTINGS, accounts: [PRINCIPAL, CURSOR_MAIN, TEAM] };
+    opened.length = 0;
+    backend({
+      account_status: (a: { id: string }) =>
+        a.id === 'equipe'
+          ? { connected: true, email: 'clé …abcd', dir: 'C:\equipe', stamp: null }
+          : a.id === 'principal-cursor'
+            ? { connected: true, email: null, dir: 'C:\Users\ada\.cursor', stamp: null }
+            : status()(a),
+    });
+    render(SettingsModal, { tab: 'accounts' });
+    const team = screen.getAllByRole('listitem', { name: 'Équipe' })[0];
+    expect(await within(team).findByText('Connecté · clé …abcd')).toBeInTheDocument();
+    // Neither its cost of the day nor a budget: Cursor tells none.
+    expect(within(team).queryByText(/Aujourd’hui/)).not.toBeInTheDocument();
+    expect(within(team).queryByRole('textbox', { name: 'Budget par jour ($)' })).not.toBeInTheDocument();
+    await userEvent.click(within(team).getByRole('button', { name: 'Usage sur cursor.com' }));
+    expect(opened).toEqual(['https://cursor.com/dashboard?tab=usage']);
+    // Its key, given again; the machine's signs in by agent login.
+    await userEvent.click(within(team).getByRole('button', { name: 'Changer la clé…' }));
+    expect(app.modal).toEqual({ kind: 'account', accountId: 'equipe' });
   });
 
   it('shows what an account of a harness without a quota spent today, in the place of the gauges', async () => {

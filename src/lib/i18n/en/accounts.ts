@@ -20,6 +20,10 @@ export default defineZone('accounts', {
     down: 'Move {name} down',
     signIn: 'Sign in…',
     signInAgain: 'Sign in again…',
+    changeKey: 'Change the key…',
+    usage: 'Usage on cursor.com',
+    usageHint:
+      '{harness} gives Escouade no usage: its dashboard shows it (the month’s included usage, the reset). A limit reached stops the turn on a card that says so.',
     remove: 'Remove',
     add: 'Add an account…',
     none: 'No account',
@@ -82,6 +86,8 @@ export default defineZone('accounts', {
     machineHint: 'Its usual folder, as it is: its settings, its sign-in and its conversations ({path}).',
     newAccount: 'A new account',
     newHint: 'A folder of its own under ~/.escouade, and its own sign-in.',
+    /** Cursor CLI: a new account is an API key (ESC-43). */
+    newHintKey: 'An API key of another Cursor account, kept in the system keychain.',
     reservedTo: 'Reserved to the project “{name}”: its sessions, memory and history will be shared with no other project.',
     addMachine: 'Add this account',
     signInTitle: 'Sign in to the account “{name}”',
@@ -122,6 +128,14 @@ export default defineZone('accounts', {
       nothingToShare: 'Nothing to share: each Cursor agent has a configuration folder of its own, where “For this agent” keeps its rules.',
       neverShared: 'Cursor CLI’s sign-in (agent login) is the machine’s: it isn’t copied, and a configuration folder doesn’t move it.',
       signInHint: 'Sign in in the terminal below: agent login opens your browser on cursor.com.',
+      /** A new Cursor account is its API key (ESC-43): the machine's is the sign-in of agent login. */
+      keyTitle: 'API key of the account “{name}”',
+      key: 'API key',
+      keyPlaceholder: 'From cursor.com, Settings › API Keys',
+      keyHint:
+        'Kept in the system keychain, given to this account’s agents by CURSOR_API_KEY, never written in a file nor on a command line. Their turns go to that key’s Cursor account; the machine’s account stays the sign-in of agent login.',
+      create: 'Add the account',
+      saveKey: 'Save the key',
     },
     restart: 'Restart',
     done: 'Done',
@@ -195,6 +209,8 @@ export default defineZone('accounts', {
     title: 'Accounts quota',
     label: 'Quota by account',
     noQuota: 'No quota: only what its turns cost counts.',
+    usageElsewhere: '{harness} gives Escouade neither its usage nor its cost.',
+    usageLink: 'See the usage on cursor.com',
     budget: 'Daily budget',
     budgetReset: 'Reset at midnight.',
     projectionNote:

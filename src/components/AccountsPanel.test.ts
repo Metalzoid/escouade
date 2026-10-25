@@ -3,9 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
-import { agent, BARE_ENGINE, CLAUDE_ENGINE, resetApp, usageOf } from '../test/ipc';
+import { agent, BARE_ENGINE, CURSOR_ENGINE, CLAUDE_ENGINE, resetApp, usageOf } from '../test/ipc';
 import type { Account, AccountUsage, RateWindow } from '../lib/types';
 import AccountsPanel from './AccountsPanel.svelte';
+
+const opened = vi.hoisted(() => [] as string[]);
+vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn(async (u: string) => void opened.push(u)) }));
 
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
 const PRO: Account = { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true };
@@ -223,6 +226,29 @@ describe('AccountsPanel with the accounts of two harnesses (ESC-30)', () => {
     app.settings.accounts = [PRINCIPAL, PRO, WORK];
     app.usage.current = { claude: 'pro', codex: 'work' };
     app.usage.accounts = [read('principal', { fiveHour: win(10) }), read('pro', { fiveHour: win(42) }), read('work', { engine: 'codex' })];
+  });
+
+  it('says a Cursor account’s usage is on its dashboard, with no cost of the day (ESC-43)', async () => {
+    const CURSOR_MAIN: Account = {
+      id: 'principal-cursor',
+      name: 'Principal',
+      engine: 'cursor',
+      configDir: '',
+      claudePath: '',
+      active: true,
+    };
+    app.engines = [CLAUDE_ENGINE, CURSOR_ENGINE];
+    app.settings.accounts = [PRINCIPAL, CURSOR_MAIN];
+    app.usage.current = { claude: 'principal', cursor: 'principal-cursor' };
+    app.usage.accounts = [read('principal', { fiveHour: win(10) }), read('principal-cursor', { engine: 'cursor' })];
+    opened.length = 0;
+    render(AccountsPanel, { onclose: () => {} });
+    const cursor = within(panel()).getByRole('region', { name: 'Comptes Cursor CLI' });
+    expect(within(cursor).queryByRole('meter')).not.toBeInTheDocument();
+    expect(within(cursor).queryByText(/Aujourd’hui/)).not.toBeInTheDocument();
+    expect(within(cursor).getByText(/Cursor CLI ne donne ni son usage ni son coût à Escouade/)).toBeInTheDocument();
+    await userEvent.click(within(cursor).getByRole('button', { name: 'Voir l’usage sur cursor.com' }));
+    expect(opened).toEqual(['https://cursor.com/dashboard?tab=usage']);
   });
 
   it('groups the accounts by harness, each with its current one first', () => {

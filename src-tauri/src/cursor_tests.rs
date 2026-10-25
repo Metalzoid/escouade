@@ -106,6 +106,204 @@ async fn each_cursor_agent_runs_in_a_configuration_folder_of_its_own_removed_wit
     assert!(home_b.exists());
 }
 
+/// A Cursor account added by its API key (ESC-43), on the fake, its key given; its id.
+async fn key_account(h: &Harness, name: &str, key: Option<&str>) -> String {
+    let made = h
+        .core
+        .create_account(
+            EngineId::Cursor,
+            name,
+            &[],
+            crate::accounts::ShareMode::Link,
+        )
+        .unwrap();
+    let program = crate::engine::fake_cursor();
+    h.set_settings(|s| {
+        if let Some(a) = s.accounts.iter_mut().find(|a| a.id == made.id) {
+            a.claude_path = program.clone();
+        }
+    });
+    if let Some(key) = key {
+        h.core.set_cursor_key(&made.id, key).await.unwrap();
+    }
+    made.id
+}
+
+async fn agent_on(h: &Harness, project: &str, account: &str) -> String {
+    h.core
+        .create_agent_with(
+            project,
+            AgentOptions {
+                engine: Some(EngineId::Cursor),
+                model: Some("default".into()),
+                mode: Some("default".into()),
+                account: Some(account.into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id
+}
+
+/// ESC-43: each Cursor account added by its key runs as that key, the machine's as its sign-in;
+/// the key is in the keychain, never in the settings' file; one without its key starts nothing
+/// (it would run as the machine's sign-in), and its key goes with it.
+#[tokio::test]
+async fn two_cursor_accounts_by_key_and_the_machines_never_mix() {
+    let h = harness("esc43-keys");
+    let (p, _) = h.project(false).await;
+    cursor_account(&h, &crate::engine::fake_cursor());
+    let pro = key_account(&h, "Pro", Some("cle-essai-pro-0000000001")).await;
+    let team = key_account(&h, "Équipe", Some("cle-essai-equipe-000002")).await;
+    let none = key_account(&h, "Sans clé", None).await;
+    let agents = [
+        (agent_on(&h, &p.id, &pro).await, "Compte : clé …0001"),
+        (agent_on(&h, &p.id, &team).await, "Compte : clé …0002"),
+        (
+            agent_on(&h, &p.id, "principal-cursor").await,
+            "Compte : connexion de la machine",
+        ),
+    ];
+    for (id, _) in &agents {
+        h.core
+            .send_message(id, "compte".into(), vec![])
+            .await
+            .unwrap();
+    }
+    for (id, said) in &agents {
+        wait_long(&h, id, said, 30, |h| texts(h, id).iter().any(|t| t == said)).await;
+    }
+    // The keychain holds the keys; the file of the settings none.
+    let keychain = crate::integrations::secrets::memory_of(&h.core.data);
+    assert_eq!(
+        keychain.entry(&format!("cursor:{pro}")).as_deref(),
+        Some("cle-essai-pro-0000000001")
+    );
+    let saved = std::fs::read_to_string(h.core.data.settings_file()).unwrap_or_default();
+    assert!(!saved.contains("cle-essai"), "{saved}");
+    // Its status says it by its end only.
+    let status = h.core.claude_account_status(&pro).await.unwrap();
+    assert!(status.connected);
+    assert_eq!(status.email.as_deref(), Some("clé …0001"));
+    assert!(!h.core.claude_account_status(&none).await.unwrap().connected);
+    // Without its key: refused, saying where to give it.
+    let lost = agent_on(&h, &p.id, &none).await;
+    let refused = h.core.send_message(&lost, "compte".into(), vec![]).await;
+    let said = match refused {
+        Err(e) => format!("{e:#}"),
+        Ok(_) => {
+            wait_long(&h, &lost, "the refusal", 30, |h| {
+                h.items(&lost)
+                    .iter()
+                    .any(|i| i.to_string().contains("clé d’API"))
+            })
+            .await;
+            String::from("clé d’API")
+        }
+    };
+    assert!(said.contains("clé d’API"), "{said}");
+    assert!(!texts(&h, &lost)
+        .iter()
+        .any(|t| t.contains("connexion de la machine")));
+    // A key that is none: refused, the one kept left as it was.
+    assert!(h.core.set_cursor_key(&pro, "trop courte").await.is_err());
+    assert!(h
+        .core
+        .set_cursor_key("principal-cursor", "cle-essai-0000000000000")
+        .await
+        .is_err());
+    // Removed, its key leaves the keychain.
+    h.core.delete_agent(&agents[1].0, false).await.unwrap();
+    h.core.remove_claude_account(&team).unwrap();
+    assert_eq!(keychain.entry(&format!("cursor:{team}")), None);
+}
+
+/// ESC-43: the key Cursor refuses ends the turn in error, saying to give it again; the limit of the
+/// month ends it « limité » on the amber card, with no resume planned (no reset is known); a write a
+/// hook refused fails, saying Cursor wrote nothing.
+#[tokio::test]
+async fn a_refused_key_the_limit_and_a_blocked_write_are_said_on_the_conversation() {
+    let h = harness("esc43-refusals");
+    let (p, _) = h.project(false).await;
+    cursor_account(&h, &crate::engine::fake_cursor());
+    let refused = key_account(&h, "Refusée", Some("cle-refusee-00000000001")).await;
+    let a = agent_on(&h, &p.id, &refused).await;
+    let b = agent_on(&h, &p.id, "principal-cursor").await;
+    h.core
+        .send_message(&a, "bonjour".into(), vec![])
+        .await
+        .unwrap();
+    h.core
+        .send_message(&b, "limite".into(), vec![])
+        .await
+        .unwrap();
+    let turn = |h: &Harness, id: &str| h.items(id).into_iter().find(|i| i["kind"] == "turn");
+    wait_long(&h, &a, "a's turn", 30, |h| turn(h, &a).is_some()).await;
+    wait_long(&h, &b, "b's turn", 30, |h| turn(h, &b).is_some()).await;
+    let ta = turn(&h, &a).unwrap();
+    assert_eq!(ta["isError"], true);
+    assert_eq!(ta["limited"], false);
+    assert!(
+        ta["error"].as_str().unwrap().contains("Changer la clé"),
+        "{ta}"
+    );
+    let tb = turn(&h, &b).unwrap();
+    assert_eq!(tb["limited"], true);
+    assert!(
+        tb["error"].as_str().unwrap().contains("Limite d’usage"),
+        "{tb}"
+    );
+    assert_eq!(h.agent(&b).resume_at, None);
+    // A write refused by a hook: its tool fails, saying so.
+    wait_long(&h, &b, "b idle", 30, |h| !h.agent(&b).status.is_active()).await;
+    h.core
+        .send_message(&b, "bloquée".into(), vec![])
+        .await
+        .unwrap();
+    wait_long(&h, &b, "the write refused", 30, |h| {
+        h.items(&b).iter().any(|i| {
+            i["kind"] == "tool" && i["status"] == "error" && i.to_string().contains("hook")
+        })
+    })
+    .await;
+}
+
+/// ESC-43: the texts written can go to Cursor CLI (« Modèle des textes rédigés »): one question to an
+/// `agent acp` of its own, in its mode Ask (it changes nothing), in a configuration folder of its own
+/// removed once answered; on the account's key when it has one.
+#[tokio::test]
+async fn the_texts_written_go_to_cursor_in_its_mode_ask_on_its_account() {
+    let dir = crate::paths::test_dir("esc43-writer");
+    std::fs::create_dir_all(&dir).unwrap();
+    let program =
+        crate::engine::Engine::locate(&crate::engine::CURSOR, &crate::engine::fake_cursor(), "")
+            .unwrap();
+    let ask = |env: Vec<(String, String)>, prompt: &'static str| crate::engine::OneShot {
+        program: program.clone(),
+        env,
+        weight: crate::engine::Weight::Light,
+        cwd: &dir,
+        system: "Réponds court.",
+        prompt,
+        limit: Duration::from_secs(30),
+        model: String::new(),
+    };
+    let answer = crate::engine::oneshot::ask(&crate::engine::CURSOR, ask(vec![], "modèle"))
+        .await
+        .unwrap();
+    assert_eq!(answer, "Je tourne sur default[], en mode ask.");
+    let keyed = vec![(
+        "CURSOR_API_KEY".to_string(),
+        "cle-essai-redacteur-0009".to_string(),
+    )];
+    let answer = crate::engine::oneshot::ask(&crate::engine::CURSOR, ask(keyed, "compte"))
+        .await
+        .unwrap();
+    assert_eq!(answer, "Compte : clé …0009");
+}
+
 /// Real run (ESC-42), by hand: the real Cursor CLI (`ESCOUADE_REAL_CURSOR`, its `agent.cmd`) on the
 /// user's account, signed in already (`agent login`, never done here): `cargo test --lib
 /// real_cursor -- --ignored --nocapture`. The account pays: four short turns on Auto. It converses,
@@ -200,4 +398,36 @@ async fn real_cursor() {
         );
     }
     h.core.archive_agent(&id, true).await.ok();
+}
+
+/// Real run (ESC-43), by hand: a text written by the real Cursor CLI (`ESCOUADE_REAL_CURSOR`, its
+/// `agent.cmd`), as « Modèle des textes rédigés » asks it, on the machine's sign-in: `cargo test
+/// --lib real_cursor_writes -- --ignored --nocapture`. One short question on Auto, in its mode Ask,
+/// in a configuration folder of its own (removed after): it prints the answer.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn real_cursor_writes_a_text() {
+    let real =
+        std::env::var("ESCOUADE_REAL_CURSOR").expect("ESCOUADE_REAL_CURSOR: the path of agent.cmd");
+    let program = crate::engine::Engine::locate(&crate::engine::CURSOR, &real, "").unwrap();
+    let dir = crate::paths::test_dir("esc43-real-writer");
+    std::fs::create_dir_all(&dir).unwrap();
+    let started = std::time::Instant::now();
+    let answer = crate::engine::oneshot::ask(
+        &crate::engine::CURSOR,
+        crate::engine::OneShot {
+            program,
+            env: Vec::new(),
+            weight: crate::engine::Weight::Light,
+            cwd: &dir,
+            system: "Tu nommes des agents de code. Réponds par le nom seul, trois mots au plus, sans ponctuation.",
+            prompt: "Corriger le calcul de la TVA dans la facture",
+            limit: Duration::from_secs(90),
+            model: String::new(),
+        },
+    )
+    .await
+    .unwrap();
+    println!("answer in {:?}: {answer}", started.elapsed());
+    assert!(!answer.trim().is_empty() && answer.len() < 200, "{answer}");
 }

@@ -41,6 +41,19 @@ export function showsCost(who: { engine: EngineId | null | undefined }): boolean
   return !!cost && cost !== 'none';
 }
 
+/**
+ * Where the usage of an account of `engine` is seen, for a harness that tells Escouade none (Cursor CLI: its dashboard, as its
+ * `/usage` says it; ESC-43). Undefined for the others, whose quota or cost Escouade reads.
+ */
+export function usagePage(engine: EngineId | null | undefined): string | undefined {
+  return capsOf(engine)?.usagePage ?? undefined;
+}
+
+/** Whether an account of `engine` other than its machine's goes by an API key rather than a sign-in (Cursor CLI, ESC-43). */
+export function byKey(engine: EngineId | null | undefined): boolean {
+  return !!capsOf(engine)?.accountsByKey;
+}
+
 /** The modes the harness of `who` takes, among `all` (in their order). */
 export function modesOf<T extends { value: string }>(who: { engine: EngineId | null | undefined }, all: T[]): T[] {
   const ids = new Set(capsOf(who.engine)?.modes.map((m) => m.id) ?? []);

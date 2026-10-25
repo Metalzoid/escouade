@@ -21,7 +21,7 @@ vi.mock('../../lib/terminals', () => ({
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { Account, AccountStatus } from '../../lib/types';
-import { BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp, SETTINGS } from '../../test/ipc';
+import { BARE_ENGINE, CURSOR_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp, SETTINGS } from '../../test/ipc';
 import AccountModal from './AccountModal.svelte';
 
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
@@ -173,6 +173,68 @@ describe('AccountModal', () => {
     await screen.findByRole('dialog', { name: 'Se connecter au compte « Travail »' });
     expect(term.opened).toEqual(['travail']);
     expect(screen.getByRole('status')).toHaveTextContent('copilot login donne un code');
+  });
+
+  describe('a Cursor account by its API key (ESC-43)', () => {
+    const KEYED: Account = {
+      ...PRO,
+      id: 'equipe',
+      name: 'Équipe',
+      engine: 'cursor',
+      configDir: 'C:\\Users\\ada\\.escouade\\cursor\\equipe',
+    };
+    const KEPT: AccountStatus = { connected: true, email: 'clé …abcd', dir: KEYED.configDir, stamp: null };
+
+    beforeEach(() => {
+      app.engines = [CLAUDE_ENGINE, CURSOR_ENGINE];
+      app.enginesFound = ['claude', 'cursor'];
+    });
+
+    it('adds a new one by its name and key, kept in the keychain: no terminal, no sign-in', async () => {
+      const b = backend([OUT], {
+        account_shareable: () => [],
+        account_machine: () => ({ found: true, added: true, connected: true, signsIn: true, email: null, dir: '' }),
+        account_create: () => KEYED,
+        account_cursor_key: () => KEPT,
+      });
+      render(AccountModal, { engine: 'cursor' });
+      expect(await screen.findByRole('dialog', { name: 'Ajouter un compte Cursor CLI' })).toBeInTheDocument();
+      expect(screen.getByText('La clé d’API d’un autre compte Cursor, gardée dans le trousseau du système.')).toBeInTheDocument();
+      // A key, hidden as it is typed; nothing to share.
+      const key = screen.getByLabelText('Clé d’API');
+      expect(key).toHaveAttribute('type', 'password');
+      expect(screen.queryByRole('group', { name: /Partager/ })).not.toBeInTheDocument();
+      expect(screen.getByText(/jamais écrite dans un fichier ni sur une ligne de commande/)).toBeInTheDocument();
+      await userEvent.type(screen.getByRole('textbox', { name: 'Nom' }), 'Équipe');
+      const add = screen.getByRole('button', { name: 'Ajouter le compte' });
+      expect(add).toBeDisabled();
+      await userEvent.type(key, 'cle-essai-0000000000abcd');
+      await userEvent.click(add);
+      await waitFor(() => expect(b.called('account_cursor_key')).toHaveLength(1));
+      expect(b.called('account_create')[0].args).toEqual({ name: 'Équipe', share: [], mode: 'link', engine: 'cursor' });
+      expect(b.called('account_cursor_key')[0].args).toEqual({ id: 'equipe', key: 'cle-essai-0000000000abcd' });
+      expect(term.opened).toEqual([]);
+      expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
+    });
+
+    it('gives the key again by « Changer la clé… », and says why one is refused', async () => {
+      app.settings.accounts = [PRINCIPAL, KEYED];
+      let n = 0;
+      const b = backend([KEPT], {
+        account_cursor_key: () => (n++ === 0 ? Promise.reject('Ce n’est pas une clé d’API de Cursor') : KEPT),
+      });
+      render(AccountModal, { accountId: 'equipe' });
+      expect(await screen.findByRole('dialog', { name: 'Clé d’API du compte « Équipe »' })).toBeInTheDocument();
+      expect(term.opened).toEqual([]);
+      await userEvent.type(screen.getByLabelText('Clé d’API'), 'courte');
+      await userEvent.click(screen.getByRole('button', { name: 'Enregistrer la clé' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('Ce n’est pas une clé d’API de Cursor');
+      expect(app.modal).toEqual({ kind: 'account' });
+      await userEvent.clear(screen.getByLabelText('Clé d’API'));
+      await userEvent.type(screen.getByLabelText('Clé d’API'), 'cle-essai-0000000000abcd{Enter}');
+      await waitFor(() => expect(b.called('account_cursor_key')).toHaveLength(2));
+      expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
+    });
   });
 
   describe('the machine’s account or a new one (ESC-128)', () => {

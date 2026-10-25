@@ -28,14 +28,14 @@ Whatever the harness, the agent has the same conversation: the answer and the re
 |---|---|---|---|---|---|
 | Installation | Claude Code’s script | `npm install -g @openai/codex` | `npm install -g opencode-ai` | `npm install -g @github/copilot` | Cursor’s script |
 | Tested with | 2.1.283 to 2.1.301 | 0.163.0 | 1.19.3 | 1.0.98 | 2026.10.22 |
-| Account | Claude subscription or API key | ChatGPT account | the providers connected to OpenCode, local models included | GitHub account with Copilot, Free included | Cursor account (`agent login`), Free included |
-| Several accounts | yes | yes | no | yes | no, for now |
+| Account | Claude subscription or API key | ChatGPT account | the providers connected to OpenCode, local models included | GitHub account with Copilot, Free included | Cursor account (`agent login`, or an API key), Free included |
+| Several accounts | yes | yes | no | yes | yes, by API key |
 | Models | those Claude Code lists for each account | those Codex lists for your account | your providers’, with search and favorites | those Copilot lists, with their multiplier | your account’s, Auto first |
 | Modes | all five | all five | four (no Auto) | all five | four (no Auto) |
 | What protects | its permissions | its sandbox | its permission rules | Escouade’s rules | its permissions, for its commands |
 | Message during a turn | waits for the end of the turn | enters the turn | waits for the end of the turn | enters the turn | waits for the end of the turn |
 | Cost | exact | estimated | exact (0 when local) | exact, in AI credits | not told |
-| Quota | 5-hour and 7-day windows | 5-hour and 7-day windows (30 days on the free plan) | none: daily budget | monthly credits | not yet |
+| Quota | 5-hour and 7-day windows | 5-hour and 7-day windows (30 days on the free plan) | none: daily budget | monthly credits | a link to its dashboard |
 | Terminal view | “Claude Code view” | “Codex view” | “OpenCode view” | “Copilot CLI view” | none |
 | Attached PDFs | yes | no | no | no | no |
 | Remote control, background tasks | yes | no | no | no | no |
@@ -145,13 +145,13 @@ No “Always allow”, no `assisted` mode (experimental), no attached PDFs, no `
 
 ### Installation and account
 
-Install Cursor CLI with its script (`irm 'https://cursor.com/install?win32=true' | iex` on Windows, `curl https://cursor.com/install -fsS | bash` on macOS and Linux), then sign it in with `agent login`. Escouade finds it in `%LOCALAPPDATA%\cursor-agent` on Windows, even when it isn’t on the `PATH`, and starts its latest installed version. Each agent has its own `agent acp` and a configuration folder of its own, removed with it: its rules, its model and its sessions are kept there, never in your Cursor config. The sign-in stays the machine’s: one Cursor account for now.
+Install Cursor CLI with its script (`irm 'https://cursor.com/install?win32=true' | iex` on Windows, `curl https://cursor.com/install -fsS | bash` on macOS and Linux), then sign it in with `agent login`. Escouade finds it in `%LOCALAPPDATA%\cursor-agent` on Windows, even when it isn’t on the `PATH`, and starts its latest installed version. Each agent has its own `agent acp` and a configuration folder of its own, removed with it: its rules, its model and its sessions are kept there, never in your Cursor config. The machine’s sign-in (`agent login`) is “the machine’s account”. Another Cursor account is added by its API key (cursor.com, Settings › API Keys) in Settings › Accounts: it’s kept in the system keychain and given to its agents by `CURSOR_API_KEY`, never in a file nor on a command line; “Change the key…” gives it again.
 
 ### Models and modes
 
 The “Model” menu lists your account’s models, Auto first, with their efforts. A Free plan runs Auto only: another model ends the turn in error, saying so. The model and the mode change at once.
 
-Cursor has no sandbox on Windows. It reads and edits files without asking, even outside the agent’s folder; its commands, the web and MCP tools ask.
+Cursor has no sandbox on Windows. It reads and edits files without asking, even outside the agent’s folder, and without going through Escouade, which therefore can’t stop it; its commands, the web and MCP tools ask. For a private project, Escouade refuses right away its commands that name the other projects’ paths, but not its reads nor its writes.
 
 | Mode | With Cursor CLI |
 |---|---|
@@ -162,11 +162,11 @@ Cursor has no sandbox on Windows. It reads and edits files without asking, even 
 
 A request of Cursor has “Allow”, “For this agent” and “Deny”: “For this agent” keeps the rule (`Shell(git status)`, say) in the agent’s folder, for it alone and its resumes. Its questions, its plan, its tasks and its subagents come into the conversation and the “Plan” banner. A message sent during a turn waits for its end: Cursor would stop the running turn for it.
 
-The Claude Code skills, commands, agents and hooks of your account and of the project run under Cursor too, as for Claude Code agents: a hook that refuses a write blocks it, without a card.
+The Claude Code skills, commands, agents and hooks of your account and of the project run under Cursor too, as for Claude Code agents; Escouade leaves them as you set them. A hook that refuses a write blocks it: the tool ends failed in the conversation, “Cursor wrote nothing”, as Cursor doesn’t give the reason.
 
 ### Cost, quota and what Cursor doesn’t do
 
-Cursor tells neither the tokens nor the cost of a turn when Escouade drives it: the conversation shows none. No quota in the status bar yet, no terminal view, no “Duplicate the conversation” (Cursor doesn’t copy a session), no attached PDFs, no `/` commands in Escouade, no remote control or background tasks. It gets Escouade’s MCP server through its session; the switch doesn’t declare it in Cursor’s config yet.
+Cursor tells neither the tokens nor the cost of a turn when Escouade drives it: the conversation shows none, and the statistics count its turns and their length. Nor does it tell its usage of the month: no bar in the status bar, but “Usage on cursor.com” in Settings › Accounts and in the quota panel, which opens its dashboard. A limit reached (“Upgrade your plan to continue”) stops the turn on an amber card that says so, with, when there is one, the account or harness to go on with. No terminal view, no “Duplicate the conversation” (Cursor doesn’t copy a session), no attached PDFs, no `/` commands in Escouade, no remote control or background tasks. It gets Escouade’s MCP server through its session; the switch doesn’t declare it in Cursor’s config yet.
 
 ## The MCP server
 

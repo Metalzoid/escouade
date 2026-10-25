@@ -12,7 +12,7 @@
     "sessionId": "6753be15-7845-4e8d-abf9-3c3ed0985561",
     "status": "done",
     "tokens": 0,
-    "touchedFiles": ["notes.txt"]
+    "touchedFiles": []
   },
   "flux": "../../cursor/full-turn.jsonl",
   "items": [
@@ -81,14 +81,10 @@
       "name": "Edit",
       "parent": null,
       "result": {
-        "add": 0,
-        "del": 0,
-        "filePath": "C:\\Users\\user\\AppData\\Local\\Temp\\esc24\\wt-agent1\\notes.txt",
-        "isError": false,
-        "patch": [],
-        "text": ""
+        "isError": true,
+        "text": "Cursor n’a rien écrit : l’écriture a été refusée, par un hook (ceux de Claude Code tournent aussi sous Cursor) ou par Cursor lui-même, qui n’en donne pas la raison."
       },
-      "status": "ok"
+      "status": "error"
     },
     {
       "input": {
@@ -198,13 +194,15 @@
       "text": "Git propre (`3d54c85 init`), `notes.txt` créé, README résumé : dépôt d’essai jetable.\n\n**Couleur ?** — Rouge ou Bleu ? (pas d’outil de question dédié ici ; réponds et je finalise.)\n\nBANANE"
     },
     {
+      "cost": 0.0,
       "durationMs": null,
       "engine": "cursor",
       "error": null,
       "interrupted": false,
       "isError": false,
       "kind": "turn",
-      "limited": false
+      "limited": false,
+      "tokens": 0
     },
     {
       "images": 0,
@@ -242,13 +240,15 @@
       "toolUseId": "call-e5b805bd-0c1c-49c9-af46-ca6a91d959ff-7~fc_f34e2922-2871-9e83-bdb5-854aea4a3266_0"
     },
     {
+      "cost": 0.0,
       "durationMs": null,
       "engine": "cursor",
       "error": null,
       "interrupted": true,
       "isError": false,
       "kind": "turn",
-      "limited": false
+      "limited": false,
+      "tokens": 0
     }
   ]
 }

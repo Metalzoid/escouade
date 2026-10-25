@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
-  import { accountName, backToAccounts, engineOfAccount, principalId, SHARED_FILES } from '../../lib/accounts';
+  import { accountName, backToAccounts, engineOfAccount, isPrincipal, principalId, SHARED_FILES } from '../../lib/accounts';
   import { tildify } from '../../lib/format';
-  import { engineName, offered } from '../../lib/engines';
+  import { byKey as goesByKey, engineName, offered } from '../../lib/engines';
   import { t, type Key } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { IS_MAC } from '../../lib/platform';
@@ -20,6 +20,8 @@
   // The sign-in runs the account's own program in a terminal here (`claude`, `codex login`, `copilot login`); Escouade looks for it
   // every 2 s, then closes the terminal and reads the account's quota. Closed before, the account stays, not signed in.
   // `onclose`: opened over another modal (the assistant « Nouveau projet »), back to it rather than to Réglages › Comptes.
+  // Cursor CLI (ESC-43): its machine's account is the sign-in of `agent login`; a new one is its API key, kept in the system's
+  // keychain and given to its processes by CURSOR_API_KEY: no terminal, « Changer la clé… » gives it again.
   // `reserveFor` (a private project's settings, ESC-141): the account added is reserved to that project alone, a new one
   // offered first (the machine's is its folder outside Escouade too), and it closes back to that project's settings.
   let {
@@ -71,6 +73,11 @@
   const engines = $derived(offered());
   const says = $derived(SAYS[engine] ?? CLAUDE_SAYS);
   let name = $state('');
+  /** The API key of a new Cursor account, or the one given again (ESC-43). */
+  let key = $state('');
+  /** An account of Cursor other than its machine's: signed in by its key, given here. */
+  const byKey = $derived(goesByKey(engine) && (!account || !isPrincipal(account)));
+
   /** The machine's account of the harness picked; null until read. */
   let machine = $state<MachineAccount | null>(null);
   /** What is added: the machine's account (when it is offered) or a new one. */
@@ -140,12 +147,15 @@
   }
 
   const title = $derived(
-    account
-      ? t('accounts.modal.signInTitle', { name: accountName(account) })
-      : t('accounts.modal.addTitle', { harness: engineName(engine) }),
+    account && byKey
+      ? t('accounts.modal.cursor.keyTitle', { name: accountName(account) })
+      : account
+        ? t('accounts.modal.signInTitle', { name: accountName(account) })
+        : t('accounts.modal.addTitle', { harness: engineName(engine) }),
   );
 
   untrack(() => {
+    if (account && byKey) return;
     if (account) return void start();
     loadShareable();
     loadMachine();
@@ -223,18 +233,43 @@
   }
 
   async function create() {
-    if (!name.trim() || busy) return;
+    if (!name.trim() || busy || (byKey && !key.trim())) return;
     busy = true;
     error = null;
     try {
-      const share = (shareable ?? []).filter((n) => checked[n]);
+      const share = byKey ? [] : (shareable ?? []).filter((n) => checked[n]);
       const made = await reserved(await api.accountCreate(name.trim(), share, mode, engine));
       // The backend tells them all (`accounts`): this one at once.
       if (!app.settings.accounts.some((a) => a.id === made.id)) app.settings.accounts = [...app.settings.accounts, made];
       account = made;
+      // A key refused leaves the account made, its key to give again here.
+      if (byKey) return void (await giveKey());
       await start();
     } catch (e) {
       error = String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  /** « Enregistrer la clé »: the key kept in the keychain, then back to the accounts, which say it by its end. */
+  async function giveKey() {
+    if (!account || !key.trim()) return;
+    error = null;
+    try {
+      await api.accountCursorKey(account.id, key.trim());
+      key = '';
+      close();
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function saveKey() {
+    if (busy) return;
+    busy = true;
+    try {
+      await giveKey();
     } finally {
       busy = false;
     }
@@ -338,19 +373,42 @@
 {/snippet}
 
 {#snippet actions()}
-  {#if !account && kind === 'machine'}
+  {#if account && byKey}
+    <button class="btn" onclick={close}>{t('common.cancel')}</button>
+    <button class="btn primary" disabled={busy || !key.trim()} onclick={saveKey}>{t('accounts.modal.cursor.saveKey')}</button>
+  {:else if !account && kind === 'machine'}
     <button class="btn" onclick={close}>{t('common.cancel')}</button>
     <button class="btn primary" disabled={busy || !offersMachine} onclick={addMachine}>{t('accounts.modal.addMachine')}</button>
   {:else if !account}
     <button class="btn" onclick={close}>{t('common.cancel')}</button>
-    <button class="btn primary" disabled={busy || !name.trim()} onclick={create}>{t('accounts.modal.create')}</button>
+    <button class="btn primary" disabled={busy || !name.trim() || (byKey && !key.trim())} onclick={create}
+      >{t(byKey ? 'accounts.modal.cursor.create' : 'accounts.modal.create')}</button
+    >
   {:else}
     <button class="btn primary" onclick={close}>{t('accounts.modal.done')}</button>
   {/if}
 {/snippet}
 
 <!-- Signing in, only its × closes it: the account stays, not signed in. -->
-<Modal {title} width={760} onclose={close} footer={!account || signedIn ? actions : undefined}>
+{#snippet keyField()}
+  <!-- The key, never shown again once kept: only its end, as its status says it. -->
+  <div class="w-fld">
+    <label class="lab" for="account-key">{t('accounts.modal.cursor.key')}</label>
+    <input
+      id="account-key"
+      class="field name mono"
+      type="password"
+      autocomplete="off"
+      spellcheck="false"
+      placeholder={t('accounts.modal.cursor.keyPlaceholder')}
+      bind:value={key}
+      onkeydown={(e) => e.key === 'Enter' && (account ? saveKey() : create())}
+    />
+    <span class="help">{t('accounts.modal.cursor.keyHint')}</span>
+  </div>
+{/snippet}
+
+<Modal {title} width={760} onclose={close} footer={!account || signedIn || byKey ? actions : undefined}>
   {#if reservedTo}<p class="w-notice" role="note">
       <Icon name="lock" /><span>{t('accounts.modal.reservedTo', { name: reservedTo.name })}</span>
     </p>{/if}
@@ -396,13 +454,19 @@
         </button>
         <button class="w-radio" role="radio" aria-checked={kind === 'new'} onclick={() => (kind = 'new')}>
           <i class="dot"></i>
-          <span><b>{t('accounts.modal.newAccount')}</b><span class="d">{t('accounts.modal.newHint')}</span></span>
+          <span
+            ><b>{t('accounts.modal.newAccount')}</b><span class="d"
+              >{t(byKey ? 'accounts.modal.newHintKey' : 'accounts.modal.newHint')}</span
+            ></span
+          >
         </button>
       </div>
       {#if kind === 'machine' && machine?.dir}<span class="help">{t('accounts.modal.machineHint', { path: tildify(machine.dir) })}</span
         >{/if}
     </div>
-    {#if kind === 'new'}
+    {#if kind === 'new' && byKey}
+      {@render keyField()}
+    {:else if kind === 'new'}
       {#if shareable?.length}
         <fieldset class="w-fld share">
           <legend class="lab">{shareLegend}</legend>
@@ -435,6 +499,8 @@
         <span class="help">{t(says.never)}</span>
       {/if}
     {/if}
+  {:else if byKey}
+    {@render keyField()}
   {:else}
     <div class="w-fld">
       <span class="lab">{t('accounts.modal.signIn')}</span>

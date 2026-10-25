@@ -436,6 +436,7 @@ pub fn run() {
             commands::favorite_model_set,
             commands::account_remove,
             commands::account_status,
+            commands::account_cursor_key,
             commands::account_login,
             commands::set_agent_view,
             commands::agent_terminal,

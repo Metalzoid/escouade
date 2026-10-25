@@ -595,6 +595,10 @@ export interface EngineCaps {
   defaultRefusal: boolean;
   /** Its commands run in a sandbox, which the modes set (Codex): « Bac à sable » in the agent's header. */
   sandbox: boolean;
+  /** Where the usage of its accounts is seen, when it tells Escouade neither quota nor cost (Cursor CLI: its dashboard, ESC-43). */
+  usagePage: string | null;
+  /** Its accounts but the machine's go by an API key, kept in the keychain (Cursor CLI), rather than a sign-in of their own. */
+  accountsByKey: boolean;
 }
 
 /** The versions of a harness Escouade was tested with. */

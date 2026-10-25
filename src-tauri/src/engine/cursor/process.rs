@@ -703,6 +703,9 @@ impl EngineProcess for CursorProcess {
                     json!({
                         "protocolVersion": PROTOCOL,
                         "clientCapabilities": {
+                            // Announced `true`, Cursor still reads and writes by itself, outside
+                            // the folder too: it never asks `fs/*` of its client (tried on
+                            // 2026.10.22, ESC-43, and read in its code). Nothing to take them for.
                             "fs": { "readTextFile": false, "writeTextFile": false },
                             "terminal": false,
                             "_meta": { "subagents": true },

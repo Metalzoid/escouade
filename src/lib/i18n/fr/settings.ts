@@ -354,7 +354,7 @@ export default {
       copilot:
         'Escouade refuse d’office ce qu’il demande sur ces chemins. Rien n’est garanti en mode Bypass, ni en vue Copilot CLI, où ses demandes ne passent pas par Escouade.',
       cursor:
-        'Escouade refuse d’office ses commandes et ses modifications qui nomment ces chemins, même en mode Bypass. Ses lectures ne demandent rien : elles ne sont pas gardées.',
+        'Escouade refuse d’office ses commandes qui nomment ces chemins, et ce qu’il soumet sur eux, même en mode Bypass. Ses lectures et ses écritures ne demandent rien, même hors du dossier de l’agent : Cursor ne les fait pas passer par Escouade, qui ne peut donc pas les garder.',
     },
     fenceNote:
       'Une barrière pour tous les harness demanderait un compte système par projet : Escouade ne le propose pas, les harness et leurs comptes n’y suivraient pas. Un agent déjà lancé prend ce réglage avant son prochain tour (son process repart, sa conversation reste) ; une vue terminal, à son prochain lancement.',

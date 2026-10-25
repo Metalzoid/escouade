@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { openUrl } from '@tauri-apps/plugin-opener';
   import { onMount } from 'svelte';
   import { accountName, metersShown, projectedDayCost, projectionLevel, quotaGroups } from '../lib/accounts';
-  import { capsOf } from '../lib/engines';
+  import { capsOf, usagePage } from '../lib/engines';
   import { trapFocus } from '../lib/focus';
   import { fUsd } from '../lib/format';
   import { t } from '../lib/i18n';
@@ -81,6 +82,7 @@
 >
   {#each groups as g (g.engine)}
     {@const noQuota = capsOf(g.engine)?.quota === 'none'}
+    {@const page = usagePage(g.engine)}
     <section class="harness" aria-label={t('accounts.tab.group', { harness: g.name })}>
       <h3><span class="emark">{g.name.split(' ')[0]}</span>{t('accounts.tab.group', { harness: g.name })}</h3>
       {#each g.rows as r (r.account.id)}
@@ -98,11 +100,18 @@
                 class="tag over">{t('accounts.panel.over')}</span
               >{/if}</span
           >
-          <span class="today" use:tip={r.today.estimated ? estimateHint(r.today) : undefined}
-            >{t('accounts.panel.today', { amount: fSpentUsd(r.today) })}</span
-          >
+          <!-- A harness that tells no cost (Cursor CLI) has none of the day to show. -->
+          {#if !page}<span class="today" use:tip={r.today.estimated ? estimateHint(r.today) : undefined}
+              >{t('accounts.panel.today', { amount: fSpentUsd(r.today) })}</span
+            >{/if}
           {#if r.reasons.length}<div class="why">{r.reasons.join(' · ')}</div>{/if}
-          {#if noQuota}
+          {#if page}
+            <!-- Neither quota nor cost told to Escouade (Cursor CLI, ESC-43): where its usage is seen, and no pause for it. -->
+            <div class="why">
+              {t('accounts.panel.usageElsewhere', { harness: g.name })}
+              <button class="link" onclick={() => app.run(openUrl(page))}>{t('accounts.panel.usageLink')}</button>
+            </div>
+          {:else if noQuota}
             {#if u?.dailyBudget}
               {@const b = budgetOf(u.todayCost, u.dailyBudget)}
               <div class="windows">
@@ -249,6 +258,17 @@
   .why {
     color: var(--muted);
     font-size: 12px;
+  }
+  /* Where the usage of a harness that tells none is seen (Cursor CLI). */
+  .why .link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--p-ink);
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
   }
   .windows {
     display: grid;

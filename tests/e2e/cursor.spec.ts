@@ -7,7 +7,11 @@ import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { addProject, expect, FAKE_CURSOR, send, test, type App } from './fixture';
 
-type Entry = { launch?: { argv: string[]; configDir: string | null; msystem: string | null }; dir?: string; msg?: any };
+type Entry = {
+  launch?: { argv: string[]; configDir: string | null; msystem: string | null; apiKey?: string | null };
+  dir?: string;
+  msg?: any;
+};
 
 /** What the fake agent was told and said, launch by launch. */
 function cursorLog(app: App): Entry[] {
@@ -198,6 +202,66 @@ test.describe('an agent on a model out of its Cursor plan', () => {
       .click();
     await send(page, 'bonjour encore');
     await expect(page.getByText(/n’est pas dans l’offre de ce compte Cursor/).first()).toBeVisible();
-    await expect(page.getByText(/choisis Auto/).first()).toBeVisible();
+    await expect(page.getByText(/Choisis Auto/).first()).toBeVisible();
+  });
+});
+
+// ESC-43: a second Cursor account is an API key, kept in the system keychain (the sandbox's entries, apart from the
+// user's) and given to its agents by CURSOR_API_KEY, never on their command line nor in a file of Escouade's.
+test.describe('a Cursor account added by its API key', () => {
+  test.use({ appEnv: { ESCOUADE_CURSOR: FAKE_CURSOR } });
+
+  test('is added by its name and key, links its usage to the dashboard, and its agents run as that key', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Réglages' });
+    await dialog.getByRole('tab', { name: 'Comptes' }).click();
+    await dialog.getByRole('button', { name: 'Ajouter un compte Cursor CLI…' }).click();
+    const modal = page.getByRole('dialog', { name: 'Ajouter un compte Cursor CLI' });
+    // The machine's is there already: a new one, by its key.
+    await expect(modal.getByRole('radio', { name: /Un nouveau compte/ })).toBeChecked();
+    await modal.getByRole('textbox', { name: 'Nom' }).fill('Équipe');
+    await modal.getByLabel('Clé d’API').fill('cle-essai-e2e-00000abcd');
+    await modal.getByRole('button', { name: 'Ajouter le compte' }).click();
+    const settings = page.getByRole('dialog', { name: 'Réglages' });
+    const team = settings.getByRole('list', { name: 'Comptes Cursor CLI' }).getByRole('listitem', { name: 'Équipe' });
+    await expect(team).toContainText('Connecté · clé …abcd');
+    await expect(team.getByRole('button', { name: 'Changer la clé…' })).toBeVisible();
+    await expect(team.getByRole('button', { name: 'Usage sur cursor.com' })).toBeVisible();
+    // Nothing of it in the settings' file.
+    expect(fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8')).not.toContain('cle-essai');
+    // The machine's account off: new Cursor agents go to the key's.
+    const machine = settings.getByRole('list', { name: 'Comptes Cursor CLI' }).getByRole('listitem', { name: 'Principal' });
+    await machine.getByRole('switch', { name: 'Actif' }).click();
+    await expect(machine.getByRole('switch', { name: 'Actif' })).toHaveAttribute('aria-checked', 'false');
+    await page.keyboard.press('Escape');
+    await newCursorAgent(page);
+    await send(page, 'compte');
+    await expect(page.getByText('Compte : clé …abcd')).toBeVisible();
+    const launch = cursorLog(app).find((e) => e.launch)!.launch!;
+    expect(launch.apiKey).toBe('cle-essai-e2e-00000abcd');
+    expect(launch.argv.join(' ')).not.toContain('cle-essai');
+  });
+});
+
+// ESC-43: what Cursor says in place of a turn, and a write refused, on the conversation.
+test.describe('an agent on Cursor CLI at its limit', () => {
+  test.use({ appEnv: { ESCOUADE_CURSOR: FAKE_CURSOR } });
+
+  test('ends a turn stopped by the usage limit on a card that says it, and a write a hook refused fails', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    await newCursorAgent(page);
+    await send(page, 'limite');
+    const card = page.locator('.card.error.limit');
+    await expect(card).toContainText('Limite d’usage de ce compte Cursor atteinte');
+    await expect(card).toContainText('cursor.com/dashboard');
+    // A write refused (a hook of the user's, say): Cursor ends it with no diff, and the tool says so.
+    await send(page, 'bloquée');
+    await expect(page.getByText('Je n’ai pas pu écrire bloquee.txt.')).toBeVisible();
+    const tool = page.locator('.tool.err', { hasText: 'bloquee.txt' });
+    await tool.getByRole('button').first().click();
+    await expect(tool).toContainText('Cursor n’a rien écrit');
   });
 });

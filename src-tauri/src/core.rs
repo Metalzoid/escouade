@@ -1817,6 +1817,8 @@ impl<R: Runtime> Core<R> {
             clock_ahead: std::sync::atomic::AtomicI64::new(0),
         });
         core.usage.lock().set_today(&core.stats.today_by_account());
+        // The API keys of the Cursor accounts, which their processes go by (ESC-43).
+        core.load_cursor_keys();
         // The images pasted in the interfaces a week ago or more, also when nobody pastes any more.
         crate::tui::clear_pastes(&core.pastes_dir());
         // The copies of joined files a window left half written, the drafts' of a day ago, and
@@ -2824,6 +2826,8 @@ impl<R: Runtime> Core<R> {
         let harness = engine::of(&h.lock().meta);
         // An account removed meanwhile: another of its harness, else refused (ESC-128).
         let account = self.agent_account(h)?;
+        // A Cursor account without its key would run as the machine's sign-in (ESC-43).
+        accounts::cursor_ready(&account)?;
         let program = accounts::program(&account, &settings)
             .ok_or_else(|| anyhow!(engine::missing_line(harness.id(), i18n::ui())))?;
         // A version older than the tested ones is refused, with its reason.
@@ -6236,6 +6240,7 @@ impl<R: Runtime> Core<R> {
             .unwrap_or(EngineId::Claude);
         let engine = engine::by_id(id);
         let account = self.account_for(id, agent, project)?;
+        accounts::cursor_ready(&account)?;
         let settings = self.settings.read().clone();
         let program = accounts::program(&account, &settings).ok_or_else(|| {
             // Claude Code by its command, as before there was a choice.

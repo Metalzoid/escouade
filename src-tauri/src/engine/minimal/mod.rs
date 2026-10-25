@@ -71,6 +71,8 @@ impl Engine for Minimal {
             todo_tools: false,
             default_refusal: false,
             sandbox: false,
+            usage_page: None,
+            accounts_by_key: false,
         }
     }
 

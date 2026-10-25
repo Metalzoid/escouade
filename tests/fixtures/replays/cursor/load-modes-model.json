@@ -36,13 +36,15 @@
       "text": "Au tour précédent j’ai créé `notes.txt`, et tu as annulé `sleep 60; echo fini`.\n\nBANANE"
     },
     {
+      "cost": 0.0,
       "durationMs": null,
       "engine": "cursor",
       "error": null,
       "interrupted": false,
       "isError": false,
       "kind": "turn",
-      "limited": false
+      "limited": false,
+      "tokens": 0
     },
     {
       "images": 0,
@@ -63,13 +65,15 @@
       "text": "**Contenu de `hello.txt` ?** — Bonjour ou Salut ?\n\n(Pas d’outil de question dédié ici ; réponds et je propose ensuite le plan en 2 étapes.)\n\nBANANE"
     },
     {
+      "cost": 0.0,
       "durationMs": null,
       "engine": "cursor",
       "error": null,
       "interrupted": false,
       "isError": false,
       "kind": "turn",
-      "limited": false
+      "limited": false,
+      "tokens": 0
     },
     {
       "images": 0,
@@ -84,13 +88,15 @@
       "text": "\n\nUpgrade your plan to continue"
     },
     {
+      "cost": 0.0,
       "durationMs": null,
       "engine": "cursor",
-      "error": "Le modèle composer-2.5 n’est pas dans l’offre de ce compte Cursor (« Upgrade your plan to continue ») : choisis Auto ou un autre modèle dans le menu Modèle.",
+      "error": "Cursor refuse le modèle composer-2.5 sur ce compte (« Upgrade your plan to continue ») : il n’est pas dans l’offre de ce compte Cursor, ou son usage inclus du mois est épuisé. Choisis Auto dans le menu Modèle ; son usage : https://cursor.com/dashboard?tab=usage",
       "interrupted": false,
       "isError": true,
       "kind": "turn",
-      "limited": false
+      "limited": true,
+      "tokens": 0
     }
   ]
 }

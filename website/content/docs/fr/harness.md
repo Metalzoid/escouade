@@ -28,14 +28,14 @@ Quel que soit le harness, l’agent a la même conversation : la réponse et le 
 |---|---|---|---|---|---|
 | Installation | script de Claude Code | `npm install -g @openai/codex` | `npm install -g opencode-ai` | `npm install -g @github/copilot` | script de Cursor |
 | Testé avec | 2.1.283 à 2.1.301 | 0.163.0 | 1.19.3 | 1.0.98 | 2026.10.22 |
-| Compte | abonnement Claude ou clé API | compte ChatGPT | les fournisseurs connectés à OpenCode, modèles locaux compris | compte GitHub avec Copilot, Free compris | compte Cursor (`agent login`), Free compris |
-| Plusieurs comptes | oui | oui | non | oui | non, pour l’instant |
+| Compte | abonnement Claude ou clé API | compte ChatGPT | les fournisseurs connectés à OpenCode, modèles locaux compris | compte GitHub avec Copilot, Free compris | compte Cursor (`agent login`, ou une clé d’API), Free compris |
+| Plusieurs comptes | oui | oui | non | oui | oui, par clé d’API |
 | Modèles | ceux que Claude Code liste pour chaque compte | ceux que Codex liste pour ton compte | ceux de tes fournisseurs, avec recherche et favoris | ceux que Copilot liste, avec leur multiplicateur | ceux de ton compte, Auto en tête |
 | Modes | les cinq | les cinq | quatre (pas d’Auto) | les cinq | quatre (pas d’Auto) |
 | Ce qui protège | ses permissions | son bac à sable | ses règles de permission | les règles d’Escouade | ses permissions, pour ses commandes |
 | Message pendant un tour | attend la fin du tour | entre dans le tour | attend la fin du tour | entre dans le tour | attend la fin du tour |
 | Coût | exact | estimé | exact (0 en local) | exact, en crédits d’IA | non donné |
-| Quota | fenêtres 5 h et 7 jours | fenêtres 5 h et 7 jours (30 jours en offre gratuite) | aucun : budget par jour | crédits du mois | pas encore |
+| Quota | fenêtres 5 h et 7 jours | fenêtres 5 h et 7 jours (30 jours en offre gratuite) | aucun : budget par jour | crédits du mois | lien vers son tableau de bord |
 | Vue terminal | « Vue Claude Code » | « Vue Codex » | « Vue OpenCode » | « Vue Copilot CLI » | aucune |
 | PDF joints | oui | non | non | non | non |
 | Remote control, tâches de fond | oui | non | non | non | non |
@@ -145,13 +145,13 @@ Pas de « Toujours autoriser », pas de mode `assisted` (expérimental), pas d
 
 ### Installation et compte
 
-Installe Cursor CLI avec son script (`irm 'https://cursor.com/install?win32=true' | iex` sous Windows, `curl https://cursor.com/install -fsS | bash` sous macOS et Linux), puis connecte-le avec `agent login`. Escouade le trouve dans `%LOCALAPPDATA%\cursor-agent` sous Windows, même absent du `PATH`, et lance sa dernière version installée. Chaque agent a son `agent acp` et son propre dossier de configuration, retiré avec lui : ses règles, son modèle et ses sessions y sont gardés, jamais dans ta config de Cursor. La connexion reste celle de la machine : un seul compte Cursor pour l’instant.
+Installe Cursor CLI avec son script (`irm 'https://cursor.com/install?win32=true' | iex` sous Windows, `curl https://cursor.com/install -fsS | bash` sous macOS et Linux), puis connecte-le avec `agent login`. Escouade le trouve dans `%LOCALAPPDATA%\cursor-agent` sous Windows, même absent du `PATH`, et lance sa dernière version installée. Chaque agent a son `agent acp` et son propre dossier de configuration, retiré avec lui : ses règles, son modèle et ses sessions y sont gardés, jamais dans ta config de Cursor. La connexion de la machine (`agent login`) est « le compte de la machine ». Un autre compte Cursor s’ajoute par sa clé d’API (cursor.com, Settings › API Keys) dans Réglages › Comptes : elle est gardée dans le trousseau du système et donnée à ses agents par `CURSOR_API_KEY`, jamais dans un fichier ni sur une ligne de commande ; « Changer la clé… » la redonne.
 
 ### Modèles et modes
 
 Le menu « Modèle » liste les modèles de ton compte, Auto en tête, avec leurs efforts. Une offre Free ne fait tourner qu’Auto : un autre modèle finit le tour en erreur, en le disant. Le modèle et le mode changent tout de suite.
 
-Cursor n’a pas de bac à sable sous Windows. Il lit et modifie les fichiers sans demander, même hors du dossier de l’agent ; ses commandes, le web et les outils MCP demandent.
+Cursor n’a pas de bac à sable sous Windows. Il lit et modifie les fichiers sans demander, même hors du dossier de l’agent, et sans passer par Escouade, qui ne peut donc pas l’en empêcher ; ses commandes, le web et les outils MCP demandent. Pour un projet privé, Escouade refuse d’office ses commandes qui nomment les chemins des autres projets, mais pas ses lectures ni ses écritures.
 
 | Mode | Chez Cursor CLI |
 |---|---|
@@ -162,11 +162,11 @@ Cursor n’a pas de bac à sable sous Windows. Il lit et modifie les fichiers sa
 
 Une demande de Cursor a « Autoriser », « Pour cet agent » et « Refuser » : « Pour cet agent » garde la règle (`Shell(git status)`, par exemple) dans le dossier de l’agent, pour lui seul et ses reprises. Ses questions, son plan, ses tâches et ses sous-agents passent dans la conversation et le bandeau « Plan ». Un message envoyé pendant un tour attend sa fin : Cursor arrêterait le tour en cours pour lui.
 
-Les skills, commandes, agents et hooks de Claude Code de ton compte et du projet tournent aussi sous Cursor, comme pour les agents Claude Code : un hook qui refuse une écriture la bloque, sans carte.
+Les skills, commandes, agents et hooks de Claude Code de ton compte et du projet tournent aussi sous Cursor, comme pour les agents Claude Code ; Escouade les laisse comme tu les as réglés. Un hook qui refuse une écriture la bloque : l’outil finit en échec dans la conversation, « Cursor n’a rien écrit », Cursor n’en donnant pas la raison.
 
 ### Coût, quota et ce que Cursor ne fait pas
 
-Cursor ne dit ni les tokens ni le coût d’un tour quand Escouade le pilote : la conversation n’en montre pas. Pas encore de quota dans la barre d’état, pas de vue terminal, pas de « Dupliquer la conversation » (Cursor ne copie pas une session), pas de PDF joints, pas de commandes `/` dans Escouade, ni remote control ni tâches de fond. Il reçoit le serveur MCP d’Escouade par sa session ; l’interrupteur ne le déclare pas encore dans la config de Cursor.
+Cursor ne dit ni les tokens ni le coût d’un tour quand Escouade le pilote : la conversation n’en montre pas, et les statistiques comptent ses tours et leur durée. Il ne dit pas non plus son usage du mois : pas de barre dans la barre d’état, mais « Usage sur cursor.com » dans Réglages › Comptes et dans le panneau des quotas, qui ouvre son tableau de bord. Une limite atteinte (« Upgrade your plan to continue ») arrête le tour sur une carte ambre qui le dit, avec, s’il y en a, le compte ou le harness où continuer. Pas de vue terminal, pas de « Dupliquer la conversation » (Cursor ne copie pas une session), pas de PDF joints, pas de commandes `/` dans Escouade, ni remote control ni tâches de fond. Il reçoit le serveur MCP d’Escouade par sa session ; l’interrupteur ne le déclare pas encore dans la config de Cursor.
 
 ## Le serveur MCP
 

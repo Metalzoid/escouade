@@ -395,7 +395,7 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
     expect(within(list).getByText(/sauf en mode Bypass, qui n’en a pas/)).toBeVisible();
     expect(within(list).getByText(/Rien n’est garanti en mode Bypass, ni en vue Copilot CLI/)).toBeVisible();
     expect(within(list).getByText(/pas à un script qui ouvre un fichier lui-même/)).toBeVisible();
-    expect(within(list).getByText(/Ses lectures ne demandent rien : elles ne sont pas gardées/)).toBeVisible();
+    expect(within(list).getByText(/Ses lectures et ses écritures ne demandent rien, même hors du dossier de l’agent/)).toBeVisible();
     expect(screen.getByText(/Une barrière pour tous les harness demanderait un compte système par projet/)).toBeVisible();
   });
 

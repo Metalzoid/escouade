@@ -10,6 +10,8 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 - A project’s tile in the projects’ rail can say something other than its initials: up to three letters or an emoji, or the logo of your choice in their place, in Settings › Projects or in the “New project” assistant. The agents waiting and those at work stay readable over it.
 - Cursor CLI becomes the fifth harness: a Cursor agent converses in Escouade, asks its questions and permissions there, proposes its plan to approve and keeps its tasks and subagents in the Plan banner. Its “Always” becomes “For this agent”: the rule holds for that agent alone, never for your Cursor config.
+- Cursor CLI takes several accounts: another Cursor account is added by its API key, kept in the system keychain. Its usage of the month opens in one click on Cursor’s dashboard, and a turn stopped by its usage limit says so on a card, with where to go on.
+- Written texts (an agent’s name, a commit message…) can go through Cursor CLI, and a Cursor write refused by a hook shows as failed in the conversation instead of passing for done.
 - A project can show a label under its tile, its name or a shorter text, and the projects’ rail widens by dragging its right edge: wide enough, it shows each project’s name beside its tile, as a list. The width chosen is kept for the whole app.
 - Settings › About offers to buy a coffee to support Escouade, as do the site, the documentation and the repository’s GitHub page.
 

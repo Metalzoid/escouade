@@ -106,8 +106,8 @@ fn meaning(lang: Lang, mode: &str) -> String {
         ),
         "acceptEdits" => tr_in!(
             lang,
-            "Comme « Demander », et git add et git commit du dossier de l’agent passent sans demander. Cursor modifie les fichiers sans rien soumettre, même hors du dossier. Pas de bac à sable : une commande acceptée peut tout faire.",
-            "As “Ask”, and git add and git commit in the agent’s folder go through without asking. Cursor edits files without submitting them, even outside the folder. No sandbox: an accepted command can do anything."
+            "Comme « Demander », et git add et git commit du dossier de l’agent passent sans demander. Cursor modifie les fichiers sans rien soumettre ni passer par Escouade, même hors du dossier. Pas de bac à sable : une commande acceptée peut tout faire.",
+            "As “Ask”, and git add and git commit in the agent’s folder go through without asking. Cursor edits files without submitting them nor going through Escouade, even outside the folder. No sandbox: an accepted command can do anything."
         ),
         "bypassPermissions" => tr_in!(
             lang,
@@ -116,8 +116,8 @@ fn meaning(lang: Lang, mode: &str) -> String {
         ),
         _ => tr_in!(
             lang,
-            "Ses commandes, le web et les outils MCP demandent. Cursor lit et modifie les fichiers sans demander, même hors du dossier de l’agent ; une écriture qu’il soumet passe sans demander dans le dossier, et ailleurs avec son diff. Pas de bac à sable sous Windows : une commande acceptée peut tout faire.",
-            "Its commands, the web and MCP tools ask. Cursor reads and edits files without asking, even outside the agent’s folder; a write it submits goes through in the folder, and asks elsewhere, with its diff. No sandbox on Windows: an accepted command can do anything."
+            "Ses commandes, le web et les outils MCP demandent. Cursor lit et modifie les fichiers sans demander, même hors du dossier de l’agent : il ne les fait pas passer par Escouade, qui ne peut pas l’en empêcher. Une écriture qu’il soumet passe sans demander dans le dossier, et ailleurs avec son diff. Pas de bac à sable sous Windows : une commande acceptée peut tout faire.",
+            "Its commands, the web and MCP tools ask. Cursor reads and edits files without asking, even outside the agent’s folder: it doesn’t pass them through Escouade, which can’t stop it. A write it submits goes through in the folder, and asks elsewhere, with its diff. No sandbox on Windows: an accepted command can do anything."
         ),
     }
 }
@@ -143,7 +143,9 @@ pub fn caps() -> EngineCaps {
         // A second prompt would cancel the running turn: the process holds it until its end.
         mid_turn: MidTurn::Queued,
         slash_commands: false,
-        // Its usage of the month is told by its interface alone (`/usage`): ESC-43.
+        // Its usage of the month is told by its interface alone (`/usage`, from the API of its
+        // dashboard with the token of the sign-in, which Escouade never reads): its dashboard is
+        // linked instead (`DASHBOARD`), and its limit ends a turn « limité » (ESC-43).
         quota: QuotaKind::None,
         quota_windows: Vec::new(),
         // Neither tokens nor cost in ACP.
@@ -154,6 +156,9 @@ pub fn caps() -> EngineCaps {
         todo_tools: false,
         default_refusal: false,
         sandbox: false,
+        usage_page: Some(DASHBOARD),
+        // Its sign-in is the machine's alone: another account is an API key (ESC-43).
+        accounts_by_key: true,
     }
 }
 
@@ -392,13 +397,87 @@ fn session_refused(lang: Lang, e: &anyhow::Error) -> String {
     )
 }
 
-/// What the card says of a turn that only got « Upgrade your plan to continue »: the model is not
-/// in the account's plan.
-pub(crate) fn upgrade_error(lang: Lang, model: &str) -> String {
+/// Where the user sees the usage of a Cursor account, its limit and its plan: Cursor's dashboard
+/// (its `/usage` says it). Escouade reads no usage of Cursor's (ESC-43): ACP tells none, and its
+/// dashboard's API takes the token of the sign-in, which Escouade never reads.
+pub const DASHBOARD: &str = "https://cursor.com/dashboard?tab=usage";
+
+/// What Cursor answers in place of a turn it does not run: a text as its last words, the turn ending
+/// as any other (`end_turn`, no error), by the action it asks (read in its code, 2026.10.22: `login`,
+/// `upgrade`, `payment`, and a key refused).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Refusal {
+    /// « Upgrade your plan to continue »: the included usage of the month spent, or a model the
+    /// plan does not offer (tried with `composer-2.5` on a Free account).
+    Upgrade,
+    /// « Add a payment method to continue »: on-demand usage, without a means to pay.
+    Payment,
+    /// « Please sign in to continue ».
+    SignIn,
+    /// « Error: [unauthenticated] Backend rejected authentication… »: the account's key refused.
+    Unauthenticated,
+}
+
+/// The refusal a turn's text `text` ends with, if any.
+pub(crate) fn refusal(text: &str) -> Option<Refusal> {
+    let last = text.trim().rsplit("\n\n").next().unwrap_or_default().trim();
+    match last {
+        UPGRADE => Some(Refusal::Upgrade),
+        "Add a payment method to continue" => Some(Refusal::Payment),
+        "Please sign in to continue" => Some(Refusal::SignIn),
+        t if t.starts_with("Error: [unauthenticated]") => Some(Refusal::Unauthenticated),
+        _ => None,
+    }
+}
+
+/// Whether the refusal is the account's usage limit: its turn ends « limité », on the amber card.
+pub(crate) fn at_limit(refusal: Refusal) -> bool {
+    matches!(refusal, Refusal::Upgrade | Refusal::Payment)
+}
+
+/// What the card says of a turn Cursor refused (`refusal`), the agent on `model`, its account by
+/// its key or not (`by_key`).
+pub(crate) fn refusal_error(lang: Lang, refusal: Refusal, model: &str, by_key: bool) -> String {
+    match refusal {
+        Refusal::Upgrade if model == AUTO || model.is_empty() => tr_in!(
+            lang,
+            "Limite d’usage de ce compte Cursor atteinte (« Upgrade your plan to continue ») : l’usage inclus du mois est épuisé jusqu’à la remise à zéro de son offre. Son usage : {url}",
+            "This Cursor account’s usage limit is reached (“Upgrade your plan to continue”): the month’s included usage is spent until its plan resets. Its usage: {url}",
+            url = DASHBOARD
+        ),
+        Refusal::Upgrade => tr_in!(
+            lang,
+            "Cursor refuse le modèle {model} sur ce compte (« Upgrade your plan to continue ») : il n’est pas dans l’offre de ce compte Cursor, ou son usage inclus du mois est épuisé. Choisis Auto dans le menu Modèle ; son usage : {url}",
+            "Cursor refuses the model {model} on this account (“Upgrade your plan to continue”): it isn’t in this Cursor account’s plan, or its included usage of the month is spent. Choose Auto in the Model menu; its usage: {url}",
+            url = DASHBOARD
+        ),
+        Refusal::Payment => tr_in!(
+            lang,
+            "Limite d’usage de ce compte Cursor atteinte : la suite passe par l’usage à la demande, qui demande un moyen de paiement (« Add a payment method to continue »). Son usage : {url}",
+            "This Cursor account’s usage limit is reached: what comes next is on-demand usage, which needs a payment method (“Add a payment method to continue”). Its usage: {url}",
+            url = DASHBOARD
+        ),
+        Refusal::SignIn | Refusal::Unauthenticated if by_key => tr_in!(
+            lang,
+            "Cursor a refusé la clé d’API de ce compte : donne-la de nouveau dans Réglages › Comptes, « Changer la clé… ».",
+            "Cursor refused this account’s API key: give it again in Settings › Accounts, “Change the key…”."
+        ),
+        Refusal::SignIn | Refusal::Unauthenticated => tr_in!(
+            lang,
+            "Cursor CLI n’est pas connecté sur cette machine (« Please sign in to continue ») : lance agent login dans un terminal.",
+            "Cursor CLI isn’t signed in on this machine (“Please sign in to continue”): run agent login in a terminal."
+        ),
+    }
+}
+
+/// What a write of Cursor that changed nothing says (its call ends `completed` with no diff): Cursor
+/// gives a write done its diff, and in ACP says nothing of one refused, by a hook of the user's
+/// (those of Claude Code run under Cursor too) or by Cursor itself (read in its code, 2026.10.22).
+pub(crate) fn write_not_done(lang: Lang) -> String {
     tr_in!(
         lang,
-        "Le modèle {model} n’est pas dans l’offre de ce compte Cursor (« Upgrade your plan to continue ») : choisis Auto ou un autre modèle dans le menu Modèle.",
-        "The model {model} isn’t in this Cursor account’s plan (“Upgrade your plan to continue”): choose Auto or another model in the Model menu."
+        "Cursor n’a rien écrit : l’écriture a été refusée, par un hook (ceux de Claude Code tournent aussi sous Cursor) ou par Cursor lui-même, qui n’en donne pas la raison.",
+        "Cursor wrote nothing: the write was refused, by a hook (those of Claude Code run under Cursor too) or by Cursor itself, which doesn’t give the reason."
     )
 }
 
@@ -835,6 +914,48 @@ mod tests {
         assert_eq!(mcp_servers(None), json!([]));
         assert_eq!(CURSOR.agent_home_var(), Some("CURSOR_CONFIG_DIR"));
         assert!(preamble(" Fais court. ").contains("<instructions>\nFais court.\n</instructions>"));
-        assert_ne!(upgrade_error(Lang::Fr, "x"), upgrade_error(Lang::En, "x"));
+    }
+
+    /// The texts Cursor answers in place of a turn (read in its code, 2026.10.22), as the last
+    /// paragraph of the turn's words; each said in both languages.
+    #[test]
+    fn the_refusals_of_cursor_are_read_from_the_last_words_of_the_turn() {
+        assert_eq!(refusal(UPGRADE), Some(Refusal::Upgrade));
+        assert_eq!(
+            refusal("Je regarde.\n\nAdd a payment method to continue"),
+            Some(Refusal::Payment)
+        );
+        assert_eq!(
+            refusal("\n\nPlease sign in to continue"),
+            Some(Refusal::SignIn)
+        );
+        assert_eq!(
+            refusal("\n\nError: [unauthenticated] Backend rejected authentication. Verify…"),
+            Some(Refusal::Unauthenticated)
+        );
+        // Said in passing, it is no refusal.
+        assert_eq!(
+            refusal("Le message « Upgrade your plan to continue » vient de Cursor."),
+            None
+        );
+        assert_eq!(refusal(""), None);
+        assert!(at_limit(Refusal::Upgrade) && at_limit(Refusal::Payment));
+        assert!(!at_limit(Refusal::SignIn) && !at_limit(Refusal::Unauthenticated));
+        for r in [
+            Refusal::Upgrade,
+            Refusal::Payment,
+            Refusal::SignIn,
+            Refusal::Unauthenticated,
+        ] {
+            for (model, key) in [(AUTO, false), ("composer-2.5", true)] {
+                let (fr, en) = (
+                    refusal_error(Lang::Fr, r, model, key),
+                    refusal_error(Lang::En, r, model, key),
+                );
+                assert!(fr != en && !fr.is_empty(), "{r:?}");
+            }
+        }
+        assert!(refusal_error(Lang::Fr, Refusal::Upgrade, "composer-2.5", false).contains("Auto"));
+        assert_ne!(write_not_done(Lang::Fr), write_not_done(Lang::En));
     }
 }

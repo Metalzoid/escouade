@@ -24,6 +24,12 @@ export default {
     down: 'Descendre {name}',
     signIn: 'Se connecter…',
     signInAgain: 'Se reconnecter…',
+    /** A Cursor account other than the machine's: its API key given again (ESC-43). */
+    changeKey: 'Changer la clé…',
+    /** A harness that tells Escouade neither quota nor cost (Cursor CLI): its dashboard. */
+    usage: 'Usage sur cursor.com',
+    usageHint:
+      '{harness} ne donne pas son usage à Escouade : son tableau de bord le montre (l’usage inclus du mois, la remise à zéro). Une limite atteinte arrête le tour sur une carte qui le dit.',
     remove: 'Supprimer',
     add: 'Ajouter un compte…',
     /** A harness installed without an account (ESC-128): nothing starts on it. */
@@ -95,6 +101,8 @@ export default {
     machineHint: 'Son dossier habituel, tel quel : ses réglages, sa connexion et ses conversations ({path}).',
     newAccount: 'Un nouveau compte',
     newHint: 'Un dossier à lui sous ~/.escouade, et sa propre connexion.',
+    /** Cursor CLI: a new account is an API key (ESC-43). */
+    newHintKey: 'La clé d’API d’un autre compte Cursor, gardée dans le trousseau du système.',
     /** Added from a private project's settings (ESC-141). */
     reservedTo: 'Réservé au projet « {name} » : ses sessions, sa mémoire et son historique ne seront partagés avec aucun autre projet.',
     addMachine: 'Ajouter ce compte',
@@ -139,6 +147,14 @@ export default {
       neverShared:
         'La connexion de Cursor CLI (agent login) est celle de la machine : elle ne se copie pas, et un dossier de configuration ne la déplace pas.',
       signInHint: 'Connecte-toi dans le terminal ci-dessous : agent login ouvre ton navigateur sur cursor.com.',
+      /** A new Cursor account is its API key (ESC-43): the machine's is the sign-in of agent login. */
+      keyTitle: 'Clé d’API du compte « {name} »',
+      key: 'Clé d’API',
+      keyPlaceholder: 'Sur cursor.com, Settings › API Keys',
+      keyHint:
+        'Gardée dans le trousseau du système, donnée aux agents de ce compte par CURSOR_API_KEY, jamais écrite dans un fichier ni sur une ligne de commande. Leurs tours vont au compte Cursor de cette clé ; le compte de la machine reste la connexion d’agent login.',
+      create: 'Ajouter le compte',
+      saveKey: 'Enregistrer la clé',
     },
     restart: 'Relancer',
     done: 'Terminé',
@@ -237,6 +253,9 @@ export default {
     label: 'Quotas par compte',
     /** Under a harness without a quota: only what its turns cost. */
     noQuota: 'Pas de quota : seul le coût de ses tours compte.',
+    /** Cursor CLI (ESC-43): it tells Escouade neither its quota nor its cost. */
+    usageElsewhere: '{harness} ne donne ni son usage ni son coût à Escouade.',
+    usageLink: 'Voir l’usage sur cursor.com',
     budget: 'Budget par jour',
     budgetReset: 'Remise à zéro à minuit.',
     projectionNote:

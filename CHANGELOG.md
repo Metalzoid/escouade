@@ -10,6 +10,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 - La tuile d’un projet dans la barre des projets peut dire autre chose que ses initiales : jusqu’à trois lettres ou un emoji, ou le logo de ton choix à leur place, dans Réglages › Projets ou dans l’assistant « Nouveau projet ». Les agents qui attendent et ceux qui travaillent restent lisibles par-dessus.
 - Cursor CLI devient le cinquième harness : un agent Cursor converse dans Escouade, y pose ses questions et ses demandes d’autorisation, propose son plan à approuver et tient ses tâches et ses sous-agents dans le bandeau Plan. Son « Toujours » devient « Pour cet agent » : la règle ne vaut que pour cet agent, jamais pour ta config de Cursor.
+- Cursor CLI prend plusieurs comptes : un autre compte Cursor s’ajoute par sa clé d’API, gardée dans le trousseau du système. Son usage du mois s’ouvre d’un clic sur le tableau de bord de Cursor, et un tour arrêté par sa limite d’usage le dit sur une carte, avec où continuer.
+- Les textes rédigés (nom d’un agent, message de commit…) peuvent passer par Cursor CLI, et une écriture de Cursor refusée par un hook se dit en échec dans la conversation au lieu de passer pour faite.
 - Un projet peut afficher un libellé sous sa tuile, son nom ou un texte plus court, et la barre des projets s’élargit en tirant son bord droit : assez large, elle montre le nom de chaque projet à côté de sa tuile, comme une liste. La largeur choisie est gardée pour toute l’app.
 - Réglages › À propos propose d’offrir un café pour soutenir Escouade, comme le site, la documentation et la page GitHub du dépôt.
 

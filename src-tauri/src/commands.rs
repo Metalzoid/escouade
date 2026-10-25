@@ -345,6 +345,17 @@ pub async fn account_status(core: CoreState<'_>, id: String) -> Res<AccountStatu
     core.claude_account_status(&id).await.map_err(err)
 }
 
+/// « Clé d’API » of a Cursor account (ESC-43): kept in the system keychain, its status as it then
+/// is. Never logged.
+#[tauri::command]
+pub async fn account_cursor_key(
+    core: CoreState<'_>,
+    id: String,
+    key: String,
+) -> Res<AccountStatus> {
+    core.set_cursor_key(&id, &key).await.map_err(err)
+}
+
 /// « Se connecter… »: the account's `claude` in an interactive terminal (written to, resized and
 /// killed as the others: `term_write`, `term_resize`, `term_kill`).
 #[tauri::command(async)]

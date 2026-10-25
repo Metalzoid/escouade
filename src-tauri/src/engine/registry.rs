@@ -145,6 +145,12 @@ pub struct EngineCaps {
     pub default_refusal: bool,
     /// Its commands run in a sandbox, which the modes set (Codex): « Bac à sable » in the agent's header.
     pub sandbox: bool,
+    /// Where the usage of its accounts is seen, when it tells Escouade neither quota nor cost
+    /// (Cursor CLI: its dashboard, ESC-43): linked in place of the gauges and the cost of the day.
+    pub usage_page: Option<&'static str>,
+    /// Its accounts but the machine's go by an API key, kept in the keychain (Cursor CLI), rather
+    /// than a sign-in in a folder of their own.
+    pub accounts_by_key: bool,
 }
 
 /// The versions of a harness Escouade was tested with, oldest and newest.

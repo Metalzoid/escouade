@@ -444,6 +444,8 @@ export const BARE_ENGINE: EngineDecl = {
     todoTools: false,
     defaultRefusal: false,
     sandbox: false,
+    usagePage: null,
+    accountsByKey: false,
   },
   install: { windows: 'npm install -g @openai/codex', unix: 'npm install -g @openai/codex' },
   models: [
@@ -452,6 +454,14 @@ export const BARE_ENGINE: EngineDecl = {
   ],
   efforts: [],
   writer: 'Nu mini',
+};
+
+/** Cursor CLI as the tests see it (ESC-43): neither quota nor cost, its usage on its dashboard, its accounts by API key. */
+export const CURSOR_ENGINE: EngineDecl = {
+  ...BARE_ENGINE,
+  id: 'cursor',
+  name: 'Cursor CLI',
+  caps: { ...BARE_ENGINE.caps, usagePage: 'https://cursor.com/dashboard?tab=usage', accountsByKey: true },
 };
 
 /** Claude Code's two windows of a reading, the shorthand of the tests: `fiveHour` and `sevenDay`, as before 1.8. */

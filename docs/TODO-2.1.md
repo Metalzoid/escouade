@@ -24,7 +24,7 @@ Un cinquième harness, par ACP, à côté de Claude Code, Codex, OpenCode et Cop
 
 - [x] Essais réels (ESC-24, 2026-10-25) : réponses dans `docs/TODO-1.8.md`, point 0, « Cursor CLI », flux dans `tests/fixtures/cursor/`.
 - [x] L'adaptateur (ESC-42, 2026-10-25) : conversation, permissions (avec le diff d'une écriture soumise, et celui de chaque écriture faite), questions, plan à approuver, tâches et sous-agents dans le bandeau Plan, modes Demander, Plan, Accepter les modifications et Bypass, modèles du compte, file des messages, interruption et reprise. « Toujours » est « Pour cet agent » (un dossier de config par agent, décidé avec l'utilisateur). Faux agent au banc de conformité, e2e, essai réel.
-- [ ] Ses comptes, son usage et son coût (ESC-43).
+- [x] Ses comptes, son usage et son coût (ESC-43, 2026-10-25) : un compte de plus par sa clé d'API (trousseau, `CURSOR_API_KEY`), Principal sans clé ni jeton de l'environnement ; pas de quota lu (ACP n'en dit rien, le tableau de bord demande le jeton de la connexion) mais « Usage sur cursor.com » ; une limite atteinte finit le tour « limité » sur la carte ambre ; coût « — », les stats comptent les tours. Le serveur MCP passe par sa session (vérifié de bout en bout sur le faux), les textes rédigés par `agent acp` en mode Ask (essai réel : 21 s). Une écriture refusée par un hook se dit en échec. `fs` d'ACP annoncé à `true` : sans effet (essai réel), d'où les textes des modes et de « Ses fichiers ». Reste : un essai avec une vraie clé d'API (aucune ici).
 - [ ] Sa vue terminal (ESC-49).
 
 ## Demandés pendant le redesign (2026-10-24)

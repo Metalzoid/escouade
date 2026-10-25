@@ -298,7 +298,7 @@ fn the_tasks_merge_by_id_and_a_subagent_speaks_under_its_task() {
 }
 
 #[test]
-fn a_model_out_of_the_plan_ends_the_turn_in_error_with_what_to_do() {
+fn a_model_out_of_the_plan_ends_the_turn_limited_with_what_to_do() {
     let mut rt = agent(WT, "default");
     rt.meta.model = "composer-2.5".into();
     start(&mut rt, "bonjour");
@@ -309,14 +309,102 @@ fn a_model_out_of_the_plan_ends_the_turn_in_error_with_what_to_do() {
             end("end_turn"),
         ],
     );
-    let Some(TurnEnd::Error(reason)) = fxs.last().unwrap().turn_end.clone() else {
-        panic!("{:?}", fxs.last().unwrap().turn_end);
-    };
+    assert_eq!(fxs.last().unwrap().turn_end, Some(TurnEnd::Limited));
+    let turn = items_of(&mut rt, "turn").pop().unwrap();
+    let reason = turn["error"].as_str().unwrap();
     assert!(
         reason.contains("composer-2.5") && reason.contains("Auto"),
         "{reason}"
     );
+    assert_eq!(turn["limited"], true);
     assert_eq!(rt.meta.status, AgentStatus::Error);
+}
+
+/// ESC-43: the limit of the month, on Auto (« Upgrade your plan to continue » after the turn's own
+/// words, as Cursor adds it), or on-demand usage without a payment method: the amber card, which
+/// says it and where to see the usage; no resume planned, Escouade knowing no reset.
+#[test]
+fn the_usage_limit_of_cursor_ends_the_turn_limited_on_a_card_that_says_it() {
+    for (said, words) in [
+        (
+            "Je commence.\n\nUpgrade your plan to continue",
+            "Limite d’usage",
+        ),
+        ("\n\nAdd a payment method to continue", "moyen de paiement"),
+    ] {
+        let mut rt = agent(WT, "default");
+        start(&mut rt, "bonjour");
+        let fxs = feed(
+            &mut rt,
+            &[chunk("agent_message_chunk", said), end("end_turn")],
+        );
+        let fx = fxs.last().unwrap();
+        assert_eq!(fx.turn_end, Some(TurnEnd::Limited), "{said}");
+        assert_eq!(fx.limited, None, "no reset known: no resume planned");
+        let turn = items_of(&mut rt, "turn").pop().unwrap();
+        assert_eq!(turn["limited"], true);
+        let reason = turn["error"].as_str().unwrap();
+        assert!(reason.contains(words), "{reason}");
+        assert!(
+            reason.contains(crate::engine::cursor::DASHBOARD),
+            "{reason}"
+        );
+    }
+}
+
+/// A sign-in or a key refused is an error, not the limit: for an account by its key, give the key
+/// again; for the machine's, `agent login`.
+#[test]
+fn a_key_or_a_sign_in_refused_ends_the_turn_in_error_saying_what_to_do() {
+    let said = "\n\nError: [unauthenticated] Backend rejected authentication. Verify this is a User API Key";
+    for (account, words) in [("pro", "clé d’API"), ("principal-cursor", "agent login")] {
+        let mut rt = agent(WT, "default");
+        rt.meta.account = account.into();
+        start(&mut rt, "bonjour");
+        let fxs = feed(
+            &mut rt,
+            &[chunk("agent_message_chunk", said), end("end_turn")],
+        );
+        let Some(TurnEnd::Error(reason)) = fxs.last().unwrap().turn_end.clone() else {
+            panic!("{:?}", fxs.last().unwrap().turn_end);
+        };
+        assert!(reason.contains(words), "{account}: {reason}");
+        assert_eq!(items_of(&mut rt, "turn").pop().unwrap()["limited"], false);
+    }
+}
+
+/// ESC-43: a write Cursor ends with no diff wrote nothing (a hook of the user's refused it, say, as
+/// one of Claude Code did in the real run of ESC-42): the tool fails, saying so; no file is counted
+/// as touched.
+#[test]
+fn a_write_that_ends_without_its_diff_fails_saying_nothing_was_written() {
+    let mut rt = agent(WT, "default");
+    start(&mut rt, "fichier");
+    let file = format!("{WT}\\notes.txt");
+    feed(
+        &mut rt,
+        &[
+            up(
+                S,
+                json!({ "sessionUpdate": "tool_call", "toolCallId": "e1", "title": "Edit File",
+                "kind": "edit", "status": "pending", "rawInput": {} }),
+            ),
+            up(
+                S,
+                json!({ "sessionUpdate": "tool_call_update", "toolCallId": "e1",
+                "title": format!("Edit `{file}`"), "rawInput": { "path": file },
+                "locations": [{ "path": file }] }),
+            ),
+            up(
+                S,
+                json!({ "sessionUpdate": "tool_call_update", "toolCallId": "e1", "status": "completed" }),
+            ),
+        ],
+    );
+    let tool = rt.conv.get("e1").cloned().unwrap();
+    assert_eq!(tool["status"], "error");
+    assert!(tool.to_string().contains("hook"), "{tool:#}");
+    assert!(rt.meta.touched_files.is_empty());
 }
 
 #[test]

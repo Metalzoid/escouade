@@ -10,11 +10,18 @@
 //   question — cursor/ask_question;  propose un plan — a plan update then cursor/create_plan;
 //   sous-agent — tasks (updateTodos, cursor/update_todos) and a subagent (task, subagent_spawned, its own session,
 //   cursor/task);  lent — a turn of 4 s (a command), stopped by session/cancel;
-//   modèle — says the model and mode it runs.
+//   modèle — says the model and mode it runs;  compte — says the identity it runs as: the key of $CURSOR_API_KEY (its
+//   last four characters) or the machine's sign-in (ESC-43);  limite — the usage limit of the month, as Cursor says it
+//   (« Upgrade your plan to continue » after its words, `end_turn`);  bloquée — a write refused (by a hook, say): its
+//   call ends `completed` with no diff, as Cursor ends it.
+//   outil escouade <outil> — calls <outil> of Escouade's MCP server, by the entry `escouade` its session was given
+//   (`mcpServers` of session/new or session/load) and its header, and says its answer.
+// CURSOR_API_KEY=cle-refusee-… : every turn answers the text of a key Cursor refuses.
 // FAKE_CURSOR_FREE=1 (or {"free": true} in $CURSOR_CONFIG_DIR/fake.json): a model other than Auto answers only
 // « Upgrade your plan to continue », as a Free account does. A second session/prompt during a turn cancels it, as
 // Cursor does. Sessions are kept in $CURSOR_CONFIG_DIR/acp-sessions/<id>.json and replayed by session/load. Each
-// message, and each launch ({launch: {argv, cwd, configDir, msystem}}), goes to $FAKE_CURSOR_LOG when set.
+// message, and each launch ({launch: {argv, cwd, configDir, msystem, apiKey, authToken}}: the fake values of the tests),
+// goes to $FAKE_CURSOR_LOG when set.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -27,7 +34,17 @@ if (argv.includes('--version')) {
 const logFile = process.env.FAKE_CURSOR_LOG;
 const log = (entry) => logFile && fs.appendFileSync(logFile, JSON.stringify(entry) + '\n');
 const home = process.env.CURSOR_CONFIG_DIR || path.join(process.cwd(), '.fake-cursor');
-log({ launch: { argv, cwd: process.cwd(), configDir: process.env.CURSOR_CONFIG_DIR ?? null, msystem: process.env.MSYSTEM ?? null } });
+const apiKey = process.env.CURSOR_API_KEY || null;
+log({
+  launch: {
+    argv,
+    cwd: process.cwd(),
+    configDir: process.env.CURSOR_CONFIG_DIR ?? null,
+    msystem: process.env.MSYSTEM ?? null,
+    apiKey,
+    authToken: process.env.CURSOR_AUTH_TOKEN || null,
+  },
+});
 if (argv[0] !== 'acp') {
   process.stderr.write('fake cursor: only `agent acp` is played\n');
   process.exit(1);
@@ -185,11 +202,85 @@ async function permission(s, toolCall, rule) {
   return option === 'allow-once' || option === 'allow-always';
 }
 
+/** The text of the tool `tool` of the MCP server `entry` (`{url, headers: [{name, value}]}`, as ACP gives it), called as
+ * Cursor's client does: initialize, initialized, tools/call. */
+async function escouadeTool(entry, tool) {
+  const base = { 'content-type': 'application/json', accept: 'application/json, text/event-stream' };
+  for (const h of entry.headers ?? []) base[h.name] = h.value;
+  let session = null;
+  const call = async (method, params, id) => {
+    const headers = { ...base, ...(session ? { 'mcp-session-id': session } : {}) };
+    const body = JSON.stringify(id === undefined ? { jsonrpc: '2.0', method, params } : { jsonrpc: '2.0', id, method, params });
+    const r = await fetch(entry.url, { method: 'POST', headers, body });
+    session = r.headers.get('mcp-session-id') ?? session;
+    const text = await r.text();
+    if (!r.ok) throw new Error(`${r.status}`);
+    if (id === undefined) return null;
+    const answers = text.includes('data:')
+      ? text
+          .split('\n')
+          .filter((l) => l.startsWith('data:'))
+          .map((l) => JSON.parse(l.slice(5)))
+      : [JSON.parse(text)];
+    const answer = answers.find((a) => a.id === id);
+    if (answer?.error) throw new Error(answer.error.message);
+    return answer?.result;
+  };
+  await call('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'Cursor', version: '0' } }, 1);
+  await call('notifications/initialized', {});
+  const result = await call('tools/call', { name: tool, arguments: {} }, 2);
+  return (result?.content ?? []).map((c) => c.text ?? '').join('');
+}
+
 async function turn(s, text, cancelled) {
   const words = text.split('</instructions>').pop().trim();
   const model = config();
   if (free && model !== 'default[]') {
     say(s, 'Upgrade your plan to continue');
+    return;
+  }
+  if (apiKey?.startsWith('cle-refusee')) {
+    say(
+      s,
+      '\n\nError: [unauthenticated] Backend rejected authentication. Verify this is a User API Key for the same endpoint/environment, then rerun.',
+    );
+    return;
+  }
+  if (words.includes('compte')) {
+    say(s, apiKey ? `Compte : clé …${apiKey.slice(-4)}` : 'Compte : connexion de la machine');
+    return;
+  }
+  if (words.startsWith('outil escouade ')) {
+    // An Escouade tool called through the server its session was given (`mcpServers`), with its header (ESC-43).
+    const tool = words.slice('outil escouade '.length).trim();
+    const entry = s.mcp.find((m) => m.name === 'escouade');
+    if (!entry) return say(s, 'Pas de serveur escouade dans la session.');
+    try {
+      say(s, `Escouade a répondu : ${await escouadeTool(entry, tool)}`);
+    } catch (e) {
+      say(s, `Escouade a refusé : ${e.message}`);
+    }
+    return;
+  }
+  if (words.includes('limite')) {
+    say(s, 'Je commence.');
+    say(s, '\n\nUpgrade your plan to continue');
+    return;
+  }
+  if (words.includes('bloquée')) {
+    const file = path.join(s.cwd, 'bloquee.txt');
+    const id = callId(10);
+    update(s, { sessionUpdate: 'tool_call', toolCallId: id, title: 'Edit File', kind: 'edit', status: 'pending', rawInput: {} });
+    update(s, {
+      sessionUpdate: 'tool_call_update',
+      toolCallId: id,
+      title: `Edit \`${file}\``,
+      rawInput: { path: file },
+      locations: [{ path: file }],
+    });
+    update(s, { sessionUpdate: 'tool_call_update', toolCallId: id, status: 'in_progress' });
+    update(s, { sessionUpdate: 'tool_call_update', toolCallId: id, status: 'completed' });
+    say(s, 'Je n’ai pas pu écrire bloquee.txt.');
     return;
   }
   if (s.history.length === 0) update(s, { sessionUpdate: 'session_info_update', title: words.slice(0, 30) }, false);

@@ -710,6 +710,21 @@ pub fn launch_env_with(
             env.push((SECURE_STORAGE_VAR.to_string(), dir.clone()));
         }
     }
+    // Cursor CLI (ESC-43): an account added by its key goes by it, never by a token of the app's;
+    // its Principal by the machine's sign-in, never by a key or token of the app's. Never on its
+    // command line.
+    if account.engine == EngineId::Cursor {
+        let key = cursor_key(account).filter(|_| by_key(account));
+        env.extend(
+            [CURSOR_TOKEN_VAR, CURSOR_KEY_VAR]
+                .into_iter()
+                .filter(|v| inherited(v) && (*v == CURSOR_TOKEN_VAR || key.is_none()))
+                .map(|v| (v.to_string(), String::new())),
+        );
+        if let Some(key) = key {
+            env.push((CURSOR_KEY_VAR.to_string(), key));
+        }
+    }
     own.into_iter()
         .chain(env)
         .chain(engine::no_self_update_env(engine))
@@ -830,12 +845,72 @@ pub fn cursor_auth_file() -> Option<PathBuf> {
     }
 }
 
-/// Whether Cursor CLI is signed in: its sign-in file is there (its tokens are never read), or a key
-/// is given by the environment (`CURSOR_API_KEY`). Under macOS, a sign-in in the keychain alone is
-/// not seen.
+/// Whether Cursor CLI is signed in on the machine (`agent login`): its sign-in file is there (its
+/// tokens are never read). Under macOS, a sign-in in the keychain alone is not seen. A key of the
+/// app's environment (`CURSOR_API_KEY`) does not count: its Principal is never given it
+/// (`launch_env_with`).
 pub fn cursor_signed_in() -> bool {
-    std::env::var("CURSOR_API_KEY").is_ok_and(|k| !k.trim().is_empty())
-        || cursor_auth_file().is_some_and(|f| f.is_file())
+    cursor_auth_file().is_some_and(|f| f.is_file())
+}
+
+/// The variables that give Cursor CLI an identity other than its sign-in (`agent login`): an API
+/// key, which an account added by its key goes by (ESC-43), and a token. Cursor takes a token
+/// first, then a key, then its sign-in; an empty one counts as none (read in its code, 2026.10.22).
+pub(crate) const CURSOR_KEY_VAR: &str = "CURSOR_API_KEY";
+const CURSOR_TOKEN_VAR: &str = "CURSOR_AUTH_TOKEN";
+
+/// The API keys of the Cursor accounts, by their folder (unique to each, the tests' too): read from
+/// the keychain at the start (`Core::load_cursor_keys`) and when the user gives one, so that
+/// `launch_env` gives each process its own.
+static CURSOR_KEYS: std::sync::LazyLock<
+    parking_lot::RwLock<std::collections::HashMap<String, String>>,
+> = std::sync::LazyLock::new(Default::default);
+
+/// The keychain's entry of the API key of the Cursor account `id`.
+pub(crate) fn cursor_key_entry(id: &str) -> String {
+    format!("cursor:{id}")
+}
+
+/// Whether the account is one of Cursor CLI's that goes by its own API key: every one but its
+/// Principal (the machine's sign-in).
+pub fn by_key(account: &Account) -> bool {
+    account.engine == EngineId::Cursor && !is_principal(account)
+}
+
+/// The API key the Cursor account goes by, as the keychain gave it; None when it has none (yet).
+pub(crate) fn cursor_key(account: &Account) -> Option<String> {
+    let dir = own_dir(account)?;
+    CURSOR_KEYS.read().get(dir).cloned()
+}
+
+/// The account's API key known (`None`: forgotten) for its processes from now on.
+pub(crate) fn remember_cursor_key(account: &Account, key: Option<&str>) {
+    let Some(dir) = own_dir(account) else { return };
+    let mut keys = CURSOR_KEYS.write();
+    match key {
+        Some(k) => keys.insert(dir.to_string(), k.to_string()),
+        None => keys.remove(dir),
+    };
+}
+
+/// How a key is shown (« Connecté · clé …a1b2 »): its last four characters, never more.
+pub(crate) fn key_hint(key: &str) -> String {
+    let chars: Vec<char> = key.trim().chars().collect();
+    let end: String = chars[chars.len().saturating_sub(4)..].iter().collect();
+    tr!("clé …{end}", "key …{end}")
+}
+
+/// Why the Cursor account cannot start a process (none but its Principal goes without its key: it
+/// would run as the machine's sign-in, another account); Ok for any other.
+pub(crate) fn cursor_ready(account: &Account) -> Result<()> {
+    if by_key(account) && cursor_key(account).is_none() {
+        bail!(tr!(
+            "Le compte Cursor « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes, « Changer la clé… ».",
+            "The Cursor account “{name}” has no API key: give it in Settings › Accounts, “Change the key…”.",
+            name = account.name
+        ));
+    }
+    Ok(())
 }
 
 fn copilot_login_in(dir: &Path) -> Option<String> {
@@ -1623,6 +1698,68 @@ impl<R: Runtime> Core<R> {
         Ok(made)
     }
 
+    /// « Clé d’API » of a Cursor account other than its Principal (ESC-43): `key` kept in the
+    /// system's keychain, read back to check, and given to its processes from now on by
+    /// `CURSOR_API_KEY` (never on a command line, never in a file of Escouade's). Its status as it
+    /// then is.
+    pub async fn set_cursor_key(&self, id: &str, key: &str) -> Result<AccountStatus> {
+        let account = find(&self.settings.read(), id)
+            .cloned()
+            .ok_or_else(|| unknown(id))?;
+        if !by_key(&account) {
+            bail!(tr!(
+                "Ce compte ne prend pas de clé d’API.",
+                "This account takes no API key."
+            ));
+        }
+        let key = key.trim();
+        if key.len() < 16 || key.chars().any(char::is_whitespace) {
+            bail!(tr!(
+                "Ce n’est pas une clé d’API de Cursor : copie-la entière depuis cursor.com, Settings › API Keys.",
+                "That isn’t a Cursor API key: copy it whole from cursor.com, Settings › API Keys."
+            ));
+        }
+        let store = self.secrets.clone();
+        let (entry, secret) = (cursor_key_entry(id), key.to_string());
+        tokio::task::spawn_blocking(move || {
+            crate::integrations::secrets::keep_secret(&*store, &entry, &secret)
+        })
+        .await?
+        .map_err(|e| {
+            log::warn!("cursor account {id}: the system keychain refused its key: {e:#}");
+            anyhow::anyhow!(tr!(
+                "Le trousseau du système n’a pas gardé la clé : {e:#}",
+                "The system keychain didn’t keep the key: {e:#}"
+            ))
+        })?;
+        remember_cursor_key(&account, Some(key));
+        log::info!("cursor account {id}: API key given");
+        Ok(self.status_of(&account).await)
+    }
+
+    /// At the start: the keys of the Cursor accounts read from the keychain (`set_cursor_key`).
+    /// One the keychain does not give leaves its account not signed in, said so in the log.
+    pub(crate) fn load_cursor_keys(&self) {
+        let accounts: Vec<Account> = self
+            .settings
+            .read()
+            .accounts
+            .iter()
+            .filter(|a| by_key(a))
+            .cloned()
+            .collect();
+        for a in accounts {
+            match self.secrets.get(&cursor_key_entry(&a.id)) {
+                Ok(Some(key)) if !key.is_empty() => remember_cursor_key(&a, Some(&key)),
+                Ok(_) => log::warn!("cursor account {}: no API key in the system keychain", a.id),
+                Err(e) => log::warn!(
+                    "cursor account {}: the system keychain did not give its key: {e:#}",
+                    a.id
+                ),
+            }
+        }
+    }
+
     /// An account added: the window told the accounts (and « Ordre des harness », which gains its
     /// harness), the models of a Claude Code one read (ESC-124).
     fn account_added(self: &Arc<Self>, made: &Account) {
@@ -1829,6 +1966,16 @@ impl<R: Runtime> Core<R> {
             self.schedule();
         }
         // Its folder stays on the disk, and with it the entry that holds the server's token.
+        // A Cursor account's key leaves the keychain with it (its folder stays, as any account's).
+        if by_key(&gone) {
+            remember_cursor_key(&gone, None);
+            if let Err(e) = self.secrets.delete(&cursor_key_entry(&gone.id)) {
+                log::warn!(
+                    "cursor account {}: the system keychain did not forget its key: {e:#}",
+                    gone.id
+                );
+            }
+        }
         self.withdraw_removed(gone);
         Ok(accounts)
     }
@@ -2184,12 +2331,18 @@ impl<R: Runtime> Core<R> {
                 dir: dir.to_string_lossy().into_owned(),
             };
         }
-        // Cursor CLI: signed in by `agent login`, the same for all its folders; never read.
+        // Cursor CLI: its Principal signed in by `agent login`, the same for all its folders, never
+        // read; another account by its API key, kept in the keychain (ESC-43), shown by its end.
         if account.engine == EngineId::Cursor {
+            let key = cursor_key(account).filter(|_| by_key(account));
             return AccountStatus {
-                connected: cursor_signed_in(),
+                connected: if by_key(account) {
+                    key.is_some()
+                } else {
+                    cursor_signed_in()
+                },
+                email: key.as_deref().map(key_hint),
                 stamp: None,
-                email: None,
                 dir: config_dir(account, &settings)
                     .to_string_lossy()
                     .into_owned(),
@@ -2499,6 +2652,42 @@ mod tests {
         assert_eq!(launch_env_with(&account("pro", dir), &|_| false).len(), 2);
         assert_eq!(launch_env_with(&principal(), &all).len(), 1);
         assert_eq!(launch_env_with(&account("pro", ""), &all).len(), 1);
+    }
+
+    /// ESC-43: a Cursor account added by its key goes by it, never by a token of the app's; the
+    /// machine's by its sign-in, never by a key or token of the app's (empty: none, for Cursor).
+    #[test]
+    fn a_cursor_account_goes_by_its_own_key_and_the_machines_by_its_sign_in() {
+        let all = |_: &str| true;
+        let empty = |v: &str| (v.to_string(), String::new());
+        let dir = crate::paths::test_dir("esc43-launch-env");
+        let pro = Account {
+            id: "pro".into(),
+            engine: EngineId::Cursor,
+            config_dir: dir.to_string_lossy().into_owned(),
+            ..Default::default()
+        };
+        // No key known: none given, the app's emptied.
+        let env = launch_env_with(&pro, &all);
+        assert!(env.contains(&empty(CURSOR_KEY_VAR)) && env.contains(&empty(CURSOR_TOKEN_VAR)));
+        assert!(cursor_ready(&pro).is_err());
+        remember_cursor_key(&pro, Some("cle-essai-0000000000abcd"));
+        let env = launch_env_with(&pro, &all);
+        assert!(env.contains(&(CURSOR_KEY_VAR.into(), "cle-essai-0000000000abcd".into())));
+        assert!(env.contains(&empty(CURSOR_TOKEN_VAR)));
+        assert!(!env.contains(&empty(CURSOR_KEY_VAR)));
+        assert!(cursor_ready(&pro).is_ok());
+        assert_eq!(key_hint("cle-essai-0000000000abcd"), "clé …abcd");
+        // Its folder, as the variable of the harness says.
+        assert!(env.contains(&("CURSOR_CONFIG_DIR".into(), pro.config_dir.clone())));
+        // The machine's: the app's key and token emptied, nothing else; none set, nothing.
+        let machine = principal_of(EngineId::Cursor);
+        let env = launch_env_with(&machine, &all);
+        assert!(env.contains(&empty(CURSOR_KEY_VAR)) && env.contains(&empty(CURSOR_TOKEN_VAR)));
+        assert!(launch_env_with(&machine, &|_| false).is_empty());
+        assert!(cursor_ready(&machine).is_ok() && !by_key(&machine) && by_key(&pro));
+        remember_cursor_key(&pro, None);
+        assert_eq!(cursor_key(&pro), None);
     }
 
     #[test]

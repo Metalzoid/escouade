@@ -391,6 +391,8 @@ pub fn caps() -> EngineCaps {
         todo_tools: false,
         default_refusal: false,
         sandbox: false,
+        usage_page: None,
+        accounts_by_key: false,
     }
 }
 
