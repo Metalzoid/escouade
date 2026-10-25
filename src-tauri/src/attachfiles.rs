@@ -789,16 +789,18 @@ impl<R: Runtime> Core<R> {
     }
 }
 
-/// The folder of the files joined to the agent `id`, removed with its files. Never the folder of
-/// all the owners that have no name of their own (`DataDir::agent_files`).
+/// The folder of the files joined to the agent `id`, removed with its files, and the configuration
+/// folder of its harness (`DataDir::agent_home`). Never the folder of all the owners that have no
+/// name of their own (`DataDir::agent_files`).
 pub(crate) fn remove_agent_files(data: &DataDir, id: &str) {
     if !paths::is_agent_folder_id(id) {
         return;
     }
-    let dir = data.agent_files(id);
-    if let Err(e) = std::fs::remove_dir_all(&dir) {
-        if e.kind() != std::io::ErrorKind::NotFound {
-            log::warn!("{} not removed: {e}", dir.display());
+    for dir in [data.agent_files(id), data.agent_home(id)] {
+        if let Err(e) = std::fs::remove_dir_all(&dir) {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                log::warn!("{} not removed: {e}", dir.display());
+            }
         }
     }
 }

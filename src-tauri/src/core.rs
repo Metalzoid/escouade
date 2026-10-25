@@ -2847,6 +2847,15 @@ impl<R: Runtime> Core<R> {
                 .then(|| self.takes_effort(rt.meta.engine, &account.id, &rt.meta.model));
             (spawn, rt.gen, engine::of(&rt.meta))
         };
+        // A configuration folder of the agent's own (Cursor: what its « Toujours » keeps).
+        if let Some(var) = engine.agent_home_var() {
+            let home = self.data.agent_home(id);
+            std::fs::create_dir_all(&home).with_context(|| format!("{}", home.display()))?;
+            spawn.env.retain(|(k, _)| k != var);
+            spawn
+                .env
+                .push((var.to_string(), home.to_string_lossy().into_owned()));
+        }
         if !Path::new(&spawn.cwd).is_dir() {
             bail!(tr!(
                 "Le dossier {dir} n'existe plus",

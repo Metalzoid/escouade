@@ -10,6 +10,7 @@
 mod claude;
 pub(crate) mod codex;
 pub(crate) mod copilot;
+pub(crate) mod cursor;
 pub mod jsonc;
 pub mod mcp;
 pub mod oneshot;
@@ -51,6 +52,9 @@ pub(crate) use copilot::{
     limit_choices as copilot_limit_choices, limit_question as copilot_limit_question,
     no as copilot_no, yes as copilot_yes,
 };
+#[cfg(test)]
+pub(crate) use cursor::fake_cursor;
+pub use cursor::CURSOR;
 pub use mcp::Escouade;
 #[cfg(test)]
 pub(crate) use opencode::fake_opencode;
@@ -95,15 +99,14 @@ pub fn of(meta: &AgentMeta) -> &'static dyn Engine {
     by_id(meta.engine)
 }
 
-/// The engine `id` names. Claude Code, Codex, OpenCode and Copilot CLI are written: the others get theirs with
-/// their adapter (docs/TODO-1.8.md, chapter 1), and until then nothing makes an agent of theirs
-/// (the interface offers none).
+/// The engine `id` names: the five harnesses are written.
 pub fn by_id(id: EngineId) -> &'static dyn Engine {
     match id {
         EngineId::Codex => &CODEX,
         EngineId::Opencode => &OPENCODE,
         EngineId::Copilot => &COPILOT,
-        EngineId::Claude | EngineId::Cursor => &CLAUDE,
+        EngineId::Cursor => &CURSOR,
+        EngineId::Claude => &CLAUDE,
         #[cfg(test)]
         EngineId::Bench => &minimal::MINIMAL,
     }
@@ -370,6 +373,13 @@ pub trait Engine: Send + Sync {
     /// What tells its accounts apart (`registry::AccountStore`): for Claude Code, a configuration
     /// folder of their own given by `CLAUDE_CONFIG_DIR`.
     fn accounts(&self) -> registry::AccountStore;
+    /// The variable that gives each agent a configuration folder of its own (`DataDir::agent_home`),
+    /// whatever its account: what the harness keeps there holds for that agent alone. Cursor CLI:
+    /// `CURSOR_CONFIG_DIR`, where its « Toujours » writes its rules (decided by the user on
+    /// 2026-10-25). None: its account's folder.
+    fn agent_home_var(&self) -> Option<&'static str> {
+        None
+    }
     /// The variables every process of it is given so that it never updates itself (ESC-133):
     /// Escouade stops its processes with their whole tree, so an update it started (`npm install
     /// -g` under Claude Code) would be cut half-way, the program gone. Escouade updates it itself

@@ -18,6 +18,8 @@ const FAKE_CODEX = path.join(ROOT, 'tests', 'fixtures', 'fake-codex.cmd');
 const FAKE_OPENCODE = path.join(ROOT, 'tests', 'fixtures', 'fake-opencode.cmd');
 /** The fake `copilot --server --stdio` (tests/fixtures/fake-copilot.mjs), for a test that runs agents on Copilot CLI. */
 const FAKE_COPILOT = path.join(ROOT, 'tests', 'fixtures', 'fake-copilot.cmd');
+/** The fake `agent acp` of Cursor CLI (tests/fixtures/fake-cursor.mjs), for a test that runs agents on Cursor CLI. */
+const FAKE_CURSOR = path.join(ROOT, 'tests', 'fixtures', 'fake-cursor.cmd');
 
 export interface App {
   /** The window of the app: a new one after each `restart()` (read `app.page` again, do not keep the old one). */
@@ -85,6 +87,13 @@ interface Instance {
 }
 
 /** Starts the app with `env`; its stderr is appended to `stderr` (a restart keeps what the launch before wrote). */
+/** The sign-in of Cursor CLI the app finds (`ESCOUADE_CURSOR_AUTH`): a file of the test's, with nothing in it. */
+function cursorAuth(root: string): string {
+  const file = path.join(root, 'cursor-auth.json');
+  if (!fs.existsSync(file)) fs.writeFileSync(file, '{}');
+  return file;
+}
+
 function startApp(env: NodeJS.ProcessEnv, stderr: string): Instance {
   const errFd = fs.openSync(stderr, 'a');
   const child = spawn(EXE, [], { env, stdio: ['ignore', 'ignore', errFd] });
@@ -228,7 +237,12 @@ function machineAccount(engine: string): Record<string, unknown> {
 }
 
 /** The variable that gives the fake program of each harness other than Claude Code, by harness. */
-const FAKE_OF: Record<string, string> = { codex: 'ESCOUADE_CODEX', opencode: 'ESCOUADE_OPENCODE', copilot: 'ESCOUADE_COPILOT' };
+const FAKE_OF: Record<string, string> = {
+  codex: 'ESCOUADE_CODEX',
+  opencode: 'ESCOUADE_OPENCODE',
+  copilot: 'ESCOUADE_COPILOT',
+  cursor: 'ESCOUADE_CURSOR',
+};
 
 /**
  * The accounts a test starts with (a first installation has none, ESC-128): the machine's account of Claude Code, and of each
@@ -341,6 +355,11 @@ export const test = base.extend<{
       ESCOUADE_COPILOT: 'none',
       COPILOT_HOME: path.join(root, 'copilot'),
       FAKE_COPILOT_LOG: path.join(root, 'fake-copilot.jsonl'),
+      // The same for Cursor CLI (`appEnv: { ESCOUADE_CURSOR: FAKE_CURSOR }`): never the machine's, nor its sign-in
+      // (`%APPDATA%\Cursor\auth.json`): a file of the test's stands for it.
+      ESCOUADE_CURSOR: 'none',
+      ESCOUADE_CURSOR_AUTH: cursorAuth(root),
+      FAKE_CURSOR_LOG: path.join(root, 'fake-cursor.jsonl'),
       ...appEnv,
     };
     // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
@@ -492,4 +511,4 @@ export async function send(page: Page, text: string) {
   await box.press('Enter');
 }
 
-export { expect, FAKE, FAKE_CODEX, FAKE_COPILOT, FAKE_OPENCODE };
+export { expect, FAKE, FAKE_CODEX, FAKE_COPILOT, FAKE_CURSOR, FAKE_OPENCODE };

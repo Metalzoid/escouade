@@ -65,7 +65,7 @@ export interface ListQuestions {
 
 /**
  * A permission to answer from the list: the tool, what it acts on, what the harness says besides (`note`), and what
- * « always » stands for, if offered: `always` (rules kept, OpenCode's pattern told in the note) or `session`.
+ * « always » stands for, if offered: `always` (rules kept, OpenCode's pattern told in the note), `session` or `agent` (Cursor CLI).
  */
 export interface ListPermission {
   kind: 'permission';
@@ -73,13 +73,13 @@ export interface ListPermission {
   tool: string;
   arg: string;
   note: string | null;
-  always: 'always' | 'session' | null;
+  always: 'always' | 'session' | 'agent' | null;
 }
 
 export type ListRequest = ListQuestions | ListPermission;
 
 /** What a permission's choice does: the decision sent. */
-export type ListDecision = 'allow' | 'always' | 'session' | 'deny';
+export type ListDecision = 'allow' | 'always' | 'session' | 'agent' | 'deny';
 
 /**
  * The request `a` waits on, when it can be answered from its card: only what is read whole there (« Vue d’ensemble »'s
@@ -99,7 +99,7 @@ export function listRequest(a: Agent): ListRequest | null {
   const arg = req.arg;
   if (req.defaultNo || !SUMMED_UP.has(req.tool) || !arg.trim()) return null;
   if (arg.length > LIST_ARG_MAX || arg.split('\n').length > LIST_ARG_LINES) return null;
-  const always = req.canAlways ? (req.alwaysScope === 'session' ? 'session' : 'always') : null;
+  const always = req.canAlways ? (req.alwaysScope === 'session' || req.alwaysScope === 'agent' ? req.alwaysScope : 'always') : null;
   return { kind: 'permission', requestId: req.id, tool: req.tool, arg, note, always };
 }
 

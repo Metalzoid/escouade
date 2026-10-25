@@ -43,7 +43,11 @@
   const verdict = $derived.by(() => {
     if (item.decision === 'deny') return t('composer.permission.denied');
     if (item.decision === 'always')
-      return item.alwaysScope === 'session' ? t('composer.permission.sessionAllowed') : t('composer.permission.alwaysAllowed');
+      return item.alwaysScope === 'session'
+        ? t('composer.permission.sessionAllowed')
+        : item.alwaysScope === 'agent'
+          ? t('composer.permission.agentAllowed')
+          : t('composer.permission.alwaysAllowed');
     return t('composer.permission.allowed');
   });
 
@@ -120,7 +124,9 @@
             ? t('composer.permission.approvePlanAndEdits')
             : item.alwaysScope === 'session'
               ? t('composer.permission.forSession')
-              : t('composer.permission.always')}
+              : item.alwaysScope === 'agent'
+                ? t('composer.permission.forAgent')
+                : t('composer.permission.always')}
           {#if keys}<kbd aria-hidden="true">{keyLabel('Ctrl+Shift+Enter')}</kbd>{/if}
         </button>
       {/if}

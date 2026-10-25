@@ -1,0 +1,96 @@
+{
+  "about": "Cursor CLI 2026.10.22 : session/load dans un autre process (l’historique rejoué n’est pas remontré), un tour qui s’en souvient, le mode Plan puis Agent, puis composer-2.5 hors de l’offre Free qui ne répond que « Upgrade your plan to continue » : le tour finit en erreur, avec quoi faire.",
+  "agent": {
+    "cwd": "C:\\Users\\user\\AppData\\Local\\Temp\\esc24\\wt-agent1",
+    "engine": "cursor",
+    "mode": "default",
+    "model": "composer-2.5",
+    "sessionId": "6753be15-7845-4e8d-abf9-3c3ed0985561"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": null,
+    "sessionId": "6753be15-7845-4e8d-abf9-3c3ed0985561",
+    "status": "error",
+    "tokens": 0,
+    "touchedFiles": []
+  },
+  "flux": "../../cursor/load-modes-model.jsonl",
+  "items": [
+    {
+      "images": 0,
+      "kind": "user",
+      "queued": false,
+      "text": "Sans outil, en une phrase : quel fichier as-tu créé au tour précédent et quelle commande ai-je annulée ?"
+    },
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": "Je vais répondre en une phrase sans outils. Je préciserai le fichier créé au tour précédent et la commande annulée."
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "Au tour précédent j’ai créé `notes.txt`, et tu as annulé `sleep 60; echo fini`.\n\nBANANE"
+    },
+    {
+      "durationMs": null,
+      "engine": "cursor",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false
+    },
+    {
+      "images": 0,
+      "kind": "user",
+      "queued": false,
+      "text": "Je veux ajouter un fichier hello.txt. Pose-moi d'abord UNE question à choix avec ton outil de question (contenu : « Bonjour » ou « Salut »), puis propose un plan court (2 étapes) avec ton outil de plan. Ne modifie rien."
+    },
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": "Je vais d'abord poser une question à choix entre « Bonjour » et « Salut ».\n\nL'outil AskQuestion n'est pas disponible. Je pose donc la question inline. Je proposerai ensuite un plan en deux étapes.\n\nJe dois attendre leur réponse avant de créer le plan. Un plan concret ne peut pas contenir d'options ouverts."
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "**Contenu de `hello.txt` ?** — Bonjour ou Salut ?\n\n(Pas d’outil de question dédié ici ; réponds et je propose ensuite le plan en 2 étapes.)\n\nBANANE"
+    },
+    {
+      "durationMs": null,
+      "engine": "cursor",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false
+    },
+    {
+      "images": 0,
+      "kind": "user",
+      "queued": false,
+      "text": "Réponds seulement : OK, et le nom de ton modèle si tu le connais."
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "\n\nUpgrade your plan to continue"
+    },
+    {
+      "durationMs": null,
+      "engine": "cursor",
+      "error": "Le modèle composer-2.5 n’est pas dans l’offre de ce compte Cursor (« Upgrade your plan to continue ») : choisis Auto ou un autre modèle dans le menu Modèle.",
+      "interrupted": false,
+      "isError": true,
+      "kind": "turn",
+      "limited": false
+    }
+  ]
+}

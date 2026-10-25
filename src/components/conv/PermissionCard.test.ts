@@ -73,6 +73,18 @@ describe('PermissionCard', () => {
     expect(screen.getByText(/Autorisé pour cette session/)).toBeInTheDocument();
   });
 
+  it('offers « Pour cet agent » for Cursor CLI, whose « always » holds for the agent alone (ESC-42)', async () => {
+    const backend = fakeBackend();
+    const asked = item({ toolName: 'Bash', input: { command: 'npm test' }, alwaysScope: 'agent' });
+    const { unmount } = render(PermissionCard, { item: asked, agentId: 'a1', pending: true, cwd: 'C:\code' });
+    expect(screen.queryByRole('button', { name: 'Toujours autoriser' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Pour cet agent' }));
+    expect(backend.called('answer_permission')[0].args.decision).toBe('always');
+    unmount();
+    render(PermissionCard, { item: { ...asked, decision: 'always' }, agentId: 'a1', pending: false, cwd: 'C:\code' });
+    expect(screen.getByText(/Autorisé pour cet agent/)).toBeInTheDocument();
+  });
+
   it('renders a proposed plan and keeps planning on refusal', async () => {
     const backend = fakeBackend();
     render(PermissionCard, {

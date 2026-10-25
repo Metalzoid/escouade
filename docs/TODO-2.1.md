@@ -23,7 +23,8 @@ GitHub, GitLab, Bitbucket et Gitea : les pull requests des tickets suivies jusqu
 Un cinquième harness, par ACP, à côté de Claude Code, Codex, OpenCode et Copilot CLI. Plan : `docs/TODO-1.8.md`, chapitre 1.
 
 - [x] Essais réels (ESC-24, 2026-10-25) : réponses dans `docs/TODO-1.8.md`, point 0, « Cursor CLI », flux dans `tests/fixtures/cursor/`.
-- [ ] L'adaptateur (ESC-42), puis ses comptes, son usage et son coût (ESC-43).
+- [x] L'adaptateur (ESC-42, 2026-10-25) : conversation, permissions (avec le diff d'une écriture soumise, et celui de chaque écriture faite), questions, plan à approuver, tâches et sous-agents dans le bandeau Plan, modes Demander, Plan, Accepter les modifications et Bypass, modèles du compte, file des messages, interruption et reprise. « Toujours » est « Pour cet agent » (un dossier de config par agent, décidé avec l'utilisateur). Faux agent au banc de conformité, e2e, essai réel.
+- [ ] Ses comptes, son usage et son coût (ESC-43).
 - [ ] Sa vue terminal (ESC-49).
 
 ## Demandés pendant le redesign (2026-10-24)

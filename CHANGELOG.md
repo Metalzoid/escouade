@@ -9,6 +9,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Nouveautés
 
 - La tuile d’un projet dans la barre des projets peut dire autre chose que ses initiales : jusqu’à trois lettres ou un emoji, ou le logo de ton choix à leur place, dans Réglages › Projets ou dans l’assistant « Nouveau projet ». Les agents qui attendent et ceux qui travaillent restent lisibles par-dessus.
+- Cursor CLI devient le cinquième harness : un agent Cursor converse dans Escouade, y pose ses questions et ses demandes d’autorisation, propose son plan à approuver et tient ses tâches et ses sous-agents dans le bandeau Plan. Son « Toujours » devient « Pour cet agent » : la règle ne vaut que pour cet agent, jamais pour ta config de Cursor.
 
 ## [2.0.0] — 2026-10-24
 

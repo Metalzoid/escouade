@@ -133,6 +133,13 @@ export default {
         'La connexion n’est jamais copiée : chaque compte se connecte par copilot login (son config.json et le trousseau du système), sans le jeton du GitHub CLI.',
       signInHint: 'Connecte-toi dans le terminal ci-dessous : copilot login donne un code à saisir sur github.com/login/device.',
     },
+    cursor: {
+      nothingToShare:
+        'Rien à partager : chaque agent Cursor a son propre dossier de configuration, où « Pour cet agent » garde ses règles.',
+      neverShared:
+        'La connexion de Cursor CLI (agent login) est celle de la machine : elle ne se copie pas, et un dossier de configuration ne la déplace pas.',
+      signInHint: 'Connecte-toi dans le terminal ci-dessous : agent login ouvre ton navigateur sur cursor.com.',
+    },
     restart: 'Relancer',
     done: 'Terminé',
   },

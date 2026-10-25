@@ -384,16 +384,18 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
     await userEvent.click(screen.getByRole('switch', { name: 'Projet privé' }));
     const list = screen.getByRole('list', { name: 'Ses fichiers' });
     const rows = within(list).getAllByRole('listitem');
-    expect(rows).toHaveLength(4);
+    expect(rows).toHaveLength(5);
     const kind = (name: string) => rows.find((r) => r.textContent?.startsWith(name))!.querySelector('.kind')!.textContent;
     expect(kind('Claude Code')).toBe('Garde-fou');
     expect(kind('Codex')).toBe('Barrière');
     expect(kind('OpenCode')).toBe('Garde-fou');
     expect(kind('Copilot CLI')).toBe('Garde-fou');
+    expect(kind('Cursor CLI')).toBe('Garde-fou');
     // What each cannot guarantee, said.
     expect(within(list).getByText(/sauf en mode Bypass, qui n’en a pas/)).toBeVisible();
     expect(within(list).getByText(/Rien n’est garanti en mode Bypass, ni en vue Copilot CLI/)).toBeVisible();
     expect(within(list).getByText(/pas à un script qui ouvre un fichier lui-même/)).toBeVisible();
+    expect(within(list).getByText(/Ses lectures ne demandent rien : elles ne sont pas gardées/)).toBeVisible();
     expect(screen.getByText(/Une barrière pour tous les harness demanderait un compte système par projet/)).toBeVisible();
   });
 

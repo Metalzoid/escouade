@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TurnItem } from '../../lib/types';
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
-import { agent, BARE_ENGINE, fakeBackend, resetApp } from '../../test/ipc';
+import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp } from '../../test/ipc';
 import TurnCard from './TurnCard.svelte';
 
 const turn = (over: Partial<TurnItem> = {}): TurnItem => ({
@@ -160,5 +160,24 @@ describe('TurnCard in English', () => {
     unmount();
     render(TurnCard, { item: turn({ interrupted: true }), agent: agent({ status: 'done' }), last: true });
     expect(screen.getByText(/Interrupted · 182\.4k tokens · \$2\.84/)).toBeInTheDocument();
+  });
+});
+
+describe('TurnCard of a harness that tells neither tokens nor cost (Cursor CLI)', () => {
+  beforeEach(() => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+  });
+
+  it('shows neither, on the last turn as on an earlier one', () => {
+    const a = agent({ status: 'done', engine: BARE_ENGINE.id });
+    const item = turn({ engine: BARE_ENGINE.id, cost: 0, tokens: 0 });
+    const { unmount } = render(TurnCard, { item, agent: a, last: true });
+    expect(screen.getByText('Tâche terminée')).toBeInTheDocument();
+    expect(screen.queryByText(/tokens/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
+    unmount();
+    render(TurnCard, { item: { ...item, interrupted: true }, agent: a, last: false });
+    expect(screen.getByText('Interrompu')).toBeInTheDocument();
   });
 });

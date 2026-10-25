@@ -237,12 +237,12 @@ test.describe('the accounts of two harnesses', () => {
     const settings = () => JSON.parse(fs.readFileSync(path.join(app.root, 'data', 'settings.json'), 'utf8'));
     await expect.poll(() => settings().accounts.find((a: { id: string }) => a.id === 'work')?.projects).toEqual([expect.any(String)]);
 
-    // « Ordre des harness »: every harness Escouade knows (OpenCode too, ESC-44, and Copilot CLI, ESC-39), Codex first, kept by the backend.
+    // « Ordre des harness »: every harness Escouade knows (OpenCode too, ESC-44, Copilot CLI, ESC-39, and Cursor CLI, ESC-42), Codex first, kept by the backend.
     const order = dialog.getByRole('list', { name: 'Ordre des harness' });
-    await expect(order.getByRole('listitem')).toHaveText([/Claude Code/, /Codex/, /Copilot CLI/, /OpenCode/]);
+    await expect(order.getByRole('listitem')).toHaveText([/Claude Code/, /Codex/, /Copilot CLI/, /OpenCode/, /Cursor CLI/]);
     await order.getByRole('button', { name: 'Monter Codex' }).click();
-    await expect(order.getByRole('listitem')).toHaveText([/Codex/, /Claude Code/, /Copilot CLI/, /OpenCode/]);
-    await expect.poll(() => settings().engineOrder).toEqual(['codex', 'claude', 'copilot', 'opencode']);
+    await expect(order.getByRole('listitem')).toHaveText([/Codex/, /Claude Code/, /Copilot CLI/, /OpenCode/, /Cursor CLI/]);
+    await expect.poll(() => settings().engineOrder).toEqual(['codex', 'claude', 'copilot', 'opencode', 'cursor']);
     // The groups follow it.
     await expect
       .poll(() => dialog.getByRole('list', { name: /^Comptes / }).evaluateAll((ls) => ls.map((l) => l.getAttribute('aria-label'))))

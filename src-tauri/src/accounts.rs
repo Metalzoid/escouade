@@ -91,6 +91,16 @@ pub fn store(engine: EngineId) -> Store {
             dirs: &COPILOT_SHARED_DIRS,
             login: &["login"],
         },
+        // Cursor CLI: its sign-in is the machine's (`agent login`, not moved by its folder), and
+        // each agent has a folder of its own (`Engine::agent_home_var`); its accounts come with
+        // ESC-43.
+        EngineId::Cursor => Store {
+            home: ".cursor",
+            var: crate::engine::cursor::CONFIG_VAR,
+            files: &[],
+            dirs: &[],
+            login: &["login"],
+        },
         // One account in 1.8: OpenCode's own config (ESC-45), its providers connected by it.
         EngineId::Opencode => Store {
             home: ".config/opencode",
@@ -790,6 +800,45 @@ pub fn codex_sign_in(dir: &Path) -> Option<CodexSignIn> {
 /// listed), never a token; None when it names none. Its token is in the system's keychain, by user
 /// (or in that file, without a keychain): a folder signed in to another user is another account.
 pub fn copilot_sign_in(dir: &Path) -> Option<String> {
+    copilot_login_in(dir)
+}
+
+/// Where Cursor CLI keeps its sign-in (`agent login`): `%APPDATA%\Cursor\auth.json` under Windows,
+/// `~/.cursor/auth.json` under macOS, `$XDG_CONFIG_HOME/cursor/auth.json` elsewhere (docs/TODO-1.8.md,
+/// point 0, « Cursor CLI »). `CURSOR_CONFIG_DIR` does not move it. In a debug build,
+/// `ESCOUADE_CURSOR_AUTH` names another (the end-to-end tests: a file of theirs, or `none`); none in
+/// the unit tests.
+pub fn cursor_auth_file() -> Option<PathBuf> {
+    // Never the machine user's in the unit tests.
+    if cfg!(test) {
+        return None;
+    }
+    if cfg!(debug_assertions) {
+        if let Ok(forced) = std::env::var("ESCOUADE_CURSOR_AUTH") {
+            return (forced != "none").then(|| PathBuf::from(forced));
+        }
+    }
+    if cfg!(windows) {
+        dirs::config_dir().map(|d| d.join("Cursor").join("auth.json"))
+    } else if cfg!(target_os = "macos") {
+        dirs::home_dir().map(|d| d.join(".cursor").join("auth.json"))
+    } else {
+        std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .or_else(|| dirs::home_dir().map(|h| h.join(".config")))
+            .map(|d| d.join("cursor").join("auth.json"))
+    }
+}
+
+/// Whether Cursor CLI is signed in: its sign-in file is there (its tokens are never read), or a key
+/// is given by the environment (`CURSOR_API_KEY`). Under macOS, a sign-in in the keychain alone is
+/// not seen.
+pub fn cursor_signed_in() -> bool {
+    std::env::var("CURSOR_API_KEY").is_ok_and(|k| !k.trim().is_empty())
+        || cursor_auth_file().is_some_and(|f| f.is_file())
+}
+
+fn copilot_login_in(dir: &Path) -> Option<String> {
     let text = std::fs::read_to_string(dir.join("config.json")).ok()?;
     let json: String = text
         .lines()
@@ -2135,6 +2184,17 @@ impl<R: Runtime> Core<R> {
                 dir: dir.to_string_lossy().into_owned(),
             };
         }
+        // Cursor CLI: signed in by `agent login`, the same for all its folders; never read.
+        if account.engine == EngineId::Cursor {
+            return AccountStatus {
+                connected: cursor_signed_in(),
+                stamp: None,
+                email: None,
+                dir: config_dir(account, &settings)
+                    .to_string_lossy()
+                    .into_owned(),
+            };
+        }
         let sign_in = crate::usage::sign_in(account, &settings);
         let stored = match crate::usage::read_stored(&sign_in.dir, &sign_in.service).await {
             Ok(stored) => Some(stored),
@@ -2582,13 +2642,13 @@ mod tests {
         assert_eq!(program(&with(path(&own)), &settings), native(&own));
         assert_eq!(program(&with(String::new()), &settings), native(&set));
         assert_eq!(program(&with("  ".into()), &settings), native(&set));
-        // A harness not written yet runs Claude Code's adapter, so the settings' claude too (never one
-        // found elsewhere on the machine).
+        // Another harness never runs the settings' claude: without a program of its own, none (the
+        // unit tests find no Cursor CLI on the machine).
         let cursor = Account {
             engine: EngineId::Cursor,
             ..with(String::new())
         };
-        assert_eq!(program(&cursor, &settings), native(&set));
+        assert_eq!(program(&cursor, &settings), None);
         // Its own named and not there: not found, rather than another one.
         let gone = path(&dir.join("absent.cmd"));
         assert_eq!(program(&with(gone), &settings), None);

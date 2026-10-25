@@ -159,6 +159,9 @@ describe('a permission answered from the list (2.0, new)', () => {
     );
     expect(codex).toMatchObject({ always: 'session', note: 'Hors du bac à sable' });
     expect(listChoices(codex!, {})).toEqual(['allow', 'session', 'deny']);
+    // Cursor CLI: « Pour cet agent ».
+    const cursor = listRequest(waiting(permission({ canAlways: true, alwaysScope: 'agent' }), { engine: 'cursor' }));
+    expect(listChoices(cursor!, {})).toEqual(['allow', 'agent', 'deny']);
   });
 
   it('leaves to the conversation what is not read whole on the card', () => {

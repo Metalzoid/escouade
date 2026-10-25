@@ -112,7 +112,8 @@
           const detail = (m.favorite ? m.provider : undefined) ?? cost?.label;
           return { value: m.id, label: m.label, detail, title: cost?.title, favorite: m.favorite, group: m.group };
         })
-      : modelOptions(app.models, modelsOf(agent)).map((o) => {
+      : // Claude Code's aliases (`default`, `opus`…) are read for its own agents only: Cursor's Auto is `default` too.
+        modelOptions((agent.engine ?? 'claude') === 'claude' ? app.models : [], modelsOf(agent)).map((o) => {
           // What it costs beside the others, when its harness bills by model (Copilot: `×3`).
           const cost = modelCost(agent, o.value);
           return cost ? { ...o, detail: cost.label, title: cost.title } : o;

@@ -620,11 +620,12 @@
         </dd>
         {#if context.pct !== null}<div class="ctx-meter" class:full={context.full}><i style:width="{context.pct}%"></i></div>{/if}
       </div>
-      <div class="fig fig-tok">
-        <dt>{t('conv.header.tokens')}</dt>
-        <dd>{fTok(used.tokens)}</dd>
-      </div>
       {#if showsCost(agent)}
+        <!-- A harness that tells neither tokens nor cost (Cursor CLI): neither is shown. -->
+        <div class="fig fig-tok">
+          <dt>{t('conv.header.tokens')}</dt>
+          <dd>{fTok(used.tokens)}</dd>
+        </div>
         <div class="fig" use:tip={used.estimated ? estimateHint(used) : undefined}>
           <dt>{t('common.cost')}</dt>
           <dd>

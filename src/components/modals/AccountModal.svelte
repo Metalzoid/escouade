@@ -44,6 +44,11 @@
       never: 'accounts.modal.copilot.neverShared',
       hint: 'accounts.modal.copilot.signInHint',
     },
+    cursor: {
+      nothing: 'accounts.modal.cursor.nothingToShare',
+      never: 'accounts.modal.cursor.neverShared',
+      hint: 'accounts.modal.cursor.signInHint',
+    },
   };
   const CLAUDE_SAYS = {
     nothing: 'accounts.modal.nothingToShare',

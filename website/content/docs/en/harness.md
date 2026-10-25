@@ -1,9 +1,9 @@
 # The harnesses
 
-A harness is the program that runs an agent: Claude Code, Codex, OpenCode or GitHub Copilot CLI. This page compares them, then tells for each one how to install it, its account, its models, its modes and what protects it, its cost and quota, its terminal view, the MCP server and what it doesn’t do.
+A harness is the program that runs an agent: Claude Code, Codex, OpenCode, GitHub Copilot CLI or Cursor CLI. This page compares them, then tells for each one how to install it, its account, its models, its modes and what protects it, its cost and quota, its terminal view and what it doesn’t do.
 
 > [!NOTE]
-> Codex, OpenCode and Copilot CLI have been there since Escouade 1.8; Claude Code from the start. Cursor CLI comes later.
+> Codex, OpenCode and Copilot CLI have been there since Escouade 1.8, Cursor CLI since 2.0.1; Claude Code from the start.
 
 ## Choosing a harness
 
@@ -24,21 +24,21 @@ Whatever the harness, the agent has the same conversation: the answer and the re
 
 ## Comparison
 
-| | Claude Code | Codex | OpenCode | Copilot CLI |
-|---|---|---|---|---|
-| Installation | Claude Code’s script | `npm install -g @openai/codex` | `npm install -g opencode-ai` | `npm install -g @github/copilot` |
-| Tested with | 2.1.283 to 2.1.301 | 0.163.0 | 1.19.3 | 1.0.98 |
-| Account | Claude subscription or API key | ChatGPT account | the providers connected to OpenCode, local models included | GitHub account with Copilot, Free included |
-| Several accounts | yes | yes | no | yes |
-| Models | those Claude Code lists for each account | those Codex lists for your account | your providers’, with search and favorites | those Copilot lists, with their multiplier |
-| Modes | all five | all five | four (no Auto) | all five |
-| What protects | its permissions | its sandbox | its permission rules | Escouade’s rules |
-| Message during a turn | waits for the end of the turn | enters the turn | waits for the end of the turn | enters the turn |
-| Cost | exact | estimated | exact (0 when local) | exact, in AI credits |
-| Quota | 5-hour and 7-day windows | 5-hour and 7-day windows (30 days on the free plan) | none: daily budget | monthly credits |
-| Terminal view | “Claude Code view” | “Codex view” | “OpenCode view” | “Copilot CLI view” |
-| Attached PDFs | yes | no | no | no |
-| Remote control, background tasks | yes | no | no | no |
+| | Claude Code | Codex | OpenCode | Copilot CLI | Cursor CLI |
+|---|---|---|---|---|---|
+| Installation | Claude Code’s script | `npm install -g @openai/codex` | `npm install -g opencode-ai` | `npm install -g @github/copilot` | Cursor’s script |
+| Tested with | 2.1.283 to 2.1.301 | 0.163.0 | 1.19.3 | 1.0.98 | 2026.10.22 |
+| Account | Claude subscription or API key | ChatGPT account | the providers connected to OpenCode, local models included | GitHub account with Copilot, Free included | Cursor account (`agent login`), Free included |
+| Several accounts | yes | yes | no | yes | no, for now |
+| Models | those Claude Code lists for each account | those Codex lists for your account | your providers’, with search and favorites | those Copilot lists, with their multiplier | your account’s, Auto first |
+| Modes | all five | all five | four (no Auto) | all five | four (no Auto) |
+| What protects | its permissions | its sandbox | its permission rules | Escouade’s rules | its permissions, for its commands |
+| Message during a turn | waits for the end of the turn | enters the turn | waits for the end of the turn | enters the turn | waits for the end of the turn |
+| Cost | exact | estimated | exact (0 when local) | exact, in AI credits | not told |
+| Quota | 5-hour and 7-day windows | 5-hour and 7-day windows (30 days on the free plan) | none: daily budget | monthly credits | not yet |
+| Terminal view | “Claude Code view” | “Codex view” | “OpenCode view” | “Copilot CLI view” | none |
+| Attached PDFs | yes | no | no | no | no |
+| Remote control, background tasks | yes | no | no | no | no |
 
 ## Claude Code
 
@@ -141,10 +141,37 @@ A turn’s cost comes from the AI credits of its calls (one credit is $0.01). Th
 
 No “Always allow”, no `assisted` mode (experimental), no attached PDFs, no `/` commands in Escouade, no remote control or background tasks. A Copilot agent doesn’t resume on another account.
 
+## Cursor CLI
+
+### Installation and account
+
+Install Cursor CLI with its script (`irm 'https://cursor.com/install?win32=true' | iex` on Windows, `curl https://cursor.com/install -fsS | bash` on macOS and Linux), then sign it in with `agent login`. Escouade finds it in `%LOCALAPPDATA%\cursor-agent` on Windows, even when it isn’t on the `PATH`, and starts its latest installed version. Each agent has its own `agent acp` and a configuration folder of its own, removed with it: its rules, its model and its sessions are kept there, never in your Cursor config. The sign-in stays the machine’s: one Cursor account for now.
+
+### Models and modes
+
+The “Model” menu lists your account’s models, Auto first, with their efforts. A Free plan runs Auto only: another model ends the turn in error, saying so. The model and the mode change at once.
+
+Cursor has no sandbox on Windows. It reads and edits files without asking, even outside the agent’s folder; its commands, the web and MCP tools ask.
+
+| Mode | With Cursor CLI |
+|---|---|
+| Ask | Cursor’s Agent mode: its commands, the web and MCP tools ask; a write it submits goes through in the agent’s folder, and asks elsewhere, with its diff. |
+| Auto edits | The same, and `git add` and `git commit` in the agent’s folder go through. |
+| Plan | Cursor’s Plan mode: it studies and proposes its plan to approve, without changing anything. |
+| Bypass | Escouade accepts all Cursor asks. |
+
+A request of Cursor has “Allow”, “For this agent” and “Deny”: “For this agent” keeps the rule (`Shell(git status)`, say) in the agent’s folder, for it alone and its resumes. Its questions, its plan, its tasks and its subagents come into the conversation and the “Plan” banner. A message sent during a turn waits for its end: Cursor would stop the running turn for it.
+
+The Claude Code skills, commands, agents and hooks of your account and of the project run under Cursor too, as for Claude Code agents: a hook that refuses a write blocks it, without a card.
+
+### Cost, quota and what Cursor doesn’t do
+
+Cursor tells neither the tokens nor the cost of a turn when Escouade drives it: the conversation shows none. No quota in the status bar yet, no terminal view, no “Duplicate the conversation” (Cursor doesn’t copy a session), no attached PDFs, no `/` commands in Escouade, no remote control or background tasks. It gets Escouade’s MCP server through its session; the switch doesn’t declare it in Cursor’s config yet.
+
 ## The MCP server
 
 Whatever their harness, Escouade’s agents get its MCP server, each with its own token, when “Agents can drive Escouade” is on. The same switch declares it in each installed harness, so that Claude Code, Codex, OpenCode or Copilot CLI started outside Escouade, in a terminal or their app, drive Escouade: see [the MCP server](mcp).
 
 ## Written texts
 
-A new agent’s name, the suggested commit messages and pull request descriptions are written by the harness of Settings › Application › “Model for written texts”: “Claude Haiku”, “Codex (GPT-6-Luna)”, an OpenCode model or “Copilot (GPT-5 mini)”, among the installed harnesses (see [written texts](settings-application#written-texts)).
+A new agent’s name, the suggested commit messages and pull request descriptions are written by the harness of Settings › Application › “Model for written texts”: “Claude Haiku”, “Codex (GPT-6-Luna)”, an OpenCode model , “Copilot (GPT-5 mini)” or “Cursor (Auto)”, among the installed harnesses (see [written texts](settings-application#written-texts)).

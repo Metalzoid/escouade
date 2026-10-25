@@ -323,6 +323,17 @@ impl DataDir {
         self.0.join("mcp-token.json")
     }
 
+    /// The configuration folder of the agent's own harness (`Engine::agent_home_var`): Cursor's
+    /// rules, model and sessions for that agent alone, kept while it lives.
+    pub fn agent_home(&self, agent_id: &str) -> PathBuf {
+        let name = if is_agent_folder_id(agent_id) {
+            agent_id
+        } else {
+            "_"
+        };
+        self.0.join("agent-homes").join(name)
+    }
+
     /// The MCP configs the agents' processes are started with (`--mcp-config`), one per agent.
     pub fn mcp_agents(&self) -> PathBuf {
         self.0.join("mcp")

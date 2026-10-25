@@ -77,6 +77,8 @@ export default defineZone('composer', {
     approvePlan: 'Approve the plan',
     forSession: 'For this session',
     sessionAllowed: 'Allowed for this session',
+    forAgent: 'For this agent',
+    agentAllowed: 'Allowed for this agent',
     always: 'Always allow',
     approvePlanAndEdits: 'Approve and accept edits',
     deny: 'Deny',

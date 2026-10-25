@@ -118,6 +118,11 @@ export default defineZone('accounts', {
         'The sign-in is never copied: each account signs in with copilot login (its config.json and the system keychain), without the GitHub CLI’s token.',
       signInHint: 'Sign in in the terminal below: copilot login gives a code to enter on github.com/login/device.',
     },
+    cursor: {
+      nothingToShare: 'Nothing to share: each Cursor agent has a configuration folder of its own, where “For this agent” keeps its rules.',
+      neverShared: 'Cursor CLI’s sign-in (agent login) is the machine’s: it isn’t copied, and a configuration folder doesn’t move it.',
+      signInHint: 'Sign in in the terminal below: agent login opens your browser on cursor.com.',
+    },
     restart: 'Restart',
     done: 'Done',
   },

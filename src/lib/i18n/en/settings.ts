@@ -297,6 +297,8 @@ export default defineZone('settings', {
       opencode: 'Refused to its tools and to the commands that name them. It has no sandbox.',
       copilot:
         'Escouade refuses what it asks about these paths right away. Nothing is guaranteed in Bypass mode, nor in the Copilot CLI view, where its requests don’t go through Escouade.',
+      cursor:
+        'Escouade refuses right away its commands and edits that name these paths, even in Bypass mode. Its reads ask nothing: they aren’t guarded.',
     },
     fenceNote:
       'A barrier for every harness would take a system account per project: Escouade doesn’t offer it, as the harnesses and their accounts wouldn’t follow. An agent already running takes this setting before its next turn (its process starts again, its conversation stays); a terminal view, at its next launch.',

@@ -1,6 +1,6 @@
 # Protocoles des harness — notes d'implémentation
 
-Escouade fait tourner ses agents sur quatre harness : Claude Code, Codex, OpenCode et GitHub Copilot CLI. Ce document dit, pour chacun, ce qu'Escouade lance, ce qu'elle envoie et ce qu'elle lit, d'après des essais réels. Ce que l'utilisateur en voit est dans docs/SPEC.md, « Harness » ; l'interface commune du code, dans docs/ENGINES.md. Cursor CLI est reporté (voir « Cursor CLI (ACP) : reporté »).
+Escouade fait tourner ses agents sur cinq harness : Claude Code, Codex, OpenCode, GitHub Copilot CLI et Cursor CLI. Ce document dit, pour chacun, ce qu'Escouade lance, ce qu'elle envoie et ce qu'elle lit, d'après des essais réels. Ce que l'utilisateur en voit est dans docs/SPEC.md, « Harness » ; l'interface commune du code, dans docs/ENGINES.md.
 
 | Sujet | Claude Code | Codex | OpenCode | Copilot CLI |
 |---|---|---|---|---|
@@ -878,9 +878,36 @@ copilot --output-format json --stream off --no-auto-update --disable-builtin-mcp
 
 Le mode `assisted` (expérimental), un bac à sable en mode serveur, « Toujours autoriser » (`approve-permanently`, `approve-for-location`), `auto` comme modèle, les PDF joints, « Reprendre sur <compte> », les commandes `/` dans le composer, Remote Control, les tâches de fond et l'arrêt d'un sous-agent. Les limites par session et par semaine des offres Pro et Pro+ n'ont pas de source lisible. En vue Copilot CLI, les consignes ajoutées et le bandeau « Plan » ne suivent pas.
 
-## Cursor CLI (ACP) : reporté
+## Cursor CLI (ACP, ESC-42)
 
-Décidé par l'utilisateur le 2026-10-17 : Cursor CLI et un harness ACP générique viendront plus tard. L'id `cursor` est réservé dans les données (`EngineId::Cursor`), et un agent ou un ticket qui le porterait tourne sur Claude Code ; aucun texte de l'interface ne le propose. Les essais et les décisions ouvertes (« Toujours » chez Cursor, ACP comme voie commune) sont dans docs/TODO-1.8.md.
+Repris le 2026-10-25 après les essais réels d'ESC-24 (docs/TODO-1.8.md, point 0, « Cursor CLI » ; flux dans `tests/fixtures/cursor/`, relevé du protocole dans `tests/fixtures/engines/cursor-2026.10.22-27dcf5f.acp.json`). Code : `src-tauri/src/engine/cursor/` (lancement, client ACP) et `src-tauri/src/agent/cursor.rs` (traduction). Testé avec la 2026.10.22.
+
+### Lancement
+
+- **Programme** : celui du réglage, sinon `%LOCALAPPDATA%\cursor-agent\agent.cmd` (puis `cursor-agent.cmd`), sinon `cursor-agent` ou `agent` du `PATH`. Pour un agent, Escouade lance le `node` et l'`index.js` de la version la plus récente de `versions/` (sans PowerShell, sans installer une mise à jour en attente), avec `acp`. `--version` passe par le lanceur.
+- **Environnement** : `CURSOR_CONFIG_DIR` vers le dossier de l'agent (`<données>/agent-homes/<agent>`, `Engine::agent_home_var`), qui garde ses règles « Pour cet agent », son modèle et ses sessions ACP ; **ni `MSYSTEM` ni `EXEPATH`** (sinon son shell est Git Bash et chaque hook bloque le tour). La connexion (`%APPDATA%\Cursor\auth.json`) n'est ni lue ni déplacée : Réglages › Harness la dit présente si ce fichier existe (ou si `CURSOR_API_KEY` est posée).
+- **Arrêt** : `agent acp` ne s'arrête pas quand son entrée se ferme : Escouade le tue 2 s après (`close_input`), avec tout son arbre (Job).
+
+### Hôte → CLI
+
+- `initialize` (ACP 1, `clientCapabilities._meta.subagents: true` pour recevoir les sous-agents, ni `fs` ni `terminal`) ; une autre version d'ACP est refusée avec sa raison.
+- `session/new` (`cwd`, `mcpServers` : l'entrée HTTP `escouade` avec `Authorization: Bearer <jeton>` quand l'agent a le serveur), ou `session/load` pour reprendre (essayé deux fois, « Session not found » excepté ; l'historique rejoué avant la réponse n'est pas remonté). Pas de copie en ACP : « Dupliquer » est masqué.
+- `session/set_mode` (`plan` pour Plan, `agent` sinon ; `ask` pour les textes rédigés seulement), `session/set_config_option` `model` (l'id complet listé, `default[]` pour Auto) puis l'option d'effort du modèle (`effort`, `reasoning_effort`…), à chaque démarrage : Cursor écrit le modèle dans sa config. `cursor/list_available_models` donne les noms et les efforts.
+- `session/prompt` : le texte, les images (`image`), les fichiers texte en texte ; les consignes ajoutées (un ticket) passent dans un bloc `<instructions>` devant le premier message d'une session neuve, que `session/load` garde. **Un message envoyé pendant un tour attend sa fin** dans le process : un second prompt annulerait le tour.
+- `session/cancel` : le prompt finit en `cancelled` (« Interrompu »).
+
+### CLI → hôte
+
+- `session/update` : `agent_message_chunk` et `agent_thought_chunk` (un élément par suite de fragments), `tool_call` et `tool_call_update` selon le `kind` (`execute` → `Bash`, `edit` → `Edit` ou `Write`, `read` → `Read`, `search` → `Grep` ou `Glob`, `fetch` → `WebFetch`, `rawInput._toolName` `task` → `Task`, `providerIdentifier`/`toolName` → `mcp__<serveur>__<outil>`), `plan` et `current_mode_update`, `subagent_spawned` (la session du sous-agent liée à son `Task`, ses mises à jour sous elle). Le saut de ligne des `toolCallId` devient `~`. Une écriture faite donne son diff dans le `content` de sa fin (`type: diff`).
+- `session/request_permission` : une carte « Autoriser » (`allow-once`), « Pour cet agent » (`allow-always`) et « Refuser » (`reject-once`), avec la raison de Cursor (« Not in allowlist: … ») et le diff d'une écriture. Les règles d'Escouade répondent sans carte : une écriture dans le dossier de l'agent (hors Plan), `git add` et `git commit` du worktree en Édits auto, tout en Bypass. « Projet privé » : une demande qui nomme un chemin d'un autre projet est refusée d'office.
+- `cursor/ask_question` : une carte de question ; la réponse donne les ids des choix, ou `skipped` avec ce qui a été écrit pour raison.
+- `cursor/create_plan` : la carte « Plan à approuver » (nom, résumé, plan) et ses tâches dans le bandeau Plan ; `accepted` (puis le mode Agent, ou Édits auto par « Approuver et accepter les édits ») ou `rejected` avec le message.
+- `cursor/update_todos` (fusionné par id quand `merge`), `cursor/task`, `cursor/generate_image` : répondus aussitôt (Cursor ne lit pas la réponse) ; les tâches vont au bandeau Plan.
+- **Fin du tour** : la réponse à `session/prompt` (`end_turn` ou `cancelled`). Un tour qui ne dit que « Upgrade your plan to continue » (un modèle hors de l'offre) finit en erreur, avec le modèle et « choisis Auto ». Ni tokens ni coût : rien n'en est montré.
+
+### Ce qui n'est pas pris en charge
+
+Le mode Auto d'Escouade et `ask`, plusieurs comptes et le quota (ESC-43), la vue terminal (ESC-49), « Dupliquer », les PDF joints, « Reprendre sur <compte> », les commandes `/`, Remote Control, les tâches de fond. Ses écritures ne demandent rien (essayé), si bien qu'une écriture n'a de carte que si Cursor la soumet. Les hooks et skills de Claude Code de l'utilisateur tournent sous Cursor : un hook qui refuse une écriture la bloque sans carte, et l'outil se dit fini quand même.
 
 ## Serveur MCP d'Escouade
 

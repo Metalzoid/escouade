@@ -1055,8 +1055,8 @@ export interface PendingRequest {
   defaultNo: boolean;
   /** A permission can be allowed for good (« Toujours autoriser ») or, with `alwaysScope`, for the session. */
   canAlways?: boolean;
-  /** What « always » stands for: the rest of the session (Codex, Copilot CLI), else the rules the harness keeps. */
-  alwaysScope?: 'session' | null;
+  /** What « always » stands for: the rest of the session (Codex, Copilot CLI), the agent alone (Cursor CLI), else the rules the harness keeps. */
+  alwaysScope?: 'session' | 'agent' | null;
 }
 
 /** Where an agent’s remote control comes from. */
@@ -1720,8 +1720,8 @@ export interface PermissionItem extends Base {
   input: Record<string, any>;
   reason?: string | null;
   canAlways: boolean;
-  /** What « always » stands for: for the rest of the session (Codex: `acceptForSession`), else the rules Claude Code suggested. */
-  alwaysScope?: 'session';
+  /** What « always » stands for: for the rest of the session (Codex: `acceptForSession`), for the agent alone (Cursor CLI: its own config folder), else the rules Claude Code suggested. */
+  alwaysScope?: 'session' | 'agent';
   /** A change of files asked: its diff, in the lines of a tool's `result.patch`. */
   patch?: { oldStart: number; newStart: number; lines: string[] }[];
   defaultNo: boolean;

@@ -134,7 +134,7 @@ async fn a_state_saved_before_the_harnesses_loads_on_claude_code_and_loses_nothi
 }
 
 /// An account for every harness beside Principal: an agent of a harness goes to its accounts
-/// alone (ESC-30). Codex, Copilot and OpenCode run their fakes, Cursor (not written yet) the fake CLI.
+/// alone (ESC-30). Each runs its fake.
 fn accounts_for_every_harness(h: &Harness) {
     h.set_settings(|s| {
         for engine in [
@@ -148,12 +148,11 @@ fn accounts_for_every_harness(h: &Harness) {
                 name: format!("{engine} work"),
                 engine,
                 config_dir: h.dir.join(engine.as_str()).to_string_lossy().into(),
-                // Codex, Copilot and OpenCode run their fakes; Cursor, not written yet, runs Claude
-                // Code's.
                 claude_path: match engine {
                     EngineId::Codex => crate::engine::fake_codex(),
                     EngineId::Opencode => crate::engine::fake_opencode(),
                     EngineId::Copilot => crate::engine::fake_copilot(),
+                    EngineId::Cursor => crate::engine::fake_cursor(),
                     _ => String::new(),
                 },
                 ..Default::default()

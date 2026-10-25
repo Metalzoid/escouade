@@ -31,6 +31,8 @@ mod copilot_tui_tests;
 mod core;
 #[cfg(test)]
 mod core_tests;
+#[cfg(test)]
+mod cursor_tests;
 mod engine;
 #[cfg(test)]
 mod engines_tests;

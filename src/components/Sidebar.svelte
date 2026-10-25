@@ -172,6 +172,7 @@
     allow: 'composer.permission.allow',
     always: 'composer.permission.always',
     session: 'composer.permission.forSession',
+    agent: 'composer.permission.forAgent',
     deny: 'composer.permission.deny',
   } as const;
 
@@ -197,7 +198,7 @@
     if (answering[a.id] === r.requestId || (click && performance.now() - (stepAt.get(r.requestId) ?? -Infinity) < HOLD_MS)) return;
     if (r.kind === 'permission') {
       const d = (listChoices(r, {}) as ListDecision[])[i];
-      if (d) await send(a, r, api.answerPermission(a.id, r.requestId, d === 'session' ? 'always' : d), t(DECISIONS[d]));
+      if (d) await send(a, r, api.answerPermission(a.id, r.requestId, d === 'session' || d === 'agent' ? 'always' : d), t(DECISIONS[d]));
       return;
     }
     const step = listStep(r, draftIfAny(r.requestId)?.picks ?? {});

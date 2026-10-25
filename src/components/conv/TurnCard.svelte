@@ -1,6 +1,6 @@
 <script lang="ts">
   import { accountName, resumeTargets } from '../../lib/accounts';
-  import { engineName } from '../../lib/engines';
+  import { engineName, showsCost } from '../../lib/engines';
   import { backTarget, forwardTargets } from '../../lib/handover';
   import { fDur, fTok, fUsd, fWhen, isAbsPath } from '../../lib/format';
   import { t } from '../../lib/i18n';
@@ -43,7 +43,9 @@
   const mark = $derived(marked ? t('handover.turnOn', { harness: engineName(item.engine ?? 'claude') }) : '');
   // A harness that tells no cost (Codex): Escouade's estimate, said so.
   const estimated = $derived(estimatedBy(item.engine ?? agent.engine));
-  const cost = $derived(estimated ? `≈ ${fUsd(item.cost)} ${t('stats.cost.estimated')}` : fUsd(item.cost));
+  const cost = $derived(estimated ? `≈ ${fUsd(item.cost ?? 0)} ${t('stats.cost.estimated')}` : fUsd(item.cost ?? 0));
+  // A harness that tells neither tokens nor cost (Cursor CLI): neither is shown.
+  const counted = $derived(showsCost({ engine: item.engine ?? agent.engine }));
 
   // Stopped by a sign-in Claude Code could not refresh (ESC-162): the account it waits for, while it does. Its process started
   // again instead, the turn is a line like any other: it goes on.
@@ -148,9 +150,9 @@
   <div class="card done" data-testid="turn-done">
     <div class="lt ok"><Icon name="check-c" size={14} />{t('conv.turn.done')}</div>
     <div class="stats">
-      <span>{fDur(item.durationMs ?? 0)}</span><span>{t('conv.turn.tokens', { tokens: fTok(item.tokens) })}</span><span
-        use:tip={estimated ? t('stats.cost.estimatedHint') : undefined}>{cost}</span
-      ><span>{t('conv.turn.filesEdited', { count: edits.length })}</span>{#if mark}<span>{mark}</span>{/if}
+      <span>{fDur(item.durationMs ?? 0)}</span>{#if counted}<span>{t('conv.turn.tokens', { tokens: fTok(item.tokens ?? 0) })}</span><span
+          use:tip={estimated ? t('stats.cost.estimatedHint') : undefined}>{cost}</span
+        >{/if}<span>{t('conv.turn.filesEdited', { count: edits.length })}</span>{#if mark}<span>{mark}</span>{/if}
     </div>
     {#if edits.length}
       <ul class="recap" aria-label={t('conv.turn.editedFiles')}>
@@ -176,8 +178,9 @@
 {:else}
   <div class="sep">
     <span class="sep-text"
-      >{item.interrupted ? t('conv.turn.interrupted') : fDur(item.durationMs ?? 0)} · {t('conv.turn.tokens', { tokens: fTok(item.tokens) })} ·
-      {cost}{mark ? ` · ${mark}` : ''}</span
+      >{item.interrupted ? t('conv.turn.interrupted') : fDur(item.durationMs ?? 0)}{#if counted}{' · '}{t('conv.turn.tokens', {
+          tokens: fTok(item.tokens ?? 0),
+        })} · {cost}{/if}{mark ? ` · ${mark}` : ''}</span
     >
   </div>
   {#if back}<div class="back-alone">{@render backRow()}</div>{/if}

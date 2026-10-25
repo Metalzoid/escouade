@@ -1,9 +1,9 @@
 # Les harness
 
-Un harness est le programme qui fait tourner un agent : Claude Code, Codex, OpenCode ou GitHub Copilot CLI. Cette page les compare, puis dit pour chacun comment l’installer, son compte, ses modèles, ses modes et ce qui le protège, son coût et son quota, sa vue terminal, le serveur MCP et ce qu’il ne fait pas.
+Un harness est le programme qui fait tourner un agent : Claude Code, Codex, OpenCode, GitHub Copilot CLI ou Cursor CLI. Cette page les compare, puis dit pour chacun son installation, son compte, ses modèles, ses modes et ce qui le protège, son coût et son quota, sa vue terminal et ce qu’il ne fait pas.
 
 > [!NOTE]
-> Codex, OpenCode et Copilot CLI sont là depuis Escouade 1.8 ; Claude Code depuis le début. Cursor CLI viendra plus tard.
+> Codex, OpenCode et Copilot CLI sont là depuis Escouade 1.8, Cursor CLI depuis la 2.0.1 ; Claude Code depuis le début.
 
 ## Choisir un harness
 
@@ -24,21 +24,21 @@ Quel que soit le harness, l’agent a la même conversation : la réponse et le 
 
 ## Comparaison
 
-| | Claude Code | Codex | OpenCode | Copilot CLI |
-|---|---|---|---|---|
-| Installation | script de Claude Code | `npm install -g @openai/codex` | `npm install -g opencode-ai` | `npm install -g @github/copilot` |
-| Testé avec | 2.1.283 à 2.1.301 | 0.163.0 | 1.19.3 | 1.0.98 |
-| Compte | abonnement Claude ou clé API | compte ChatGPT | les fournisseurs connectés à OpenCode, modèles locaux compris | compte GitHub avec Copilot, Free compris |
-| Plusieurs comptes | oui | oui | non | oui |
-| Modèles | ceux que Claude Code liste pour chaque compte | ceux que Codex liste pour ton compte | ceux de tes fournisseurs, avec recherche et favoris | ceux que Copilot liste, avec leur multiplicateur |
-| Modes | les cinq | les cinq | quatre (pas d’Auto) | les cinq |
-| Ce qui protège | ses permissions | son bac à sable | ses règles de permission | les règles d’Escouade |
-| Message pendant un tour | attend la fin du tour | entre dans le tour | attend la fin du tour | entre dans le tour |
-| Coût | exact | estimé | exact (0 en local) | exact, en crédits d’IA |
-| Quota | fenêtres 5 h et 7 jours | fenêtres 5 h et 7 jours (30 jours en offre gratuite) | aucun : budget par jour | crédits du mois |
-| Vue terminal | « Vue Claude Code » | « Vue Codex » | « Vue OpenCode » | « Vue Copilot CLI » |
-| PDF joints | oui | non | non | non |
-| Remote control, tâches de fond | oui | non | non | non |
+| | Claude Code | Codex | OpenCode | Copilot CLI | Cursor CLI |
+|---|---|---|---|---|---|
+| Installation | script de Claude Code | `npm install -g @openai/codex` | `npm install -g opencode-ai` | `npm install -g @github/copilot` | script de Cursor |
+| Testé avec | 2.1.283 à 2.1.301 | 0.163.0 | 1.19.3 | 1.0.98 | 2026.10.22 |
+| Compte | abonnement Claude ou clé API | compte ChatGPT | les fournisseurs connectés à OpenCode, modèles locaux compris | compte GitHub avec Copilot, Free compris | compte Cursor (`agent login`), Free compris |
+| Plusieurs comptes | oui | oui | non | oui | non, pour l’instant |
+| Modèles | ceux que Claude Code liste pour chaque compte | ceux que Codex liste pour ton compte | ceux de tes fournisseurs, avec recherche et favoris | ceux que Copilot liste, avec leur multiplicateur | ceux de ton compte, Auto en tête |
+| Modes | les cinq | les cinq | quatre (pas d’Auto) | les cinq | quatre (pas d’Auto) |
+| Ce qui protège | ses permissions | son bac à sable | ses règles de permission | les règles d’Escouade | ses permissions, pour ses commandes |
+| Message pendant un tour | attend la fin du tour | entre dans le tour | attend la fin du tour | entre dans le tour | attend la fin du tour |
+| Coût | exact | estimé | exact (0 en local) | exact, en crédits d’IA | non donné |
+| Quota | fenêtres 5 h et 7 jours | fenêtres 5 h et 7 jours (30 jours en offre gratuite) | aucun : budget par jour | crédits du mois | pas encore |
+| Vue terminal | « Vue Claude Code » | « Vue Codex » | « Vue OpenCode » | « Vue Copilot CLI » | aucune |
+| PDF joints | oui | non | non | non | non |
+| Remote control, tâches de fond | oui | non | non | non | non |
 
 ## Claude Code
 
@@ -141,10 +141,37 @@ Le coût d’un tour vient des crédits d’IA de ses appels (un crédit vaut 0,
 
 Pas de « Toujours autoriser », pas de mode `assisted` (expérimental), pas de PDF joints, pas de commandes `/` dans Escouade, pas de remote control ni de tâches de fond. Un agent Copilot ne reprend pas sur un autre compte.
 
+## Cursor CLI
+
+### Installation et compte
+
+Installe Cursor CLI avec son script (`irm 'https://cursor.com/install?win32=true' | iex` sous Windows, `curl https://cursor.com/install -fsS | bash` sous macOS et Linux), puis connecte-le avec `agent login`. Escouade le trouve dans `%LOCALAPPDATA%\cursor-agent` sous Windows, même absent du `PATH`, et lance sa dernière version installée. Chaque agent a son `agent acp` et son propre dossier de configuration, retiré avec lui : ses règles, son modèle et ses sessions y sont gardés, jamais dans ta config de Cursor. La connexion reste celle de la machine : un seul compte Cursor pour l’instant.
+
+### Modèles et modes
+
+Le menu « Modèle » liste les modèles de ton compte, Auto en tête, avec leurs efforts. Une offre Free ne fait tourner qu’Auto : un autre modèle finit le tour en erreur, en le disant. Le modèle et le mode changent tout de suite.
+
+Cursor n’a pas de bac à sable sous Windows. Il lit et modifie les fichiers sans demander, même hors du dossier de l’agent ; ses commandes, le web et les outils MCP demandent.
+
+| Mode | Chez Cursor CLI |
+|---|---|
+| Demander | Le mode Agent de Cursor : ses commandes, le web et les outils MCP demandent ; une écriture qu’il soumet passe dans le dossier de l’agent, et demande ailleurs, avec son diff. |
+| Édits auto | Pareil, et `git add` et `git commit` du dossier de l’agent passent. |
+| Plan | Le mode Plan de Cursor : il étudie et propose son plan à approuver, sans rien modifier. |
+| Bypass | Escouade accepte tout ce que Cursor demande. |
+
+Une demande de Cursor a « Autoriser », « Pour cet agent » et « Refuser » : « Pour cet agent » garde la règle (`Shell(git status)`, par exemple) dans le dossier de l’agent, pour lui seul et ses reprises. Ses questions, son plan, ses tâches et ses sous-agents passent dans la conversation et le bandeau « Plan ». Un message envoyé pendant un tour attend sa fin : Cursor arrêterait le tour en cours pour lui.
+
+Les skills, commandes, agents et hooks de Claude Code de ton compte et du projet tournent aussi sous Cursor, comme pour les agents Claude Code : un hook qui refuse une écriture la bloque, sans carte.
+
+### Coût, quota et ce que Cursor ne fait pas
+
+Cursor ne dit ni les tokens ni le coût d’un tour quand Escouade le pilote : la conversation n’en montre pas. Pas encore de quota dans la barre d’état, pas de vue terminal, pas de « Dupliquer la conversation » (Cursor ne copie pas une session), pas de PDF joints, pas de commandes `/` dans Escouade, ni remote control ni tâches de fond. Il reçoit le serveur MCP d’Escouade par sa session ; l’interrupteur ne le déclare pas encore dans la config de Cursor.
+
 ## Le serveur MCP
 
 Quel que soit leur harness, les agents d’Escouade reçoivent son serveur MCP, chacun avec son propre jeton, quand « Les agents peuvent piloter Escouade » est allumé. Le même interrupteur le déclare dans chaque harness installé, pour que Claude Code, Codex, OpenCode ou Copilot CLI lancés hors d’Escouade, dans un terminal ou leur app, pilotent Escouade : voir [le serveur MCP](mcp).
 
 ## Textes rédigés
 
-Le nom d’un nouvel agent, les messages de commit et les descriptions de pull request proposés sont écrits par le harness de Réglages › Application › « Modèle des textes rédigés » : « Claude Haiku », « Codex (GPT-6-Luna) », un modèle d’OpenCode ou « Copilot (GPT-5 mini) », parmi les harness installés (voir [les textes rédigés](settings-application#textes-rediges)).
+Le nom d’un nouvel agent, les messages de commit et les descriptions de pull request proposés sont écrits par le harness de Réglages › Application › « Modèle des textes rédigés » : « Claude Haiku », « Codex (GPT-6-Luna) », un modèle d’OpenCode , « Copilot (GPT-5 mini) » ou « Cursor (Auto) », parmi les harness installés (voir [les textes rédigés](settings-application#textes-rediges)).

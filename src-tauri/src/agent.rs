@@ -23,6 +23,7 @@ mod codex;
 mod codex_tui;
 mod copilot;
 mod copilot_tui;
+mod cursor;
 mod localcmd;
 // The translation of the minimal fake engine of the conformance bench (`engine/minimal/`).
 #[cfg(test)]
@@ -272,6 +273,8 @@ pub struct AgentRt {
     codex: codex::CodexState,
     /// What the translation of Copilot keeps between its events (`agent/copilot.rs`).
     copilot: copilot::CopilotState,
+    /// What the translation of Cursor keeps between its updates (`agent/cursor.rs`).
+    cursor: cursor::CursorState,
     /// What the translation of OpenCode keeps between its events (`agent/opencode.rs`).
     opencode: opencode::OpencodeState,
 }
@@ -542,6 +545,7 @@ impl AgentRt {
             escouade_next: false,
             codex: codex::CodexState::default(),
             copilot: copilot::CopilotState::default(),
+            cursor: cursor::CursorState::default(),
             opencode: opencode::OpencodeState::default(),
         }
     }
@@ -635,6 +639,7 @@ impl AgentRt {
         self.announced_tasks.clear();
         self.codex = codex::CodexState::default();
         self.copilot = copilot::CopilotState::default();
+        self.cursor = cursor::CursorState::default();
         self.opencode = opencode::OpencodeState::default();
         // What ran in the process before is gone with it.
         self.interrupt_plan();

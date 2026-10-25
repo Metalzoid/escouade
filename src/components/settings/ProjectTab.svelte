@@ -96,6 +96,7 @@
     { id: 'codex', name: 'Codex', kind: 'barrier' },
     { id: 'opencode', name: 'OpenCode', kind: 'guard' },
     { id: 'copilot', name: 'Copilot CLI', kind: 'guard' },
+    { id: 'cursor', name: 'Cursor CLI', kind: 'guard' },
   ] as const;
 
   /** Asks before closing it, then comes back to these settings, their draft as it was. */

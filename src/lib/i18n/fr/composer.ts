@@ -90,6 +90,9 @@ export default {
     /** Allowed for the rest of the session, the same request (Codex: `acceptForSession`). */
     forSession: 'Pour cette session',
     sessionAllowed: 'Autorisé pour cette session',
+    /** Allowed for good, but for this agent alone (Cursor CLI: its rule kept in the agent's own config folder). */
+    forAgent: 'Pour cet agent',
+    agentAllowed: 'Autorisé pour cet agent',
     approvePlanAndEdits: 'Approuver et accepter les édits',
     deny: 'Refuser',
     keepPlanning: 'Continuer à planifier',
