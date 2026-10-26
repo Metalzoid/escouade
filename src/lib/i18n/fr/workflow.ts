@@ -73,6 +73,17 @@ export default {
   untraced: 'jamais lancé ici',
   describe: 'Décrire un workflow…',
   analyze: 'Analyser avec un agent…',
-  tickets: 'La boucle des tickets du Kanban s’affiche ici dès qu’un ticket de {project} tourne.',
+  tickets: 'La boucle des tickets du Kanban s’affiche ici, comme le workflow « Tickets », dès que {project} a un ticket.',
   reading: 'Lecture des workflows…',
+  // Where the card, the conversation and the Kanban meet it (ESC-197, choices 145 and 159).
+  ticketsName: 'Tickets',
+  ticketsDoor: 'pilote auto',
+  ticketsDoing: {
+    one: 'jusqu’à {count} boucle : le travail, puis la vérification des critères',
+    other: 'jusqu’à {count} boucles : le travail, puis la vérification des critères',
+  },
+  sendBack: 'Renvoyer : retour à {step}',
+  ticketsEscouade: 'Le workflow des tickets d’Escouade, d’après le Kanban',
+  divider: 'Voir l’étape dans l’onglet Workflow',
+  cardStep: 'Étape : {step}',
 } as const satisfies Tree;

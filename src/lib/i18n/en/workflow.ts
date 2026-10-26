@@ -67,6 +67,17 @@ export default defineZone('workflow', {
   untraced: 'never run here',
   describe: 'Describe a workflow…',
   analyze: 'Analyze with an agent…',
-  tickets: 'The Kanban’s ticket loop shows here as soon as a ticket of {project} runs.',
+  tickets: 'The Kanban’s ticket loop shows here, as the workflow “Tickets”, as soon as {project} has a ticket.',
   reading: 'Reading the workflows…',
+  // Where the card, the conversation and the Kanban meet it (ESC-197, choices 145 and 159).
+  ticketsName: 'Tickets',
+  ticketsDoor: 'autopilot',
+  ticketsDoing: {
+    one: 'up to {count} loop: the work, then the check of the criteria',
+    other: 'up to {count} loops: the work, then the check of the criteria',
+  },
+  sendBack: 'Send back: back to {step}',
+  ticketsEscouade: 'Escouade’s workflow of the tickets, from the Kanban',
+  divider: 'See the step in the Workflow tab',
+  cardStep: 'Step: {step}',
 });

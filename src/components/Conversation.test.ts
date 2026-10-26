@@ -35,6 +35,8 @@ import { app } from '../lib/state.svelte';
 import type { Agent } from '../lib/types';
 import { answerClock, settle } from '../test/conversation';
 import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, gitInfo, project, pullRequest, resetApp, ticket } from '../test/ipc';
+import { workflows } from '../lib/workflows.svelte';
+import { GSD_ID, gsd, passage, scanOf, track } from '../test/workflows';
 import Conversation from './Conversation.svelte';
 import ContextMenu from './ContextMenu.svelte';
 
@@ -2443,5 +2445,35 @@ describe('Conversation: files an agent sends (ESC-171)', () => {
     expect(screen.getByRole('button', { name: 'Afficher contrat.pdf dans le dossier' })).toBeInTheDocument();
     // Not a tool call among the others.
     expect(screen.queryByText('SendUserFile')).not.toBeInTheDocument();
+  });
+});
+
+describe('the entry in a step of a workflow (ESC-197, choice 145)', () => {
+  it('draws a divider before the message of the door, which leads to the Workflow tab on that workflow', async () => {
+    const at = new Date(2026, 9, 26, 10, 47).getTime();
+    const items = [
+      { kind: 'user', id: 'u0', text: 'Bonjour', images: 0, ts: at - 600_000, queued: false },
+      { kind: 'user', id: 'u1', text: '/gsd:verify-work 3', images: 0, ts: at, queued: false },
+    ];
+    const { a } = setup({}, items);
+    const named = { ...gsd(), steps: gsd().steps.map((s) => (s.name === 'gsd:verify-work' ? { ...s, name: 'Vérifier', named: true } : s)) };
+    workflows.scans.p1 = scanOf(named);
+    workflows.take(
+      track(a.id, {
+        step: 'Vérifier',
+        passages: [passage(1, 'Vérifier', 47, 1, { door: '/gsd:verify-work 3', outcome: 'running', at: at + 30 })],
+      }),
+    );
+    const div = await screen.findByTestId('step-divider');
+    expect(div).toHaveTextContent('GSD · Vérifier/gsd:verify-work 310:47');
+    // Before the message of its door.
+    expect(div.nextElementSibling).toHaveAttribute('data-item', 'u1');
+    await userEvent.click(within(div).getByRole('button', { name: 'GSD · Vérifier' }));
+    expect(app.panelTab).toBe('workflow');
+    expect(app.filesOpen).toBe(true);
+    expect(workflows.chosen.p1).toBe(GSD_ID);
+    // A workflow dismissed is in no list: no divider.
+    workflows.scans.p1 = scanOf();
+    await waitFor(() => expect(screen.queryByTestId('step-divider')).toBeNull());
   });
 });

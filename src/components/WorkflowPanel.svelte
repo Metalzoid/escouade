@@ -22,8 +22,12 @@
     stepDetail,
     stepsOf,
     stripOf,
+    TICKETS,
+    ticketsWorkflow,
+    ticketTracks,
     tracksIn,
     turnsGrid,
+    withTickets,
     workflowTitle,
   } from '../lib/workflow-view';
   import { workflows } from '../lib/workflows.svelte';
@@ -46,9 +50,17 @@
     });
   });
 
-  const scan = $derived(workflows.scans[pid] ?? null);
-  const tracks = $derived(workflows.list(pid).filter((tr) => app.agents[tr.agentId]));
+  const read = $derived(workflows.scans[pid] ?? null);
+  // « Tickets », Escouade's own (ESC-197, choice 159): beside those read, as long as the Kanban has tickets.
+  const tickets = $derived(Object.values(app.tickets).filter((tk) => tk.projectId === pid));
+  const ticketsWf = $derived(ticketsWorkflow(tickets));
+  const scan = $derived(read ? { ...read, workflows: withTickets(read.workflows, ticketsWf) } : null);
+  const tracks = $derived([
+    ...workflows.list(pid).filter((tr) => app.agents[tr.agentId]),
+    ...ticketTracks(pid, tickets, app.agents, app.now),
+  ]);
   const wf = $derived(pickWorkflow(scan, tracks, agent?.id ?? null, workflows.chosen[pid] ?? null));
+  const isTickets = $derived(wf?.id === TICKETS);
   const steps = $derived(wf ? stepsOf(wf) : []);
   const inWf = $derived(wf ? tracksIn(wf, tracks) : []);
   const folded = $derived(workflows.isFolded(pid));
@@ -237,6 +249,8 @@
     <div class="caption wf-cap">
       {#if wf.kind === 'prompt'}
         {t('workflow.promptCaption')}
+      {:else if isTickets}
+        {t('workflow.ticketsEscouade')}
       {:else}
         {t('workflow.steps', { count: steps.length })}{#if phase}{' · '}<Rich
             k="workflow.phase"
@@ -379,14 +393,16 @@
             <i class="wf-node"></i>
             <div class="wf-main">
               <div class="wf-line">
-                <span class="wf-name">{labelIn(wf, s.name)}</span>{#if s.command}<span class="gate">{s.command}</span>{/if}
+                <span class="wf-name">{labelIn(wf, s.name)}</span>{#if s.command}<span class="gate" class:plain={isTickets}
+                    >{s.command}</span
+                  >{/if}
               </div>
               {#if s.guessed}
                 <div class="wf-detail">
                   <span><Rich k="workflow.guessed">{#snippet file()}<span class="fl">{s.path.split('/').pop()}</span>{/snippet}</Rich></span
                   >
                 </div>
-              {:else if d.agents.length || d.writes.length || d.back.length}
+              {:else if d.agents.length || d.writes.length || d.back.length || s.note}
                 <div class="wf-detail">
                   {#each d.agents as a, i (a)}
                     {#if i > 0}<Icon name={i === d.agents.length - 1 && d.rounds ? 'swap' : 'right'} size={12} />{/if}<span class="sa"
@@ -394,12 +410,13 @@
                     >
                   {/each}
                   {#if d.rounds}<span>{t('workflow.upTo', { count: d.rounds })}</span>{/if}
+                  {#if s.note}<span>{s.note}</span>{/if}
                   {#if d.writes.length}
                     <span><Rich k="workflow.writes">{#snippet files()}<span class="fl">{d.writes.join(', ')}</span>{/snippet}</Rich></span>
                   {/if}
                   {#each d.back as b (b.to)}
                     <span class="back" use:tip={b.condition ?? ''}
-                      ><Icon name="restart" size={12} />{t('workflow.backTo', { step: labelIn(wf, b.to) })}</span
+                      ><Icon name="restart" size={12} />{b.say ?? t('workflow.backTo', { step: labelIn(wf, b.to) })}</span
                     >
                   {/each}
                 </div>
@@ -464,7 +481,8 @@
         </div>
       {/if}
 
-      {#if reader}
+      <!-- « Tickets » has no history of its own: the Kanban and the agent's conversation tell it. -->
+      {#if reader && !isTickets}
         <div class="wf-h">
           {t('workflow.historyOf', { name: nameOf(reader.agentId) })}
           <span class="n"
@@ -657,7 +675,9 @@
   button.gate:disabled {
     cursor: default;
   }
-  .gate.more {
+  /* « pilote auto », the door of Escouade's « Tickets »: words, not a command (the preview's `.rrow .plain`). */
+  .gate.more,
+  .gate.plain {
     font-family: var(--font);
     color: var(--muted);
   }

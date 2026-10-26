@@ -251,6 +251,8 @@ describe('the Workflow tab', () => {
   });
 
   it('says what was looked for when the project has no workflow, and the two ways out', async () => {
+    // No ticket either: « Tickets » would be there.
+    app.tickets = {};
     const scan = scanOf();
     scan.untraced = [{ name: 'GSD', harness: 'claude', steps: 4 }];
     await open(scan, []);
@@ -270,7 +272,7 @@ describe('the Workflow tab', () => {
       within(menu)
         .getAllByRole('menuitemradio')
         .map((b) => b.textContent),
-    ).toEqual(['GSD', 'web · Ralph']);
+    ).toEqual(['GSD', 'web · Ralph', 'Tickets']);
     await userEvent.click(within(menu).getByRole('menuitemradio', { name: 'web · Ralph' }));
     expect(workflows.chosen.p1).toBe(ralph().id);
     expect(await screen.findByText('Un prompt relancé à chaque tour', { exact: false })).toBeInTheDocument();
@@ -318,6 +320,7 @@ describe('the Workflow tab', () => {
   });
 
   it('leaves out a workflow the user dismissed: the tab then says it has none', async () => {
+    app.tickets = {};
     const scan = scanOf(gsd(), ralph());
     fakeBackend({ get_workflows: () => scan, effective_workflows: () => [ralph()], get_workflow_tracks: () => [] });
     render(SidePanel, { project: project(), agent: app.agents.a1, docked: true });
@@ -332,6 +335,7 @@ describe('the Workflow tab', () => {
   });
 
   it('says it has no workflow when the only one was dismissed, and reads them again when the corrections change', async () => {
+    app.tickets = {};
     let effective = [] as ReturnType<typeof gsd>[];
     const be = fakeBackend({ get_workflows: () => scanOf(gsd()), effective_workflows: () => effective, get_workflow_tracks: () => [] });
     const { rerender } = render(SidePanel, { project: project(), agent: app.agents.a1, docked: true });
@@ -356,5 +360,58 @@ describe('the Workflow tab', () => {
     expect(screen.getByText('Agents in GSD')).toBeInTheDocument();
     expect(screen.getByText('History of pagination-users')).toBeInTheDocument();
     expect(getByTip(document.body, 'Fold the steps')).toBeInTheDocument();
+  });
+});
+
+describe('the workflow « Tickets » of Escouade, in the same tab (ESC-197, choice 159)', () => {
+  beforeEach(() =>
+    resetApp({
+      projects: [project()],
+      agents: AGENTS,
+      tickets: [
+        ticket({ id: 't1', key: 'DEM-5', column: 'doing', agentId: 'a3', iteration: 1, maxLoops: 5 }),
+        ticket({ id: 't2', key: 'DEM-6', column: 'todo' }),
+      ],
+    }),
+  );
+
+  it('is in the menu beside the project’s workflow, an agent of a ticket in both', async () => {
+    await open(scanOf(gsd()), gsdTracks(), 'a3');
+    const tab = screen.getByTestId('workflow');
+    // The agent of DEM-5 follows GSD: GSD first, with its ticket and its loop.
+    await within(tab).findByText('Agents dans GSD');
+    expect(within(tab).getByText('DEM-5')).toBeInTheDocument();
+    expect(tab.querySelector('.wf-step[data-step="gsd:plan-phase"] .who[aria-current]')).toHaveTextContent('dem-5-export');
+    // Counted once in the tab, though in two workflows.
+    expect(screen.getByRole('tab', { name: /^Workflow/ })).toHaveTextContent('Workflow 3');
+    await userEvent.click(within(tab).getByRole('button', { name: 'Workflow' }));
+    await userEvent.click(within(screen.getByRole('menu')).getByRole('menuitemradio', { name: 'Tickets' }));
+    // Its columns, the autopilot its door, « Renvoyer » its way back; the agent on « En cours ».
+    expect([...tab.querySelectorAll('.wf-step .wf-name')].map((n) => n.textContent)).toEqual([
+      'À faire',
+      'En cours',
+      'À tester',
+      'Terminé',
+    ]);
+    expect(within(tab).getByText('pilote auto')).toHaveClass('plain');
+    expect(within(tab).getByText('jusqu’à 5 boucles : le travail, puis la vérification des critères')).toBeInTheDocument();
+    expect(within(tab).getByText('Renvoyer : retour à En cours')).toBeInTheDocument();
+    expect(tab.querySelector('.wf-step[data-step="En cours"] .who')).toHaveTextContent('dem-5-export');
+    expect(within(tab).getByText('Agents dans Tickets')).toBeInTheDocument();
+    expect(within(tab).getByText('boucle 1/5 du ticket', { exact: false })).toBeInTheDocument();
+    // No history of its own.
+    expect(within(tab).queryByText(/^Historique de/)).toBeNull();
+  });
+
+  it('shows « Tickets » alone when the project has no workflow of its own', async () => {
+    await open(scanOf(), [], 'a3');
+    const tab = screen.getByTestId('workflow');
+    await within(tab).findByText('Le workflow des tickets d’Escouade, d’après le Kanban', { exact: false });
+    expect(within(tab).queryByText(/^Pas de workflow/)).toBeNull();
+    setLang('en');
+    await within(tab).findByText('Escouade’s workflow of the tickets, from the Kanban', { exact: false });
+    expect([...tab.querySelectorAll('.wf-step .wf-name')].map((n) => n.textContent)).toEqual(['To do', 'In progress', 'To review', 'Done']);
+    expect(within(tab).getByText('Send back: back to In progress')).toBeInTheDocument();
+    setLang('fr');
   });
 });

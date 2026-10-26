@@ -7,7 +7,7 @@
   import GitGraph from './GitGraph.svelte';
   import WorkflowPanel from './WorkflowPanel.svelte';
   import { workflows } from '../lib/workflows.svelte';
-  import { followers } from '../lib/workflow-view';
+  import { followers, ticketTracks } from '../lib/workflow-view';
   import Icon from './Icon.svelte';
   import { tip } from '../lib/tip';
 
@@ -18,8 +18,13 @@
 
   let count = $state(0);
   const tab = $derived(app.panelTab);
-  /** The agents that follow a workflow of the project (ESC-194): the count of its tab. */
-  const following = $derived(followers(workflows.list(project.id).filter((tr) => app.agents[tr.agentId])));
+  /** The agents that follow a workflow of the project (ESC-194), « Tickets » too (ESC-197): the count of its tab. */
+  const following = $derived(
+    followers([
+      ...workflows.list(project.id).filter((tr) => app.agents[tr.agentId]),
+      ...ticketTracks(project.id, Object.values(app.tickets), app.agents, 0),
+    ]),
+  );
   $effect(() => void workflows.loadTracks(project.id));
 </script>
 

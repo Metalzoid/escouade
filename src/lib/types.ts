@@ -2055,6 +2055,8 @@ export interface WorkflowStep {
   also?: string[];
   /** Named by the user (the window's own mark, ESC-194): its name is shown as is. */
   named?: boolean;
+  /** What the rail says of it in words, for a workflow of Escouade's own (« Tickets », ESC-197). */
+  note?: string;
 }
 
 export interface WorkflowTransition {
@@ -2064,6 +2066,8 @@ export interface WorkflowTransition {
   back: boolean;
   condition: string | null;
   max: number | null;
+  /** How the rail says it, for a workflow of Escouade's own (« Renvoyer : retour à En cours », ESC-197). */
+  say?: string;
 }
 
 export interface WorkflowProgress {

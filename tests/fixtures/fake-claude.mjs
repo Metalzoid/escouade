@@ -49,7 +49,8 @@
 // in), [retire-env] then .env taken out of git again in a second commit (still in the branch's
 // history), [tenace] a process that lasts 5 s once its input is closed, [rien] no file written (nothing
 // to merge), [dans:api] its file written in that folder instead (each one named; ESC-169); by default criterion n is
-// met from loop n on.
+// met from loop n on. "faits-workflow: [...]" in its ticket (ESC-197) plays those facts first, then holds its turn 10 min
+// as [lent] does: the agent of a ticket under way that follows a workflow too.
 // "[worktree <branch>]" in a message goes into a worktree of its own as Claude Code's EnterWorktree does (ESC-161): made
 // under <repository>/.claude/worktrees/<branch with non-alphanumerics replaced by -> on the new branch <branch> (or
 // gone into again), the session goes on there (the `cwd` of its entries), kept in its first folder's project folder.
@@ -1066,6 +1067,11 @@ function startSession() {
       asked = true;
       return askQuestion(() => ticketTurn(text));
     }
+    const facts = /faits-workflow:\s*(\[[^\n]*\])/.exec(all);
+    if (facts) {
+      workflowFacts(JSON.parse(facts[1]), false, true).catch((e) => process.stderr.write(`faits-workflow: ${e.stack}\n`));
+      return;
+    }
     if (all.includes('[lent]')) {
       streamText('Je commence…');
       slowTimer = setTimeout(() => result(), 30_000);
@@ -1721,7 +1727,7 @@ function startSession() {
   // ---------- "faits-workflow" ----------
 
   // The facts of an agent in a workflow, one turn: see the head of this file.
-  async function workflowFacts(list, fails) {
+  async function workflowFacts(list, fails, hold = false) {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     let n = 0;
     for (const f of list) {
@@ -1752,6 +1758,11 @@ function startSession() {
         await wait(f.wait);
       }
       await wait(20);
+    }
+    if (hold) {
+      // Under way, as [lent]: an interrupt ends it.
+      slowTimer = setTimeout(() => result(), 600_000);
+      return;
     }
     streamText(fails ? 'Échec simulé.' : 'Fait.');
     result({ isError: fails, subtype: fails ? 'error_during_execution' : 'success' });

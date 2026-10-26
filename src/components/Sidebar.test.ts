@@ -10,6 +10,8 @@ import { agent, BARE_ENGINE, branchInfo, CLAUDE_ENGINE, fakeBackend, gitInfo, pr
 import ContextMenu from './ContextMenu.svelte';
 import Sidebar from './Sidebar.svelte';
 import { getByTip } from '../test/tip';
+import { gsd, scanOf, track } from '../test/workflows';
+import { workflows } from '../lib/workflows.svelte';
 
 // The terminal opened is not one of xterm.js (jsdom has no canvas for it): only what is asked of the backend is looked at.
 vi.mock('../lib/terminals', async (original) => ({
@@ -569,6 +571,38 @@ describe('Sidebar agent card plan line', () => {
     resetApp({ agents: [agent({ plan: planOf(seven()) })], tickets: [ticket({ column: 'doing', agentId: 'a1', iteration: 1 })] });
     render(Sidebar, { project: project() });
     expect(mini(/refacto-auth/)).toBeNull();
+  });
+
+  it('says where the agent is in its workflow in the place of its plan, a ticket’s card in the tooltip of its loop (ESC-197)', async () => {
+    // GSD, its verifying step named by the user (Réglages › Projets › Workflow).
+    const named = {
+      ...gsd(),
+      steps: gsd().steps.map((st) => (st.name === 'gsd:verify-work' ? { ...st, name: 'Vérifier', named: true } : st)),
+    };
+    const tracks = [
+      track('a1', { step: 'Vérifier' }),
+      track('a2', { step: 'gsd:plan-phase' }),
+      track('a3', { step: 'gsd:execute-phase', outside: 'lance la suite e2e' }),
+    ];
+    resetApp({
+      agents: [
+        agent({ plan: planOf(seven()) }),
+        agent({ id: 'a2', name: 'dem-5', createdAt: 2 }),
+        agent({ id: 'a3', name: 'tests-e2e', createdAt: 3 }),
+      ],
+      tickets: [ticket({ key: 'DEM-5', column: 'doing', agentId: 'a2', iteration: 1 })],
+    });
+    fakeBackend({ get_workflows: () => scanOf(named), effective_workflows: () => [named], get_workflow_tracks: () => tracks });
+    render(Sidebar, { project: project() });
+    const card = (name: RegExp) => screen.getByRole('button', { name });
+    await waitFor(() => expect(card(/refacto-auth/).querySelector('.wf-mini')).toHaveTextContent('GSD · Vérifier'));
+    // The plan stays in its banner, not on the card.
+    expect(mini(/refacto-auth/)).toBeNull();
+    // The ticket's loop keeps its place, the step in its tooltip.
+    expect(card(/dem-5/).querySelector('.wf-mini')).toBeNull();
+    expect(getByTip(card(/dem-5/), 'Étape : GSD · Plan phase')).toHaveTextContent('boucle 1/5');
+    // Outside its workflow: nothing.
+    expect(card(/tests-e2e/).querySelector('.wf-mini')).toBeNull();
   });
 
   it('counts the subagents running, in the plural and in the singular', () => {

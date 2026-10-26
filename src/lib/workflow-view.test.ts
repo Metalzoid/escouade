@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GSD_ID, gsd, paginationUsers, passage, ralph, scanOf, track } from '../test/workflows';
 import {
   backArcs,
+  cardStep,
   checkedOf,
   currentPhase,
   didOf,
@@ -15,10 +16,17 @@ import {
   stepDetail,
   stepLabel,
   stepsOf,
+  stepDividers,
   stripOf,
+  TICKETS,
+  ticketsWorkflow,
+  ticketTracks,
   turnsGrid,
+  followers,
   workflowTitle,
+  withTickets,
 } from './workflow-view';
+import { agent, ticket } from '../test/ipc';
 
 const NOW = new Date(2026, 9, 26, 10, 49).getTime();
 
@@ -154,5 +162,101 @@ describe('the Workflow tab, worked out', () => {
     expect(turnsGrid(tr, 5).map((u) => u.cls)).toEqual(['ok', 'bad', 'on', 'todo', 'todo']);
     expect(checkedOf(ralph(), tr)).toEqual({ done: 4, total: 6 });
     expect(checkedOf(ralph(), null)).toEqual({ done: 3, total: 6 });
+  });
+});
+
+describe('the step on the card, in the conversation, and the workflow « Tickets » (ESC-197)', () => {
+  const tickets = [
+    ticket({
+      id: 't1',
+      key: 'DEM-5',
+      projectId: 'p1',
+      column: 'doing',
+      agentId: 'a3',
+      iteration: 1,
+      maxLoops: 5,
+      startedAt: NOW - 9 * 60_000,
+    }),
+    ticket({ id: 't2', key: 'DEM-6', projectId: 'p1', column: 'review', agentId: 'a4' }),
+    ticket({ id: 't3', key: 'DEM-7', projectId: 'p1', column: 'todo' }),
+  ];
+  const agents = Object.fromEntries(['a1', 'a3', 'a4'].map((id) => [id, agent({ id })]));
+
+  it('draws the loop of the tickets as a workflow of Escouade’s: its columns, the autopilot its door, « Renvoyer » its way back', () => {
+    const w = ticketsWorkflow(tickets)!;
+    expect(w.id).toBe(TICKETS);
+    expect(w.name).toBe('Tickets');
+    expect(stepsOf(w).map((s) => labelIn(w, s.name))).toEqual(['À faire', 'En cours', 'À tester', 'Terminé']);
+    expect(stepsOf(w)[0].command).toBe('pilote auto');
+    expect(stepsOf(w)[1].note).toBe('jusqu’à 5 boucles : le travail, puis la vérification des critères');
+    expect(stepDetail(w, stepsOf(w)[2]).back).toEqual([{ to: 'En cours', condition: null, say: 'Renvoyer : retour à En cours' }]);
+    expect(
+      backArcs(
+        w,
+        stepsOf(w).map((s) => s.name),
+      ),
+    ).toEqual([[2, 1]]);
+    // Not there without a ticket.
+    expect(ticketsWorkflow([])).toBeNull();
+  });
+
+  it('puts each agent of a ticket on its column, its loop beside it, and counts an agent in two workflows once', () => {
+    const list = ticketTracks('p1', tickets, agents, NOW);
+    expect(list.map((tr) => [tr.agentId, tr.step, tr.ticketLoop])).toEqual([
+      ['a3', 'En cours', [1, 5]],
+      ['a4', 'À tester', null],
+    ]);
+    expect(list[0].ms).toBe(9 * 60_000);
+    expect(ticketTracks('p2', tickets, agents, NOW)).toEqual([]);
+    const w = ticketsWorkflow(tickets)!;
+    expect(pipsOf(w, list[0])).toEqual(['done', 'on', '', '']);
+    expect(followers([track('a3'), ...list])).toBe(2);
+  });
+
+  it('shows the project’s own workflow before « Tickets », unless the open agent follows Tickets alone', () => {
+    const tk = ticketsWorkflow(tickets);
+    const scan = scanOf(...withTickets([gsd()], tk));
+    const tr = ticketTracks('p1', tickets, agents, NOW);
+    // Two agents in Tickets, one in GSD: GSD all the same.
+    expect(pickWorkflow(scan, [track('a1'), ...tr], null, null)?.name).toBe('GSD');
+    // The agent of DEM-5 follows GSD too: GSD.
+    expect(pickWorkflow(scan, [...tr, track('a3')], 'a3', null)?.name).toBe('GSD');
+    expect(pickWorkflow(scan, tr, 'a4', null)?.id).toBe(TICKETS);
+    expect(pickWorkflow(scanOf(...withTickets([], tk)), tr, null, null)?.id).toBe(TICKETS);
+  });
+
+  it('says on the card where the agent is in its workflow, never in Tickets nor outside', () => {
+    const all = withTickets([gsd()], ticketsWorkflow(tickets));
+    expect(cardStep(all, track('a1', { step: 'gsd:verify-work' }))).toBe('GSD · Verify work');
+    const named = { ...gsd(), steps: gsd().steps.map((s) => (s.name === 'gsd:verify-work' ? { ...s, name: 'Vérifier', named: true } : s)) };
+    expect(cardStep([named], track('a1', { step: 'Vérifier' }))).toBe('GSD · Vérifier');
+    expect(cardStep(all, track('a1', { step: 'gsd:verify-work', outside: 'runs the e2e' }))).toBeNull();
+    expect(cardStep(all, ticketTracks('p1', tickets, agents, NOW)[0])).toBeNull();
+    // A workflow dismissed (« Ce n'est pas un workflow ») is in no list: nothing.
+    expect(cardStep([], track('a1', { step: 'gsd:verify-work' }))).toBeNull();
+  });
+
+  it('puts a divider before the message of the door, else before the call that signalled the step', () => {
+    const at = (min: number) => new Date(2026, 9, 26, 10, min).getTime();
+    const items = [
+      { id: 'u1', kind: 'user', ts: at(0), text: '/gsd:discuss-phase 3' },
+      { id: 'x1', kind: 'text' },
+      { id: 'c1', kind: 'tool', ts: at(4) },
+      { id: 'u2', kind: 'user', ts: at(10), text: 'merci' },
+      { id: 'c2', kind: 'tool', ts: at(10) + 300 },
+    ];
+    const passages = [
+      passage(1, 'gsd:discuss-phase', 0, 4, { door: '/gsd:discuss-phase 3' }),
+      passage(2, 'gsd:plan-phase', 4, 6),
+      passage(3, null, 10, 1),
+      // The fact, a moment after its call.
+      passage(4, 'gsd:execute-phase', 10.01, 1),
+      passage(5, 'gsd:verify-work', 30, 1, { workflow: 'gone' }),
+    ];
+    passages[3].at = at(10) + 400;
+    const map = stepDividers(items, passages, [gsd()]);
+    expect([...map.keys()]).toEqual(['u1', 'c1', 'c2']);
+    expect(map.get('u1')![0]).toMatchObject({ title: 'GSD · Discuss phase', door: '/gsd:discuss-phase 3', workflow: GSD_ID });
+    expect(map.get('c1')![0].door).toBeNull();
   });
 });

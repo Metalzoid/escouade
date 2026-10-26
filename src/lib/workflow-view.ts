@@ -3,7 +3,17 @@
 // one agent's history. Pure: the tab draws what these give.
 
 import { t } from './i18n';
-import type { Workflow, WorkflowPassage, WorkflowScan, WorkflowStep, WorkflowTrack } from './types';
+import type {
+  Agent,
+  Column,
+  Ticket,
+  Workflow,
+  WorkflowPassage,
+  WorkflowScan,
+  WorkflowStep,
+  WorkflowTrack,
+  WorkflowTransition,
+} from './types';
 
 /** A step's name as the rail writes it: `gsd:discuss-phase` → « Discuss phase » (the corrections rename it). */
 export function stepLabel(name: string): string {
@@ -32,11 +42,17 @@ export function pickWorkflow(scan: WorkflowScan | null, tracks: WorkflowTrack[],
   const all = scan?.workflows ?? [];
   if (!all.length) return null;
   const byId = (id: string | null | undefined) => (id ? all.find((w) => w.id === id) : undefined);
-  const mine = byId(tracks.find((tr) => tr.agentId === openAgent)?.workflow);
+  // The open agent's own workflow before « Tickets », which it may follow too (choice 159).
+  const ofOpen = tracks
+    .filter((tr) => tr.agentId === openAgent)
+    .sort((a, b) => Number(a.workflow === TICKETS) - Number(b.workflow === TICKETS));
+  const mine = ofOpen.map((tr) => byId(tr.workflow)).find(Boolean);
   if (byId(chosen)) return byId(chosen)!;
   if (mine) return mine;
+  // « Tickets » by the count of its agents never hides the project's own workflow.
+  const read = all.filter((w) => w.id !== TICKETS);
   const count = (w: Workflow) => tracks.filter((tr) => tr.workflow === w.id).length;
-  return [...all].sort((a, b) => count(b) - count(a))[0];
+  return [...(read.length ? read : all)].sort((a, b) => count(b) - count(a))[0];
 }
 
 /** « phase 3 sur 6 », as a state file of the workflow says it. */
@@ -74,7 +90,11 @@ export function stepDetail(w: Workflow, s: WorkflowStep) {
   const self = w.transitions.find((tr) => tr.back && tr.from === s.name && tr.to === s.name);
   const back = w.transitions
     .filter((tr) => tr.back && tr.from === s.name && tr.to !== s.name)
-    .map((tr) => ({ to: tr.to, condition: tr.condition }));
+    .map((tr): { to: string; condition: string | null; say?: string } => ({
+      to: tr.to,
+      condition: tr.condition,
+      ...(tr.say ? { say: tr.say } : {}),
+    }));
   return {
     agents: s.agents.map((a) => a.name),
     rounds: self?.max ?? null,
@@ -240,5 +260,156 @@ export function checkedOf(w: Workflow, tr: WorkflowTrack | null) {
   return turn?.checked ?? w.promptLoop?.list?.says?.checked ?? null;
 }
 
-/** The count of the Workflow tab: the agents that follow a workflow of the project. */
-export const followers = (tracks: WorkflowTrack[]) => tracks.filter((tr) => tr.workflow !== null).length;
+/** The count of the Workflow tab: the agents that follow a workflow of the project, once each (in « Tickets » too). */
+export const followers = (tracks: WorkflowTrack[]) => new Set(tracks.filter((tr) => tr.workflow !== null).map((tr) => tr.agentId)).size;
+
+// ---------- Where the card, the conversation and the Kanban meet the workflow (ESC-197, choices 145 and 159) ----------
+
+/** The id of Escouade's own workflow, the loop of the tickets: no reading has it, the Kanban does. */
+export const TICKETS = 'escouade:tickets';
+
+/** The columns of the Kanban, the steps of « Tickets » in their order. */
+const COLUMNS: Column[] = ['todo', 'doing', 'review', 'done'];
+
+/**
+ * « Tickets », the loop of the Kanban drawn as a workflow of Escouade's (choice 159): À faire → En cours (loop n/max, the
+ * work then the check of the criteria) → À tester → Terminé, « Renvoyer » its way back; the autopilot its door. There
+ * when the project's Kanban has tickets. Its steps are named as the columns, in the window's language.
+ */
+export function ticketsWorkflow(tickets: Ticket[]): Workflow | null {
+  if (!tickets.length) return null;
+  const name = (c: Column) => t(`board.columns.${c}`);
+  const max = Math.max(...tickets.map((tk) => tk.maxLoops));
+  const step = (c: Column, order: number): WorkflowStep => ({
+    name: name(c),
+    command: c === 'todo' ? t('workflow.ticketsDoor') : '',
+    order,
+    description: '',
+    path: '',
+    agents: [],
+    reads: [],
+    writes: [],
+    named: true,
+    ...(c === 'doing' ? { note: t('workflow.ticketsDoing', { count: max }) } : {}),
+  });
+  const go = (from: Column, to: Column): WorkflowTransition => ({
+    from: name(from),
+    to: name(to),
+    back: false,
+    condition: null,
+    max: null,
+  });
+  return {
+    id: TICKETS,
+    name: t('workflow.ticketsName'),
+    kind: 'cycle',
+    harness: null,
+    repo: '',
+    doors: [],
+    steps: COLUMNS.map(step),
+    transitions: [
+      go('todo', 'doing'),
+      go('doing', 'review'),
+      go('review', 'done'),
+      {
+        from: name('review'),
+        to: name('doing'),
+        back: true,
+        condition: null,
+        max: null,
+        say: t('workflow.sendBack', { step: name('doing') }),
+      },
+    ],
+    stateFiles: [],
+    exit: null,
+    promptLoop: null,
+  };
+}
+
+/**
+ * Where each agent of a ticket is in « Tickets »: on its ticket's column, its loop beside it. An agent of a ticket that
+ * follows the project's workflow too is in both (choice 159).
+ */
+export function ticketTracks(projectId: string, tickets: Ticket[], agents: Record<string, Agent>, now: number): WorkflowTrack[] {
+  const out: WorkflowTrack[] = [];
+  for (const tk of tickets) {
+    const a = tk.agentId ? agents[tk.agentId] : undefined;
+    if (!a || tk.projectId !== projectId || tk.column === 'todo') continue;
+    const since = tk.startedAt ?? tk.createdAt;
+    out.push({
+      agentId: a.id,
+      projectId,
+      workflow: TICKETS,
+      step: t(`board.columns.${tk.column}`),
+      version: '',
+      outside: null,
+      subagents: [],
+      passages: [],
+      turns: [],
+      support: { partial: false, missing: [] },
+      since,
+      ms: Math.max(0, (tk.doneAt ?? now) - since),
+      cost: tk.cost,
+      ticketLoop: tk.column === 'doing' ? [tk.iteration, tk.maxLoops] : null,
+      updated: since,
+      behind: false,
+    });
+  }
+  return out;
+}
+
+/** The workflows of a project as the tab offers them: those read (corrections in), then « Tickets ». */
+export const withTickets = (read: Workflow[], tickets: Workflow | null) => (tickets ? [...read, tickets] : read);
+
+/** « GSD · Vérifier »: where an agent is in a workflow, as its card and the conversation say it; null out of any. */
+export function stepTitle(all: Workflow[], workflow: string | null, step: string | null): string | null {
+  const w = all.find((x) => x.id === workflow);
+  if (!w || !step) return null;
+  return `${workflowTitle(w)} · ${labelIn(w, step)}`;
+}
+
+/** The step an agent's card shows in the place of its plan: its workflow's (never « Tickets », the card has its loop). */
+export const cardStep = (all: Workflow[], tr: WorkflowTrack | undefined | null) =>
+  tr && !tr.outside && tr.workflow !== TICKETS ? stepTitle(all, tr.workflow, tr.step) : null;
+
+/** A divider of the conversation: the agent entering a step, by its door, at its time. */
+export interface StepDivider {
+  key: string;
+  workflow: string;
+  title: string;
+  door: string | null;
+  at: number;
+}
+
+type Timed = { id: string; kind: string; ts?: number; text?: string };
+
+/**
+ * The dividers of a conversation (choice 145), by the item each goes before: one at each entry in a step of a workflow
+ * the project has. A step entered by its door goes before the message that typed it, else before the call (subagent,
+ * skill, file) that signalled it; the fact is seen just after its item, within a moment.
+ */
+export function stepDividers(items: Timed[], passages: WorkflowPassage[], all: Workflow[]): Map<string, StepDivider[]> {
+  const out = new Map<string, StepDivider[]>();
+  // The fact is applied as its item comes: a moment after its time, never long.
+  const SLACK = 2000;
+  /** The last item between `from` and `to` that `ok` takes. */
+  const last = (from: number, to: number, ok: (it: Timed) => boolean) => {
+    let found: Timed | null = null;
+    for (const it of items) if (it.ts !== undefined && it.ts >= from && it.ts <= to && ok(it)) found = it;
+    return found;
+  };
+  for (const p of passages) {
+    const title = p.step ? stepTitle(all, p.workflow, p.step) : null;
+    if (!title) continue;
+    const word = p.door?.trim().split(/\s/)[0];
+    const anchor =
+      (word ? last(p.at - 60_000, p.at + SLACK, (it) => it.kind === 'user' && !!it.text?.trimStart().startsWith(word)) : null) ??
+      last(p.at - SLACK, p.at + 200, (it) => it.kind === 'tool') ??
+      items.find((it) => it.ts !== undefined && it.ts >= p.at - SLACK);
+    if (!anchor) continue;
+    const list = out.get(anchor.id) ?? [];
+    list.push({ key: `${p.workflow}#${p.n}`, workflow: p.workflow, title, door: p.door, at: p.at });
+    out.set(anchor.id, list);
+  }
+  return out;
+}

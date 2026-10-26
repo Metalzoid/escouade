@@ -28,7 +28,9 @@
   import { accountsOf } from '../lib/accounts';
   import { bgCount } from '../lib/bgtasks';
   import { splitEscouade } from '../lib/escouade';
-  import { fDur, fInt, fNum, fTok } from '../lib/format';
+  import { fDur, fInt, fNum, fTime, fTok } from '../lib/format';
+  import { stepDividers } from '../lib/workflow-view';
+  import { workflows } from '../lib/workflows.svelte';
   import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
   import { capsOf, engineName, showsCost, speakerOf } from '../lib/engines';
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
@@ -102,6 +104,18 @@
     return rank >= 0 ? rank : Math.max(0, top.length - SLICE);
   });
   const drawn = $derived(top.slice(start));
+  // A divider at each entry of the agent in a step of its project's workflows (ESC-197, choice 145), before the message
+  // of its door or the call that signalled it: as the project has them (corrections in, those dismissed left out).
+  const dividers = $derived.by(() => {
+    const track = workflows.tracks[project.id]?.[agent.id];
+    return track ? stepDividers(top, track.passages, workflows.scans[project.id]?.workflows ?? []) : new Map();
+  });
+  /** The Workflow tab, on the workflow of the divider. */
+  function openWorkflow(workflow: string) {
+    workflows.chosen[project.id] = workflow;
+    app.panelTab = 'workflow';
+    if (!app.split) app.filesOpen = true;
+  }
   // The next slice: what « Afficher les N précédents » adds.
   const older = $derived(Math.min(SLICE, start));
   const children = $derived.by(() => {
@@ -806,6 +820,13 @@
         {#each drawn as item, j (item.id)}
           <!-- Its rank in the whole conversation. -->
           {@const i = start + j}
+          {#each dividers.get(item.id) ?? [] as d (d.key)}
+            <div class="wf-div" data-testid="step-divider">
+              <button use:tip={t('workflow.divider')} onclick={() => openWorkflow(d.workflow)}
+                ><Icon name="flow" size={14} />{d.title}</button
+              >{#if d.door}<span class="mono">{d.door}</span>{/if}<span>{fTime(d.at)}</span>
+            </div>
+          {/each}
           {#if shows(item)}
             <!-- The block of an item, found by it (reveal). -->
             <div class="item" class:found={found === item.id} class:tool-item={isCall(item)} data-item={item.id}>
@@ -1331,6 +1352,48 @@
     contain-intrinsic-size: auto 60px;
   }
   /* The block of an item lays its content out as the list does. */
+  /* The entry in a step of a workflow (ESC-197): the preview's `.wf-div`. */
+  .wf-div {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 18px;
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .wf-div::before,
+  .wf-div::after {
+    content: '';
+    flex: 1;
+    border-top: 1px solid var(--line);
+  }
+  .wf-div > * {
+    flex: none;
+    white-space: nowrap;
+  }
+  .wf-div button {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--soft);
+    font-weight: 550;
+  }
+  .wf-div button:hover {
+    color: var(--text);
+  }
+  .wf-div :global(.icon) {
+    color: var(--muted);
+  }
+  .wf-div .mono {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 500;
+  }
   .item {
     display: flex;
     flex-direction: column;

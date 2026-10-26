@@ -52,6 +52,8 @@
   import { menu, type MenuItem } from '../lib/menu.svelte';
   import { modelLabel, MODES } from '../lib/models';
   import { planView } from '../lib/plan';
+  import { cardStep } from '../lib/workflow-view';
+  import { workflows } from '../lib/workflows.svelte';
   import { sidebarSubs, type SubRow } from '../lib/subagents';
   import { BG_FINISHED_SHOWN, BG_RUNNING_SHOWN, bgCount, bgDuration, rowLine, rowTitle, sidebarBg, type BgRow } from '../lib/bgtasks';
   import { estimateHint, spent } from '../lib/spend';
@@ -71,6 +73,15 @@
   import { tip } from '../lib/tip';
 
   let { project }: { project: Project } = $props();
+
+  // The workflows of the project and where its agents are in them, for the step on their cards (ESC-197): read again
+  // when its corrections change, as the Workflow tab does.
+  const workflowFixes = $derived(JSON.stringify(project.workflowFixes ?? []));
+  $effect(() => {
+    const id = project.id;
+    void workflowFixes;
+    untrack(() => void workflows.follow(id));
+  });
 
   /** What an agent is doing, read when shown (the language of the interface can change). */
   const statusLabel = (status: AgentStatus) => t(`nav.sidebar.status.${status}`);
@@ -775,6 +786,7 @@
       {@const s = spent(a)}
       {@const ticket = app.ticketOf(a.id)}
       {@const plan = planView(a)?.mini}
+      {@const wfStep = cardStep(workflows.scans[project.id]?.workflows ?? [], workflows.tracks[project.id]?.[a.id])}
       {@const inBg = can(a, 'backgroundTasks') ? bgCount(a.plan) : 0}
       {@const subsRunning = (a.plan?.agents ?? []).filter((x) => x.status === 'running').length}
       {@const remote = remoteStateOf(a)}
@@ -874,9 +886,12 @@
           {#if ticket?.column === 'doing' || ticket?.column === 'review'}
             <span class="ticket-chip">{ticket.key}</span>
             {#if ticket.column === 'doing'}
-              <span>{t('nav.sidebar.loop', { iteration: ticket.iteration, max: ticket.maxLoops })}</span>
-              <span class="loops" aria-hidden="true"
-                >{#each { length: Math.min(ticket.maxLoops, 10) } as _, i (i)}<i class:on={i < ticket.iteration}></i>{/each}</span
+              <!-- The ticket's loop keeps its place; the step of its workflow, if it follows one, is in the tooltip (choice 145). -->
+              <span class="loop" use:tip={wfStep && t('workflow.cardStep', { step: wfStep })}
+                ><span>{t('nav.sidebar.loop', { iteration: ticket.iteration, max: ticket.maxLoops })}</span>
+                <span class="loops" aria-hidden="true"
+                  >{#each { length: Math.min(ticket.maxLoops, 10) } as _, i (i)}<i class:on={i < ticket.iteration}></i>{/each}</span
+                ></span
               >
             {:else}
               <span>{t('nav.sidebar.toTest')}</span>
@@ -888,7 +903,10 @@
             {:else}
               <span class="sep">·</span><span>{t('nav.sidebar.noMessage')}</span>
             {/if}
-            {#if plan}
+            {#if wfStep}
+              <!-- Where it is in its workflow takes the place of its plan, which stays in its banner (choice 145). -->
+              <span class="sep">·</span><span class="wf-mini"><Icon name="flow" size={14} /><span>{wfStep}</span></span>
+            {:else if plan}
               <!-- How far the agent is through its plan: the bar says it at a glance, the words are read. -->
               <span class="sep">·</span><span class="plan-mini"
                 ><span class="plan-text"
@@ -1687,6 +1705,29 @@
   }
   .loops i.on {
     background: var(--p-ink);
+  }
+  /* Where the card meets the workflow (ESC-197): the preview's `.wf-mini`. */
+  .loop {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .wf-mini {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--soft);
+    white-space: nowrap;
+  }
+  .wf-mini :global(.icon) {
+    flex: none;
+    color: var(--muted);
+  }
+  .wf-mini span {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .plan-mini {
     display: inline-flex;

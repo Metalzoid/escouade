@@ -47,7 +47,23 @@ class Workflows {
    * The workflows of a project as it has them (ESC-195): those of its files, with the user's corrections, those dismissed
    * left out; beside what the reading says of itself (when, where it looked). Asked again when the corrections change.
    */
-  async loadScan(projectId: string) {
+  loadScan(projectId: string): Promise<void> {
+    // The tab and the cards ask together: one reading for both.
+    const now = this.reading.get(projectId);
+    if (now) return now;
+    const next = this.readScan(projectId).finally(() => this.reading.delete(projectId));
+    this.reading.set(projectId, next);
+    return next;
+  }
+
+  /** The project's workflows and its agents' tracks, for the cards and the conversation (ESC-197). */
+  async follow(projectId: string) {
+    await Promise.all([this.loadTracks(projectId), this.loadScan(projectId)]);
+  }
+
+  private reading = new Map<string, Promise<void>>();
+
+  private async readScan(projectId: string) {
     try {
       // One after the other: the first reads again what changed, the second finds it read.
       const scan = await api.getWorkflows(projectId);
@@ -90,6 +106,7 @@ class Workflows {
     this.reader = {};
     this.folded = {};
     this.asked.clear();
+    this.reading.clear();
   }
 }
 
