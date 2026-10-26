@@ -390,6 +390,12 @@ impl DataDir {
         self.0.join("projects").join(name)
     }
 
+    /// What the last reading of a project's workflows found (`workflow`), of this machine: never in
+    /// the project, never versioned.
+    pub fn workflows_file(&self, project_id: &str) -> PathBuf {
+        self.project_files(project_id).join("workflows.json")
+    }
+
     /// The tickets' files, a folder each: the images pasted in their form.
     pub fn tickets(&self) -> PathBuf {
         self.0.join("tickets")

@@ -654,6 +654,18 @@ pub async fn refresh_repos(core: CoreState<'_>, id: String) -> Res<Project> {
     core.project(&id).map_err(err)
 }
 
+/// The workflows of the project (ESC-192): the last reading, read again if a file it read changed.
+#[tauri::command]
+pub async fn get_workflows(core: CoreState<'_>, id: String) -> Res<crate::workflow::Scan> {
+    core.refresh_workflows(&id, false).await.map_err(err)
+}
+
+/// « Relire » the project's workflows (ESC-192).
+#[tauri::command]
+pub async fn refresh_workflows(core: CoreState<'_>, id: String) -> Res<crate::workflow::Scan> {
+    core.refresh_workflows(&id, true).await.map_err(err)
+}
+
 /// « Oublier » a repository gone from the project's folder (ESC-169).
 #[tauri::command(async)]
 pub fn forget_repo(core: CoreState, id: String, repo: String) -> Res<Project> {

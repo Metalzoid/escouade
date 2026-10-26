@@ -127,6 +127,9 @@ mod updates;
 mod usage;
 mod voice;
 mod which;
+mod workflow;
+#[cfg(test)]
+mod workflow_tests;
 mod worktrees;
 mod wsl;
 
@@ -420,6 +423,7 @@ pub fn run() {
                     core.declare_on_focus();
                     // A repository added or removed in a project's folder meanwhile (ESC-169).
                     core.refresh_all_repos();
+                    core.refresh_all_workflows();
                 }
             }
             if let WindowEvent::CloseRequested { api, .. } = event {
@@ -464,6 +468,8 @@ pub fn run() {
             commands::paste_image,
             commands::inspect_folder,
             commands::refresh_repos,
+            commands::get_workflows,
+            commands::refresh_workflows,
             commands::agent_merge_check,
             commands::merge_agent_repos,
             commands::forget_repo,

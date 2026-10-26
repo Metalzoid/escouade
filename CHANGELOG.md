@@ -4,6 +4,12 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [Non publié]
+
+### Nouveautés
+
+- Escouade lit le workflow de ton projet à partir des commandes, skills, sous-agents et prompts de tes harness (GSD, Superpowers, une boucle `PROMPT.md`…) : ses étapes, leurs sous-agents, leurs retours et ses fichiers d’état, sans rien dépenser. Chaque dépôt d’un projet a le sien, et la lecture se refait quand un fichier change.
+
 ## [2.0.2] — 2026-10-26
 
 ### Corrections

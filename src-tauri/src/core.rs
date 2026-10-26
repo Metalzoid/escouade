@@ -1869,6 +1869,8 @@ impl<R: Runtime> Core<R> {
         }
         // Repositories added or removed while the app was closed (ESC-169).
         self.refresh_all_repos();
+        // And their workflows, read again if a file changed meanwhile (ESC-192).
+        self.refresh_all_workflows();
         let c = self.clone();
         tauri::async_runtime::spawn(async move { c.git_loop(git_rx).await });
         let c = self.clone();
