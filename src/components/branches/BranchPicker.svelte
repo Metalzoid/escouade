@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { agentGitOf, switchRefusal } from '../../lib/agent-branch';
-  import { deletable, deleteBranch, startAgentOn, switchBranch, tellRefusal, worktreeReason } from '../../lib/branch-actions';
+  import { deletable, deleteBranch, refusalText, startAgentOn, switchBranch, tellRefusal, worktreeReason } from '../../lib/branch-actions';
   import { rankFiles } from '../../lib/editor/quick-open';
+  import { missingAccountOf } from '../../lib/refusal';
   import { trapFocus } from '../../lib/focus';
   import { gitSync, repoSyncInfo, syncInfo, type SyncOp } from '../../lib/git-sync.svelte';
   import { pointerMoves } from '../../lib/hover';
@@ -271,13 +272,19 @@
 
   /** The rows, the one that creates the branch typed being last. */
   const count = $derived(rows.length + (creatable ? 1 : 0) + (creatableFrom ? 1 : 0));
+  /** Where the cursor starts, nothing searched yet: on the branch the agent is on, not on one it can't take (ESC-238). */
+  const home = $derived(forAgent && !text.trim() ? rows.findIndex((r) => !r.b.remote && isHere(r.b)) : -1);
   const cursor = $derived.by(() => {
     if (active === CREATE && creatable) return rows.length;
     if (active === CREATE_FROM && creatableFrom) return rows.length + 1;
-    return Math.max(
-      0,
-      rows.findIndex((r) => r.b.name === active),
-    );
+    const at = rows.findIndex((r) => r.b.name === active);
+    return Math.max(0, at >= 0 ? at : home);
+  });
+  /** Why the backend refused to switch the agent's folder: said in the picker, until the cursor or the search moves. */
+  let refused = $state<string | null>(null);
+  $effect(() => {
+    void [cursor, text];
+    refused = null;
   });
   const onCreate = $derived(creatable && cursor === rows.length);
   const onCreateFrom = $derived(creatableFrom && cursor === rows.length + 1);
@@ -369,8 +376,11 @@
         onclose();
       } catch (e) {
         switching = false;
-        tellRefusal(e, b.name);
         await load();
+        // In its note rather than a toast, which would cover the picker's foot in a narrow window (ESC-238); for want
+        // of an account, the toast that offers to add one.
+        if (missingAccountOf(e)) tellRefusal(e, b.name);
+        else refused = refusalText(e, b.name);
       }
       return;
     }
@@ -625,6 +635,8 @@
   <div class="note">
     {#if switching}
       <p role="status">{t('branches.picker.switching')}</p>
+    {:else if refused}
+      <p class="error" role="alert" use:tip={{ text: refused, cut: true }}>{refused}</p>
     {:else}
       <p id="branch-description" use:tip={{ text: description, cut: true }}>{description}</p>
     {/if}
@@ -801,7 +813,8 @@
     padding: 10px 8px;
     color: var(--dim);
   }
-  .none.error {
+  .none.error,
+  .note .error {
     color: var(--del);
   }
   /* Two lines, whatever the row says: a line that grew or went would move the list under the pointer (ESC-188). */

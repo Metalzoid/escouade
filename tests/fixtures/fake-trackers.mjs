@@ -105,8 +105,11 @@ function seed() {
         },
       ],
       // The pull requests opened by the app (ESC-64), from #101: open, their CI running, until POST
-      // /__github/pulls/<n> sets what a test wants of them ({ checks: 'FAILURE', changesRequested: true, … }).
+      // /__github/pulls/<n> sets what a test wants of them ({ checks: 'FAILURE', changesRequested: true, … }), the
+      // repository it is in (`repo`, acme/demo by default) and the one of its branch (`headRepo`: a fork's, ESC-238).
       pulls: [],
+      // The forks and the repository each was forked from (`repository.parent`).
+      forks: { 'ada/demo': 'acme/demo', 'bob/demo': 'acme/demo' },
     },
     // ClickUp: the workspace Atlas, its space Produit, the list « Sprint 12 » in the folder Sprints
     // (its own statuses) and the list « Backlog » outside any folder.
@@ -499,14 +502,15 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
     }
     const node = (x) => ({
       number: x.number,
-      url: `https://github.com/acme/demo/pull/${x.number}`,
+      url: `https://github.com/${x.repo ?? 'acme/demo'}/pull/${x.number}`,
       title: x.title,
       state: x.state,
       isDraft: x.draft,
       headRefName: x.head,
       baseRefName: x.base,
       mergeable: 'MERGEABLE',
-      isCrossRepository: false,
+      isCrossRepository: (x.headRepo ?? x.repo ?? 'acme/demo') !== (x.repo ?? 'acme/demo'),
+      headRepository: { nameWithOwner: x.headRepo ?? x.repo ?? 'acme/demo' },
       autoMergeRequest: null,
       latestOpinionatedReviews: { nodes: x.changesRequested ? [{ state: 'CHANGES_REQUESTED' }] : [] },
       reviewThreads: { nodes: x.changesRequested ? [{ isResolved: false }] : [] },
@@ -520,13 +524,18 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
             repository: {
               pullRequests: {
                 nodes: g.pulls
-                  .filter((x) => x.head === q.variables.branch)
+                  .filter((x) => x.head === q.variables.branch && (x.repo ?? 'acme/demo') === `${q.variables.owner}/${q.variables.name}`)
                   .reverse()
                   .map(node),
               },
             },
           },
         });
+      if (q.operationName === 'RepoParent') {
+        const parent = g.forks[`${q.variables.owner}/${q.variables.name}`];
+        const [owner, name] = parent ? parent.split('/') : [];
+        return send(200, { data: { repository: { parent: parent ? { name, owner: { login: owner } } : null } } });
+      }
       if (q.operationName === 'Threads') {
         const x = g.pulls.find((y) => y.number === q.variables.number);
         const thread = {

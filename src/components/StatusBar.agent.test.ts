@@ -169,10 +169,28 @@ describe('StatusBar while an agent is open', () => {
     await userEvent.click(button(/^escouade\/login/));
     const dialog = await screen.findByRole('dialog', { name: 'Branche de refacto-auth' });
     await userEvent.click(await within(dialog).findByText('feat/review'));
-    await waitFor(() =>
-      expect(app.toasts.at(-1)).toMatchObject({ text: 'L’agent refacto-auth travaille : attends la fin de son tour.', kind: 'error' }),
-    );
+    // Said in the picker, which stays open: a toast would cover its foot in a narrow window (ESC-238).
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('L’agent refacto-auth travaille : attends la fin de son tour.');
+    expect(app.toasts).toEqual([]);
     expect(screen.getByRole('dialog', { name: 'Branche de refacto-auth' })).toBeInTheDocument();
+    // Gone once the cursor moves to another branch.
+    await userEvent.keyboard('{ArrowDown}');
+    await waitFor(() => expect(within(dialog).queryByRole('alert')).toBeNull());
+  });
+
+  it('opens on the agent’s branch, not on a branch it can’t take (ESC-238)', async () => {
+    fakeBackend({ branch_list: () => LIST });
+    app.git = { p1: gitInfo({ agentGit: { a1: own() } }) };
+    render(StatusBar);
+    await userEvent.click(button(/^escouade\/login/));
+    const dialog = await screen.findByRole('dialog', { name: 'Branche de refacto-auth' });
+    const option = (name: string) => within(dialog).getByText(name, { selector: '.name' }).closest('[role="option"]')!;
+    await waitFor(() => expect(option('escouade/login')).toHaveAttribute('aria-selected', 'true'));
+    expect(option('main')).toHaveAttribute('aria-selected', 'false');
+    expect(within(dialog).queryByText('C’est la branche du dossier du projet : un worktree ne peut pas la prendre.')).toBeNull();
+    // A search puts its best match first, as before.
+    await userEvent.type(within(dialog).getByRole('combobox'), 'review');
+    await waitFor(() => expect(option('feat/review')).toHaveAttribute('aria-selected', 'true'));
   });
 
   it('syncs its worktree, not the project’s folder', async () => {
