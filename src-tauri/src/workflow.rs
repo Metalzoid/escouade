@@ -35,10 +35,16 @@ const DIRECTORY: usize = 6;
 const TEXT_EXT: &[&str] = &["md", "mdc", "txt", "yml", "yaml", "json", "toml"];
 /// What is never read, even named: a sign-in, a secret, a conversation.
 const SECRET_NAMES: &[&str] = &[".credentials.json", "auth.json"];
+/// A harness' settings (`settings.json`, `settings.local.json`) or any `*.local.*` file: they may hold keys
+/// or the user's own choices, never read (ESC-196).
+fn is_config(name: &str) -> bool {
+    (name.starts_with("settings") && name.ends_with(".json")) || name.contains(".local.")
+}
+
 /// The folders of a harness' own folder that hold its conversations.
 const TRANSCRIPTS: &[&str] = &["projects", "sessions"];
 /// What `Scan::searched` says of a file named and not read: `ignored:<why>:<as named>`, `<why>` one
-/// of `outside`, `extension`, `secret`, `transcript`. Never its content.
+/// of `outside`, `extension`, `secret`, `config`, `transcript`. Never its content.
 pub const IGNORED: &str = "ignored:";
 
 /// The folders of each harness, from a repository (`user` ones from the harness' folder), and what
@@ -289,6 +295,11 @@ pub struct Workflow {
     /// The line that says when it is over.
     pub exit: Option<String>,
     pub prompt_loop: Option<PromptLoop>,
+    /// Set when « Affiner… » (ESC-196) made this definition: the fingerprint of the reading it was
+    /// made from (`workflowrefine`). A reading that finds that same definition again leaves it; one
+    /// that finds it changed writes its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refined: Option<String>,
 }
 
 /// Something of a harness' folders that is no workflow (a command alone).
@@ -562,6 +573,9 @@ impl Ctx<'_> {
         if SECRET_NAMES.contains(&name.as_str()) || name.starts_with(".env") {
             return Some("secret");
         }
+        if is_config(&name) {
+            return Some("config");
+        }
         let Ok(real) = path.canonicalize() else {
             return Some("outside");
         };
@@ -572,6 +586,9 @@ impl Ctx<'_> {
             .to_lowercase();
         if SECRET_NAMES.contains(&real_name.as_str()) || real_name.starts_with(".env") {
             return Some("secret");
+        }
+        if is_config(&real_name) {
+            return Some("config");
         }
         let own: Vec<PathBuf> = [
             Some(&self.repo_dir),
@@ -1700,6 +1717,7 @@ fn read_harness(ctx: &mut Ctx, repo: &str, harness: EngineId, launched: &[String
             state_files: state,
             exit,
             prompt_loop: None,
+            refined: None,
         });
     }
     // Loops of one prompt through `/loop`.
@@ -1918,6 +1936,7 @@ fn prompt_loop_of(
             returns,
             max_turns,
         }),
+        refined: None,
     })
 }
 
@@ -2049,6 +2068,16 @@ static ALL_RUNNING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 static FILES: std::sync::LazyLock<
     parking_lot::Mutex<std::collections::HashMap<String, (String, BTreeMap<String, String>)>>,
 > = std::sync::LazyLock::new(Default::default);
+
+/// What a change of a workflow's file is said to have been (« Mis à jour par … »).
+pub(crate) fn mark_updated(project_id: &str, id: &str, what: &str) {
+    FILES
+        .lock()
+        .entry(project_id.to_string())
+        .or_default()
+        .1
+        .insert(id.to_string(), what.to_string());
+}
 
 impl<R: tauri::Runtime> crate::core::Core<R> {
     /// The workflows of the project: the last reading kept in the data folder, read again when a
@@ -2258,4 +2287,74 @@ pub fn list_progress(project_root: &Path, path: &str, roots: &Roots) -> Option<P
     };
     let text = ctx.read(path, &project_root.join(path))?;
     says_of(&text).checked
+}
+
+/// The most of a file an agent that refines is given, and of all of them (ESC-196).
+const CAUSE_EACH: usize = 12_000;
+const CAUSE_TOTAL: usize = 150_000;
+
+/// The files the workflows stand on (their doors, steps and sub-agents, `path` from the project's
+/// folder or `~/…`) with what they say, as the reader may read them (no secret, no conversation,
+/// nothing outside the project and the harnesses' own folders): what an agent that refines is
+/// given. Each is clipped, and the whole is bounded.
+pub fn files_in_cause(
+    project_root: &Path,
+    workflows: &[Workflow],
+    sources: &[Source],
+    roots: &Roots,
+) -> Vec<(String, String)> {
+    // Only what this machine's own reading found (its commands, skills, sub-agents, prompts, what they
+    // include, the instructions): a path that only a shared workflow file names is never read, for such a
+    // file comes with a cloned repository.
+    let found: BTreeSet<PathBuf> = sources
+        .iter()
+        .filter(|s| s.kind != "state")
+        .filter_map(|s| Path::new(&s.path).canonicalize().ok())
+        .collect();
+    let mut paths: BTreeSet<String> = BTreeSet::new();
+    for w in workflows {
+        paths.extend(w.doors.iter().map(|d| d.path.clone()));
+        for s in &w.steps {
+            paths.insert(s.path.clone());
+            paths.extend(s.agents.iter().filter_map(|a| a.path.clone()));
+        }
+    }
+    let mut ctx = Ctx {
+        roots,
+        repo_dir: project_root.to_path_buf(),
+        repo: String::new(),
+        sources: Vec::new(),
+        ignored: BTreeSet::new(),
+    };
+    let (mut out, mut total) = (Vec::new(), 0usize);
+    for path in paths.into_iter().filter(|p| !p.is_empty()) {
+        let Some(file) = ctx.resolve(&path, &project_root.join("x")) else {
+            continue;
+        };
+        if !file.canonicalize().is_ok_and(|f| found.contains(&f)) {
+            continue;
+        }
+        let Some(text) = ctx.read(&path, &file) else {
+            continue;
+        };
+        let text = clip_chars(&text, CAUSE_EACH);
+        if total + text.len() > CAUSE_TOTAL {
+            break;
+        }
+        total += text.len();
+        out.push((path, text));
+    }
+    out
+}
+
+/// `text` cut to at most `max` bytes, at a character.
+fn clip_chars(text: &str, max: usize) -> String {
+    if text.len() <= max {
+        return text.to_string();
+    }
+    let mut end = max;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    text[..end].to_string()
 }

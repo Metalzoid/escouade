@@ -3,11 +3,11 @@
   import Rich from '../../lib/i18n/Rich.svelte';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
-  import { fDate, fTime } from '../../lib/format';
+  import { fDate, fTime, fTok, fUsd } from '../../lib/format';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import { tip } from '../../lib/tip';
-  import type { Project, Workflow, WorkflowScan, WorkflowSignal } from '../../lib/types';
+  import type { Project, Workflow, WorkflowRefinePlan, WorkflowScan, WorkflowSignal } from '../../lib/types';
   import {
     agentsOf,
     fixFrom,
@@ -146,6 +146,59 @@
   /** The file of a workflow, as the backend says it. */
   const fileOf = (w: Workflow) => shownScan?.files?.find((f) => f.id === w.id);
 
+  // « Affiner… » (ESC-196): the plan is said first (model, account, cost), the agent asked on « Lancer » only.
+  let plan = $state<WorkflowRefinePlan | null>(null);
+  let planFailed = $state('');
+  let asking = $state(false);
+  let rejected = $state<string[]>([]);
+  let refineMsg = $state('');
+  let refineBad = $state(false);
+
+  async function offerRefine() {
+    plan = null;
+    planFailed = '';
+    rejected = [];
+    refineMsg = '';
+    refineBad = false;
+    try {
+      const id = project.id;
+      const p = await api.workflowRefinePlan(id);
+      if (id === project.id) plan = p;
+    } catch (e) {
+      planFailed = String(e);
+    }
+  }
+
+  async function refine() {
+    const id = project.id;
+    asking = true;
+    refineMsg = '';
+    refineBad = false;
+    try {
+      const out = await api.refineWorkflows(id);
+      if (id !== project.id) return;
+      scan = out.scan;
+      scanOf = id;
+      rejected = out.rejected;
+      const added = out.refined.reduce((n, r) => n + r.added.length, 0);
+      const described = out.refined.reduce((n, r) => n + r.described, 0);
+      const ways = out.refined.reduce((n, r) => n + r.transitions, 0);
+      const parts = [
+        added && t('workflowSettings.refineAdded', { count: added }),
+        described && t('workflowSettings.refineDescribed', { count: described }),
+        ways && t('workflowSettings.refineWays', { count: ways }),
+      ].filter(Boolean);
+      refineMsg = parts.length ? t('workflowSettings.refineDone', { summary: parts.join(', ') }) : t('workflowSettings.refineNothing');
+      app.toast(refineMsg);
+      plan = null;
+    } catch (e) {
+      refineMsg = t('workflowSettings.refineFailed', { error: String(e) });
+      refineBad = true;
+    } finally {
+      asking = false;
+    }
+  }
+
   /** « Retirer du dépôt »: the file of a workflow this machine does not read goes, at once. */
   async function removeFile(w: Workflow) {
     reading = true;
@@ -189,13 +242,40 @@
     >
   </Row>
   <Row label={t('workflowSettings.refine')} desc={t('workflowSettings.refineDesc')}>
-    <!-- LOOP-5 brings the agent; until then the button says why it waits. -->
-    <span class="soon" use:tip={t('workflowSettings.refineSoon')}>
-      <button class="btn" disabled aria-describedby="wf-refine-soon"
-        ><Icon name="sparkle" size={14} />{t('workflowSettings.refineButton')}</button
-      >
-    </span>
-    <span id="wf-refine-soon" hidden>{t('workflowSettings.refineSoon')}</span>
+    {#snippet extra()}
+      {#if plan}
+        <span class="more wf-plan" data-testid="refine-plan">
+          <span>{t('workflowSettings.refineWho', { model: plan.model, account: plan.account })}</span>
+          <span
+            >{plan.cost === null
+              ? t('workflowSettings.refineCostUnknown', { tokens: fTok(plan.inputTokens) })
+              : t('workflowSettings.refineCost', { tokens: fTok(plan.inputTokens), cost: fUsd(plan.cost) })}</span
+          >
+          <span
+            >{t('workflowSettings.refineWeighs', {
+              workflows: t('workflowSettings.refineWf', { count: plan.workflows }),
+              files: t('workflowSettings.refineFiles', { count: plan.files }),
+            })}</span
+          >
+          {#if plan.private}<span>{t('workflowSettings.refinePrivate')}</span>{/if}
+          <span class="wf-plan-acts">
+            <button class="btn primary small" disabled={asking} onclick={refine}>{t('workflowSettings.refineRun')}</button>
+            <button class="btn small" disabled={asking} onclick={() => (plan = null)}>{t('workflowSettings.refineCancel')}</button>
+          </span>
+        </span>
+      {/if}
+      {#if asking}<span class="more">{t('workflowSettings.refineAsking')}</span>{/if}
+      {#if planFailed}<span class="bad">{t('workflowSettings.refineFailed', { error: planFailed })}</span>{/if}
+      {#if refineMsg}<span class={refineBad ? 'bad' : 'more'}>{refineMsg}</span>{/if}
+      {#if rejected.length}
+        <span class="more wf-plan"
+          ><span>{t('workflowSettings.refineRejected')}</span>{#each rejected as r (r)}<span class="bad">{r}</span>{/each}</span
+        >
+      {/if}
+    {/snippet}
+    <button class="btn" disabled={reading || asking} onclick={offerRefine}
+      ><Icon name="sparkle" size={14} />{t('workflowSettings.refineButton')}</button
+    >
   </Row>
   <Row label={t('workflowSettings.auto')} desc={t('workflowSettings.autoDesc')}>
     <Switch label={t('workflowSettings.auto')} bind:on={draft.workflowsAutoRead} />
@@ -421,8 +501,16 @@
     font-size: 12px;
     line-height: 1.5;
   }
-  .soon {
-    display: inline-flex;
+  .wf-plan {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 6px;
+  }
+  .wf-plan-acts {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
   }
   .sub-h {
     display: flex;

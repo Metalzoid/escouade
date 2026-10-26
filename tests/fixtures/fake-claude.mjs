@@ -339,6 +339,52 @@ if (argv[0] === 'mcp') {
   const tongue = (english) => (/^You /.test(role) === english ? (english ? 'en' : 'fr') : 'mixed');
   process.stdin.on('data', (d) => (input += d));
   process.stdin.on('end', () => {
+    // « Affiner… » (ESC-196): the workflows it is given, answered in the schema: each step described, a way
+    // back from the last to the first (3 times at most). A file that says [invalide] gets prose, one that says
+    // [invente] gets a step with no file, one on a file it read (« Devinée »), a way to a step that is not there
+    // and a workflow of the project it does not have; one that says [muet] gets nothing (the model fails).
+    if (input.includes('<workflows-json>')) {
+      if (input.includes('[muet]')) {
+        process.stderr.write('model unavailable\n');
+        process.exit(1);
+      }
+      if (input.includes('[invalide]')) {
+        process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: 'Voici ce que je pense : tout va bien.' }));
+        return;
+      }
+      const given = JSON.parse(input.match(/<workflows-json>\n([\s\S]*?)\n<\/workflows-json>/)[1]);
+      const file = input.match(/^=== (.+)$/m)?.[1] ?? '';
+      const workflows = given.map((w) => {
+        const steps = w.steps.map((s) => ({ ...s, description: `Précisé par le faux claude : ${s.name}` }));
+        const transitions = [{ from: steps[steps.length - 1].name, to: steps[0].name, condition: 'si rouge', max: 3 }];
+        if (input.includes('[invente]')) {
+          steps.push({
+            name: 'Devinée',
+            command: '/devinee',
+            description: 'Une étape portée par un fichier.',
+            path: file,
+            agents: ['inventé'],
+            reads: [],
+            writes: [],
+          });
+          steps.push({
+            name: 'Fantôme',
+            command: '/fantome',
+            description: 'Sans aucun fichier.',
+            path: 'absent.md',
+            agents: [],
+            reads: [],
+            writes: [],
+          });
+          transitions.push({ from: steps[0].name, to: 'Absent', condition: null, max: null });
+        }
+        return { id: w.id, steps, transitions, exit: null };
+      });
+      if (input.includes('[invente]')) workflows.push({ id: 'inconnu|x', steps: [], transitions: [] });
+      const result = `Voici.\n\n\`\`\`json\n${JSON.stringify({ workflows })}\n\`\`\``;
+      process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
+      return;
+    }
     // A project's worktree commands: a setup of two that stand, one whose folder leaves the project and
     // one on two lines, and a teardown. Only such ones on two lines or padded with blanks when the
     // project's folder is named "all-refused".

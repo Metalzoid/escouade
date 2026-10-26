@@ -181,6 +181,7 @@ const ORDER: &[&str] = &[
     "stateFiles",
     "exit",
     "promptLoop",
+    "refined",
     "dismissed",
     "removed",
     "signals",
@@ -548,6 +549,13 @@ fn new_path(dir: &Path, folder: &Folder, id: &str) -> PathBuf {
     }
 }
 
+/// The fingerprint of a reading's definition (what `Workflow::refined` keeps).
+pub fn fingerprint_of(w: &Workflow) -> String {
+    let mut w = w.clone();
+    w.refined = None;
+    crate::sharing::fingerprint(&portable(&w).to_string())
+}
+
 /// What changed of a definition, said simply: the steps added and taken out.
 fn change_of(old: &Workflow, new: &Workflow) -> String {
     let names = |w: &Workflow| w.steps.iter().map(|s| s.name.clone()).collect::<Vec<_>>();
@@ -585,6 +593,10 @@ pub fn merge_reading(dir: &Path, folder: &Folder, read: &[Workflow]) -> Vec<(Str
                 if portable(&doc.workflow) == portable(w) {
                     continue;
                 }
+                // Refined from this very reading (ESC-196): what the agent made stands.
+                if doc.workflow.refined.as_deref() == Some(fingerprint_of(w).as_str()) {
+                    continue;
+                }
                 let next = Doc {
                     workflow: w.clone(),
                     fixes: doc.fixes.clone(),
@@ -612,6 +624,26 @@ pub fn merge_reading(dir: &Path, folder: &Folder, read: &[Workflow]) -> Vec<(Str
                     seen.docs.push((path, doc));
                 }
             }
+        }
+    }
+    changed
+}
+
+/// Writes workflows an agent refined (ESC-196) into their files, the user's corrections kept:
+/// what changed of each, by workflow id; a file that already says it is not touched.
+pub fn set_workflows(folder: &Folder, refined: &[Workflow]) -> Vec<(String, String)> {
+    let mut changed = Vec::new();
+    for w in refined {
+        let Some((path, doc)) = folder.doc(&w.id) else {
+            continue;
+        };
+        let next = Doc {
+            workflow: w.clone(),
+            fixes: doc.fixes.clone(),
+        };
+        let text = write(&next);
+        if text != write(doc) && write_file(path, &text).is_ok() {
+            changed.push((w.id.clone(), change_of(&doc.workflow, w)));
         }
     }
     changed
@@ -772,6 +804,7 @@ pub fn schema() -> Value {
                     "steps": { "type": "array", "items": step }, "transitions": { "type": "array", "items": transition },
                     "stateFiles": { "type": "array", "items": { "type": "object" } },
                     "exit": { "type": ["string", "null"] }, "promptLoop": { "type": ["object", "null"] },
+                    "refined": { "type": "string", "description": "Set by « Affiner… »: the fingerprint of the reading the agent refined; a reading that finds the same leaves the definition as refined." },
                 },
                 "required": ["id", "name", "kind", "repo", "doors", "steps", "transitions", "stateFiles"],
             },

@@ -1,5 +1,7 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
+  WorkflowRefineOutcome,
+  WorkflowRefinePlan,
   WorkflowScan,
   SentView,
   LeftoverReport,
@@ -357,6 +359,10 @@ export const api = {
   getWorkflows: (id: string) => invoke<WorkflowScan>('get_workflows', { id }),
   /** « Relire » its workflows. */
   refreshWorkflows: (id: string) => invoke<WorkflowScan>('refresh_workflows', { id }),
+  /** What « Affiner… » will do, said before it is asked (ESC-196). */
+  workflowRefinePlan: (id: string) => invoke<WorkflowRefinePlan>('workflow_refine_plan', { id }),
+  /** « Affiner… »: a short agent refines the workflows, the rules check what it says. */
+  refineWorkflows: (id: string) => invoke<WorkflowRefineOutcome>('refine_workflows', { id }),
   /** « Retirer du dépôt »: the file of a workflow this machine does not read (ESC-195). */
   removeWorkflowFile: (id: string, workflow: string) => invoke<WorkflowScan>('remove_workflow_file', { id, workflow }),
   /** « Oublier » a repository gone from the project's folder. */

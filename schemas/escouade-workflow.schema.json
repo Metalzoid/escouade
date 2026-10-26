@@ -111,6 +111,10 @@
         "promptLoop": {
           "type": ["object", "null"]
         },
+        "refined": {
+          "description": "Set by « Affiner… »: the fingerprint of the reading the agent refined; a reading that finds the same leaves the definition as refined.",
+          "type": "string"
+        },
         "repo": {
           "type": "string"
         },

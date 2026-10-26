@@ -605,6 +605,16 @@ pub enum SyncOp {
     Push,
 }
 
+/// Who answers a one-shot question (`Core::one_shot_who`).
+pub(crate) struct OneShotWho {
+    pub engine: EngineId,
+    /// As the interface names it (`Claude Haiku`).
+    pub model: String,
+    /// What the price grid knows it by (`haiku`).
+    pub priced: String,
+    pub account: Account,
+}
+
 /// A one-shot question to a harness (`Core::ask_harness`).
 struct Ask<'a> {
     weight: Weight,
@@ -6648,6 +6658,40 @@ impl<R: Runtime> Core<R> {
             project,
         })
         .await
+    }
+
+    /// Who answers a one-shot question about `project`, said before it is asked (ESC-196): the
+    /// harness of « Modèle des textes rédigés », its model as the interface names it, and the
+    /// account a new agent of the project would go to (a private project's reserved one).
+    pub(crate) async fn one_shot_who(&self, project: &str) -> Result<OneShotWho> {
+        let settings = self.settings.read().clone();
+        let id = engine::oneshot::writer(settings.writer_engine, &self.engines_found())
+            .unwrap_or(EngineId::Claude);
+        let engine = engine::by_id(id);
+        let account = self.account_for(id, None, Some(project))?;
+        let (model, priced) = if engine.writer_takes_model() {
+            let program = accounts::program(&account, &settings);
+            let env = [settings.claude_env(), accounts::launch_env(&account)].concat();
+            let model = match program {
+                Some(p) => self.writer_model(engine, &p, env).await,
+                None => String::new(),
+            };
+            (format!("{} ({model})", engine.writer(Weight::Light)), model)
+        } else {
+            (
+                engine.writer(Weight::Light).to_string(),
+                match id {
+                    EngineId::Claude => "haiku".to_string(),
+                    _ => engine.writer(Weight::Light).to_string(),
+                },
+            )
+        };
+        Ok(OneShotWho {
+            engine: id,
+            model,
+            priced,
+            account,
+        })
     }
 
     /// The id of the account agent `id` runs on: empty for an agent gone.

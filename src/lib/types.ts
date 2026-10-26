@@ -776,6 +776,28 @@ export interface WorkflowFix {
   removed?: string[];
 }
 
+/** What « Affiner… » will do, said before (`workflowrefine::RefinePlan`). */
+export interface WorkflowRefinePlan {
+  workflows: number;
+  files: number;
+  harness: EngineId;
+  model: string;
+  account: string;
+  accountId: string;
+  inputTokens: number;
+  outputTokens: number;
+  /** Dollars at the list price; none when the model's is unknown. */
+  cost: number | null;
+  private: boolean;
+}
+
+/** What an « Affiner… » did (`workflowrefine::Outcome`). */
+export interface WorkflowRefineOutcome {
+  scan: WorkflowScan;
+  refined: { id: string; name: string; added: string[]; described: number; transitions: number }[];
+  rejected: string[];
+}
+
 /** Something of a `.escouade.yml` that was left out, with its line. */
 export interface SharedWarning {
   line: number | null;

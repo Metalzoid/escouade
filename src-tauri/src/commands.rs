@@ -672,6 +672,25 @@ pub async fn refresh_workflows(core: CoreState<'_>, id: String) -> Res<crate::wo
     core.refresh_workflows(&id, true).await.map_err(err)
 }
 
+/// What « Affiner… » will do, said before (ESC-196): the model, the account, the cost estimated.
+#[tauri::command]
+pub async fn workflow_refine_plan(
+    core: CoreState<'_>,
+    id: String,
+) -> Res<crate::workflowrefine::RefinePlan> {
+    core.workflow_refine_plan(&id).await.map_err(err)
+}
+
+/// « Affiner… »: a short agent refines the project's workflows, the rules check what it says
+/// (ESC-196).
+#[tauri::command]
+pub async fn refine_workflows(
+    core: CoreState<'_>,
+    id: String,
+) -> Res<crate::workflowrefine::Outcome> {
+    core.refine_workflows(&id).await.map_err(err)
+}
+
 /// The project's workflows as the user corrected them (ESC-195): what follows the agents reads.
 #[tauri::command]
 pub async fn effective_workflows(

@@ -15,10 +15,14 @@ const section = () => document.querySelector<HTMLElement>('#sg-workflow')!;
 const sentFixes = (backend: ReturnType<typeof fakeBackend>) =>
   backend.called('update_project').at(-1)!.args.project.workflowFixes as WorkflowFix[];
 
-function open(over: Partial<Project> = {}, scan = gsdScan()) {
+function open(over: Partial<Project> = {}, scan = gsdScan(), handlers: Record<string, (args: any) => unknown> = {}) {
   resetApp({ projects: [project(over)] });
   app.modal = { kind: 'settings' };
-  const backend = fakeBackend({ get_workflows: () => scan, refresh_workflows: () => ({ ...scan, readAt: scan.readAt + 60_000 }) });
+  const backend = fakeBackend({
+    get_workflows: () => scan,
+    refresh_workflows: () => ({ ...scan, readAt: scan.readAt + 60_000 }),
+    ...handlers,
+  });
   render(SettingsModal, { tab: 'projects', projectId: 'p1' });
   return backend;
 }
@@ -46,9 +50,75 @@ describe('Réglages › Projets › Workflow (ESC-195)', () => {
     await userEvent.click(s.getByRole('button', { name: 'Relire' }));
     expect(backend.called('refresh_workflows')).toHaveLength(1);
     expect(await s.findByText('Lu par les règles à 10:13')).toBeInTheDocument();
-    // « Affiner… » waits for its agent, and says so.
-    expect(s.getByRole('button', { name: 'Affiner…' })).toBeDisabled();
-    expect(s.getByRole('button', { name: 'Affiner…' })).toHaveAccessibleDescription(/^Bientôt : l’agent qui affine/);
+  });
+
+  const plan = {
+    workflows: 1,
+    files: 6,
+    harness: 'claude',
+    model: 'Claude Haiku',
+    account: 'Principal',
+    accountId: 'principal',
+    inputTokens: 5200,
+    outputTokens: 700,
+    cost: 0.0087,
+    private: false,
+  };
+
+  it('says the model, the account and the cost before « Affiner… », and asks nothing until « Lancer »', async () => {
+    const backend = open({}, gsdScan(), {
+      workflow_refine_plan: () => plan,
+      refine_workflows: () => ({
+        scan: gsdScan(),
+        refined: [{ id: 'g', name: 'GSD', added: ['Revue'], described: 3, transitions: 1 }],
+        rejected: ['GSD : l’étape « Fantôme » n’a pas de fichier connu, refusée.'],
+      }),
+    });
+    const s = within(section());
+    await userEvent.click(await s.findByRole('button', { name: 'Affiner…' }));
+    const said = await s.findByTestId('refine-plan');
+    expect(said).toHaveTextContent('Modèle : Claude Haiku · compte : Principal');
+    expect(said).toHaveTextContent(/jetons envoyés, .*0,009.* au tarif public/);
+    expect(said).toHaveTextContent('1 workflow sur 6 fichiers');
+    expect(backend.called('refine_workflows')).toHaveLength(0);
+    await userEvent.click(within(said).getByRole('button', { name: 'Lancer' }));
+    expect(backend.called('refine_workflows')).toHaveLength(1);
+    expect(await s.findByText('Workflows affinés : 1 étape devinée, 3 descriptions, 1 passage.')).toBeInTheDocument();
+    // What the rules refused is told.
+    expect(s.getByText(/Fantôme.*refusée/)).toBeInTheDocument();
+    expect(s.queryByTestId('refine-plan')).toBeNull();
+  });
+
+  it('says it for a private project, and lets « Annuler » ask nothing', async () => {
+    const backend = open({}, gsdScan(), { workflow_refine_plan: () => ({ ...plan, private: true, cost: null }) });
+    const s = within(section());
+    await userEvent.click(await s.findByRole('button', { name: 'Affiner…' }));
+    const said = await s.findByTestId('refine-plan');
+    expect(said).toHaveTextContent('Projet privé : un agent du projet, sur un compte qui lui est réservé.');
+    expect(said).toHaveTextContent('coût non estimé');
+    await userEvent.click(within(said).getByRole('button', { name: 'Annuler' }));
+    expect(s.queryByTestId('refine-plan')).toBeNull();
+    expect(backend.called('refine_workflows')).toHaveLength(0);
+  });
+
+  it('says why when there is no account to ask, or when the agent fails', async () => {
+    let planned = false;
+    open({}, gsdScan(), {
+      workflow_refine_plan: () => {
+        if (planned) return plan;
+        planned = true;
+        throw new Error('Aucun compte ne sert ce projet.');
+      },
+      refine_workflows: () => {
+        throw new Error('L’agent n’a pas répondu dans le schéma attendu : rien n’a changé.');
+      },
+    });
+    const s = within(section());
+    await userEvent.click(await s.findByRole('button', { name: 'Affiner…' }));
+    expect(await s.findByText(/Affiner a échoué : .*Aucun compte/)).toBeInTheDocument();
+    await userEvent.click(s.getByRole('button', { name: 'Affiner…' }));
+    await userEvent.click(await s.findByRole('button', { name: 'Lancer' }));
+    expect(await s.findByText(/rien n’a changé/)).toBeInTheDocument();
   });
 
   it('turns the reading again by itself off', async () => {
