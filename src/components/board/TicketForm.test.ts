@@ -207,33 +207,27 @@ describe('TicketForm', () => {
       expect(title()).toHaveFocus();
     });
 
-    it('gives the description a large field and the criteria a smaller one, both resizable', () => {
+    it('gives the criteria a field of their own rows, the description the room left (its style)', () => {
       show();
       const [description, criteria] = [
         screen.getByRole('textbox', { name: 'Description' }),
         screen.getByRole('textbox', { name: "Critères d'acceptation" }),
       ];
-      expect(description).toHaveAttribute('rows', '12');
+      // No rows of its own, nor a height set by its text (ESC-189): the window's room decides, a long text scrolls in it.
+      expect(description).not.toHaveAttribute('rows');
       expect(criteria).toHaveAttribute('rows', '6');
       // The title is a field of one line, above the others.
       expect(title().tagName).toBe('INPUT');
     });
 
-    it('takes rows from each big field (four from the description, one from the criteria) in a short window, so that loops, branch and dependencies show at once', () => {
+    it('takes a row from the criteria in a short window, so that loops, branch and dependencies show at once', () => {
       heightOf(700);
       show();
-      const [description, criteria] = [
-        screen.getByRole('textbox', { name: 'Description' }),
-        screen.getByRole('textbox', { name: "Critères d'acceptation" }),
-      ];
-      expect(description).toHaveAttribute('rows', '8');
+      const criteria = screen.getByRole('textbox', { name: "Critères d'acceptation" });
       expect(criteria).toHaveAttribute('rows', '5');
       // Taller again with the window.
       heightOf(900);
-      return waitFor(() => {
-        expect(description).toHaveAttribute('rows', '12');
-        expect(criteria).toHaveAttribute('rows', '6');
-      });
+      return waitFor(() => expect(criteria).toHaveAttribute('rows', '6'));
     });
 
     it('names its two big fields with a label of their own, besides the placeholder', () => {
@@ -259,20 +253,15 @@ describe('TicketForm', () => {
       expect(onsubmit.mock.calls[0][0].description).toBe(long.trim());
     });
 
-    it('grows the description with what is typed in it, never shrinks it under the user’s hand', async () => {
+    it('leaves the height of the description to the window, whatever its text (ESC-189)', async () => {
       show();
       const field = screen.getByRole('textbox', { name: 'Description' });
-      let content = 100;
-      Object.defineProperty(field, 'scrollHeight', { configurable: true, get: () => content });
+      Object.defineProperty(field, 'scrollHeight', { configurable: true, get: () => 4000 });
       Object.defineProperty(field, 'clientHeight', { configurable: true, get: () => 100 });
-      Object.defineProperty(field, 'offsetHeight', { configurable: true, get: () => 102 });
-      await userEvent.type(field, 'a');
-      // Fits: left as it is.
+      await userEvent.type(field, 'ab');
+      // A height of its text would push the fields under it out of the window, or draw it over them.
       expect(field.style.height).toBe('');
-      content = 340;
-      await userEvent.type(field, 'b');
-      // Its content plus its borders (offset minus client).
-      expect(field.style.height).toBe('342px');
+      expect(field.style.minHeight).toBe('');
     });
 
     it.each([
@@ -684,18 +673,18 @@ describe('TicketForm, its images', () => {
     expect(screen.queryByAltText(/image-21\.png/)).not.toBeInTheDocument();
   });
 
-  it('gives three rows of the description to its images, so that nothing more shows below them in a short window', async () => {
+  it('takes the room of its images from the description by its style, not by its rows (ESC-189)', async () => {
     fakeBackend();
     window.innerHeight = 700;
     window.dispatchEvent(new Event('resize'));
     try {
       show();
-      expect(description()).toHaveAttribute('rows', '8');
       paste(description(), { files: [capture()], types: ['Files'] });
       await screen.findByAltText('capture.png');
-      expect(description()).toHaveAttribute('rows', '5');
+      expect(description()).not.toHaveAttribute('rows');
+      expect(description().style.height).toBe('');
       await userEvent.click(screen.getByRole('button', { name: 'Retirer capture.png' }));
-      expect(description()).toHaveAttribute('rows', '8');
+      expect(screen.queryByAltText('capture.png')).not.toBeInTheDocument();
     } finally {
       window.innerHeight = 768;
       window.dispatchEvent(new Event('resize'));
@@ -1159,18 +1148,18 @@ describe('TicketForm, its files', () => {
       expect(app.toasts).toEqual([]);
     });
 
-    it('gives two rows of the description to its chips, so that nothing more shows below them in a short window', async () => {
+    it('takes the room of its chips from the description by its style, not by its rows (ESC-189)', async () => {
       fakeBackend(copying());
       window.innerHeight = 700;
       window.dispatchEvent(new Event('resize'));
       try {
         show();
-        expect(description()).toHaveAttribute('rows', '8');
         drop([zip()]);
         await screen.findByText('sources.zip');
-        expect(description()).toHaveAttribute('rows', '6');
+        expect(description()).not.toHaveAttribute('rows');
+        expect(description().style.height).toBe('');
         await userEvent.click(screen.getByRole('button', { name: 'Retirer sources.zip' }));
-        expect(description()).toHaveAttribute('rows', '8');
+        expect(screen.queryByText('sources.zip')).not.toBeInTheDocument();
       } finally {
         window.innerHeight = 768;
         window.dispatchEvent(new Event('resize'));

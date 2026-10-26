@@ -1149,10 +1149,14 @@ test('a ticket is written in a large window, a long description included, and ad
   ).join('\n');
   await title.fill('Un ticket écrit en grand');
   await description.fill(long);
-  // The description grew with its text, up to the window's share, and the buttons stay in reach.
-  const field = (await description.boundingBox())!;
-  expect(field.height).toBeGreaterThan(300);
-  expect(field.height).toBeLessThanOrEqual(779 * 0.6 + 2);
+  // The description keeps the room the window leaves it and scrolls in itself (ESC-189): the criteria under it, and the
+  // buttons, stay in reach.
+  expect(await description.evaluate((d) => d.scrollHeight > d.clientHeight + 100)).toBe(true);
+  const [field, criteria] = await Promise.all([
+    description.boundingBox(),
+    dialog.getByRole('textbox', { name: "Critères d'acceptation" }).boundingBox(),
+  ]);
+  expect(criteria!.y).toBeGreaterThanOrEqual(field!.y + field!.height);
   await expect(dialog.getByRole('button', { name: 'Ajouter', exact: true })).toBeInViewport();
   // Escape asks first; « Annuler » brings the window back with everything in it.
   await page.keyboard.press('Escape');

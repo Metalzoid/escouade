@@ -628,8 +628,8 @@
   }
 
   /**
-   * The height of the window of the app: a short one gets four rows less in the description and one in the criteria, for the rest of the form (its account, model and effort included) to show.
-   * The images take three rows of the description (their height) for the same reason, the chips of the files two.
+   * The height of the window of the app: a short one gets a row less in the criteria and a tighter form, for the rest of it
+   * (its account, model and effort included) to show. The description takes the room left (its style).
    */
   let viewHeight = $state(window.innerHeight);
   const short = $derived(viewHeight < 820);
@@ -640,19 +640,6 @@
   /** Hands a menu's button, made by the snippet `select`, to the variable its menu opens from. */
   function ref(node: HTMLButtonElement, set: (el: HTMLButtonElement) => void) {
     set(node);
-  }
-
-  /** The textarea grows with what is typed in it (up to its `max-height`), and keeps a height the user dragged it to. */
-  function grow(node: HTMLTextAreaElement, _text: string) {
-    const fit = () => {
-      if (node.scrollHeight <= node.clientHeight) return;
-      // Its least height too: the room the window gives it never takes back what its text needs, up to 60 % of the window.
-      const needed = node.scrollHeight + node.offsetHeight - node.clientHeight;
-      node.style.height = `${needed}px`;
-      node.style.minHeight = `${Math.min(needed, window.innerHeight * 0.6)}px`;
-    };
-    fit();
-    return { update: fit };
   }
 </script>
 
@@ -698,7 +685,8 @@
         onkeydown={(e) => e.key === 'Enter' && !e.isComposing && !e.repeat && !primaryKey(e) && submit()}
       />
     </div>
-    <!-- The description takes what the window leaves free: a large field to write in, whatever its height. -->
+    <!-- The description takes what the window leaves free: a large field to write in, whatever its height; a long text
+         scrolls in it, never over the fields under it (ESC-189). -->
     <div class="fld desc">
       <div class="lab-row">
         <label for="{uid}-description">{t('board.form.description')}</label>
@@ -708,10 +696,8 @@
         bind:this={descriptionField}
         id="{uid}-description"
         class="field description"
-        rows={(short ? 8 : 12) - (images.length ? 3 : 0) - (files.length ? 2 : 0)}
         placeholder={t('board.form.descriptionPlaceholder')}
         bind:value={description}
-        use:grow={description}
       ></textarea>
       <input
         bind:this={fileInput}
@@ -945,19 +931,19 @@
     line-height: 1.5;
   }
   /*
-   * The description's field takes the height the window leaves (its rows say how high it starts), down to five lines;
-   * past what it holds, it scrolls in itself.
+   * The description's field takes the height the window leaves, whatever its text, down to five lines; past what it
+   * holds, it scrolls in itself. Its block never gets smaller than its label, its five lines and its attachments: lower,
+   * the window's body scrolls, and no field under it is drawn over it (ESC-189).
    */
   .form > .desc {
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
-    min-height: 0;
   }
   .description {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-height: 116px;
-    max-height: 60vh;
+    resize: none;
   }
   /* The description's label, and on its right the microphone that dictates into it. */
   .lab-row {
