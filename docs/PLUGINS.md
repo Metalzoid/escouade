@@ -7,7 +7,9 @@ Ce document est l'analyse. Il ne change pas l'app. Le découpage en tickets, le 
 - §1 : l'inventaire de ce qu'un plugin pourrait manipuler, point d'extension par point d'extension, depuis le code ;
 - §2 : l'architecture, comparée sur ce que font VS Code, Zed, Obsidian, Raycast, JetBrains, Claude Code, Tauri et MCP, et trois expériences jetables ;
 - §3 : le modèle de confiance et de distribution ;
-- §4 : la recommandation, en une page.
+- §4 : tout ce qui est externe devient un plugin (ESC-203, 2026-10-26) : les harness, les sources du Kanban, les hébergeurs et leurs PR, en plugins de première main, tous en process ; un plugin qui tient plusieurs points (GitHub : tickets et PR) ; les options comparées et ce que coûte le « tout en process » décidé, l'ordre de migration, l'effet sur les tickets en cours.
+
+**Depuis ESC-203, la règle est : tout ce qui est externe est un plugin.** Les intégrations d'aujourd'hui deviennent des plugins de première main, livrés et signés avec l'app, et, comme les plugins tiers, des process qui parlent le même protocole (§4, décidé le 2026-10-26).
 
 ## En bref
 
@@ -202,6 +204,8 @@ Ce qui rend un point facile, c'est un **trait ou un registre déjà là**, derri
 | Langues | 2 | 3 | 1 | 2.3 |
 | Harness en programme, vue terminal | 2 | 3 | 3 | plus tard |
 
+**Révisé par ESC-203** (§4) : les sources du Kanban et les hébergeurs ne sont plus seulement des points ouverts aux tiers en 2.2. Leur contrat est posé dès la 2.1.0 (les sources) et la 2.1.x (les hébergeurs), et les intégrations d'Escouade deviennent des plugins de première main en process, après le transport (PLG-2) et le banc (PLG-3). Les versions sont dans `docs/TODO-2.1.md`, « Tout l'externe en plugins ».
+
 ## 2. L'architecture
 
 ### 2.1 Ce que font les autres
@@ -381,7 +385,252 @@ Les secrets d'un plugin vont au coffre d'Escouade (`integrations/secrets.rs`, `S
 
 Rien de neuf sans accord. Si l'utilisateur a accepté les statistiques d'usage (`telemetry.rs`), Escouade compte les fonctions des plugins comme les autres (« un plugin installé », « un plugin activé », sans son nom tant qu'il n'est pas dans le registre). Un plugin n'a pas accès à la télémétrie d'Escouade ; s'il envoie ses propres statistiques, c'est une permission réseau qu'il déclare et que l'utilisateur voit.
 
-## 4. Sources
+## 4. Tout ce qui est externe est un plugin, en process (ESC-203)
+
+Demandé par l'utilisateur le 2026-10-26 : « Faudra prévoir de faire passer toutes les intégrations externes sous forme de plugins (Claude code, copilot CLI, etc, y compris la gestion des tickets externes et la gestion des PR). Ex : un plugin github pourra gérer les tickets ET les PR. »
+
+Les §1 à §3 font des plugins des **ajouts** : ils viennent à côté des intégrations écrites dans le cœur. Ce chapitre va plus loin : **chaque intégration externe devient un plugin**, celles d'aujourd'hui comprises, et **chaque plugin est un process**, ceux d'Escouade comme ceux des tiers (décidé le 2026-10-26, §4.11). Il ne change pas l'app ; le plan, version par version, est dans `docs/TODO-2.1.md`, chapitre « Tout l'externe en plugins ».
+
+### 4.1 La décision
+
+- **Est externe** ce qui parle à un programme ou à un service qu'Escouade n'a pas écrit : un harness (`claude`, `codex`, `copilot`, `agent` de Cursor, `opencode`), l'API d'un service de tickets (Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues), celle d'un hébergeur de code et de sa CI et de ses déploiements (GitHub, GitLab, Bitbucket, Gitea et Forgejo), la CLI d'un service (`gh`, `glab`). **Chacun devient un plugin** : un manifeste, une fiche dans Réglages › Plugins, un interrupteur, un journal.
+- **Les intégrations d'aujourd'hui deviennent des plugins de première main** : écrites et tenues par Escouade, livrées et signées avec l'app (§4.3).
+- **Tout en process** : un plugin de première main est un programme à part qui parle le protocole des plugins (JSON-RPC 2.0 sur stdio, PLG-2), exactement comme un plugin tiers. **Un seul chemin, un seul contrat** : ce qui marche pour GitHub par Escouade marche pour un GitHub d'un tiers, et le banc le prouve sur les deux.
+- **Un plugin peut tenir plusieurs points d'extension** : le plugin « GitHub » donne les tickets (Issues), les PR, la CI et les déploiements, sur une seule connexion (§4.4).
+- **Plus tard, par la même règle** : les services de voix (§1.4) et les environnements de lancement comme isola (§1.11) sont aussi externes. Ce ticket ne les planifie pas ; ils suivront le même chemin une fois les trois familles faites.
+
+### 4.2 Ce qui reste dans le cœur, et pourquoi
+
+| Reste dans le cœur | Où | Pourquoi |
+| --- | --- | --- |
+| Les agents et leur état | `agent.rs` (`AgentRt`, `Effects`), `conv.rs`, `handover.rs`, `switching.rs` | Tous les harness écrivent dans le même état. Le plugin d'un harness ne le touche plus : il envoie des **éléments normalisés** et des **effets** (§4.5), que le cœur applique. |
+| Le lancement des process des harness | `proc.rs`, `job.rs`, `shellenv.rs`, `resources.rs` | Le cœur lance le harness d'après la description que le plugin lui rend (§4.6) : le Job object, la mesure des ressources, le lancement sous WSL et la vérification de la clôture restent les siens, et le harness survit à un plantage de son plugin. |
+| Les terminaux et les vues TUI | `pty.rs`, `engine/terminal.rs`, `escouade-hook`, `TerminalView.svelte` | Le PTY reste au cœur : les octets du terminal et les frappes ne passent jamais par un plugin (§4.6). |
+| Le Kanban, le pilote auto, le protocole des tickets | `board.rs`, `sharing.rs` | C'est le produit. |
+| La synchro d'une source avec le Kanban | `integrations/sync.rs` | La logique (les colonnes et les états, les conflits, quand pousser) est la même pour toutes les sources ; le plugin ne fait que lire et écrire chez son service. |
+| Le flux des PR d'un ticket | ESC-59 à 62 : la colonne « En revue », la CI corrigée par l'agent, les retours de relecture, le merge | Même raison : le plugin d'hébergeur donne les appels (`Forge`), le cœur décide quoi en faire. |
+| Git local, les worktrees, plusieurs dépôts | `git.rs`, `worktrees.rs`, `repos.rs` | `git` est un outil local, au centre de chaque fonction ; il n'y a pas de service derrière. |
+| Le serveur MCP d'Escouade | `mcp/` (`resolve.rs` : `Sight`, `may_act_on`) | Il dit ce qu'un agent voit ; les agents l'appellent directement, jamais à travers le plugin de leur harness. |
+| La clôture des projets privés | `fence.rs` | Le cœur calcule la règle ; le plugin la traduit pour son harness (`fence_settings`) ; le cœur vérifie la description de lancement avant de lancer (§4.6). Un harness qui ne peut pas l'appliquer est refusé pour un projet privé. |
+| Le coffre | `integrations/secrets.rs` (`SecretStore`) | Le service que tous les plugins utilisent, avec sa règle : **chaque plugin n'a que ses secrets** (§3.5). Les plugins de première main n'y échappent pas : le plugin « Jira » n'obtient pas le jeton du plugin « GitHub ». |
+| La jauge des comptes et le changement au seuil | `accounts.rs`, `usage.rs`, `QuotaMeter.svelte` | Le plugin lit le quota (`engine/readUsage`), le cœur décide. |
+| Les mises à jour, la télémétrie, les statistiques | `updates.rs`, `selfupdate.rs`, `telemetry.rs`, `stats.rs` | Jamais par un plugin (§1.12, §1.13). |
+
+### 4.3 Les plugins de première main
+
+- **Un binaire, plusieurs plugins.** Le code d'aujourd'hui (`engine/<harness>/`, `agent/<harness>.rs`, `integrations/<service>.rs`, `forge/<hébergeur>.rs`) sort du cœur dans des crates Rust, une par plugin (`plugins/<id>/`), avec les types du protocole dans une crate partagée avec le cœur (`escouade-plugin-protocol`, la crate Rust de PLG-9, avancée). Elles sont réunies dans **un seul exécutable à plusieurs entrées**, `escouade-plugins`, livré à côté de l'app comme `escouade-hook` (`src-tauri/src/bin/`) : `escouade-plugins github`, `escouade-plugins claude`… Un exécutable par plugin coûterait 5 à 10 Mo chacun (tokio, reqwest, serde à chaque fois), une quinzaine en tout ; un seul ne coûte qu'une fois. Chaque plugin reste **un process à lui** : le même exécutable, lancé avec son nom.
+- **Son manifeste** est un `escouade-plugin.json` du même schéma, avec `"run": { "command": "{escouade}/escouade-plugins", "args": ["github"] }`. L'origine (`builtin`) est donnée par l'app, jamais par le manifeste. Les ids `dev.escouade.*` sont réservés : le store (ESC-202) les refuse à la soumission, l'app refuse un dossier qui les prend.
+- **Livrés et mis à jour avec l'app.** Leur version est celle d'Escouade ; ils n'ont pas de mise à jour à part. `escouade-plugins` est signé comme l'app (Authenticode sous Windows, la signature et la notarisation de chaque binaire sous macOS, la clé de l'updater de Tauri pour `latest.json`), et l'app vérifie avant de le lancer que c'est bien le sien (son chemin dans le dossier de l'app, et sa signature là où le système la vérifie). Ils ont le badge « Livré avec Escouade », qui vaut « Vérifié par Escouade » (ESC-202). Un correctif vient avec une release ; pas de liste de révocation pour eux.
+- **Activés partout par défaut**, projets privés compris : ils l'étaient avant d'être des plugins, et leur code est celui d'Escouade. C'est la seule exception au §3.3.
+- **Ce que l'utilisateur voit.** Réglages › Plugins les liste en tête, groupés sous « Livrés avec Escouade », avec la même fiche que les autres (contributions, permissions en mots, comptes, état du process, journal). Les écrans d'aujourd'hui gardent leur place : Réglages › Harness, l'onglet Intégrations et la section des hébergeurs deviennent des **vues par point d'extension** des plugins actifs, de première main ou tiers. On cherche « GitHub » dans les intégrations, pas dans une liste de plugins.
+- **Les désactiver.** Un interrupteur pour l'app, ou par projet, comme les autres. Ils ne se désinstallent pas. Un harness désactivé : ses agents restent, marqués « harness absent », leurs données gardées (comme un harness de plugin désinstallé, PLG-6) ; on ne peut plus en créer. Une source désactivée : les tickets importés restent, la synchro s'arrête et la carte dit pourquoi. Un hébergeur désactivé : les PR ne sont plus suivies, la carte le dit ; rien n'est perdu.
+- **Les remplacer.** Un plugin tiers peut servir le même point pour le même service (« Jira Data Center » maison, un client GitHub d'entreprise derrière un proxy). Les deux peuvent être installés ; c'est **le compte** qui dit quel plugin le sert (on ajoute un compte « Jira » par l'un ou par l'autre), et un projet utilise ses comptes. Jamais de remplacement silencieux : un plugin tiers ne prend pas un id ni un compte d'un plugin de première main.
+
+### 4.4 Un plugin, plusieurs points
+
+Le manifeste (PLG-1, §3.1) déclare déjà des contributions ; il gagne quatre points d'extension et une contribution qu'ils partagent :
+
+- `accounts` : **un genre de compte** que ses points partagent. Ses hôtes (l'instance publique, les instances auto-hébergées et comment les reconnaître : `default_host`, `own_host`, `probe` de `forge::Provider`), ses façons de se connecter (un jeton, la CLI du service, OAuth plus tard), les champs à saisir (`site`, `email`, `key` : aujourd'hui des champs de `integrations::Account` propres à Jira et Trello, demain déclarés), les droits demandés (`scopes`), la page qui crée un jeton (`token_page`). Le secret va au coffre sous `plugin:<id>:account:<compte>`. **Une connexion, plusieurs usages** : c'est déjà le cas pour github.com, dont le compte d'hébergeur est celui de GitHub Issues (`forge/accounts.rs`, `Accounts::github`) ; la règle devient générale (GitLab : un compte pour ses Issues et ses MR).
+- `ticketSources` : une source du Kanban, sur un compte déclaré (§4.5).
+- `forges` : un hébergeur de code, ses PR, sa CI et ses déploiements, selon ses capacités (`Capabilities`), sur un compte déclaré.
+- `harnesses` : un harness ; par le protocole `engine/*` (§4.5), ou décrit par ACP (PLG-6), servi alors par le plugin ACP générique d'Escouade.
+- Plus tard, `ci` et `deployments` à part, pour un service qui n'est pas l'hébergeur (Jenkins, Coolify, Vercel, §1.3) : ils s'attachent à une PR déjà connue d'un `forge`.
+
+Ce que partagent les points d'un même plugin : **le process** (un seul pour ses sources et ses hébergeurs), **le compte** (l'identité, `me`, une seule fois), **le jeton** au coffre, **la connexion** (la CLI `gh`, une session OAuth), **la limite d'appels** (le budget de 5 000 appels par heure de GitHub est celui du jeton : les Issues et les PR le consomment ensemble ; `forge::RateLimit` ne compte aujourd'hui que ceux de l'hébergeur), **le journal** et **l'activation** (désactiver « GitHub » pour un projet coupe ses tickets et ses PR ; une source ou un hébergeur peut aussi être coupé seul, dans sa vue).
+
+**L'exemple complet : le plugin « GitHub »** (de première main) :
+
+```json
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.github",
+  "name": "GitHub",
+  "version": "2.1.0",
+  "description": { "fr": "Les issues dans le Kanban, les PR, la CI et les déploiements de vos dépôts GitHub.", "en": "…" },
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "run": { "command": "{escouade}/escouade-plugins", "args": ["github"] },
+  "activation": ["account:github", "project:remote-github"],
+  "permissions": {
+    "network": ["api.github.com", "*.ghe.com", "<instances ajoutées par l'utilisateur>"],
+    "secrets": ["account:*"],
+    "commands": ["gh auth token --hostname <hôte>"]
+  },
+  "contributes": {
+    "accounts": [
+      {
+        "id": "github",
+        "name": "GitHub",
+        "hosts": { "default": "github.com", "own": ["github.com", "www.github.com", "ssh.github.com", "*.ghe.com"], "selfHosted": true },
+        "auth": [{ "kind": "token", "scopes": ["repo"] }, { "kind": "cli", "program": "gh", "args": ["auth", "token", "--hostname", "{host}"] }],
+        "tokenPage": { "github.com": "https://{host}/settings/personal-access-tokens/new", "*.ghe.com": "https://{host}/settings/personal-access-tokens/new", "*": "{url}/settings/tokens/new" }
+      }
+    ],
+    "ticketSources": [{ "id": "github-issues", "name": "GitHub Issues", "account": "github", "containers": "repositories", "states": ["open", "closed", "label:*"], "push": true, "comment": true }],
+    "forges": [
+      {
+        "id": "github",
+        "account": "github",
+        "requestWord": "PR",
+        "capabilities": { "pullRequests": true, "draft": true, "autoMerge": true, "checks": true, "jobLogs": true, "rerun": true, "reviews": true, "reviewThreads": true, "deployments": true, "mergeStrategies": ["merge", "squash", "rebase"] }
+      }
+    ]
+  }
+}
+```
+
+- **Le compte** : github.com, GHE.com et GitHub Enterprise Server (une instance ajoutée par son adresse), reconnus par leur hôte (`GithubProvider::own_host`) ; un jeton (`repo`) ou celui de `gh` (`forge/github.rs`, `CliToken`). Ces règles sont **déclarées** : le cœur reconnaît le remote d'un dépôt sans lancer le plugin.
+- **Les Issues** : les dépôts comme conteneurs, ouvert, fermé ou un label comme état (`integrations/github.rs`), la synchro poussée et le commentaire de fin (`sync.rs`, `Client::set_state`, `comment`).
+- **Les PR** : ouvrir, suivre, merger (`Forge::create_pr`, `pull_request`, `pull_requests_of_branch`, `merge`, `auto_merge`).
+- **La CI** : les vérifications d'un commit, le journal d'un job, la relance (`checks`, `job_log`, `rerun_failed`).
+- **Les relectures** : `reviews`, `comments`, `review`, `reply`.
+- **Les déploiements** : `deployments`, par environnement (ESC-67).
+
+Dans la fenêtre, l'utilisateur ajoute **un** compte GitHub ; l'import d'issues et le suivi des PR le proposent tous deux. Pour un projet, il peut couper les Issues et garder les PR.
+
+### 4.5 Le contrat de chaque point d'extension
+
+Les traits Rust d'aujourd'hui deviennent, dans le cœur, des **adaptateurs** qui parlent au process : `ProcessTicketSource: TicketSource`, `ProcessForge: Forge`, `ProcessEngine: Engine` et `ProcessEngineProcess: EngineProcess`. Le reste du cœur ne voit pas la différence. Les types sont ceux de la crate du protocole, partagée par le cœur et les plugins de première main, et générés en TypeScript pour le SDK (PLG-9). Ceux des sources et des hébergeurs sont déjà sérialisables (`Container`, `ExternalIssue`, `IssuePage`, `PullRequest`, `Check`…).
+
+| Point | Côté cœur | Méthodes JSON-RPC | Aujourd'hui |
+| --- | --- | --- | --- |
+| Compte | `AccountKind` (nouveau, tiré de `forge::Provider` et de `integrations::Account`) | déclaratif (hôtes, sonde, auth, champs, droits, page du jeton) ; `account/me` | `Provider::{default_host, own_host, probe, scopes, token_page, cli, needs_email}`, `Client::me` |
+| Source du Kanban | `TicketSource` et `TicketSourceKind` (nouveaux, à la place de l'énumération `integrations::Client`) | `tickets/containers`, `tickets/states`, `tickets/issues` (filtre, page), `tickets/setState`, `tickets/comment` ; capacités déclarées | `Client::{containers, states, issues, set_state, comment}` (`integrations/mod.rs`) |
+| Hébergeur | `Provider` et `Forge` (`forge/mod.rs`) | `forge/createPr`, `forge/pullRequest`, `forge/pullRequestsOfBranch`, `forge/pullRequests`, `forge/merge`, `forge/autoMerge`, `forge/checks`, `forge/jobLog`, `forge/rerunFailed`, `forge/reviews`, `forge/comments`, `forge/comment`, `forge/review`, `forge/reply`, `forge/deployments` ; `unsupported` par défaut ; la limite d'appels dans chaque réponse | tel quel |
+| Harness | `Engine` et `EngineProcess` (`engine/mod.rs`) | déclaratif : `locate` (noms, chemins, `--version`), versions testées, `EngineCaps`, modes ; sans état : `engine/models`, `engine/efforts`, `engine/launch` (la description de lancement), `engine/oneShot`, `engine/userConfig`, `engine/fenceSettings` ; par agent : `agent/frames` (reçu), `agent/items` (envoyé), `agent/write`, `agent/sendMessage`, `agent/interrupt`, `agent/setModel`, `agent/setMode`, `agent/answerPermission`, `agent/answerQuestion`, `agent/readUsage`, `agent/attach` (après un redémarrage) ; vue terminal : `terminal/launch`, `terminal/hook` | `Engine::{locate, tested, caps, models, efforts, spawn, message, translate, one_shot, grant_file, escouade_launch, fence_settings, user_config…}`, `EngineProcess::{send_message, interrupt, set_model, set_mode, answer_permission, answer_question, read_usage…}` |
+
+Ce que le contrat exige de chaque point, vérifié par le banc des harness (`engine/bench/`) et celui des plugins (PLG-3) : les erreurs typées (`HttpError` : 401 dit « reconnecte le compte », 404, limite atteinte), un délai par appel, la tolérance de l'inconnu ; pour un harness, la clôture (`fenceSettings`, vérifiée par le cœur), le jeton du serveur MCP jamais dans les arguments (`grant_file`, `no_engine_puts_the_token_on_the_command_line`, contrôlé sur la description de lancement), les noms d'outils normalisés.
+
+### 4.6 Tout en process : ce que ça coûte, et comment on le tient
+
+Ce qui existe : environ 41 000 lignes de Rust dans `engine/`, `agent/`, `integrations/` et `forge/`, tests compris ; cinq faux harness (`tests/fixtures/fake-*.mjs`), un faux service de tickets (`fake-trackers.mjs`), un faux `gh` ; le banc des harness ; des essais réels par harness (`real-harnesses.spec.ts`, `real_fence`, `real_*_view`, `real_claude_models`). La décision les garde tous, et les rejoue à chaque migration.
+
+**Ce qui a été comparé** (avant la décision) :
+
+| | I. Intégré (Rust dans l'app) | P. Process (retenu) | W. WASM |
+| --- | --- | --- | --- |
+| **Le flux d'un agent** | inchangé | un passage de plus par frame (43 µs par aller-retour mesurés au §2.2), la sérialisation, et la traduction à séparer de l'état de l'agent (plus bas) | 11 ns par appel ; mais un harness lance un process, ce que le bac à sable ne permet pas sans le rouvrir |
+| **Les terminaux** | inchangés | inchangés : le PTY reste au cœur | inchangés : le PTY reste au cœur |
+| **Sources et hébergeurs** | inchangés | négligeable devant un appel HTTP (des centaines de ms) | négligeable |
+| **La clôture** | tenue par le code du cœur | traduite par le plugin, vérifiée par le cœur sur la description de lancement | appliquée au module, pas au harness qu'il lance |
+| **Les jetons** | restent dans le process d'Escouade | chaque plugin reçoit les siens (`secrets/get`) et le jeton MCP de ses agents | appliqués : le module n'a que les siens |
+| **Effort de migration** | faible | fort : sortir le code en crates, séparer la traduction de l'état, un adaptateur par point, l'empaquetage signé | très fort, impossible pour un harness |
+| **Risque de régression** | faible | moyen à fort, tenu par les mesures, le banc et les essais réels rejoués (plus bas) | fort |
+| **Ce que ça apporte** | rien de plus que le contrat | **un seul chemin** : le banc, le protocole et le journal servent les deux ; ce qui manque au contrat se voit chez Escouade avant un tiers ; un plantage d'intégration ne fait plus tomber l'app ; une intégration pourra un jour se corriger sans release | un bac à sable réel |
+
+L'utilisateur a retenu **P pour tout** (§4.11). Ce qu'elle coûte, point par point, et comment on le tient :
+
+**1. Le flux d'un agent.**
+
+- **Qui lance le harness : le cœur.** Le plugin rend une **description de lancement** (`engine/launch` : programme, arguments, variables, dossier, fichiers de config à écrire, `grant_file`), le cœur la vérifie (clôture, jeton absent des arguments, chemin du programme trouvé par `locate`) puis lance le harness dans son Job object, sous WSL au besoin, comme aujourd'hui (`proc.rs`, `job.rs`). Le harness survit à un plantage de son plugin, et `resources.rs` continue de mesurer son arbre. L'autre façon, le plugin qui lance son harness lui-même, a été écartée : le cœur perdrait le Job, la vérification de la clôture et la survie au plantage.
+- **Le chemin d'une frame** : le harness écrit une ligne (stream-json de Claude Code, JSON-RPC de Codex et de Copilot, ACP de Cursor) ; le cœur la lit et l'envoie au plugin dans `agent/frames` ; le plugin la traduit et rend `agent/items`, des éléments normalisés (`user`, `text`, `thinking`, `tool`, `question`, `permission`, `turn`, `notice`, `event`, les mêmes que la conversation d'aujourd'hui, `ConvOp`) et des **effets** (`Effects` d'`agent.rs` : fin de tour, quota, limite atteinte, compte déconnecté, fichiers changés, plan écrit) ; le cœur les applique à `AgentRt` et à la fenêtre. Ce que le plugin écrit au harness (une réponse JSON-RPC de Codex, un message ACP) passe par `agent/write`, que le cœur écrit sur le stdin du harness. OpenCode parle HTTP et SSE à son serveur : là, le cœur lance `opencode serve` et le plugin lui parle lui-même, sur `127.0.0.1`.
+- **Par lots.** Le cœur ne fait pas un aller-retour par ligne : il envoie au plugin tout ce qu'une lecture a rendu (jusqu'à 64 Kio, ou 8 ms d'attente au plus), et le plugin rend ses éléments par lots aussi, en fusionnant les morceaux de texte d'un même bloc (les deltas d'un message en cours). Le flux reste continu : aucune frame n'attend la fin d'un tour, seulement la fin de son lot.
+- **La sérialisation.** Une frame est déjà du JSON : elle est passée au plugin comme une chaîne, sans être relue par le cœur (`RawValue`), puis relue une fois par le plugin, comme le cœur la relit aujourd'hui. Le coût en plus est l'échappement d'une chaîne dans une chaîne et une copie par passage. Les grosses frames (un fichier lu en entier, une image) sont les cas à mesurer.
+- **La traduction à séparer de l'état.** C'est le gros du travail : aujourd'hui, `claude_frame` et ses pareils sont des méthodes d'`AgentRt` (`agent/claude.rs` et les autres) qui lisent et écrivent directement l'état de l'agent : 61 membres d'`AgentRt` pour Claude Code, 41 à 50 pour les autres. Chaque plugin garde l'état qui ne sert qu'à traduire (les outils en cours, les blocs ouverts, le plan, les identifiants des demandes) et rend ce que le cœur doit appliquer. Ce qu'un plugin ne peut pas savoir (le mode courant, le modèle choisi, l'agent en pause), le cœur le lui donne à `agent/attach` et à chaque changement.
+- **La mesure, avant et après.** Un banc de flux (INT-0, dans `docs/TODO-2.1.md`) rejoue des flux enregistrés de chaque harness (`tests/fixtures/<harness>/`, et un long tour réel de Claude Code avec des milliers de frames), au rythme réel et au plus vite, et mesure : le délai de la ligne lue à l'événement envoyé à la fenêtre (médiane et 99e centile), le débit maximal, le CPU et la mémoire du cœur et du plugin, le temps d'un rejeu entier. Mesuré **avant** toute migration, puis après celle de chaque harness. Les seuils proposés, à confirmer par la première mesure : au plus 5 ms de plus au 99e centile, un débit au moins dix fois le plus fort flux réel observé, au plus 30 Mo par process de plugin. Un harness qui les dépasse ne passe pas en process tant que ce n'est pas corrigé.
+
+**2. Les terminaux et les vues TUI.** Le PTY reste au cœur (§4.2). Le plugin **décide du lancement**, rien de plus.
+
+- **Passe par le process** : la description du lancement de la vue (`terminal/launch` : la commande, `--resume <id>`, les hooks à écrire, le dossier de config, les bandes de confiance à montrer, les variables à retirer comme `MSYSTEM` pour Cursor) ; la traduction des événements des hooks (`escouade-hook` les envoie au cœur, qui les passe au plugin par `terminal/hook` : quelques-uns par tour) ; le suivi d'un transcript quand le harness n'a pas de hook (Cursor, ESC-49), lu par le plugin qui rend des éléments.
+- **Ne passe jamais par le process** : les octets du PTY vers xterm, les frappes, le redimensionnement, le copier-coller (le délai d'une frappe, mesuré de 15 à 40 ms en ESC-100 et ESC-104, ne bouge pas) ; les appels des agents au serveur MCP d'Escouade (le harness parle au cœur directement) ; le coffre entier (le plugin n'obtient que ses secrets) ; l'état d'un autre agent.
+
+**3. Les essais réels**, à refaire à la migration de chaque harness, et notés dans son ticket : `real-harnesses.spec.ts` (ESC-52), `real_fence` (ESC-140), la vue terminal (`real_claude_view`, `real_codex_view`, `real_cursor_view`…), les modèles du compte (`real_claude_models`), la passation d'un harness à l'autre (ESC-88), le changement de compte au seuil (ESC-148). Ils demandent de vrais comptes : ceux que le mode auto refuse (ESC-12, ESC-110) se lancent à la main, et le ticket ne se ferme pas sans eux. Pour les sources et les hébergeurs : l'essai réel GitHub (`github_tests.rs`, par `gh`) à chaque migration, et le faux service pour les autres, inchangé.
+
+**4. Le démarrage de l'app.**
+
+- **Rien de lancé avant la fenêtre.** Ce qu'il faut à l'écran d'accueil est **déclaré** dans les manifestes et lu sans process : les harness trouvés (`locate` déclaratif), leurs capacités, les hôtes des hébergeurs (pour reconnaître un remote), les champs des comptes.
+- **Démarrage paresseux** ensuite : une source à sa première synchro, un hébergeur à la première PR à suivre, un harness au premier agent qui reprend ou à la première ouverture du menu des modèles. Les agents qui reprennent au démarrage lancent leur plugin en parallèle, pas l'un après l'autre.
+- **Le coût** : un process `escouade-plugins` démarre en quelques millisecondes (un exécutable Rust, pas un runtime) ; INT-0 mesure le temps jusqu'à la fenêtre et jusqu'au premier agent prêt, avant et après. Seuil proposé : la fenêtre au même temps qu'aujourd'hui, le premier agent prêt à moins de 100 ms de plus.
+
+**5. Un plugin de première main qui plante.**
+
+- **La relance** : celle de PLG-2, trois fois en cinq minutes, puis le plugin est arrêté.
+- **L'agent, pendant la relance** : son harness vit toujours (le cœur l'a lancé). Le cœur garde les frames reçues pendant la relance (une file bornée), relance le plugin, lui redonne l'agent (`agent/attach` : sa session, son mode, son modèle, les demandes en attente que le cœur connaît) et lui rejoue les frames gardées. Ce qui peut se perdre : l'état de traduction en cours (un outil commencé avant le plantage reste « en cours » jusqu'à la fin du tour, où le cœur le ferme). La conversation dit « Le plugin Claude Code a redémarré », sans autre gêne.
+- **Après le troisième plantage** : les agents de ce harness s'arrêtent proprement (interruption, puis fin du Job), passent en erreur avec « Le plugin Claude Code s'est arrêté après trois plantages », et un bouton « Relancer » ; leur session est gardée, et le message suivant les reprend (`--resume`) une fois le plugin relancé. Une notification le dit une fois, le journal du plugin garde le détail (stderr, dernier message).
+- **Pour une source** : la synchro se met en pause, la carte et l'onglet Intégrations disent « GitHub Issues : arrêté », la synchro reprend au prochain passage. **Pour un hébergeur** : l'état des PR passe à « inconnu », sans être perdu, jusqu'à la relance.
+- **Les tests** : le faux plugin de PLG-2 sait planter ; chaque adaptateur a son test de plantage (en plein tour pour un harness, en pleine synchro pour une source).
+
+**6. La sécurité.** Un plugin de première main en process a les droits de l'utilisateur, comme aujourd'hui le cœur. Ce qui change : il reçoit, dans son process, les secrets de ses comptes et le jeton du serveur MCP de ses agents (que le harness reçoit déjà) ; rien d'autre. Le cœur ne lance que l'`escouade-plugins` de son propre dossier, signé avec l'app.
+
+### 4.7 Ce qui doit sortir du cœur pour ça
+
+Les énumérations fermées à ouvrir :
+
+- **`EngineId`** (`model.rs`, énumération `Claude`, `Codex`, `Copilot`, `Cursor`, `Opencode`, et `Bench` en test), gardé dans les agents (`AgentMeta::engine`), les tickets, les projets et la colonne `engine` des statistiques. Il devient un id ouvert (une chaîne), **sérialisé à l'identique** (`claude`, `codex`…) : aucune donnée à migrer. Les `match` sur `EngineId` (une trentaine de fichiers hors tests) passent par le registre et les capacités (`EngineCaps`), comme l'interface le fait déjà.
+- **`engine::registry::all()`**, une liste écrite en dur des cinq harness : construite depuis les plugins actifs.
+- **`Service`** (`model.rs` : `Jira`, `Trello`, `Github`, `Linear`), gardé dans `ExternalRef` de chaque ticket importé : un id ouvert, sérialisé à l'identique. Côté fenêtre : le type `Service`, `SERVICE_IDS` et les noms courts (`SHORT`) de `src/lib/integrations.ts`, lus depuis le registre.
+- **`integrations::Client`** (`integrations/mod.rs`, une énumération qui distribue chaque appel par `match`) : les traits `TicketSource` et `TicketSourceKind`, et un registre, comme `forge::Registry`. Les champs de `integrations::Account` propres à un service (`site`, `email`, `key`) deviennent des champs déclarés par le genre de compte.
+- **`forge::Registry::standard()`** (`forge/mod.rs`), écrit en dur : construit depuis les plugins. `Provider::kind()` et `scopes()` rendent des `&'static str` : à passer en chaînes possédées ; `CliToken::parse` et `Probe::matches` sont des pointeurs de fonctions : à rendre déclaratifs (une commande et le champ lu ; un chemin et la clé attendue).
+
+Ce qui se sépare :
+
+- **la traduction des harness et l'état des agents** : les méthodes `claude_frame`, `codex_*`, `copilot_*`, `cursor_*`, `opencode_*` d'`AgentRt` deviennent des traducteurs à état propre qui rendent des éléments et des effets (§4.6, 1) ;
+- **`Engine::spawn`** devient `engine/launch` (une description) plus le lancement par le cœur ;
+- **les textes de chaque intégration** écrits dans le cœur (par exemple ceux de `sync.rs` : « GitHub : donne un jeton, ou connecte la CLI gh ») vont dans le catalogue de son plugin.
+
+Les traits qui deviennent le contrat : `Engine` et `EngineProcess` (`engine/mod.rs`), `Forge` et `Provider` (`forge/mod.rs`), `TicketSource` et `AccountKind` (nouveaux), implémentés dans le cœur par les adaptateurs en process. `SecretStore` reste un service du cœur, que les plugins utilisent par `secrets/get`. Les faux (`integrations/fake.rs`, `fake-trackers.mjs`, `fake-gh`, les `fake-<harness>.mjs`) restent où ils sont : ils simulent le service ou le harness, pas le plugin, et servent tels quels aux tests de chaque plugin.
+
+### 4.8 L'ordre, une étape livrable à la fois
+
+Chaque étape est livrable seule, garde ses tests et ses essais réels inchangés, et ne migre qu'une intégration à la fois. L'ordre va du plus simple au plus risqué ; **le transport en process (PLG-2) et le banc (PLG-3) passent avant toute migration de première main**.
+
+0. **Les mesures de référence** (INT-0), avant tout : le flux de chaque harness, le démarrage, la mémoire. Ce sont les chiffres « avant ».
+1. **Les contrats dans le cœur**, sans rien sortir : `TicketSource` et `Service` ouvert (les cinq sources derrière, sans changer de comportement), `forge::Registry` ouvert, `EngineId` ouvert. Des refactors, livrables en 2.0.x ou avec la 2.1.0.
+2. **Le socle** : le manifeste (PLG-1), **le transport en process (PLG-2)** et **le banc (PLG-3)** ; le registre des plugins de première main et l'exécutable `escouade-plugins` empaqueté et signé, d'abord vide ; les adaptateurs en process des sources et des hébergeurs, essayés sur le faux plugin.
+3. **Les comptes partagés** : un genre de compte par plugin ; l'exception de github.com (`Accounts::github`) devient la règle. Migration des comptes enregistrés (`integrations.json`) et des noms au coffre, réversible.
+4. **Les sources du Kanban en process**, une par ticket : Trello, Linear, Jira, ClickUp. Le plus simple : quelques appels HTTP, des types sérialisables.
+5. **Les hébergeurs en process**, un par ticket : **GitHub d'abord, avec ses Issues** (le plugin « GitHub » complet), puis GitLab avec ses Issues (ESC-56 et ESC-165), Bitbucket, Gitea.
+6. **Le contrat des harness en process** : la traduction séparée de l'état, `engine/launch`, les lots, `agent/attach`, la vue terminal ; prouvé sur le faux moteur minimal (`engine/minimal/`) devenu un plugin, mesuré contre INT-0.
+7. **Les harness en process**, un par ticket, du moins utilisé au plus utilisé : Cursor CLI (avec le plugin ACP générique de PLG-6), OpenCode, Copilot CLI, Codex, **Claude Code en dernier**. Chacun mesuré avant et après, banc, e2e et essais réels rejoués.
+8. **Plus tard** : les plugins tiers en WASM (les sources d'abord, 2.2), un harness tiers par `engine/*` documenté (2.3), les services de voix et les environnements de lancement par la même règle.
+
+### 4.9 L'effet sur les tickets en cours ou à venir
+
+| Tickets | Effet | Décidé |
+| --- | --- | --- |
+| ESC-201, ClickUp (en cours) | Il ajoute une variante à `Service` et à `integrations::Client`, comme Linear. | **Fini tel quel** : l'étape 1 le passe derrière le contrat avec les autres, l'étape 4 le sort en process. |
+| ESC-165, GitLab Issues | Une source de plus, sur un compte GitLab que l'hébergeur (ESC-56) utilisera aussi. | **Réécrit** : une source du plugin « GitLab », en process, sur le compte partagé (étapes 2, 3 et 5). |
+| ESC-56, 57, 58, clients GitLab, Bitbucket, Gitea | Le trait `Forge` existe ; les `Provider` sont écrits. | **Écrits directement dans la crate de leur plugin** si l'étape 2 est faite ; sinon dans le cœur, et sortis à l'étape 5. Pas d'attente. |
+| ESC-59 à 63, 65 à 68, PR, CI, relectures, déploiements, vues | Ce sont des fonctions du cœur qui appellent `Forge`. | **Inchangés** : ils restent au cœur et marchent pour tout plugin d'hébergeur. |
+| ESC-69, 70, docs et essais des hébergeurs | Les pages parlent des plugins. | La page « Hébergeurs » dit qu'ils sont des plugins de première main ; l'essai réel passe aussi par « plugin arrêté puis relancé ». |
+| ESC-53, parcours enregistrés | — | Inchangé. |
+| ESC-172 à 184, PLG | Le socle porte maintenant les intégrations d'Escouade. | Modifiés, ticket par ticket : `docs/TODO-2.1.md`, « Les tickets PLG à modifier ». |
+| ESC-36, moteur ACP générique | Doublon de PLG-6. | **À fermer**, renvoyé à ESC-178. |
+| ESC-202, place de marché (en cours) | — | Le store refuse les ids `dev.escouade.*` ; l'app montre « Livré avec Escouade » à côté de « Vérifié par Escouade ». |
+
+### 4.10 La place de marché : ce qu'un plugin tiers peut de plus, et de moins
+
+Avec « tout en process », un plugin tiers et un plugin de première main ont **le même transport et le même contrat**. Ce qui les sépare est la confiance, pas la technique.
+
+**De plus qu'un plugin de première main :**
+
+- sortir à son rythme : une API de service qui change se corrige sans attendre une release d'Escouade ;
+- servir ce qu'Escouade ne tiendra pas : YouTrack, Asana, Azure Boards, un Jira Data Center derrière un proxy, une forge d'entreprise, un harness ACP de plus ;
+- s'écrire dans n'importe quel langage (TypeScript avec le SDK, PLG-9).
+
+**De moins :**
+
+- **activé d'office nulle part dans un projet privé** (§3.3), là où un plugin de première main l'est ;
+- **un harness tiers** passe d'abord par l'ACP décrit (PLG-6) ; `engine/*` lui sera ouvert quand il aura été tenu par les cinq harness d'Escouade et documenté (2.3), pas avant ;
+- **ses secrets seulement**, jamais ceux d'un plugin de première main, même pour le même service ;
+- **ni les ids ni les comptes d'un plugin de première main** ;
+- **pas de lancement sans accord** : sa fenêtre d'installation dit « Lance un programme sur votre ordinateur, avec vos droits » (§3.4) ; celle d'un plugin de première main n'existe pas, il vient avec l'app ;
+- **son badge** est « Vérifié par Escouade » s'il est passé par la revue (ESC-202), « non vérifié » sinon ; jamais « Livré avec Escouade ».
+
+### 4.11 Les décisions (2026-10-26)
+
+Posées par le chef d'escouade, répondues par l'utilisateur le 2026-10-26 :
+
+1. **L'architecture des intégrations : tout en process.** Les plugins de première main (Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode, GitHub, Jira, Trello, Linear, ClickUp…) deviennent des process JSON-RPC à part, comme ceux des tiers : un seul chemin, un seul contrat. Ils restent livrés et signés avec l'app. _La recommandation était autre_ (le Rust intégré pour la première main, le process pour les tiers) ; ce qu'il en coûte, et comment on le tient : §4.6.
+2. **L'ordre** : sources, comptes partagés, hébergeurs, transport, harness en dernier ; revu là où le process l'impose : les mesures de référence d'abord, puis le transport (PLG-2) et le banc (PLG-3) avant toute migration (§4.8). _Retenu._
+3. **Ce qui reste dans le cœur** : le tableau du §4.2, la synchro, le flux des PR et le PTY compris. _Retenu_ ; avec le process, le lancement des harness y reste aussi.
+4. **Un compte par plugin, partagé par ses points.** _Retenu._
+5. **Les plugins de première main désactivables, non désinstallables, activés partout par défaut, projets privés compris.** _Retenu._
+6. **Remplacer un plugin de première main par un tiers** : permis, compte par compte, jamais en silence. _Retenu._
+7. **Les tickets en cours** : ESC-201 fini tel quel ; ESC-165 réécrit en plugin « GitLab » ; ESC-56 à 58 écrits dans la crate de leur plugin dès le socle, sinon sortis plus tard ; ESC-36 fermé (§4.9). _Retenu._
+
+À confirmer avec l'utilisateur, conséquence de la décision 1 : **PLG-6 (ESC-178) sort de la 2.1.0**. L'adaptateur ACP générique s'écrit directement en plugin de première main, sur le contrat des harness (étape 6), plutôt que dans le cœur puis à nouveau dehors.
+
+## 5. Sources
 
 - VS Code, _Workspace Trust_ : <https://code.visualstudio.com/docs/editor/workspace-trust> et le guide des extensions <https://code.visualstudio.com/api/extension-guides/workspace-trust>.
 - VS Code, les _webviews_ (iframes d'une autre origine, service workers) : <https://blog.mattbierner.com/vscode-webview-web-learnings/>.

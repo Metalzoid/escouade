@@ -6,6 +6,8 @@ La 2.0.0 est sortie le 2026-10-24 avec le nouveau design de l'app (voir `docs/TO
 
 GitHub, GitLab, Bitbucket et Gitea : les pull requests des tickets suivies jusqu'au merge, avec leur CI et leurs déploiements, sans quitter Escouade. Plan détaillé : `docs/TODO-1.8.md`, chapitre 2.
 
+Depuis ESC-203, chaque hébergeur est un plugin de première main, et le plugin « GitHub » porte aussi ses Issues : voir « Tout l'externe en plugins », plus bas. Le flux des PR (ESC-59 à 68) reste au cœur.
+
 - [x] Interface commune, comptes par instance et analyse des remotes (ESC-54).
 - [x] Client GitHub : github.com, GHE.com, GitHub Enterprise Server (ESC-55).
 - [x] Ouvrir une PR depuis un agent ordinaire, et la suivre sur sa carte (ESC-64).
@@ -30,7 +32,7 @@ Un cinquième harness, par ACP, à côté de Claude Code, Codex, OpenCode et Cop
 ## Demandés pendant le redesign (2026-10-24)
 
 - [ ] **Wispr Flow** pour la transcription vocale, comme service en ligne et comme app de bureau (ESC-164).
-- [ ] **GitLab Issues** comme source de synchro du Kanban, sur gitlab.com et les instances auto-hébergées (ESC-165).
+- [ ] **GitLab Issues** comme source de synchro du Kanban, sur gitlab.com et les instances auto-hébergées (ESC-165). À réécrire en source du plugin « GitLab », sur le compte partagé avec ESC-56 (ESC-203).
 
 ## Plugins (demandé le 2026-10-25)
 
@@ -166,6 +168,8 @@ L'utilisateur a retenu chaque recommandation :
 5. **Un projet qui propose un plugin** : il propose, il n'installe jamais seul ; en 2.2 avec le WASM.
 6. **Les autorisations décidées par un plugin** : permises, comme une permission rouge (jamais donnée par un projet, journalisée), un refus qui l'emporte et un délai court qui rend la demande à l'utilisateur.
 
+Compléments du 2026-10-26 (ESC-203) : tout ce qui est externe devient un plugin, et les plugins d'Escouade aussi sont des process ; PLG-6 sortirait de la 2.1.0 (à confirmer). Voir « Tout l'externe en plugins », plus bas.
+
 ### Les tickets (créés le 2026-10-25, pour plus tard)
 
 | Plan | Ticket | Dépend de |
@@ -209,6 +213,90 @@ Les tickets s'appellent ici LOOP-1, LOOP-2… ; le chef d'escouade leur donne le
 | LOOP-9. Essais réels | GSD et Ralph sur Claude Code (chat et vue), un prompt de Codex, OpenCode, Copilot CLI, Cursor CLI (chat et vue) ; les tableaux de `docs/LOOPS.md` corrigés d'après ce qui est vu | 150 | Sonnet medium | LOOP-1 à LOOP-7 |
 
 LOOP-3 et LOOP-4 peuvent avancer en même temps une fois LOOP-1 fait (LOOP-3 sur des faits joués par le faux agent en attendant LOOP-2). LOOP-8 attend le bus de faits des plugins ; s'il n'est pas dans la 2.1.0, il passe à la 2.1.x sans rien retarder.
+
+## Tout l'externe en plugins (demandé le 2026-10-26)
+
+« Faudra prévoir de faire passer toutes les intégrations externes sous forme de plugins (Claude code, copilot CLI, etc, y compris la gestion des tickets externes et la gestion des PR). Ex : un plugin github pourra gérer les tickets ET les PR. »
+
+- [x] **L'analyse et le plan** (ESC-203, 2026-10-26) : `docs/PLUGINS.md`, §4 (la décision, ce qui reste dans le cœur, les plugins de première main, un plugin à plusieurs points avec l'exemple GitHub, le contrat de chaque point, ce que coûte le « tout en process » et comment on le tient, ce qui sort du cœur, l'ordre, l'effet sur les tickets, la place de marché), et ce chapitre.
+- [x] Les décisions, répondues par l'utilisateur le 2026-10-26 (plus bas, « Les décisions ») : **tout en process**, les six autres recommandations retenues.
+- [ ] À confirmer : PLG-6 (ESC-178) sort de la 2.1.0 (plus bas).
+- [ ] Les tickets INT-0 à INT-11 à créer, et les tickets PLG et des hébergeurs à reprendre (plus bas).
+
+### Ce qui est décidé
+
+**Tout ce qui est externe est un plugin, et chaque plugin est un process** : les cinq harness, les sources du Kanban (Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues), les hébergeurs avec leurs PR, leur CI et leurs déploiements (GitHub, GitLab, Bitbucket, Gitea). Les intégrations d'aujourd'hui deviennent des **plugins de première main** : leur code Rust sort du cœur dans des crates, réunies dans un exécutable `escouade-plugins` à plusieurs entrées (un process par plugin), livré et signé avec l'app. Ils parlent le **même protocole** que les plugins tiers (JSON-RPC sur stdio, PLG-2) : un seul chemin, un seul contrat. **Un plugin peut tenir plusieurs points** sur un compte partagé : « GitHub » donne les Issues, les PR, la CI et les déploiements.
+
+**Ce qui reste dans le cœur** : les agents et leur état, le lancement des process des harness (d'après la description que rend le plugin), le PTY et les vues terminal, le Kanban et sa synchro, le flux des PR d'un ticket, git, les worktrees, le serveur MCP, la clôture des projets privés, le coffre (chaque plugin n'a que ses secrets), la jauge des comptes, les mises à jour, la télémétrie et les statistiques (`docs/PLUGINS.md`, §4.2).
+
+**Ce que ça coûte, et comment on le tient** (`docs/PLUGINS.md`, §4.6) : un passage de plus par frame et la sérialisation, tenus par des lots (64 Kio ou 8 ms) et des frames passées en chaîne brute ; la traduction de chaque harness à séparer de l'état de l'agent (41 à 61 membres d'`AgentRt` touchés aujourd'hui par harness), le gros du travail ; des mesures avant toute migration et après celle de chaque harness, avec des seuils ; le PTY jamais dans le process ; les essais réels rejoués à chaque migration ; rien de lancé avant la fenêtre ; un plugin qui plante relancé sans perdre l'agent (son harness, lancé par le cœur, vit toujours).
+
+### Quelle version porte quoi
+
+| Version | Étape (`docs/PLUGINS.md`, §4.8) | Tickets |
+| --- | --- | --- |
+| 2.0.x, dès maintenant | 0. Les mesures de référence ; 1. les contrats dans le cœur, sans rien sortir (sources, hébergeurs, `EngineId`) | INT-0, INT-1, INT-2, INT-3 |
+| 2.1.0 | 2. Le socle : PLG-1, **PLG-2 (le transport)** et **PLG-3 (le banc)**, avec PLG-4, 5, 7, 9 comme décidé le 2026-10-25 ; l'exécutable `escouade-plugins` signé ; les adaptateurs en process des sources et des hébergeurs | ESC-173 à 177, 179, 181 ; INT-4, INT-5 |
+| 2.1.x | 3. Les comptes partagés ; 4. les sources en process, une par une ; 5. les hébergeurs en process (GitHub avec ses Issues d'abord, puis GitLab avec ESC-56 et ESC-165, Bitbucket, Gitea), au fil d'ESC-56 à 70 | INT-6, INT-7.1 à 7.4, INT-8.1 à 8.4, ESC-165 |
+| 2.2 | 6. Le contrat des harness en process, prouvé sur le faux moteur ; 7. les harness en process, un par un, Claude Code en dernier ; PLG-6 sur ce contrat ; les plugins tiers en WASM | INT-9, INT-10.1 à 10.5, ESC-178 |
+| 2.3 et plus tard | Un harness tiers par `engine/*` documenté ; les services de voix et les environnements de lancement par la même règle | — |
+
+Chaque étape se livre seule : une intégration migrée à la fois, ses tests, ses faux (`fake-*.mjs`, `fake-trackers.mjs`, `fake-gh`), son banc et ses essais réels rejoués **inchangés**. Un ticket qui doit changer un test pour passer n'est pas une migration : il le dit et le fait valider.
+
+### Les décisions (2026-10-26)
+
+Posées par le chef d'escouade, répondues par l'utilisateur le 2026-10-26 :
+
+1. **L'architecture des intégrations : tout en process.** Les plugins de première main (Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode, GitHub, Jira, Trello, Linear, ClickUp…) sont des process JSON-RPC à part, comme ceux des tiers : un seul chemin, un seul contrat ; livrés et signés avec l'app. (La recommandation était le Rust intégré pour la première main ; le coût du choix et comment on le tient : `docs/PLUGINS.md`, §4.6.)
+2. **L'ordre** : sources, comptes partagés, hébergeurs, transport, harness en dernier ; revu là où le process l'impose : les mesures d'abord, puis le transport (PLG-2) et le banc (PLG-3) avant toute migration.
+3. **Ce qui reste dans le cœur** : la liste ci-dessus.
+4. **Un compte par plugin, partagé par ses points** (un seul GitHub pour les Issues et les PR ; un seul GitLab pour ses Issues et ses MR), avec la migration des comptes enregistrés.
+5. **Les plugins de première main** : désactivables pour l'app ou par projet, jamais désinstallables, activés partout par défaut, projets privés compris ; badge « Livré avec Escouade ».
+6. **Remplacer un plugin de première main par un plugin tiers** : permis, compte par compte, jamais en silence ; les ids `dev.escouade.*` réservés.
+7. **Les tickets en cours** : ESC-201 (ClickUp) fini tel quel ; ESC-165 (GitLab Issues) réécrit en source du plugin « GitLab » ; ESC-56 à 58 écrits dans la crate de leur plugin dès le socle, sinon sortis par INT-8.n ; ESC-36 fermé (doublon d'ESC-178).
+
+**À confirmer**, conséquence de la décision 1 : PLG-6 (ESC-178, les harness ACP décrits) sort de la 2.1.0 et passe après INT-9. L'adaptateur ACP générique s'écrit alors une seule fois, en plugin de première main sur le contrat des harness, au lieu d'être écrit dans le cœur puis sorti. Recommandé ; l'autre choix garde PLG-6 en 2.1.0, dans le cœur, et ajoute sa sortie à INT-10.1.
+
+### Les tickets à créer
+
+Les tickets s'appellent ici INT-0, INT-1… ; le chef d'escouade leur donne leurs clés. **Une migration par intégration**, chacune avec ses tests et ses essais réels inchangés ; pour un harness, les mesures d'INT-0 avant et après, notées dans le ticket.
+
+| Plan | Ce qu'il fait | Modèle conseillé | Dépend de |
+| --- | --- | --- | --- |
+| INT-0. Les mesures de référence | Un banc de flux qui rejoue des flux enregistrés de chaque harness (`tests/fixtures/<harness>/`, et un long tour réel de Claude Code de plusieurs milliers de frames) au rythme réel et au plus vite : délai de la ligne lue à l'événement de la fenêtre (médiane, 99e centile), débit maximal, CPU et mémoire ; le temps jusqu'à la fenêtre et jusqu'au premier agent prêt ; le délai d'une frappe dans une vue terminal. Les chiffres dans `docs/PLUGINS.md`, et le banc rejouable en une commande. | Sonnet medium (back) | — |
+| INT-1. Le contrat des sources du Kanban | `TicketSource` et `TicketSourceKind` à la place de l'énumération `integrations::Client`, un registre comme `forge::Registry` ; `Service` ouvert, sérialisé à l'identique (`ExternalRef`) ; côté fenêtre, `Service`, `SERVICE_IDS` et `SHORT` de `src/lib/integrations.ts` lus depuis le registre ; Jira, Trello, Linear, GitHub Issues et ClickUp derrière, **sans changer de comportement**. Tests : `integrations_tests.rs`, `fake-trackers.mjs` et les e2e d'import inchangés. | Sonnet medium (back) | ESC-201 |
+| INT-2. Le contrat des hébergeurs ouvert | `forge::Registry` construit depuis une liste qu'on pourra remplir depuis les plugins ; `Provider::kind()` et `scopes()` en chaînes possédées ; `CliToken::parse` et `Probe::matches` déclaratifs. Tests : `forge/tests.rs`, `github_tests.rs`, `fake-gh` inchangés. | Sonnet medium (back) | — |
+| INT-3. `EngineId` ouvert | Un id ouvert sérialisé à l'identique (`claude`, `codex`…, aucune donnée à migrer : agents, tickets, projets, colonne `engine` des stats) ; les `match` sur `EngineId` remplacés par le registre et `EngineCaps` ; `engine::registry::all()` construit depuis une liste ; « harness absent » pour un agent dont le harness manque. Tests : toutes les suites des harness inchangées, des données d'avant relues. | Sonnet medium (back) | — |
+| INT-4. Le registre des plugins de première main et `escouade-plugins` | Le manifeste à plusieurs points et la contribution `accounts` ; l'exécutable `escouade-plugins` à plusieurs entrées (`src-tauri/src/bin/`, comme `escouade-hook`), la crate `escouade-plugin-protocol` partagée avec le cœur ; l'empaquetage et la signature dans `release.yml` (Authenticode, notarisation macOS, Linux) ; l'app ne lance que le sien ; l'origine `builtin`, les ids `dev.escouade.*` réservés ; désactiver pour l'app ou un projet. D'abord avec un seul plugin de démonstration (le faux moteur minimal). Tests : le registre, un id réservé refusé, la signature vérifiée en CI sur les trois systèmes. | Sonnet medium | ESC-173, ESC-174 |
+| INT-5. Les adaptateurs en process des sources et des hébergeurs | `ProcessTicketSource` et `ProcessForge` (noms du §4.5 de `docs/PLUGINS.md`), `account/me`, `secrets/get` ; délais, erreurs typées, plantage (la synchro en pause, les PR en « inconnu ») ; le faux plugin (`fake-plugin.mjs`) qui sert une source et un hébergeur ; le banc des plugins joue les mêmes scénarios que les tests des intégrations d'aujourd'hui. | Sonnet medium | ESC-174, ESC-175, INT-1, INT-2 |
+| INT-6. Les comptes partagés par plugin | `AccountKind` (tiré de `forge::Provider` et de `integrations::Account`) : hôtes, façons de se connecter, champs déclarés, droits, page du jeton ; un compte sert tous les points de son plugin (la règle de github.com, `Accounts::github`, généralisée) ; la limite d'appels comptée par compte ; migration réversible d'`integrations.json` et des noms au coffre (`plugin:<id>:account:<compte>`) ; le plugin qui sert un compte, choisi à son ajout. Tests : migration aller et retour, un compte GitLab qui sert Issues et MR sur les faux, le coffre qui refuse le secret d'un autre plugin. | Opus medium (interface des comptes) | INT-1, INT-2, INT-4, ESC-54 |
+| INT-7.1 à 7.4. Les sources en process | Une par ticket, dans cet ordre : **Trello**, **Linear**, **Jira**, **ClickUp**. Chacune sort en crate dans `escouade-plugins`, avec son manifeste et ses textes (ceux de `sync.rs` compris) ; ses tests passent inchangés contre le plugin en process ; l'onglet Intégrations la lit depuis le registre. | Sonnet medium | INT-5, INT-6 ; chacune après la précédente |
+| INT-8.1 à 8.4. Les hébergeurs en process | Un par ticket : **GitHub** (le plugin complet du §4.4 : compte, Issues, PR, CI, relectures, déploiements ; l'essai réel par `gh`), **GitLab** (avec ESC-56 et ESC-165), **Bitbucket** (avec ESC-57), **Gitea et Forgejo** (avec ESC-58). Chacun avec ses tests inchangés et sa vue des hébergeurs lue depuis le registre ; un hébergeur arrêté le dit sur la carte. | Sonnet medium ; Opus medium pour GitHub (le plus utilisé) | INT-5, INT-6 ; 8.2 à 8.4 après leur client |
+| INT-9. Le contrat des harness en process | `ProcessEngine` et `ProcessEngineProcess` ; `engine/launch` (la description de lancement, vérifiée par le cœur : clôture, jeton absent des arguments) et le lancement par le cœur ; `agent/frames` et `agent/items` par lots, les frames en chaîne brute ; les effets ; `agent/attach` et la file des frames pendant une relance ; `terminal/launch` et `terminal/hook` ; `engine/oneShot`. Prouvé sur le faux moteur minimal (`engine/minimal/`) devenu un plugin, au banc des harness, avec un plantage en plein tour ; mesuré contre INT-0. | Opus medium (risque) | INT-0, INT-3, INT-4 |
+| INT-10.1 à 10.5. Les harness en process | Un par ticket, dans cet ordre : **Cursor CLI** (sur le plugin ACP générique de PLG-6), **OpenCode**, **Copilot CLI**, **Codex**, **Claude Code**. Chacun : sa traduction séparée de l'état de l'agent, sa vue terminal, ses textes rédigés ; le banc, les e2e et les tests de sa vue inchangés ; les mesures d'INT-0 avant et après, dans les seuils ; ses essais réels rejoués et notés (`real-harnesses.spec.ts`, `real_fence`, `real_<harness>_view`, et pour Claude Code `real_claude_models`, la passation et le changement de compte au seuil), ceux que le mode auto refuse lancés à la main avant la fin du ticket. | Opus medium | INT-9 ; 10.1 après ESC-178 ; chacun après le précédent |
+| INT-11. La doc de référence | `docs/PLUGINS.md` §4 passé de l'analyse à la référence au fil des étapes ; `docs/ENGINES.md`, « Ajouter un moteur » devenu « Écrire un plugin de harness » ; les pages `kanban-sources.md`, `forges.md`, `harnesses.md` du site (PLG-11) ; le CHANGELOG fr/en à chaque étape livrée. | Sonnet medium | chaque étape |
+
+Ordre : INT-0, INT-1, INT-2, INT-3 (dès maintenant, en parallèle) → ESC-173, ESC-174, ESC-175 → INT-4 → INT-5 → INT-6 → INT-7.1 à 7.4 et INT-8.1 à 8.4 → INT-9 → ESC-178 → INT-10.1 à 10.5 ; INT-11 suit.
+
+### Les tickets PLG à modifier
+
+| Ticket | Ce qui change |
+| --- | --- |
+| ESC-172, renommage des jetons | Rien. |
+| ESC-173, PLG-1, le manifeste | Plusieurs points par plugin (`ticketSources`, `forges`, `harnesses`) et la contribution `accounts` ; `run` qui désigne `{escouade}/escouade-plugins` ; les parties déclaratives lues sans process (`locate`, hôtes, capacités) ; l'origine `builtin` donnée par l'app, les ids `dev.escouade.*` réservés. |
+| ESC-174, PLG-2, le transport | Il porte maintenant les intégrations d'Escouade : les lots dans les deux sens, les chaînes brutes, un process par plugin servant plusieurs agents (multiplexés par id), la file bornée pendant une relance, `attach` ; un délai par méthode (court pour une décision, long pour un import) ; ses mesures (aller-retour, débit) comparées à INT-0. |
+| ESC-175, PLG-3, le banc | Des scénarios par point (source, hébergeur, harness), rejoués sur un plugin de première main et sur le faux plugin ; le plantage en plein tour et en pleine synchro ; un mode mesure qui rejoue INT-0. |
+| ESC-176, PLG-4, Réglages › Plugins | Le groupe « Livrés avec Escouade », désactiver sans désinstaller, l'état du process (actif, relancé, arrêté après trois plantages, avec « Relancer »), le plugin qui sert un compte ; les vues Harness, Intégrations et Hébergeurs lues depuis le registre ; l'aperçu `impeccable` les montre. |
+| ESC-177, PLG-5, les événements | Rien ; les plugins de première main pourront s'y abonner comme les autres. |
+| ESC-178, PLG-6, les harness ACP décrits | Sort de la 2.1.0 (à confirmer) : écrit en plugin de première main (`dev.escouade.acp`) sur le contrat d'INT-9 ; dépend d'INT-3 et d'INT-9 ; Cursor CLI (INT-10.1) le prend comme base. |
+| ESC-179, PLG-7, les thèmes | Rien. |
+| ESC-180, PLG-8, les règles d'autorisation | Rien ; la décision d'un plugin s'insère avant la demande, que le harness soit en process ou non. |
+| ESC-181, PLG-9, le SDK | La crate Rust des types (`escouade-plugin-protocol`) avancée en 2.1.0, partagée par le cœur et les plugins de première main ; les types TypeScript générés depuis elle ou depuis le même schéma. |
+| ESC-182, PLG-10, les exemples | Un sixième exemple : une source tierce (un CSV du dépôt, ou YouTrack) ; l'exemple Gemini CLI suit ESC-178. |
+| ESC-183, PLG-11, la doc du site | Les pages des sources, des hébergeurs et des harness décrivent les plugins de première main et leur contrat. |
+| ESC-184, PLG-12, docs internes et essai réel | Les essais réels des plugins de première main migrés à la date de la release, en plus des cinq exemples. |
+
+Et ailleurs : **ESC-165** réécrit (une source du plugin « GitLab », avec INT-8.2, après INT-1, INT-5 et INT-6) ; **ESC-56, 57, 58** écrits dans la crate de leur plugin si INT-4 est fait, sinon dans le cœur puis sortis par INT-8.2 à 8.4 ; **ESC-69, 70** : la page dit qu'ils sont des plugins de première main, l'essai réel passe aussi par « plugin arrêté puis relancé » ; **ESC-202** : le store refuse les ids `dev.escouade.*`, l'app montre « Livré avec Escouade » ; **ESC-36** à fermer (doublon d'ESC-178). ESC-201, ESC-53, ESC-59 à 63 et ESC-65 à 68 (le flux des PR, au cœur) ne changent pas.
 
 ## Restes du redesign
 
