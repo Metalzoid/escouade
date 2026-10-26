@@ -872,7 +872,7 @@ fn repo_of(root: &str, repos: &[String], cwd: &str) -> String {
 impl<R: tauri::Runtime> crate::core::Core<R> {
     /// The last reading of a project's workflows (the file `refresh_workflows` keeps, or the last
     /// one it made): none read yet is no workflow.
-    fn tracking_scan(&self, project_id: &str) -> std::sync::Arc<Scan> {
+    pub(crate) fn tracking_scan(&self, project_id: &str) -> std::sync::Arc<Scan> {
         if let Some(s) = self.wf_tracks.lock().scans.get(project_id) {
             return s.clone();
         }

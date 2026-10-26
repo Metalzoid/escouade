@@ -24,6 +24,7 @@ const ESCOUADE_TOOLS: Record<string, Key> = {
   get_ticket_image: 'mcp.tools.getTicketImage',
   get_ticket_file: 'mcp.tools.getTicketFile',
   get_usage: 'mcp.tools.getUsage',
+  get_workflow: 'mcp.tools.getWorkflow',
   get_board: 'mcp.tools.getBoard',
   set_board: 'mcp.tools.setBoard',
   get_agent_summary: 'mcp.tools.getAgentSummary',

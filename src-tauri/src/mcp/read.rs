@@ -7,6 +7,7 @@ use super::files::{self, FileView};
 use super::images::{self, ImageView};
 use super::resolve::{self, Sight};
 use super::tools::ToolError;
+use super::workflow::{AgentWorkflow, AgentWorkflowHistory, Tracked};
 use super::Caller;
 use crate::accounts;
 use crate::agent::{AgentRt, Waiting};
@@ -274,6 +275,8 @@ struct AgentRow {
     work: WorkCounts,
     #[serde(flatten)]
     remote: RemoteRead,
+    /// Where it is in its project's workflow; null when it follows none.
+    workflow: Option<AgentWorkflow>,
 }
 
 /// `list_agents`: the agents not archived, oldest first, of every project the caller sees or of
@@ -295,12 +298,22 @@ pub(super) fn agents<R: Runtime>(
         .collect();
     let keys = ticket_keys(core);
     let settings = core.settings.read().clone();
-    let rows: Vec<AgentRow> = core
+    let views: Vec<_> = core
         .agent_views()
         .into_iter()
         .filter(|v| !v.meta.archived && sight.sees(&v.meta.project_id))
         .filter(|v| scope.as_ref().is_none_or(|p| v.meta.project_id == p.id))
+        .collect();
+    let mut tracked: HashMap<String, Tracked> = HashMap::new();
+    for v in &views {
+        tracked
+            .entry(v.meta.project_id.clone())
+            .or_insert_with(|| Tracked::of(core, &v.meta.project_id));
+    }
+    let rows: Vec<AgentRow> = views
+        .into_iter()
         .map(|v| AgentRow {
+            workflow: tracked[&v.meta.project_id].of_agent(&v.meta.id),
             work: WorkCounts::of(v.meta.plan.as_ref()),
             remote: RemoteRead::of(&v.meta, v.remote_state.as_deref(), v.interface_remote),
             project: projects
@@ -871,6 +884,9 @@ struct Summary {
     repos: Vec<RepoBranch>,
     #[serde(flatten)]
     remote: RemoteRead,
+    /// Where it is in its project's workflow and the steps it went through; null when it follows
+    /// none.
+    workflow: Option<AgentWorkflowHistory>,
 }
 
 /// `get_agent_summary`: the agent `agent` names (in `project` when given), summed up.
@@ -918,10 +934,12 @@ pub(super) fn agent_summary<R: Runtime>(
                 rt.remote_state.as_deref(),
                 rt.tui.as_ref().map(|t| t.remote),
             ),
+            workflow: None,
         };
         (summary, rt.meta.ticket_id.clone())
     };
     // The agent's lock released first (the order is agents, then tickets).
+    summary.workflow = Tracked::of(core, &found.project_id).history_of(&found.id);
     summary.ticket = ticket_id.and_then(|id| {
         core.tickets
             .read()

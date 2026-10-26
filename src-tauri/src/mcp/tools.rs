@@ -44,6 +44,7 @@ use super::files;
 use super::images;
 use super::read;
 use super::wait;
+use super::workflow;
 use super::Caller;
 use crate::core::Core;
 use crate::model::Column;
@@ -728,6 +729,12 @@ pub struct StartTicketArgs {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetWorkflowArgs {
+    #[schemars(description = "The project: its id, or its name in any case.")]
+    pub project: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetBoardArgs {
     #[schemars(description = "The project: its id, or its name in any case.")]
     pub project: String,
@@ -1005,7 +1012,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "List Escouade's Claude Code agents, oldest first (archived ones left out), of every project or of one: their id, name, project (its name) and projectId, status (idle, running, waiting, done or error), whether a question or a permission waits for the user's answer and how many (requests; list_requests gives them), the key of their ticket (null when none), their harness (engine: claude for Claude Code, codex, copilot, cursor or opencode), their model, their Claude account, what they cost so far in US dollars, how many subagents and background tasks they have running (subagentsRunning: the subagents at work, in the foreground or the background; backgroundTasksRunning: the commands, monitors, remote agents, teammates and workflows Claude Code runs for them, never the subagents; an agent that finished its turn may still have some going on, and list_background_work lists them), and their Remote Control: remoteControl (in force now, so the agent is reachable from claude.ai), remoteSource (what turned it on: hand, project or global; off when the user set the agent apart with « Désactiver le remote control », so no setting gives it back; null otherwise), remoteState (the link's state Claude Code reports: ready, connected, unavailable; null without a link) and interfaceRemote (in the Claude Code view: true when its interface runs and was started with Remote Control, so it stays linked to claude.ai until its next launch even after Remote Control was turned off; false when it runs without; null when none runs). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
+        description = "List Escouade's Claude Code agents, oldest first (archived ones left out), of every project or of one: their id, name, project (its name) and projectId, status (idle, running, waiting, done or error), whether a question or a permission waits for the user's answer and how many (requests; list_requests gives them), the key of their ticket (null when none), their harness (engine: claude for Claude Code, codex, copilot, cursor or opencode), their model, their Claude account, what they cost so far in US dollars, how many subagents and background tasks they have running (subagentsRunning: the subagents at work, in the foreground or the background; backgroundTasksRunning: the commands, monitors, remote agents, teammates and workflows Claude Code runs for them, never the subagents; an agent that finished its turn may still have some going on, and list_background_work lists them), and their Remote Control: remoteControl (in force now, so the agent is reachable from claude.ai), remoteSource (what turned it on: hand, project or global; off when the user set the agent apart with « Désactiver le remote control », so no setting gives it back; null otherwise), remoteState (the link's state Claude Code reports: ready, connected, unavailable; null without a link) and interfaceRemote (in the Claude Code view: true when its interface runs and was started with Remote Control, so it stays linked to claude.ai until its next launch even after Remote Control was turned off; false when it runs without; null when none runs), and workflow (where it is in its project's workflow: name, step, turn, since in epoch milliseconds, and outside when it does something else; null when it follows none; get_workflow gives the workflow). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn list_agents(
@@ -1113,6 +1120,20 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
+        description = "Read a project's workflows, as the window's Workflow tab shows them (read again if a file they read changed): for each workflow its id, name, kind (cycle: steps that name each other; prompt: a prompt run over and over), harness (engine; null for a PROMPT.md), repo (of a project of several repositories), doors (the commands or skills that go in: name, command as typed, kind, scope, path, description, role entry, step or other, enters), steps (name, command, order, description, path, agents: the sub-agents it launches, reads, writes, and agentsHere: the agents of the project on it now, with id, name, since in epoch milliseconds and pass, the nth stay in that step), transitions (from, to, back: a way back to a step already passed, condition: the line that says when, max), stateFiles, exit and promptLoop. Then alone (commands of the harness' folders that belong to no workflow), and agentsElsewhere (agents that follow a workflow but are on no step: between two, or outside it, doing something else). An agent is placed by what it does, compared to the steps; nothing is asked of it. Open to every client, for the projects it sees (a private project is seen by its own agents alone). list_agents and get_agent_summary give each agent's workflow too.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn get_workflow(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<GetWorkflowArgs>,
+    ) -> CallToolResult {
+        let result = workflow::get(&ctx.core, &ctx.caller, &args.project).await;
+        let asked = summary(&[("project", Some(&args.project))]);
+        ctx.reply("get_workflow", &asked, result)
+    }
+
+    #[tool(
         description = "Read the quota of every account, of every harness: for each account its harness (engine), whether new agents of that harness go to it now (current: the first active account of the harness whose meters are under the autopilot's threshold, else the first active one), and its meters as last read (meters: a window of a length in minutes, 300 for 5 hours and 10080 for a week, or the month's credits with minutes null; each with how much is used, pct 0 to 100, and when it resets, resetsAt in epoch milliseconds; none for a harness without a quota or not read yet), Claude Code's 5-hour and weekly windows also as fiveHour and sevenDay (null when not read); and why the autopilot holds the tickets of the default harness back, when it does (reason: window, with its length in minutes, credits or limit), until when (epoch milliseconds).",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
@@ -1122,7 +1143,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Sum up an agent without reading its conversation: its id, name, status, its harness (engine, as list_agents gives it), the key of its ticket (null when none), its last message (null before its first; 2,000 characters at most, a longer one given by its start and its end, where it says what it concluded or asks, joined by \" … \"), the files it edited (the latest 100 at most, relative to its folder), and how many requests wait for the user's answer (requests) and of which type, in the order they came (waitingFor: permission, question or plan), how many subagents and background tasks it has running (subagentsRunning and backgroundTasksRunning, as list_agents gives them; list_background_work lists them), and its Remote Control as list_agents gives it (remoteControl, remoteSource, remoteState, interfaceRemote). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
+        description = "Sum up an agent without reading its conversation: its id, name, status, its harness (engine, as list_agents gives it), the key of its ticket (null when none), its last message (null before its first; 2,000 characters at most, a longer one given by its start and its end, where it says what it concluded or asks, joined by \" … \"), the files it edited (the latest 100 at most, relative to its folder), and how many requests wait for the user's answer (requests) and of which type, in the order they came (waitingFor: permission, question or plan), how many subagents and background tasks it has running (subagentsRunning and backgroundTasksRunning, as list_agents gives them; list_background_work lists them), its Remote Control as list_agents gives it (remoteControl, remoteSource, remoteState, interfaceRemote), and its workflow as list_agents gives it (workflow: name, step, turn, since, outside), with the steps it went through (history, the latest 100, oldest first: step, door, version, pass, at, ended, ms, cost, did, outcome running, done, back, failed, stopped or left, reason and backTo for a way back; ms and cost for its whole stay in the workflow). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn get_agent_summary(

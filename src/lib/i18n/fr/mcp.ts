@@ -53,6 +53,7 @@ export default {
     getTicketFile: 'Lire un fichier d’un ticket',
     getUsage: 'Lire le quota',
     getBoard: 'Lire les réglages du Kanban',
+    getWorkflow: 'Lire les workflows',
     setBoard: 'Régler le Kanban',
     getAgentSummary: 'Résumer un agent',
     listRequests: 'Lister les demandes en attente',

@@ -417,6 +417,7 @@ export const fr: Catalog = {
       testing: 'Tester et valider',
       integrations: 'Tickets externes',
       'shared-board': 'Partager le Kanban',
+      workflows: 'Les workflows',
       mcp: 'Le serveur MCP',
       accounts: 'Plusieurs comptes',
       usage: 'Quotas et coût',

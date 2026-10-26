@@ -43,6 +43,9 @@ pub(crate) mod tools;
 #[cfg(test)]
 mod tools_tests;
 mod wait;
+mod workflow;
+#[cfg(test)]
+mod workflow_tests;
 
 // The one line a text is shown as (also the plan's titles).
 pub(crate) use act::visible_line;

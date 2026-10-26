@@ -80,6 +80,7 @@ fn naming_calls() -> Vec<(&'static str, Names, Value)> {
         ("list_agents", Names::Project, json!({ "project": "{}" })),
         ("list_tickets", Names::Project, json!({ "project": "{}" })),
         ("get_board", Names::Project, json!({ "project": "{}" })),
+        ("get_workflow", Names::Project, json!({ "project": "{}" })),
         ("list_requests", Names::Project, json!({ "project": "{}" })),
         (
             "create_ticket",

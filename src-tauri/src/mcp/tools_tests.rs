@@ -223,6 +223,7 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
     assert_eq!(required("get_agent_summary"), json!(["agent"]));
     assert_eq!(required("wait_ticket"), json!(["tickets"]));
     assert_eq!(required("get_board"), json!(["project"]));
+    assert_eq!(required("get_workflow"), json!(["project"]));
     assert_eq!(required("list_background_work"), json!(["agent"]));
     assert_eq!(required("get_background_output"), json!(["agent", "id"]));
     for name in [
@@ -248,6 +249,7 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
         "get_agent_summary",
         "wait_ticket",
         "get_board",
+        "get_workflow",
         "list_background_work",
         "get_background_output",
     ] {
@@ -383,6 +385,7 @@ async fn the_agents_are_listed_with_what_waits_their_ticket_model_account_and_co
             "remoteSource": null,
             "remoteState": null,
             "interfaceRemote": null,
+            "workflow": null,
         })
     );
     assert_eq!(
@@ -997,6 +1000,7 @@ async fn an_agents_summary_gives_its_last_message_cut_cleanly_and_the_files_it_e
             "remoteSource": null,
             "remoteState": null,
             "interfaceRemote": null,
+            "workflow": null,
         })
     );
     assert_eq!(
@@ -1028,7 +1032,7 @@ async fn an_agents_summary_gives_its_last_message_cut_cleanly_and_the_files_it_e
     assert!(!tail.contains('…'), "{last}");
     // Never the whole conversation: neither the message sent nor anything else.
     let text = serde_json::to_string(&summary).unwrap();
-    assert!(text.chars().count() < 2300, "{}", text.chars().count());
+    assert!(text.chars().count() < 2400, "{}", text.chars().count());
     assert_eq!(
         summary.as_object().unwrap().keys().collect::<Vec<_>>(),
         [
@@ -1046,7 +1050,8 @@ async fn an_agents_summary_gives_its_last_message_cut_cleanly_and_the_files_it_e
             "subagentsRunning",
             "ticket",
             "touchedFiles",
-            "waitingFor"
+            "waitingFor",
+            "workflow"
         ]
     );
     // The 100 latest files it edited.

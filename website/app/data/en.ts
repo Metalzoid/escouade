@@ -413,6 +413,7 @@ export const en: Catalog = {
       testing: 'Review and approve',
       integrations: 'External tickets',
       'shared-board': 'Sharing the Kanban',
+      workflows: 'Workflows',
       mcp: 'The MCP server',
       accounts: 'Several accounts',
       usage: 'Quotas and cost',
