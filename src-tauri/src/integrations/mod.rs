@@ -1,10 +1,11 @@
-//! External ticket systems (Jira, Trello, GitHub Issues, Linear, ClickUp): their accounts, the tickets a project
+//! External ticket systems (Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues): their accounts, the tickets a project
 //! imports from them, and the sync of their states with the Kanban's columns.
 
 pub mod clickup;
 #[cfg(test)]
 pub(crate) mod fake;
 pub mod github;
+pub mod gitlab;
 pub mod jira;
 pub mod linear;
 pub mod secrets;
@@ -54,6 +55,8 @@ impl Accounts {
             Service::Github => self.github.as_ref(),
             Service::Linear => self.linear.as_ref(),
             Service::Clickup => self.clickup.as_ref(),
+            // The GitLab code host's accounts (`gitlab_accounts`).
+            Service::Gitlab => None,
         }
     }
 
@@ -64,6 +67,7 @@ impl Accounts {
             Service::Github => self.github.as_mut(),
             Service::Linear => self.linear.as_mut(),
             Service::Clickup => self.clickup.as_mut(),
+            Service::Gitlab => None,
         }
     }
 
@@ -74,6 +78,21 @@ impl Accounts {
             Service::Github => self.github = a,
             Service::Linear => self.linear = a,
             Service::Clickup => self.clickup = a,
+            // Connected and disconnected as a code host.
+            Service::Gitlab => {}
+        }
+    }
+
+    /// The GitLab code host's accounts, one per instance: GitLab Issues' too.
+    pub fn gitlab_accounts(&self) -> Vec<&crate::forge::accounts::ForgeAccount> {
+        self.forges.iter().filter(|a| a.kind == "gitlab").collect()
+    }
+
+    /// An account of `s` is connected (for GitLab, a code host's one).
+    pub fn connected(&self, s: Service) -> bool {
+        match s {
+            Service::Gitlab => !self.gitlab_accounts().is_empty(),
+            _ => self.get(s).is_some(),
         }
     }
 
@@ -81,17 +100,40 @@ impl Accounts {
     pub fn views(&self) -> Vec<AccountView> {
         Service::ALL
             .iter()
-            .map(|&service| AccountView {
-                service,
-                connected: self.get(service).is_some(),
-                label: self
-                    .get(service)
-                    .map(|a| a.label.clone())
-                    .unwrap_or_default(),
-                in_file: self.get(service).is_some_and(|a| a.in_file),
-                unread: self.get(service).is_some_and(|a| a.unread),
+            .map(|&service| match service {
+                Service::Gitlab => self.gitlab_view(),
+                _ => AccountView {
+                    service,
+                    connected: self.get(service).is_some(),
+                    label: self
+                        .get(service)
+                        .map(|a| a.label.clone())
+                        .unwrap_or_default(),
+                    in_file: self.get(service).is_some_and(|a| a.in_file),
+                    unread: self.get(service).is_some_and(|a| a.unread),
+                },
             })
             .collect()
+    }
+
+    /// GitLab Issues' view: its code host's accounts, their instance named but gitlab.com's.
+    fn gitlab_view(&self) -> AccountView {
+        let list = self.gitlab_accounts();
+        let label = list
+            .iter()
+            .map(|a| match a.host().as_str() {
+                "gitlab.com" => a.label.clone(),
+                host => format!("{} · {host}", a.label),
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        AccountView {
+            service: Service::Gitlab,
+            connected: !list.is_empty(),
+            label,
+            in_file: list.iter().any(|a| a.in_file),
+            unread: !list.is_empty() && list.iter().all(|a| a.unread),
+        }
     }
 }
 
@@ -162,6 +204,9 @@ pub struct Container {
     /// « Space › Folder ». None for the others.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
+    /// The project's own repository (its remote's), which the import offers to link at once.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub own: bool,
 }
 
 /// The states of a container, and those each column gives by default.
@@ -271,6 +316,7 @@ pub enum Client {
     Github(github::Github),
     Linear(linear::Linear),
     Clickup(clickup::Clickup),
+    Gitlab(gitlab::Gitlab),
 }
 
 impl Client {
@@ -284,6 +330,18 @@ impl Client {
             Service::Clickup => {
                 Client::Clickup(clickup::Clickup::new(http, account, &bases.clickup))
             }
+            // One instance: the account's site, token and user (`Core::gitlab_client` gives
+            // every one).
+            Service::Gitlab => Client::Gitlab(gitlab::Gitlab::new(
+                http,
+                vec![gitlab::Instance {
+                    host: crate::forge::host_of(&account.site),
+                    base: format!("{}/api/v4", account.site.trim_end_matches('/')),
+                    token: account.token.trim().to_string(),
+                    user: account.user.clone(),
+                    label: account.label.clone(),
+                }],
+            )),
         }
     }
 
@@ -295,6 +353,7 @@ impl Client {
             Client::Github(c) => c.me().await,
             Client::Linear(c) => c.me().await,
             Client::Clickup(c) => c.me().await,
+            Client::Gitlab(c) => c.me().await,
         }
     }
 
@@ -305,6 +364,7 @@ impl Client {
             Client::Github(c) => c.containers().await,
             Client::Linear(c) => c.containers().await,
             Client::Clickup(c) => c.containers().await,
+            Client::Gitlab(c) => c.containers().await,
         }
     }
 
@@ -315,6 +375,7 @@ impl Client {
             Client::Github(c) => c.states(container).await,
             Client::Linear(c) => c.states(container).await,
             Client::Clickup(c) => c.states(container).await,
+            Client::Gitlab(c) => c.states(container).await,
         }
     }
 
@@ -338,11 +399,12 @@ impl Client {
             Client::Github(c) => c.issues(container, q).await,
             Client::Linear(c) => c.issues(container, q).await,
             Client::Clickup(c) => c.issues(container, q).await,
+            Client::Gitlab(c) => c.issues(container, q).await,
         }
     }
 
     /// Gives the external ticket `state`; `mapped`: every state the link gives a column (GitHub
-    /// takes the labels of the others off).
+    /// and GitLab take the labels of the others off).
     pub async fn set_state(
         &self,
         r: &ExternalRef,
@@ -355,6 +417,7 @@ impl Client {
             Client::Github(c) => c.set_state(r, state, mapped).await,
             Client::Linear(c) => c.set_state(r, state).await,
             Client::Clickup(c) => c.set_state(r, state).await,
+            Client::Gitlab(c) => c.set_state(r, state, mapped).await,
         }
     }
 
@@ -365,6 +428,7 @@ impl Client {
             Client::Github(c) => c.comment(r, text).await,
             Client::Linear(c) => c.comment(r, text).await,
             Client::Clickup(c) => c.comment(r, text).await,
+            Client::Gitlab(c) => c.comment(r, text).await,
         }
     }
 }
@@ -702,7 +766,7 @@ mod tests {
         let v = serde_json::to_string(&a.views()).unwrap();
         assert!(!v.contains("secret"));
         let views = a.views();
-        assert_eq!(views.len(), 5);
+        assert_eq!(views.len(), 6);
         assert!(!views[0].connected);
         assert_eq!(
             (views[1].connected, views[1].label.as_str()),

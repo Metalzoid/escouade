@@ -1,9 +1,9 @@
 import type { Tree } from '../types';
 
-// Jira, Trello, GitHub, Linear and ClickUp: the integrations tab and the import of tickets.
+// Jira, Trello, GitHub, Linear, ClickUp and GitLab: the integrations tab and the import of tickets.
 export default {
   // What each service calls the place its tickets are in (the project, the board, the repository).
-  container: { jira: 'Projet', trello: 'Tableau', github: 'Dépôt', linear: 'Équipe', clickup: 'Liste' },
+  container: { jira: 'Projet', trello: 'Tableau', github: 'Dépôt', linear: 'Équipe', clickup: 'Liste', gitlab: 'Projet' },
   // The search field of the import, by service.
   searchHint: {
     jira: 'Rechercher par clé ou par texte…',
@@ -11,9 +11,22 @@ export default {
     github: 'Rechercher une issue…',
     linear: 'Rechercher par identifiant (ENG-42) ou par titre…',
     clickup: 'Rechercher par id (#86abx3, ABC-12) ou par titre…',
+    gitlab: 'Rechercher une issue (#12) ou par texte…',
   },
   // The toast after an import: « 3 tickets importés depuis Jira et Trello ».
   imported: { one: '{count} ticket importé depuis {from}', other: '{count} tickets importés depuis {from}' },
+
+  // The two parts of the tab: where the tickets come from, and where the code is.
+  parts: {
+    sources: {
+      title: 'Sources du Kanban',
+      note: 'Import et synchro des tickets : un ticket importé suit sa colonne là-bas (état, commentaires).',
+    },
+    forges: {
+      title: 'Hébergeurs de code',
+      note: 'PR et MR des agents, CI et déploiements : un compte par instance, que chaque projet trouve par son remote.',
+    },
+  },
 
   // The accounts group of the settings tab.
   accounts: {
@@ -42,12 +55,15 @@ export default {
     createLinearKey: "Créer une clé d'API Linear",
     clickupKeyHint: 'pk_…',
     createClickupKey: "Créer une clé d'API ClickUp",
+    // GitLab Issues has no account of its own: the GitLab code host's serves.
+    byForge: 'Compte de l’hébergeur GitLab : il se connecte et se déconnecte dans Hébergeurs de code.',
+    connectForge: 'Connecter GitLab…',
   },
 
   // The code hosts' accounts: one per instance, with what each check found.
   forges: {
-    title: 'Hébergeurs de code',
-    note: "Un compte par instance (github.com, celle de l'entreprise…) : chaque projet trouve le sien par son remote. Le compte de github.com sert aussi à GitHub Issues.",
+    title: 'Instances connectées',
+    note: "Une par adresse (github.com, celle de l'entreprise…). Le compte de github.com sert aussi à GitHub Issues, ceux de GitLab à GitLab Issues.",
     empty: 'Aucun hébergeur connecté.',
     connected: 'Connecté · {label}',
     unchecked: '{label} · pas encore vérifié',
@@ -57,7 +73,8 @@ export default {
     unreachable: 'Injoignable · {label}',
     unread: 'Trousseau du système illisible : relance Escouade ou reconnecte le compte.',
     viaCli: 'Jeton de {cli}',
-    issues: 'Sert aussi à GitHub Issues',
+    issues: 'Sert aussi à {source}',
+    noTickets: 'Pas de tickets : PR et CI seulement',
     projects: { one: 'Projet : {list}', other: 'Projets : {list}' },
     noAccount: { one: 'Aucun compte, pour le projet {list}', other: 'Aucun compte, pour les projets {list}' },
     connectHost: 'Connecter {host}',
@@ -88,6 +105,7 @@ export default {
       github: 'Dépôt GitHub Issues',
       linear: 'Équipe Linear',
       clickup: 'Liste ClickUp',
+      gitlab: 'Projet GitLab Issues',
     },
   },
 
@@ -108,7 +126,7 @@ export default {
     loopSummary: 'Publier un résumé à chaque boucle',
     loopSummaryDesc: "Critères atteints et notes de l'agent, sur le ticket externe",
     extractCriteria: "Extraire les critères d'acceptation",
-    extractCriteriaDesc: 'Depuis la description (Jira, GitHub, Linear) ou la checklist (Trello, ClickUp) du ticket importé',
+    extractCriteriaDesc: 'Depuis la description (Jira, GitHub, Linear, GitLab) ou la checklist (Trello, ClickUp) du ticket importé',
   },
 
   autoImport: {
@@ -118,7 +136,7 @@ export default {
     label: 'Étiquette',
     /** A column mapped to a label of the service rather than to one of its states. */
     labelState: 'Étiquette « {name} »',
-    labelHint: 'label Jira, étiquette Trello, GitHub, Linear ou ClickUp',
+    labelHint: 'label Jira, étiquette Trello, GitHub, Linear, ClickUp ou GitLab',
     every: 'Vérifier toutes les',
     minutes: '{n} min',
   },
@@ -129,9 +147,13 @@ export default {
     sub: 'Dans « À faire » du Kanban de {project}',
     noSource: 'Aucune source liée à ce projet',
     noSourceBody:
-      'Connecte Jira, Trello, GitHub Issues, Linear ou ClickUp, puis choisis le projet, le tableau, le dépôt, l’équipe ou la liste à associer à {project}.',
+      'Connecte Jira, Trello, GitHub Issues, Linear, ClickUp ou GitLab Issues, puis choisis le projet, le tableau, le dépôt, l’équipe ou la liste à associer à {project}.',
     thisProject: 'ce projet',
     linkSource: 'Lier une source',
+    // The project's own repository, on a code host whose source is connected.
+    linkOwn: 'Lier {name} ({service})',
+    linking: 'Liaison…',
+    otherSource: 'Lier une autre source',
     sources: 'Sources',
     pickedCount: { one: '{n} sélectionné', other: '{n} sélectionnés' },
     manage: '⚙ Gérer les sources',

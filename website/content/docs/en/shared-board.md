@@ -71,7 +71,7 @@ outcome: null
 | `author`, `taken_by`, `updated_by` | Who shared it, who started it, who last changed the file: `{ name, id }`. |
 | `after` | The `id`s of the shared tickets it waits for (“After”). |
 | `images`, `files` | Its images and joined files, in the folder of its `id`. |
-| `external` | The Jira, Trello, GitHub, Linear or ClickUp ticket it was imported from. |
+| `external` | The Jira, Trello, GitHub, Linear, ClickUp or GitLab ticket it was imported from. |
 | `outcome` | What its approval did, once done. |
 
 Stay on your machine: the loops, the cost, the agent’s progress, the criteria met, the account, the model, the agent and its branch. The format’s JSON schema is published at `https://escouade.dev/schemas/escouade-ticket.schema.json`.
@@ -88,7 +88,7 @@ A shared ticket keeps everywhere the key its author gave it: Alice’s DEM-12 is
 - **A file in a git conflict.** Escouade does not read it: the card keeps its last state and offers “Keep mine” (Escouade writes the file again with your version, which settles the conflict) or “Take theirs” (the side merged in). Nothing is committed.
 - **A file that can’t be read.** It becomes a “Shared ticket that can’t be read” card, with the line in cause; Escouade never writes it nor starts it.
 - **A ticket its author no longer shares.** It leaves your Kanban at your pull, unless you had started it: it then stays with you, as one of yours.
-- **An import already shared.** Importing a Jira, Trello, GitHub, Linear or ClickUp ticket a teammate already shared makes no duplicate: your import, if not started, becomes the shared ticket.
+- **An import already shared.** Importing a Jira, Trello, GitHub, Linear, ClickUp or GitLab ticket a teammate already shared makes no duplicate: your import, if not started, becomes the shared ticket.
 - **A private project.** It is shared too: “private” is about what Escouade’s other projects see, not your team on the repository. Its shared tickets stay out of sight of the other projects’ agents.
 
 ## With the MCP server

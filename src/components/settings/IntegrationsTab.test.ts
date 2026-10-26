@@ -59,7 +59,7 @@ describe('IntegrationsTab', () => {
     app.accounts = [off('jira'), off('trello'), off('github')];
     render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
     expect(screen.getByRole('tab', { name: 'Intégrations' })).toHaveAttribute('aria-selected', 'true');
-    expect(within(panel()).getAllByText('Non connecté')).toHaveLength(5);
+    expect(within(panel()).getAllByText('Non connecté')).toHaveLength(6);
     expect(within(panel()).getByText('Connecte un compte ci-dessus pour lier une source à ce projet.')).toBeInTheDocument();
     expect(within(panel()).queryByText('Correspondance des statuts')).not.toBeInTheDocument();
   });
@@ -118,7 +118,80 @@ describe('IntegrationsTab', () => {
     render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
     await userEvent.click(within(panel()).getByRole('button', { name: 'Déconnecter' }));
     expect(b.called('integration_disconnect')[0].args).toEqual({ service: 'jira' });
-    await waitFor(() => expect(within(panel()).getAllByText('Non connecté')).toHaveLength(5));
+    await waitFor(() => expect(within(panel()).getAllByText('Non connecté')).toHaveLength(6));
+  });
+
+  it('names its two parts apart, the code hosts and the sources of the Kanban, and opens on the sources when asked', async () => {
+    backend();
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView');
+    render(SettingsModal, { tab: 'integrations', projectId: 'p1', section: 'sources' });
+    const p = within(panel());
+    const hosts = p.getByRole('heading', { name: 'Hébergeurs de code' });
+    const sources = p.getByRole('heading', { name: 'Sources du Kanban' });
+    expect(hosts.parentElement).toHaveTextContent('PR et MR des agents, CI et déploiements');
+    expect(sources.parentElement).toHaveTextContent('Import et synchro des tickets');
+    // The accounts of the sources come under their own part.
+    const accounts = p.getByRole('heading', { name: 'Comptes connectés' });
+    expect(sources.compareDocumentPosition(accounts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(hosts.compareDocumentPosition(sources) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await expect.poll(() => scrolled.mock.contexts.length).toBeGreaterThan(0);
+    expect(scrolled.mock.contexts.at(-1)).toBe(sources.parentElement);
+    scrolled.mockRestore();
+  });
+
+  it('connects GitLab Issues through the GitLab code host, and shows it connected with it', async () => {
+    const gitlab = {
+      kind: 'gitlab',
+      name: 'GitLab',
+      requestWord: 'MR',
+      defaultHost: 'gitlab.com',
+      needsEmail: false,
+      cli: 'glab',
+      scopes: ['api'],
+      capabilities: {},
+    };
+    const github = { ...gitlab, kind: 'github', name: 'GitHub', requestWord: 'PR', defaultHost: 'github.com', cli: 'gh' };
+    const b = backend({ forges: () => ({ providers: [github, gitlab], accounts: [], unknown: [], issues: app.accounts }) });
+    render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
+    const p = within(panel());
+    const row = p.getAllByText('GitLab Issues')[0].closest('.acct') as HTMLElement;
+    expect(row).toHaveTextContent('Non connecté');
+    expect(row).toHaveTextContent('Compte de l’hébergeur GitLab : il se connecte et se déconnecte dans Hébergeurs de code.');
+    await waitFor(() => expect(b.called('forges').length).toBeGreaterThan(0));
+    // The same form as the code host: one GitLab account for both uses.
+    await userEvent.click(within(row).getByRole('button', { name: 'Connecter GitLab…' }));
+    const form = await p.findByRole('form', { name: 'Connexion à un hébergeur' });
+    expect(within(form).getByLabelText('Hébergeur')).toHaveValue('gitlab');
+    expect(within(form).getByLabelText('Adresse')).toHaveFocus();
+    expect(b.called('integration_connect')).toHaveLength(0);
+  });
+
+  it('lists the GitLab projects of every instance, without a disconnect of its own', async () => {
+    const b = backend({
+      integration_containers: (a: any) =>
+        a.service === 'gitlab'
+          ? [
+              { id: 'gitlab.com/acme/back/api', name: 'acme/back/api (dépôt du projet)', own: true },
+              { id: 'git.acme.dev/infra/deploy', name: 'infra/deploy', group: 'git.acme.dev' },
+            ]
+          : [],
+    });
+    app.accounts = [
+      off('jira'),
+      off('trello'),
+      off('github'),
+      { service: 'gitlab', connected: true, label: '@ada, @ada.l · git.acme.dev' },
+    ];
+    render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
+    const p = within(panel());
+    const row = p.getAllByText('GitLab Issues')[0].closest('.acct') as HTMLElement;
+    expect(row).toHaveTextContent('Connecté · @ada, @ada.l · git.acme.dev');
+    expect(within(row).queryByRole('button')).toBeNull();
+    const source = p.getByRole('combobox', { name: 'Projet GitLab Issues' });
+    await waitFor(() => expect(within(source).getByRole('option', { name: 'acme/back/api (dépôt du projet)' })).toBeInTheDocument());
+    expect(within(source).getByRole('group', { name: 'git.acme.dev' })).toHaveTextContent('infra/deploy');
+    await userEvent.selectOptions(source, 'gitlab.com/acme/back/api');
+    expect(b.called('integration_states').at(-1)!.args).toEqual({ service: 'gitlab', container: 'gitlab.com/acme/back/api' });
   });
 
   it('links a source with its default states, sets them by column, and saves them with the project', async () => {
@@ -288,8 +361,14 @@ describe('IntegrationsTab in English', () => {
     render(IntegrationsTab, { project: app.projects[0] });
     const p = within(document.body);
     expect(p.getByRole('heading', { name: 'Connected accounts' })).toBeInTheDocument();
+    expect(p.getByRole('heading', { name: 'Code hosts' })).toBeInTheDocument();
+    expect(p.getByRole('heading', { name: 'Kanban sources' }).parentElement).toHaveTextContent(
+      'Import and sync of tickets: an imported ticket follows its column there (status, comments).',
+    );
+    expect(p.getByText('The GitLab code host’s account: it is connected and disconnected in Code hosts.')).toBeInTheDocument();
+    expect(p.getByRole('button', { name: 'Connect GitLab…' })).toBeInTheDocument();
     expect(p.getByText('Connected · ada@atlas.dev · atlas.atlassian.net')).toBeInTheDocument();
-    expect(p.getAllByText('Not connected')).toHaveLength(3);
+    expect(p.getAllByText('Not connected')).toHaveLength(4);
     expect(p.getByText('System keychain unavailable: the token stays in ~/.escouade/integrations.json.')).toBeInTheDocument();
     expect(p.getByText('System keychain unreadable: restart Escouade or reconnect the account.')).toBeInTheDocument();
     expect(p.getAllByRole('button', { name: 'Disconnect' })).toHaveLength(2);

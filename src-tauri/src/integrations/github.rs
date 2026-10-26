@@ -67,6 +67,7 @@ impl Github {
                 id: n.to_string(),
                 name: n.to_string(),
                 group: None,
+                own: false,
             })
             .collect())
     }

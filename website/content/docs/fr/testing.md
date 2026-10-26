@@ -79,7 +79,7 @@ Le bouton de la carte porte le nom de ce que la validation fait. Cela se règle 
 
 Un ticket « À tester » se valide même s’il est en « Objectif partiel ».
 
-Une fois le ticket validé (sauf avec « Laisser en l’état »), son agent est archivé. Si « Supprimer le worktree une fois validé » est activé (par défaut), le worktree est supprimé après les commandes de démontage du projet. La branche du ticket part avec lui après un merge, ou quand le ticket n’apportait aucun changement ; elle reste quand elle a été poussée ou proposée en PR. Une branche existante que le ticket avait reprise n’est jamais supprimée. Le ticket passe dans « Terminé », avec son issue, son coût et son nombre de boucles. Un ticket importé met son statut à jour et peut laisser un commentaire (voir [Jira, Trello, GitHub, Linear et ClickUp](integrations)).
+Une fois le ticket validé (sauf avec « Laisser en l’état »), son agent est archivé. Si « Supprimer le worktree une fois validé » est activé (par défaut), le worktree est supprimé après les commandes de démontage du projet. La branche du ticket part avec lui après un merge, ou quand le ticket n’apportait aucun changement ; elle reste quand elle a été poussée ou proposée en PR. Une branche existante que le ticket avait reprise n’est jamais supprimée. Le ticket passe dans « Terminé », avec son issue, son coût et son nombre de boucles. Un ticket importé met son statut à jour et peut laisser un commentaire (voir [Jira, Trello, GitHub, Linear, ClickUp et GitLab](integrations)).
 
 Si la branche du ticket n’apporte aucun changement, le ticket est terminé quand même : « ∅ Aucune modification ».
 

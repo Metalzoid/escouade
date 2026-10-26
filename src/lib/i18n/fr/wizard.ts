@@ -39,7 +39,7 @@ export default {
     launch: 'Les commandes qui lancent le projet, chacune dans son terminal.',
     kanban: 'Ce que fait la validation d’un ticket, et comment ses agents travaillent.',
     account: 'Le harness et le compte des agents de ce projet, qui écrit les commits, et s’il est privé.',
-    integrations: 'Les tickets peuvent venir de Jira, Trello, GitHub, Linear ou ClickUp. Rien n’est obligatoire.',
+    integrations: 'Les tickets peuvent venir de Jira, Trello, GitHub, Linear, ClickUp ou GitLab. Rien n’est obligatoire.',
     summary: 'Ce qui empêcherait la méthode de travail de marcher, puis ce qui sera réglé.',
   },
   start: {
@@ -93,7 +93,7 @@ export default {
       account: 'Git et compte',
     },
     count: { one: '{count} réglage', other: '{count} réglages' },
-    notCopied: 'Pas copiés : les sources liées (Jira, Trello, GitHub, Linear, ClickUp) et les tickets.',
+    notCopied: 'Pas copiés : les sources liées (Jira, Trello, GitHub, Linear, ClickUp, GitLab) et les tickets.',
     prefixes: 'Préfixes des branches',
     unnamed: 'Sans nom',
     validation: 'Validation',
@@ -129,7 +129,7 @@ export default {
     reservedNone: 'Aucun compte {harness} libre : ajoute un compte réservé dans Réglages › Projets, une fois le projet créé.',
   },
   integrations: {
-    none: 'Aucun compte Jira, Trello, GitHub, Linear ou ClickUp n’est connecté : connecte-en un dans Réglages › Intégrations, après la création.',
+    none: 'Aucun compte Jira, Trello, GitHub, Linear, ClickUp ou GitLab n’est connecté : connecte-en un dans Réglages › Intégrations, après la création.',
     source: 'Source {service}',
     noSource: 'Aucune',
     loading: 'Chargement…',

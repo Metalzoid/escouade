@@ -84,6 +84,7 @@ impl Trello {
                 id: b["id"].as_str().unwrap_or_default().to_string(),
                 name: b["name"].as_str().unwrap_or_default().to_string(),
                 group: None,
+                own: false,
             })
             .collect())
     }
@@ -353,6 +354,7 @@ mod tests {
                 id: "b1".into(),
                 name: "Atlas".into(),
                 group: None,
+                own: false,
             }]
         );
         let lists: Vec<String> = t

@@ -123,7 +123,9 @@ describe('the new project’s assistant', () => {
     expect(within(launch).getByText(/dossier « web » introuvable ici/)).toBeInTheDocument();
     const kanban = screen.getByRole('region', { name: 'Kanban' });
     expect(within(kanban).getByText(/branche introuvable : main à la place/)).toBeInTheDocument();
-    expect(screen.getByText('Pas copiés : les sources liées (Jira, Trello, GitHub, Linear, ClickUp) et les tickets.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Pas copiés : les sources liées (Jira, Trello, GitHub, Linear, ClickUp, GitLab) et les tickets.'),
+    ).toBeInTheDocument();
     // The account and commits: the commit mode left out by hand.
     await userEvent.click(within(screen.getByRole('region', { name: 'Git et compte' })).getByRole('checkbox', { name: 'Commit' }));
     await next();
@@ -661,6 +663,8 @@ describe('the assistant in English', () => {
     expect(screen.getByRole('heading', { name: /Copied settings · web-shop/ })).toBeInTheDocument();
     expect(screen.getByText(/folder “web” not found here/)).toBeInTheDocument();
     expect(screen.getByText(/branch not found: the current branch instead/)).toBeInTheDocument();
-    expect(screen.getByText('Not copied: the linked sources (Jira, Trello, GitHub, Linear, ClickUp) and the tickets.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Not copied: the linked sources (Jira, Trello, GitHub, Linear, ClickUp, GitLab) and the tickets.'),
+    ).toBeInTheDocument();
   });
 });

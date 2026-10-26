@@ -164,14 +164,27 @@
 
   const every = $derived([5, 15, 60].map((n) => ({ value: n, label: t('integrations.autoImport.minutes', { n }) })));
   const blank = (): AccountForm => ({ site: '', email: '', key: '', token: '' });
+
+  /** The code hosts' part: GitLab Issues' « Connecter GitLab… » opens its form there (one account for both uses). */
+  let forges = $state<ReturnType<typeof ForgesSection>>();
 </script>
 
 {#snippet badge(id: Service, small = false)}
   <span class="badge" class:small aria-hidden="true">{SERVICES[id].letter}</span>
 {/snippet}
 
-<!-- The code hosts first (choice 27 of the 2.0 design): they serve every agent's pull requests. -->
-<ForgesSection />
+<!-- Two parts, named apart (ESC-165): the code hosts first (choice 27 of the 2.0 design), they serve every agent's
+     pull requests; then the sources of the Kanban. -->
+<header class="part" data-anchor="hosts">
+  <h2>{t('integrations.parts.forges.title')}</h2>
+  <p>{t('integrations.parts.forges.note')}</p>
+</header>
+<ForgesSection bind:this={forges} />
+
+<header class="part" data-anchor="sources">
+  <h2>{t('integrations.parts.sources.title')}</h2>
+  <p>{t('integrations.parts.sources.note')}</p>
+</header>
 
 <Group title={t('integrations.accounts.title')} note={t('integrations.accounts.note')}>
   {#each SERVICE_IDS as id (id)}
@@ -190,8 +203,13 @@
         {#if a?.connected && a.unread}
           <span class="d warn">{t('integrations.accounts.keychainUnreadable')}</span>
         {/if}
+        {#if id === 'gitlab'}<span class="d">{t('integrations.accounts.byForge')}</span>{/if}
       </div>
-      {#if a?.connected}
+      {#if id === 'gitlab'}
+        {#if !a?.connected}
+          <button class="btn" onclick={() => forges?.connectKind('gitlab')}>{t('integrations.accounts.connectForge')}</button>
+        {/if}
+      {:else if a?.connected}
         <button class="btn" onclick={() => disconnect(id)}>{t('integrations.accounts.disconnect')}</button>
       {:else if !form}
         <button class="btn" onclick={() => (forms[id] = blank())}>{t('integrations.accounts.connectEllipsis')}</button>
@@ -411,6 +429,31 @@
 </Group>
 
 <style>
+  .part {
+    padding: 26px 0 2px;
+  }
+  .part:first-child {
+    padding-top: 6px;
+  }
+  :global(.sg) + .part {
+    margin-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+  .part h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 650;
+  }
+  .part p {
+    max-width: 64ch;
+    margin: 4px 0 0;
+    color: var(--soft);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .part + :global(.sg) {
+    border-top: none;
+  }
   .badge {
     min-width: 24px;
     height: 24px;

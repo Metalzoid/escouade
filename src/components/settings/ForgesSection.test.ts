@@ -89,6 +89,7 @@ const VIEW: ForgesView = {
       url: 'https://gitlab.acme.dev',
       status: { health: 'missingScopes', missing: ['api'], error: null },
       projects: ['web'],
+      issues: true,
     }),
     account({
       kind: 'gitea',
@@ -123,7 +124,11 @@ describe('ForgesSection', () => {
     const gl = row('gitlab.acme.dev');
     expect(gl).toHaveTextContent('Droits manquants : api');
     expect(gl).toHaveTextContent('Projet : web');
+    // GitLab Issues takes it too; a Gitea is no source of tickets, and says so.
+    expect(gl).toHaveTextContent('Sert aussi à GitLab Issues');
     const cb = row('codeberg.org');
+    expect(cb).toHaveTextContent('Pas de tickets : PR et CI seulement');
+    expect(gh).not.toHaveTextContent('Pas de tickets');
     expect(cb).toHaveTextContent('Jeton expiré ou révoqué · @ada-cb');
     expect(cb).toHaveTextContent('Gitea refuse ces identifiants (401)');
     expect(row('git.example.org')).toHaveTextContent('Aucun compte, pour le projet notes');
@@ -210,7 +215,9 @@ describe('ForgesSection', () => {
     try {
       fakeBackend({ forges: () => VIEW, forge_check: () => VIEW });
       render(ForgesSection);
-      expect(await screen.findByText('Code hosts')).toBeInTheDocument();
+      expect(await screen.findByText('Connected instances')).toBeInTheDocument();
+      expect(row('gitlab.acme.dev')).toHaveTextContent('Also used for GitLab Issues');
+      expect(row('codeberg.org')).toHaveTextContent('No tickets: PRs and CI only');
       expect(row('gitlab.acme.dev')).toHaveTextContent('Missing permissions: api');
       expect(row('github.com')).toHaveTextContent('Also used for GitHub Issues');
       expect(row('github.com')).toHaveTextContent('Projects: demo and api');

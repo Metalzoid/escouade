@@ -36,7 +36,7 @@ export default defineZone('wizard', {
     launch: 'The commands that launch the project, each in its own terminal.',
     kanban: 'What approving a ticket does, and how its agents work.',
     account: 'The harness and account of this project’s agents, who writes the commits, and whether it’s private.',
-    integrations: 'Tickets can come from Jira, Trello, GitHub, Linear or ClickUp. None of it is required.',
+    integrations: 'Tickets can come from Jira, Trello, GitHub, Linear, ClickUp or GitLab. None of it is required.',
     summary: 'What would keep the way of working from working, then what will be set.',
   },
   start: {
@@ -88,7 +88,7 @@ export default defineZone('wizard', {
       account: 'Git and account',
     },
     count: { one: '{count} setting', other: '{count} settings' },
-    notCopied: 'Not copied: the linked sources (Jira, Trello, GitHub, Linear, ClickUp) and the tickets.',
+    notCopied: 'Not copied: the linked sources (Jira, Trello, GitHub, Linear, ClickUp, GitLab) and the tickets.',
     prefixes: 'Branch prefixes',
     unnamed: 'Unnamed',
     validation: 'Approval',
@@ -121,7 +121,7 @@ export default defineZone('wizard', {
     reservedNone: 'No free {harness} account: add a reserved account in Settings › Projects once the project is created.',
   },
   integrations: {
-    none: 'No Jira, Trello, GitHub, Linear or ClickUp account is connected: connect one in Settings › Integrations, after creating the project.',
+    none: 'No Jira, Trello, GitHub, Linear, ClickUp or GitLab account is connected: connect one in Settings › Integrations, after creating the project.',
     source: '{service} source',
     noSource: 'None',
     loading: 'Loading…',

@@ -82,8 +82,49 @@ describe('ImportModal', () => {
     fakeBackend();
     render(ImportModal, { projectId: 'p1' });
     expect(within(dialog()).getByText('Aucune source liée à ce projet')).toBeInTheDocument();
+    // The six sources, each named.
+    expect(
+      within(dialog()).getByText(
+        'Connecte Jira, Trello, GitHub Issues, Linear, ClickUp ou GitLab Issues, puis choisis le projet, le tableau, le dépôt, l’équipe ou la liste à associer à demo-api.',
+      ),
+    ).toBeInTheDocument();
     await userEvent.click(within(dialog()).getByRole('button', { name: 'Lier une source' }));
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'integrations', projectId: 'p1' });
+    // At the sources of the Kanban, not at the code hosts above them.
+    expect(app.modal).toEqual({ kind: 'settings', tab: 'integrations', projectId: 'p1', section: 'sources' });
+  });
+
+  it('offers the project’s own GitLab project when its code host is connected, and links it in one click', async () => {
+    resetApp({ projects: [project()] });
+    app.accounts = [...ACCOUNTS, { service: 'gitlab', connected: true, label: '@ada · git.acme.dev' }];
+    const doing = { id: 'label:Doing', name: 'Doing' };
+    const backend = fakeBackend({
+      integration_containers: (a: any) =>
+        a.service === 'gitlab'
+          ? [
+              { id: 'git.acme.dev/acme/back/api', name: 'acme/back/api (dépôt du projet)', own: true },
+              { id: 'git.acme.dev/ada/notes', name: 'ada/notes', group: 'git.acme.dev' },
+            ]
+          : [],
+      integration_states: () => ({ states: [doing], defaults: { doing } }),
+      update_project: () => undefined,
+      integration_issues: () => ({ issues: [], filters: [], next: null, total: null }),
+    });
+    render(ImportModal, { projectId: 'p1' });
+    const d = within(dialog());
+    const own = await d.findByRole('button', { name: 'Lier acme/back/api (GitLab Issues)' });
+    // GitHub is not connected here: only GitLab asked.
+    expect(backend.called('integration_containers').map((c) => c.args)).toEqual([{ service: 'gitlab', projectId: 'p1' }]);
+    expect(d.getByRole('button', { name: 'Lier une autre source' })).toBeInTheDocument();
+    await userEvent.click(own);
+    await waitFor(() => expect(backend.called('update_project')).toHaveLength(1));
+    const sent = backend.called('update_project')[0].args.project;
+    expect(sent.integrations.links).toEqual([
+      { service: 'gitlab', container: 'git.acme.dev/acme/back/api', name: 'acme/back/api', states: { doing } },
+    ]);
+    // Linked: its tickets are listed at once.
+    await waitFor(() => expect(d.getAllByRole('tab')).toHaveLength(1));
+    expect(d.getByRole('tab')).toHaveTextContent('GitLab Issuesacme/back/api');
+    await waitFor(() => expect(backend.called('integration_issues').at(-1)?.args.service).toBe('gitlab'));
   });
 
   it('lists the first source’s tickets, with their kind, meta and criteria, those already there greyed', async () => {
@@ -345,11 +386,11 @@ describe('ImportModal in English', () => {
     expect(d.getByText('No source linked to this project')).toBeInTheDocument();
     expect(
       d.getByText(
-        'Connect Jira, Trello, GitHub Issues, Linear, or ClickUp, then choose the project, board, repository, team, or list to link to demo-api.',
+        'Connect Jira, Trello, GitHub Issues, Linear, ClickUp, or GitLab Issues, then choose the project, board, repository, team, or list to link to demo-api.',
       ),
     ).toBeInTheDocument();
     await userEvent.click(d.getByRole('button', { name: 'Link a source' }));
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'integrations', projectId: 'p1' });
+    expect(app.modal).toEqual({ kind: 'settings', tab: 'integrations', projectId: 'p1', section: 'sources' });
   });
 
   it('colours a type by its code, whatever its name in English or French', async () => {

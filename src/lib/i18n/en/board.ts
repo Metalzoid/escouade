@@ -18,7 +18,7 @@ export default defineZone('board', {
       other: '{count} tickets · {looping} looping',
     },
     noEngine: 'No harness found — no tickets will start',
-    importTitle: 'Import tickets from Jira, Trello, GitHub Issues, Linear, or ClickUp',
+    importTitle: 'Import tickets from Jira, Trello, GitHub Issues, Linear, ClickUp, or GitLab Issues',
     settingsTitle: 'Kanban settings — {summary}',
     afterApproval: 'After approval:',
     autopilotTitle: 'Tickets in “To do” start on their own as soon as a slot is free',

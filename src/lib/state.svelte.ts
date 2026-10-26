@@ -86,7 +86,7 @@ export type Modal =
    * scrolled to a section of it; `resume`: with the draft it had, back from a modal it opened; `suggest`: Claude
    * reads the project at once to suggest its launch commands.
    */
-  | { kind: 'settings'; tab?: SettingsTab; projectId?: string; section?: 'launch'; resume?: boolean; suggest?: boolean }
+  | { kind: 'settings'; tab?: SettingsTab; projectId?: string; section?: 'launch' | 'sources'; resume?: boolean; suggest?: boolean }
   /**
    * `commit`: what it changed; `refs`: what changes from `from` to `to` (branches, or commits); `wholeProject`: every
    * uncommitted file the project's list shows, worktrees of the agents included.

@@ -1,16 +1,28 @@
 import { defineZone } from '../types';
 
-// Jira, Trello, GitHub, Linear and ClickUp: the integrations tab and the import of tickets.
+// Jira, Trello, GitHub, Linear, ClickUp and GitLab: the integrations tab and the import of tickets.
 export default defineZone('integrations', {
-  container: { jira: 'Project', trello: 'Board', github: 'Repository', linear: 'Team', clickup: 'List' },
+  container: { jira: 'Project', trello: 'Board', github: 'Repository', linear: 'Team', clickup: 'List', gitlab: 'Project' },
   searchHint: {
     jira: 'Search by key or text…',
     trello: 'Search for a card…',
     github: 'Search for an issue…',
     linear: 'Search by identifier (ENG-42) or title…',
     clickup: 'Search by id (#86abx3, ABC-12) or title…',
+    gitlab: 'Search for an issue (#12) or by text…',
   },
   imported: { one: '{count} ticket imported from {from}', other: '{count} tickets imported from {from}' },
+
+  parts: {
+    sources: {
+      title: 'Kanban sources',
+      note: 'Import and sync of tickets: an imported ticket follows its column there (status, comments).',
+    },
+    forges: {
+      title: 'Code hosts',
+      note: 'The agents’ PRs and MRs, CI and deployments: one account per instance, which each project finds through its remote.',
+    },
+  },
 
   accounts: {
     title: 'Connected accounts',
@@ -38,11 +50,13 @@ export default defineZone('integrations', {
     createLinearKey: 'Create a Linear API key',
     clickupKeyHint: 'pk_…',
     createClickupKey: 'Create a ClickUp API key',
+    byForge: 'The GitLab code host’s account: it is connected and disconnected in Code hosts.',
+    connectForge: 'Connect GitLab…',
   },
 
   forges: {
-    title: 'Code hosts',
-    note: "One account per instance (github.com, your company's…): each project finds its own through its remote. The github.com account is GitHub Issues' too.",
+    title: 'Connected instances',
+    note: "One per address (github.com, your company's…). The github.com account is GitHub Issues' too, the GitLab ones GitLab Issues'.",
     empty: 'No code host connected.',
     connected: 'Connected · {label}',
     unchecked: '{label} · not checked yet',
@@ -52,7 +66,8 @@ export default defineZone('integrations', {
     unreachable: 'Unreachable · {label}',
     unread: 'System keychain unreadable: restart Escouade or reconnect the account.',
     viaCli: '{cli} token',
-    issues: 'Also used for GitHub Issues',
+    issues: 'Also used for {source}',
+    noTickets: 'No tickets: PRs and CI only',
     projects: { one: 'Project: {list}', other: 'Projects: {list}' },
     noAccount: { one: 'No account, for the project {list}', other: 'No account, for the projects {list}' },
     connectHost: 'Connect {host}',
@@ -81,6 +96,7 @@ export default defineZone('integrations', {
       github: 'GitHub Issues repository',
       linear: 'Linear team',
       clickup: 'ClickUp list',
+      gitlab: 'GitLab Issues project',
     },
   },
 
@@ -100,7 +116,7 @@ export default defineZone('integrations', {
     loopSummary: 'Post a summary on every loop',
     loopSummaryDesc: 'Criteria met and the agent’s notes, on the external ticket',
     extractCriteria: 'Extract the acceptance criteria',
-    extractCriteriaDesc: 'From the description (Jira, GitHub, Linear) or the checklist (Trello, ClickUp) of the imported ticket',
+    extractCriteriaDesc: 'From the description (Jira, GitHub, Linear, GitLab) or the checklist (Trello, ClickUp) of the imported ticket',
   },
 
   autoImport: {
@@ -109,7 +125,7 @@ export default defineZone('integrations', {
     enableDesc: 'Open tickets from linked sources that carry the label arrive in “To do”',
     label: 'Label',
     labelState: 'Label “{name}”',
-    labelHint: 'Jira, Trello, GitHub, Linear or ClickUp label',
+    labelHint: 'Jira, Trello, GitHub, Linear, ClickUp or GitLab label',
     every: 'Check every',
     minutes: '{n} min',
   },
@@ -119,9 +135,12 @@ export default defineZone('integrations', {
     sub: 'Into “To do” on the Kanban of {project}',
     noSource: 'No source linked to this project',
     noSourceBody:
-      'Connect Jira, Trello, GitHub Issues, Linear, or ClickUp, then choose the project, board, repository, team, or list to link to {project}.',
+      'Connect Jira, Trello, GitHub Issues, Linear, ClickUp, or GitLab Issues, then choose the project, board, repository, team, or list to link to {project}.',
     thisProject: 'this project',
     linkSource: 'Link a source',
+    linkOwn: 'Link {name} ({service})',
+    linking: 'Linking…',
+    otherSource: 'Link another source',
     sources: 'Sources',
     pickedCount: { one: '{n} selected', other: '{n} selected' },
     manage: '⚙ Manage sources',

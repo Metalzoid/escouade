@@ -21,7 +21,7 @@ The app says so under the group’s title: “Claude Code processes, quota reads
 ### What goes through the proxy
 
 - **Claude Code processes**: agents, and the other calls to Claude Code that Escouade makes (naming an agent, commit messages, signing in to an account). They get `HTTPS_PROXY`, `HTTP_PROXY`, their lowercase variants, and `NO_PROXY` (with `no_proxy`) if “Exclusions” isn’t empty. An agent only sees them the next time its process (re)starts: an agent already running keeps its settings until then.
-- **Quota reads and integrations** (Jira, Trello, GitHub Issues, Linear, ClickUp): the app’s requests go through the proxy and respect “Exclusions”.
+- **Quota reads and integrations** (Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues): the app’s requests go through the proxy and respect “Exclusions”.
 - **Updates**: checking and downloading go through the proxy. An invalid proxy address makes the check fail, with the message “invalid proxy address”. When the proxy itself doesn’t answer (switched off, or a computer outside the company network), Escouade tries once without the proxy and the failure message gives both tries; when the proxy refuses the request, it isn’t made again without the proxy. See [“Behind a company proxy”](updates#behind-a-company-proxy).
 - **Built-in terminals**: only if “Also apply the proxy to the built-in terminals” is on. The same variables are then added to terminals, launch commands, and worktree commands. See [terminals](terminals).
 

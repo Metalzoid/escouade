@@ -25,7 +25,7 @@
     section,
     resume = false,
     suggest = false,
-  }: { tab?: SettingsTab; projectId?: string; section?: 'launch'; resume?: boolean; suggest?: boolean } = $props();
+  }: { tab?: SettingsTab; projectId?: string; section?: 'launch' | 'sources'; resume?: boolean; suggest?: boolean } = $props();
 
   // A fresh draft each time the modal opens, unless it comes back from a modal it opened. Asked for it, Claude reads
   // the project to fill the launch commands of the draft (only a fresh one: coming back is not asking again).

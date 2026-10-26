@@ -1,12 +1,19 @@
 # Réglages : Intégrations
 
-L’onglet « Intégrations » des réglages connecte Jira, Trello, GitHub Issues, Linear et ClickUp, lie chaque projet à une source de tickets, et règle ce qu’Escouade écrit sur les tickets externes et ce qu’elle importe toute seule.
+L’onglet « Intégrations » des réglages connecte Jira, Trello, GitHub Issues, Linear, ClickUp et GitLab Issues, lie chaque projet à une source de tickets, et règle ce qu’Escouade écrit sur les tickets externes et ce qu’elle importe toute seule.
 
 ## Ouvrir l’onglet
 
 Ouvre les réglages avec `Ctrl+,` (`⌘,` sous macOS), puis choisis « Intégrations ». Les tickets importés et leur synchronisation sont expliqués dans [les intégrations](integrations).
 
-L’onglet réunit trois sortes de réglages :
+L’onglet a deux parties, chacune avec son titre et une ligne qui dit à quoi elle sert :
+
+- **« Hébergeurs de code »** : « PR et MR des agents, CI et déploiements : un compte par instance, que chaque projet trouve par son remote. » (voir [plus bas](#hebergeurs-de-code)) ;
+- **« Sources du Kanban »** : « Import et synchro des tickets : un ticket importé suit sa colonne là-bas (état, commentaires). » Tout le reste de l’onglet est sous elle.
+
+Un hébergeur n’est pas une source : connecter GitLab ou GitHub comme hébergeur sert aux PR et à la CI ; ses tickets ne viennent dans le Kanban qu’une fois une source liée au projet. GitHub Issues et GitLab Issues reprennent pour cela le compte de leur hébergeur, sans rien redemander.
+
+Les sources réunissent trois sortes de réglages :
 
 - « Comptes connectés » est commun à toute l’app et s’enregistre tout de suite, sans « Enregistrer ».
 - « Sources liées à … » et « Correspondance des statuts » sont propres au projet sélectionné dans la barre « Projet » en haut de la fenêtre. Ils restent dans un brouillon jusqu’à « Enregistrer » ; « Annuler » les abandonne.
@@ -16,7 +23,9 @@ Sans projet ouvert, l’onglet affiche « Aucun projet ouvert. ».
 
 ## Comptes connectés
 
-Un compte par service : Jira, Trello, GitHub Issues, Linear et ClickUp. Chaque service affiche « Non connecté » avec un bouton « Connecter… », ou « Connecté · » suivi du compte avec un bouton « Déconnecter ». Sous le titre, l’app rappelle : « Les jetons restent sur cette machine, à part des réglages, et ne servent qu’aux appels de ces services. »
+Un compte par service : Jira, Trello, GitHub Issues, Linear, ClickUp et GitLab Issues. Chaque service affiche « Non connecté » avec un bouton « Connecter… », ou « Connecté · » suivi du compte avec un bouton « Déconnecter ». Sous le titre, l’app rappelle : « Les jetons restent sur cette machine, à part des réglages, et ne servent qu’aux appels de ces services. »
+
+GitLab Issues n’a pas de compte à lui : sa ligne dit « Compte de l’hébergeur GitLab : il se connecte et se déconnecte dans Hébergeurs de code. », et son bouton « Connecter GitLab… » ouvre le formulaire de l’hébergeur (voir [GitLab Issues](#gitlab-issues)).
 
 « Connecter… » ouvre le formulaire du service, dont les champs sont décrits ci-dessous. Les jetons et les clés d’API de Linear et de ClickUp sont masqués à la saisie ; la clé d’API de Trello ne l’est pas.
 
@@ -63,6 +72,10 @@ Le lien « Créer une clé d’API Linear » ouvre `https://linear.app/setting
 
 Le lien « Créer une clé d’API ClickUp » ouvre `https://app.clickup.com/settings/apps`. Une fois connecté, le compte s’affiche avec ton nom chez ClickUp, par exemple « Connecté · Ada Lovelace ». L’endroit des tickets est une « Liste ». La connexion d’une application ClickUp par OAuth n’est pas proposée : une clé personnelle suffit et reste sur ta machine.
 
+### GitLab Issues
+
+Aucun champ : GitLab Issues prend les comptes de l’hébergeur GitLab (gitlab.com et les instances auto-hébergées, un compte par instance), avec leur jeton personnel (droit `api`) ou celui de la CLI `glab`. Le jeton reste dans le trousseau du système, comme celui de l’hébergeur : c’est le même. « Connecter GitLab… » ouvre le formulaire de « Hébergeurs de code », hébergeur GitLab déjà choisi : adresse (vide : gitlab.com), jeton (vide : celui de `glab`). Connecté, la ligne dit « Connecté · @ada », suivi de l’instance quand elle n’est pas gitlab.com (« @ada · git.acme.dev »). Pour le déconnecter, déconnecte l’instance dans « Hébergeurs de code ». L’endroit des tickets est un « Projet ».
+
 ### Connecter et déconnecter
 
 Clique sur « Connecter » une fois les champs remplis ; le bouton dit « Vérification… » pendant l’appel, et « Annuler » ferme le formulaire. Escouade vérifie les identifiants auprès du service et ne les garde que s’il les accepte. S’il les refuse, ou s’il est injoignable, sa réponse s’affiche en rouge sous les champs, par exemple « Jira refuse ces identifiants (401) ». Un champ manquant est signalé avant tout appel, par exemple « Indique le jeton. ».
@@ -79,12 +92,13 @@ Si le trousseau ne rend pas un jeton au démarrage, le compte affiche « Trouss
 
 Le groupe s’appelle « Sources liées à » suivi du nom du projet. Tant qu’aucun compte n’est connecté, il dit : « Connecte un compte ci-dessus pour lier une source à ce projet. »
 
-Pour chaque service connecté, un menu choisit la source du projet : « Projet Jira », « Tableau Trello », « Dépôt GitHub Issues », « Équipe Linear » ou « Liste ClickUp ». « Aucun » (par défaut) délie. Un projet a au plus une source par service.
+Pour chaque service connecté, un menu choisit la source du projet : « Projet Jira », « Tableau Trello », « Dépôt GitHub Issues », « Équipe Linear », « Liste ClickUp » ou « Projet GitLab Issues ». « Aucun » (par défaut) délie. Un projet a au plus une source par service.
 
 - **Jira** : les projets du site, présentés sous la forme « CLÉ — nom ».
 - **Trello** : tes tableaux ouverts.
 - **GitHub Issues** : les dépôts auxquels tu as accès (propriétaire, collaborateur ou membre d’une organisation), les derniers poussés d’abord. Le dépôt du projet, lu dans son remote git, est en tête avec « (dépôt du projet) ».
 - **Linear** : tes équipes, sous la forme « Nom (CLÉ) ».
+- **GitLab Issues** : les projets dont tu es membre, sur chaque instance connectée (rangés sous l’instance), leur chemin complet avec les groupes et sous-groupes (« acme/back/api »), les derniers actifs d’abord. Le projet du remote du projet est en tête avec « (dépôt du projet) ». Les groupes ne sont pas proposés : les issues vivent dans les projets.
 - **ClickUp** : les listes de tes espaces de travail, rangées sous leur espace et leur dossier (« Produit › Sprints » ; l’espace de travail devant quand tu en as plusieurs), les listes hors dossier d’abord, les archivées en moins.
 
 Choisir une source charge ses statuts et préremplit la correspondance ci-dessous. Si les statuts ne se chargent pas, la source est liée quand même, et l’infobulle des menus de la correspondance dit pourquoi.
@@ -105,6 +119,7 @@ Chaque menu propose « — inchangé » (le ticket externe n’est pas touché
 | Trello | Les listes ouvertes du tableau | La carte passe dans la liste. |
 | GitHub Issues | « Ouverte », « Fermée », et les étiquettes du dépôt (précédées de ◆) | « Fermée » ferme l’issue comme terminée ; « Ouverte » la rouvre. Une étiquette est posée sur l’issue (rouverte si besoin), et les autres étiquettes de la correspondance sont retirées. |
 | Linear | Les états du workflow de l’équipe | Le ticket prend cet état. |
+| GitLab Issues | « Ouverte », « Fermée », les étiquettes des listes des tableaux du projet, puis ses autres étiquettes (précédées de ◆) | Comme GitHub : « Fermée » ferme l’issue, « Ouverte » la rouvre, une étiquette est posée (l’issue rouverte si besoin) et les autres étiquettes de la correspondance retirées, en un seul appel. |
 | ClickUp | Les statuts de la liste liée (chaque liste a les siens) | La tâche prend ce statut. Si la liste ne l’a plus, la carte le dit et rien n’est envoyé. |
 
 Quand tu lies une source, Escouade préremplit les menus d’après le nom des statuts : celui qui ressemble à « en cours » (« In Progress », « En cours », « Doing »…) pour « En cours » et « À tester », et celui qui ressemble à « à tester » (« To test », « QA », « In Review », « À tester »…) pour « Terminé ». « À faire » reste « — inchangé ». Pour ClickUp, quand les noms ne disent rien, le type des statuts décide : le premier statut personnalisé pour « En cours » et « À tester », le suivant (ou celui de type fini) pour « Terminé ». Corrige les menus si ton workflow est autre.
@@ -130,7 +145,7 @@ Ces trois réglages valent pour tous les projets.
 |---|---|---|
 | « Mettre à jour le statut externe » | Quand un ticket importé change de colonne dans le Kanban, le ticket externe prend le statut que la correspondance donne à la colonne. Désactivé, les statuts ne sont plus touchés ; les commentaires de la correspondance restent publiés. | Activé |
 | « Publier un résumé à chaque boucle » | Quand un ticket entame une nouvelle boucle (à partir de la deuxième), un commentaire donne les critères atteints et les notes de l’agent sur le ticket externe. | Désactivé |
-| « Extraire les critères d’acceptation » | À l’import, lit les critères dans la description (Jira, GitHub, Linear) ou la checklist (Trello, ClickUp) du ticket importé. Désactivé, le ticket reçoit les critères par défaut. | Activé |
+| « Extraire les critères d’acceptation » | À l’import, lit les critères dans la description (Jira, GitHub, Linear, GitLab) ou la checklist (Trello, ClickUp) du ticket importé. Désactivé, le ticket reçoit les critères par défaut. | Activé |
 
 Si un service refuse ou n’est pas joignable, l’opération n’est pas perdue : elle est retentée après 1, 5, 15 puis 60 minutes, pendant 24 h au plus. La carte du ticket affiche alors l’erreur et « Resynchroniser » pour réessayer tout de suite. Un refus que réessayer ne changerait pas (ticket supprimé, workflow qui ne mène pas au statut, liste ClickUp disparue ou statut qu’elle n’a plus) est mis de côté sans attendre. Une limite de requêtes de ClickUp (429) est attendue jusqu’à sa fin annoncée, une minute au plus, puis la requête repart une fois.
 
@@ -141,7 +156,17 @@ Ces trois réglages valent aussi pour tous les projets. L’import à la main es
 | Réglage | Effet | Par défaut |
 |---|---|---|
 | « Importer les tickets étiquetés » | Les tickets ouverts des sources liées qui portent l’étiquette arrivent dans « À faire », avec 5 boucles maximum. | Désactivé |
-| « Étiquette » | Le nom de l’étiquette : un label Jira, une étiquette Trello, GitHub ou Linear, un tag ClickUp. Vide, rien n’est importé. | `claude-ready` |
+| « Étiquette » | Le nom de l’étiquette : un label Jira, une étiquette Trello, GitHub, Linear ou GitLab, un tag ClickUp. Vide, rien n’est importé. | `claude-ready` |
 | « Vérifier toutes les » | L’intervalle entre deux vérifications : 5 min, 15 min ou 60 min. | 15 min |
 
 L’import automatique n’importe un ticket qu’une fois par projet : un ticket déjà importé, même supprimé du Kanban depuis, n’est pas ramené tout seul (l’import à la main peut le reprendre, tant qu’il n’est plus dans le Kanban). Chaque import affiche un message du genre « 3 tickets importés depuis Jira dans demo ». La première vérification a lieu environ 30 secondes après le démarrage de l’app, ou au plus 30 secondes après l’enregistrement si tu actives l’import ensuite ; les suivantes, à l’intervalle choisi.
+
+## Hébergeurs de code
+
+La première partie de l’onglet connecte les hébergeurs de code : GitHub, GitLab, Bitbucket Cloud, Gitea et Forgejo. Ils servent aux pull requests (merge requests sur GitLab) des agents, à la CI et aux déploiements, pas aux tickets. Un compte par instance (github.com, gitlab.com, celle de ton entreprise…) ; chaque projet trouve le sien par son remote. « Connecter un hébergeur… » demande l’hébergeur, l’adresse (vide : son instance publique) et un jeton (vide : celui de sa CLI, `gh` ou `glab`) ; un remote sans compte propose « Connecter » suivi de son hôte.
+
+Chaque instance dit sur sa ligne si elle sert aussi de source du Kanban :
+
+- « Sert aussi à GitHub Issues » : le compte de github.com ;
+- « Sert aussi à GitLab Issues » : chaque compte GitLab, gitlab.com ou auto-hébergé ;
+- « Pas de tickets : PR et CI seulement » : Bitbucket, Gitea, Forgejo, et un GitHub d’entreprise.

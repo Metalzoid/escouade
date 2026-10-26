@@ -129,6 +129,7 @@ impl Linear {
                     t["key"].as_str().unwrap_or_default()
                 ),
                 group: None,
+                own: false,
             })
             .collect())
     }
@@ -443,6 +444,7 @@ mod tests {
                 id: "t1".into(),
                 name: "Engineering (ENG)".into(),
                 group: None,
+                own: false,
             }]
         );
         workflow(&server);

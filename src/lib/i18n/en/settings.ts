@@ -10,7 +10,10 @@ export default defineZone('settings', {
     notifications: { label: 'Notifications', desc: 'Visual and sound alerts' },
     projects: { label: 'Projects', desc: 'Settings specific to each project' },
     board: { label: 'Kanban', desc: 'Autopilot and approved tickets' },
-    integrations: { label: 'Integrations', desc: 'Code hosts, Jira, Trello, GitHub Issues, Linear, and ClickUp' },
+    integrations: {
+      label: 'Integrations',
+      desc: 'Kanban sources (Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues) and code hosts',
+    },
     terminals: { label: 'Terminals', desc: 'Shells available in the built-in terminals' },
     network: {
       label: 'Network',
@@ -81,7 +84,7 @@ export default defineZone('settings', {
     claudeLanguage: 'Language of texts written by the agents',
     sameAsUi: 'Same as the interface (default)',
     claudeLanguageHelp:
-      'Proposed commit messages and pull request descriptions, comments posted to Jira, Trello, GitHub, Linear, and ClickUp, instructions given to agents (by default, the proposed commit message follows the language of the repository’s latest commits).',
+      'Proposed commit messages and pull request descriptions, comments posted to Jira, Trello, GitHub, Linear, ClickUp, and GitLab, instructions given to agents (by default, the proposed commit message follows the language of the repository’s latest commits).',
     langName: { fr: 'French', en: 'English' },
     writing: 'Written texts',
     writer: 'Model for written texts',

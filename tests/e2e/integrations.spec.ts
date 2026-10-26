@@ -1,4 +1,4 @@
-// The external ticket systems on the real app, against the fake Jira, Trello, GitHub and ClickUp of
+// The external ticket systems on the real app, against the fake Jira, Trello, GitHub, ClickUp and GitLab of
 // tests/fixtures/fake-trackers.mjs: an account connected, a source linked, tickets imported, and
 // their external ones moved and commented while the fake `claude` works them.
 
@@ -233,4 +233,73 @@ test('the self-hosted GitLab of a project is connected from its remote, and the 
   // Disconnected: the host is back without an account.
   await settings.getByRole('button', { name: `Déconnecter ${host}` }).click();
   await expect(settings.getByRole('button', { name: 'Connecter 127.0.0.1', exact: true })).toBeVisible();
+});
+
+test('GitLab Issues takes the GitLab code host’s account, its project offered by the import, and its issue follows its ticket (1024 × 728)', async ({
+  app,
+}) => {
+  const { page } = app;
+  // The runner's screen is 1024 × 768.
+  await page.setViewportSize({ width: 1024, height: 728 });
+  // Its remote is on the self-hosted GitLab (the fake one).
+  execFileSync('git', ['remote', 'add', 'origin', `${trackers.url}/acme/api.git`], { cwd: app.repo, stdio: 'pipe' });
+  await addProject(page, app.repo, { firstAgent: false });
+
+  // No source yet: the import names the six, and leads to the sources of the Kanban.
+  await page.getByRole('button', { name: /^Kanban/ }).click();
+  await page.getByRole('button', { name: 'Importer' }).click();
+  const imp = page.getByRole('dialog', { name: 'Importer des tickets' });
+  await expect(imp.getByText('Aucune source liée à ce projet')).toBeVisible();
+  await expect(imp.getByText(/^Connecte Jira, Trello, GitHub Issues, Linear, ClickUp ou GitLab Issues, puis choisis/)).toBeVisible();
+  await imp.getByRole('button', { name: 'Lier une source' }).click();
+  const settings = page.getByRole('dialog', { name: 'Réglages' });
+  await expect(settings.getByRole('heading', { name: 'Sources du Kanban' })).toBeInViewport();
+  await expect(settings.getByRole('heading', { name: 'Hébergeurs de code' })).toBeVisible();
+
+  // GitLab Issues is connected through the code host's own form: one account for both uses.
+  await settings.getByRole('button', { name: 'Connecter GitLab…' }).click();
+  const form = settings.getByRole('form', { name: 'Connexion à un hébergeur' });
+  await expect(form.getByLabel('Hébergeur')).toHaveValue('gitlab');
+  await form.getByLabel('Adresse').fill(trackers.url);
+  await form.getByLabel(/^Jeton/).fill('glpat-e2e');
+  await form.getByRole('button', { name: 'Connecter' }).click();
+  const host = new URL(trackers.url).host;
+  await expect(settings.getByRole('group', { name: host })).toContainText('Sert aussi à GitLab Issues');
+  await expect(settings.getByText(`Connecté · @ada · ${host}`)).toBeVisible();
+  await settings.getByRole('button', { name: 'Annuler' }).click();
+  await expect(settings).toHaveCount(0);
+
+  // The import offers the project's own GitLab project, linked in one click.
+  await page.getByRole('button', { name: 'Importer' }).click();
+  await imp.getByRole('button', { name: 'Lier acme/api (GitLab Issues)' }).click();
+  await expect(imp.getByRole('tab', { name: /GitLab Issues/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(imp.getByRole('checkbox', { name: /#7/ })).toContainText('✓ 2 critères détectés');
+  await expect(imp.getByRole('checkbox', { name: /#8/ })).toBeVisible();
+  // The closed one is not offered; « Assignées à moi » keeps Ada's.
+  await expect(imp.getByRole('checkbox', { name: /#3/ })).toHaveCount(0);
+  await imp.getByRole('button', { name: 'Assignées à moi' }).click();
+  await expect(imp.getByRole('checkbox', { name: /#7/ })).toHaveCount(0);
+  await imp.getByRole('button', { name: 'Assignées à moi' }).click();
+  await imp.getByRole('textbox', { name: 'Rechercher' }).fill('factures');
+  await imp.getByRole('checkbox', { name: /#7/ }).click();
+  await imp.getByRole('button', { name: '3', exact: true }).click();
+  await imp.getByRole('button', { name: 'Importer 1 ticket' }).click();
+  await expect(imp).toHaveCount(0);
+  await expect(page.getByText('1 ticket importé depuis GitLab')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ouvrir #7 dans GitLab Issues' })).toBeVisible();
+
+  // The fake claude meets criterion n at loop n: « À tester » after its second loop.
+  const review = page.getByRole('region', { name: 'À tester' });
+  await expect(review.getByRole('button', { name: /Ouvrir #7/ })).toBeVisible({ timeout: 60_000 });
+  const issue = '/api/v4/projects/acme%2Fapi/issues/7';
+  await expect.poll(async () => (await writes()).filter((w) => w.path === `${issue}/notes`).length).toBe(1);
+  const all = await writes();
+  // « Doing », a list of its board, when it starts; already there when it goes to test.
+  expect(all.filter((w) => w.method === 'PUT' && w.path === issue).map((w) => w.body)).toEqual([{ add_labels: 'Doing' }]);
+  const note = all.find((w) => w.path === `${issue}/notes`)!.body;
+  expect(note.body).toContain('est prêt à tester.');
+  expect(note.body).toContain('✓ 50 factures par page');
+  // The issue carries it in GitLab.
+  const now = await (await fetch(`${trackers.url}${issue}`, { headers: { 'PRIVATE-TOKEN': 'x' } })).json();
+  expect(now.labels).toEqual(['claude-ready', 'Doing']);
 });

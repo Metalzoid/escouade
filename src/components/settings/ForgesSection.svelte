@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from '../Icon.svelte';
+  import { tick } from 'svelte';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { fList } from '../../lib/format';
   import { forgeBadge } from '../../lib/forges';
@@ -50,6 +51,16 @@
   function open(kind = view?.providers[0]?.kind ?? 'github', url = '') {
     refused = '';
     form = { kind, url, email: '', token: '' };
+  }
+
+  /** The form of a code host of `kind`, opened from elsewhere (GitLab Issues' « Connecter GitLab… »): shown, its address field focused. */
+  export async function connectKind(kind: string) {
+    if (!form) open(kind);
+    else form.kind = kind;
+    await tick();
+    const at = document.querySelector<HTMLFormElement>('[data-anchor="forges"] form.connect');
+    at?.scrollIntoView({ block: 'nearest' });
+    at?.querySelectorAll<HTMLInputElement>('input')[0]?.focus();
   }
 
   /** « Connecter <hôte> »: its kind, by its name, else by asking it. */
@@ -142,7 +153,11 @@
         {#if a.status.error && a.status.health !== 'connected'}<span class="d why">{a.status.error}</span>{/if}
         {#if a.inFile}<span class="d warn">{t('integrations.accounts.keychainUnavailable')}</span>{/if}
         {#if a.viaCli}<span class="d">{t('integrations.forges.viaCli', { cli: provider(a.kind)?.cli ?? 'gh' })}</span>{/if}
-        {#if a.issues}<span class="d">{t('integrations.forges.issues')}</span>{/if}
+        {#if a.issues}
+          <span class="d">{t('integrations.forges.issues', { source: a.kind === 'gitlab' ? 'GitLab Issues' : 'GitHub Issues' })}</span>
+        {:else}
+          <span class="d">{t('integrations.forges.noTickets')}</span>
+        {/if}
         {#if a.projects.length}
           <span class="d">{t('integrations.forges.projects', { count: a.projects.length, list: fList(a.projects) })}</span>
         {/if}

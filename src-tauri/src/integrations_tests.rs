@@ -2132,3 +2132,201 @@ async fn a_clickup_task_is_imported_with_its_checklist_then_moved_and_commented_
     assert!(error.contains("n'a pas le statut « review »"), "{error}");
     assert_eq!(server.writes().len(), 3);
 }
+
+#[tokio::test]
+async fn gitlab_issues_take_the_code_hosts_account_and_follow_their_ticket() {
+    let h = harness("ig-gitlab");
+    // A self-hosted instance (the fake server, on this machine).
+    let server = FakeServer::start().await;
+    let api = "/api/v4";
+    let project = format!("{api}/projects/acme%2Fback%2Fapi");
+    server.on(
+        "GET",
+        &format!("{api}/user"),
+        200,
+        json!({ "username": "ada" }),
+    );
+    server.on(
+        "GET",
+        &format!("{api}/personal_access_tokens/self"),
+        200,
+        json!({ "scopes": ["api"] }),
+    );
+    server.on(
+        "GET",
+        &format!("{api}/projects"),
+        200,
+        json!([{ "path_with_namespace": "ada/notes" }, { "path_with_namespace": "acme/back/api" }]),
+    );
+    server.on(
+        "GET",
+        &format!("{project}/labels"),
+        200,
+        json!([{ "name": "Doing" }, { "name": "bug" }]),
+    );
+    server.on("GET", &format!("{project}/boards"), 200, json!([]));
+    server.on_with(
+        "GET",
+        &format!("{project}/issues"),
+        200,
+        json!([{
+            "iid": 42, "title": "Crash au paiement", "state": "opened",
+            "description": "Le paiement plante.\n\n- [ ] Plus de crash\n- [ ] Un test e2e",
+            "labels": ["bug"], "author": { "username": "grace" }, "assignees": [],
+            "web_url": "https://git.acme.dev/acme/back/api/-/issues/42"
+        }]),
+        &[("X-Total", "1"), ("X-Next-Page", "")],
+    );
+    server.on(
+        "GET",
+        &format!("{project}/issues/42"),
+        200,
+        json!({ "iid": 42, "state": "opened", "labels": ["bug"] }),
+    );
+    server.on("PUT", &format!("{project}/issues/42"), 200, json!({}));
+    server.on(
+        "POST",
+        &format!("{project}/issues/42/notes"),
+        201,
+        json!({ "id": 1 }),
+    );
+    // Without a GitLab code host, the source says where to connect it.
+    assert!(!h.core.integration_accounts()[5].connected);
+    let e = h
+        .core
+        .integration_containers(Service::Gitlab, None)
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("Hébergeurs de code"), "{e}");
+    // Its own form is the code host's.
+    let e = h
+        .core
+        .integration_connect(Service::Gitlab, Account::default())
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("Hébergeurs de code"), "{e}");
+    h.core
+        .forge_connect(crate::forge::connect::ForgeForm {
+            kind: "gitlab".into(),
+            url: server.url.clone(),
+            token: "glpat-secret".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let host = crate::forge::host_of(&server.url);
+    // The source is connected with it, nothing asked again, its token never shown nor written.
+    let view = h.core.integration_accounts()[5].clone();
+    assert_eq!(view.service, Service::Gitlab);
+    assert_eq!(
+        (view.connected, view.label.clone()),
+        (true, format!("@ada · {host}"))
+    );
+    assert!(!serde_json::to_string(&h.core.integration_accounts())
+        .unwrap()
+        .contains("glpat-secret"));
+    assert!(!std::fs::read_to_string(h.core.data.integrations_file())
+        .unwrap()
+        .contains("glpat-secret"));
+    // A project whose remote is on the instance: its GitLab project first.
+    let (p, r) = h.project(false).await;
+    h.set_autopilot(&p.id, false);
+    git(
+        &r,
+        &[
+            "remote",
+            "add",
+            "origin",
+            &format!("{}/acme/back/api.git", server.url),
+        ],
+    );
+    let list = h
+        .core
+        .integration_containers(Service::Gitlab, Some(&p.id))
+        .await
+        .unwrap();
+    let container = format!("{host}/acme/back/api");
+    assert_eq!(list[0].id, container);
+    assert_eq!(list[0].name, "acme/back/api (dépôt du projet)");
+    assert!(list[0].own && !list[1].own);
+    assert_eq!(list.len(), 2, "{list:?}");
+    let states = h
+        .core
+        .integration_states(Service::Gitlab, &container)
+        .await
+        .unwrap();
+    let ids: Vec<&str> = states.states.iter().map(|s| s.id.as_str()).collect();
+    assert_eq!(ids, ["opened", "closed", "label:Doing", "label:bug"]);
+    let mut columns = BTreeMap::new();
+    columns.insert(Column::Doing, state("label:Doing", "Doing"));
+    columns.insert(Column::Done, state("closed", "Fermée"));
+    h.link(
+        &p.id,
+        SourceLink {
+            service: Service::Gitlab,
+            container: container.clone(),
+            name: "acme/back/api".into(),
+            states: columns,
+        },
+        &[Column::Review],
+    );
+    let page = h
+        .core
+        .integration_issues(&p.id, Service::Gitlab, Query::default())
+        .await
+        .unwrap();
+    assert_eq!(page.total, Some(1));
+    let t = h
+        .core
+        .integration_import(&p.id, page.issues, 5)
+        .await
+        .unwrap()
+        .remove(0);
+    let criteria: Vec<&str> = t.criteria.iter().map(|c| c.text.as_str()).collect();
+    assert_eq!(criteria, ["Plus de crash", "Un test e2e"]);
+    assert!(t
+        .description
+        .contains("https://git.acme.dev/acme/back/api/-/issues/42"));
+    let ext = t.external.clone().unwrap();
+    assert_eq!(
+        (ext.service, ext.id.as_str(), ext.key.as_str()),
+        (Service::Gitlab, "42", "#42")
+    );
+    // Imported once: the list says so.
+    let again = h
+        .core
+        .integration_issues(&p.id, Service::Gitlab, Query::default())
+        .await
+        .unwrap();
+    assert!(again.issues[0].imported);
+    h.move_to(&t.id, Column::Doing);
+    h.move_to(&t.id, Column::Review);
+    h.wait_synced().await;
+    let writes: Vec<(String, Value)> = server
+        .writes()
+        .iter()
+        .map(|w| (format!("{} {}", w.method, w.path()), w.json()))
+        .collect();
+    assert_eq!(writes.len(), 2, "{writes:?}");
+    assert_eq!(
+        writes[0],
+        (
+            format!("PUT {project}/issues/42"),
+            json!({ "add_labels": "Doing" })
+        )
+    );
+    assert_eq!(writes[1].0, format!("POST {project}/issues/42/notes"));
+    assert!(writes[1].1["body"]
+        .as_str()
+        .unwrap()
+        .contains("est prêt à tester"));
+    assert!(server
+        .writes()
+        .iter()
+        .all(|w| w.headers["private-token"] == "glpat-secret"));
+    assert_eq!(h.sync_error(&t.id), None);
+    // Its source cannot be disconnected apart: the code host's « Déconnecter » does it.
+    assert!(h.core.integration_disconnect(Service::Gitlab).is_err());
+    h.core.forge_disconnect(&host).await.unwrap();
+    assert!(!h.core.integration_accounts()[5].connected);
+}

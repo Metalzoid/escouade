@@ -397,7 +397,7 @@ export interface IntegrationSettings {
 }
 
 /** An external ticket system. */
-export type Service = 'jira' | 'trello' | 'github' | 'linear' | 'clickup';
+export type Service = 'jira' | 'trello' | 'github' | 'linear' | 'clickup' | 'gitlab';
 
 /** A Jira status, a Trello list, or for GitHub "open", "closed" or "label:<name>". */
 export interface ExternalState {
@@ -532,6 +532,8 @@ export interface Container {
   name: string;
   /** Where it is in its service's hierarchy (a ClickUp list's « Space › Folder »): the group of its menu. */
   group?: string;
+  /** The project's own repository (its remote's): the import offers to link it at once. */
+  own?: boolean;
 }
 
 export interface StatesView {

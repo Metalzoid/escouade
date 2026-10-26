@@ -6,7 +6,7 @@ Escouade est un environnement de développement agentique (ADE) : une applicatio
 
 Un ADE réunit tout le cycle de développement au même endroit, fait avec des agents qui travaillent en parallèle, chacun dans sa conversation et, si tu veux, dans son propre worktree git :
 
-- **planifier** : un Kanban de tickets avec leurs critères d’acceptation, leurs captures et leurs fichiers, importés au besoin de Jira, Trello, GitHub Issues, Linear ou ClickUp, que des agents prennent seuls (c’est le pilote auto) et sur lesquels ils bouclent jusqu’à atteindre les critères ;
+- **planifier** : un Kanban de tickets avec leurs critères d’acceptation, leurs captures et leurs fichiers, importés au besoin de Jira, Trello, GitHub Issues, Linear, ClickUp ou GitLab Issues, que des agents prennent seuls (c’est le pilote auto) et sur lesquels ils bouclent jusqu’à atteindre les critères ;
 - **coder** : un onglet par projet, autant d’agents que tu veux, chacun avec une conversation lisible (markdown, appels d’outils dépliables, questions et demandes d’autorisation en cartes) ou l’interface de Claude Code elle-même ; ses sous-agents et ses tâches de fond dans la barre latérale, l’avancée de son plan, un éditeur de fichiers et de vrais terminaux ;
 - **relire et tester** : les fichiers modifiés, leurs diffs, le git graph du dépôt et ses branches, « ▶ Tester » sur chaque ticket et les commandes qui lancent le projet ;
 - **livrer** : le commit, le merge, le squash ou le rebase dans la branche cible, le push ou la pull request ;
@@ -26,7 +26,7 @@ Aujourd’hui, chaque agent est une vraie session de [Claude Code](https://code.
 
 - tu travailles sur plusieurs tâches ou plusieurs projets en même temps, et tu veux voir d’un coup d’œil quel agent travaille, lequel attend ta réponse et lequel a fini ;
 - tu veux relire et commiter ce que chaque agent a changé, sans que les agents se marchent dessus ;
-- tu écris tes tâches comme des tickets, dans Escouade ou dans Jira, Trello, GitHub Issues, Linear ou ClickUp, et tu veux les confier à des agents qui recommencent jusqu’à atteindre les critères d’acceptation ;
+- tu écris tes tâches comme des tickets, dans Escouade ou dans Jira, Trello, GitHub Issues, Linear, ClickUp ou GitLab Issues, et tu veux les confier à des agents qui recommencent jusqu’à atteindre les critères d’acceptation ;
 - tu as plusieurs comptes Claude (un perso, un pro) et tu veux suivre leurs quotas.
 
 ## Les notions de base
@@ -57,7 +57,7 @@ La conversation est l’échange entre toi et un agent : tes messages, les répo
 
 ### Ticket et Kanban
 
-Un ticket décrit une tâche : un titre, une description et des critères d’acceptation. Le Kanban d’un projet, ouvert avec le bouton « Kanban » de la barre latérale, range les tickets en quatre colonnes : « À faire », « En cours », « À tester » et « Terminé ». Un agent prend un ticket, travaille et boucle jusqu’à en atteindre les critères ; tu le testes, puis tu le valides. Tu peux aussi importer des tickets de Jira, Trello, GitHub Issues, Linear et ClickUp. Voir [le Kanban](board).
+Un ticket décrit une tâche : un titre, une description et des critères d’acceptation. Le Kanban d’un projet, ouvert avec le bouton « Kanban » de la barre latérale, range les tickets en quatre colonnes : « À faire », « En cours », « À tester » et « Terminé ». Un agent prend un ticket, travaille et boucle jusqu’à en atteindre les critères ; tu le testes, puis tu le valides. Tu peux aussi importer des tickets de Jira, Trello, GitHub Issues, Linear, ClickUp et GitLab Issues. Voir [le Kanban](board).
 
 ### Pilote auto
 
@@ -85,7 +85,7 @@ La « Vue d’ensemble » est une page qui liste les agents de tous les projet
 
 Le détail des prérequis est dans l’[installation](installation).
 
-L’interface existe en français et en anglais. Par défaut, elle suit la langue du système : français si le système est en français, anglais sinon. Réglages › Application permet de choisir l’une ou l’autre sans redémarrer, et de choisir à part la langue des textes que Claude rédige (messages de commit, descriptions de pull request, commentaires publiés dans Jira, Trello, GitHub, Linear et ClickUp, consignes données aux agents), car beaucoup d’équipes commitent en anglais avec une interface en français. Voir les [réglages de l’application](settings-application).
+L’interface existe en français et en anglais. Par défaut, elle suit la langue du système : français si le système est en français, anglais sinon. Réglages › Application permet de choisir l’une ou l’autre sans redémarrer, et de choisir à part la langue des textes que Claude rédige (messages de commit, descriptions de pull request, commentaires publiés dans Jira, Trello, GitHub, Linear, ClickUp et GitLab, consignes données aux agents), car beaucoup d’équipes commitent en anglais avec une interface en français. Voir les [réglages de l’application](settings-application).
 
 ## Plan de la documentation
 

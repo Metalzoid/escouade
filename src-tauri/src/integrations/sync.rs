@@ -8,6 +8,7 @@ use super::secrets;
 use super::text::{column_comment, loop_comment};
 use super::*;
 use crate::core::Core;
+use crate::forge::accounts::{self as forge_accounts, ForgeAccount};
 use crate::i18n::{self, Lang};
 use crate::paths;
 use crate::tickets::TicketDraft;
@@ -394,6 +395,14 @@ fn sources(lang: Lang, tickets: &[Ticket]) -> String {
     }
 }
 
+/// GitLab Issues has no account of its own: the GitLab code host's serves.
+fn gitlab_by_its_host() -> String {
+    tr!(
+        "GitLab se connecte dans Réglages › Intégrations › Hébergeurs de code : un seul compte pour les MR et les tickets.",
+        "GitLab is connected in Settings › Integrations › Code hosts: one account for the MRs and the tickets."
+    )
+}
+
 /// What the form of a service's account lacks, in a sentence: Jira's site, its e-mail, the token,
 /// Trello's API key. None when nothing is missing (GitHub's token may be the CLI's).
 fn missing_field(lang: Lang, service: Service, account: &Account) -> Option<String> {
@@ -441,6 +450,9 @@ impl<R: Runtime> Core<R> {
     }
 
     async fn client(&self, service: Service) -> Result<Client> {
+        if service == Service::Gitlab {
+            return self.gitlab_client().await;
+        }
         let account = self.accounts.read().get(service).cloned().ok_or_else(|| {
             let name = service.label();
             anyhow!(tr!(
@@ -458,6 +470,54 @@ impl<R: Runtime> Core<R> {
             ));
         }
         self.client_for(service, &account).await
+    }
+
+    /// GitLab Issues' client: every GitLab code host's account, its instance and token (its own
+    /// from the keychain, or `glab`'s) as the code host uses them. An instance whose token cannot
+    /// be had is left out while another one can.
+    async fn gitlab_client(&self) -> Result<Client> {
+        let list: Vec<ForgeAccount> = self
+            .accounts
+            .read()
+            .gitlab_accounts()
+            .into_iter()
+            .cloned()
+            .collect();
+        if list.is_empty() {
+            bail!(tr!(
+                "Aucun compte GitLab connecté : connecte-le dans Réglages › Intégrations › Hébergeurs de code.",
+                "No GitLab account connected: connect it in Settings › Integrations › Code hosts."
+            ));
+        }
+        let mut instances = Vec::new();
+        let mut failed = None;
+        for a in list {
+            let host = a.host();
+            if a.unread {
+                failed = Some(anyhow!(tr!(
+                    "Trousseau du système illisible : relance Escouade ou reconnecte le compte de {host}.",
+                    "The system keychain can’t be read: restart Escouade or connect the {host} account again."
+                )));
+                continue;
+            }
+            match self.credentials(&a).await {
+                Ok(c) => instances.push(gitlab::Instance {
+                    base: c
+                        .api
+                        .unwrap_or_else(|| format!("{}/api/v4", c.url.trim_end_matches('/'))),
+                    token: c.token.trim().to_string(),
+                    user: a.user.clone(),
+                    label: a.label.clone(),
+                    host,
+                }),
+                Err(e) => failed = Some(e),
+            }
+        }
+        if instances.is_empty() {
+            return Err(failed.unwrap_or_else(|| anyhow!("GitLab")));
+        }
+        let http = crate::usage::http_client(&self.settings.read())?;
+        Ok(Client::Gitlab(gitlab::Gitlab::new(http, instances)))
     }
 
     /// The GitHub CLI's token (`gh auth token`), asked once.
@@ -500,6 +560,10 @@ impl<R: Runtime> Core<R> {
         service: Service,
         form: Account,
     ) -> Result<AccountView> {
+        if service == Service::Gitlab {
+            // One account for both uses: the code host's form.
+            bail!(gitlab_by_its_host());
+        }
         let mut account = Account {
             site: if service == Service::Jira {
                 jira::site(&form.site)
@@ -553,6 +617,9 @@ impl<R: Runtime> Core<R> {
     /// unused until one is connected again). An entry the keychain keeps goes at the next start
     /// (`Accounts::to_forget`); the window is told when it held the account's token.
     pub fn integration_disconnect(&self, service: Service) -> Result<Vec<AccountView>> {
+        if service == Service::Gitlab {
+            bail!(gitlab_by_its_host());
+        }
         // Not for GitHub through the CLI (no token of its own), nor a token the keychain refused
         // (in the file, which is written again without it).
         let in_keychain = self
@@ -584,33 +651,48 @@ impl<R: Runtime> Core<R> {
         Ok(self.integration_accounts())
     }
 
-    /// The account's containers; for GitHub, the project's own repository first.
+    /// The account's containers; for GitHub and GitLab, the project's own repository first.
     pub async fn integration_containers(
         &self,
         service: Service,
         project_id: Option<&str>,
     ) -> Result<Vec<Container>> {
         let mut list = self.client(service).await?.containers().await?;
-        if service == Service::Github {
-            if let Some(repo) = match project_id {
-                Some(id) => self.project_repo(id).await,
-                None => None,
-            } {
-                list.retain(|c| c.id != repo);
-                list.insert(
-                    0,
-                    Container {
-                        name: tr!(
-                            "{repo} (dépôt du projet)",
-                            "{repo} (the project’s repository)"
-                        ),
-                        id: repo,
-                        group: None,
-                    },
-                );
-            }
+        let own = match (service, project_id) {
+            (Service::Github, Some(id)) => self.project_repo(id).await,
+            (Service::Gitlab, Some(id)) => self.project_gitlab(id).await,
+            _ => None,
+        };
+        if let Some(repo) = own {
+            list.retain(|c| c.id != repo);
+            let name = repo
+                .split_once('/')
+                .filter(|_| service == Service::Gitlab)
+                .map_or(repo.as_str(), |(_, p)| p)
+                .to_string();
+            list.insert(
+                0,
+                Container {
+                    name: tr!(
+                        "{name} (dépôt du projet)",
+                        "{name} (the project’s repository)"
+                    ),
+                    id: repo,
+                    group: None,
+                    own: true,
+                },
+            );
         }
         Ok(list)
+    }
+
+    /// `<host>/<groups>/<project>` of the project's remote, when it is on an instance a GitLab
+    /// account is connected for.
+    async fn project_gitlab(&self, project_id: &str) -> Option<String> {
+        let remote = self.project_forge(project_id).await?;
+        let list = forge_accounts::all(&self.accounts.read());
+        let a = forge_accounts::for_host(&list, &remote.host).filter(|a| a.kind == "gitlab")?;
+        Some(format!("{}/{}", a.host(), remote.repo.full()))
     }
 
     /// `owner/repo` of the project's GitHub remote (origin, else the only one), if it has one.
@@ -735,7 +817,7 @@ impl<R: Runtime> Core<R> {
         for p in projects {
             let mut found = Vec::new();
             for link in &p.integrations.links {
-                if self.accounts.read().get(link.service).is_none() {
+                if !self.accounts.read().connected(link.service) {
                     continue;
                 }
                 let q = Query {

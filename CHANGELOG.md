@@ -15,11 +15,13 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - La barre des agents et du Kanban s’élargit ou se rétrécit en tirant son bord droit, et le panneau de droite se ferme par son bouton × aussi quand il est côte à côte avec la conversation.
 - La barre d’état montre la branche de l’agent ouvert, celle de son worktree telle que git la voit, et l’état de sa PR à côté, qu’un clic ouvre dans le navigateur. Son sélecteur fait passer le worktree de l’agent sur une branche qui existe déjà : l’agent l’apprend avec ton prochain message.
 - Les PR d’un agent sont trouvées sur la branche où il est vraiment, qui que soit leur auteur : une branche reprise, une PR ouverte depuis un fork vers le dépôt d’origine, la branche du dossier du projet, ou celle d’un agent de ticket. Merci à @Metalzoid (#17).
+- GitLab Issues devient une source du Kanban, sur gitlab.com comme sur ton instance : il reprend le compte GitLab déjà connecté comme hébergeur, sans rien redemander, et ses issues s’importent avec leurs critères puis changent d’étiquette ou d’état et reçoivent une note à mesure que leur ticket avance.
 
 ### Corrections
 
 - `/compact` compacte vraiment le contexte d’un agent Codex, Copilot CLI ou OpenCode au lieu de partir au modèle comme un message : la conversation montre son début et sa fin, et la jauge de contexte redescend.
 - Le menu des commandes s’ouvre aussi sur un `/` tapé après une espace ou en début de ligne, au milieu d’un message, mais jamais dans un chemin ni une adresse.
+- Réglages › Intégrations sépare les hébergeurs de code (PR, CI) des sources du Kanban (tickets), chacun dans sa partie nommée, et la fenêtre d’import sans source nomme les six sources et propose de lier d’un clic le dépôt GitHub ou le projet GitLab du projet, pour qu’un GitLab connecté ne laisse plus croire que ses tickets arrivent seuls.
 
 ## [2.0.2] — 2026-10-26
 

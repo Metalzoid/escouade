@@ -4,7 +4,10 @@ import { fList } from './format';
 import { t } from './i18n';
 import type { Column, Container, ExternalIssue, ExternalState, ProjectIntegrations, Service } from './types';
 
-export const SERVICE_IDS: Service[] = ['jira', 'trello', 'github', 'linear', 'clickup'];
+export const SERVICE_IDS: Service[] = ['jira', 'trello', 'github', 'linear', 'clickup', 'gitlab'];
+
+/** The sources whose account is a code host's (GitHub Issues: github.com's; GitLab Issues: every GitLab instance's). */
+export const HOSTED: Service[] = ['github', 'gitlab'];
 
 /**
  * How the window shows each service. `container` (what the service calls the place its tickets are in) and
@@ -74,10 +77,29 @@ export const SERVICES: Record<
       return t('integrations.searchHint.clickup');
     },
   },
+  gitlab: {
+    name: 'GitLab Issues',
+    letter: 'GL',
+    color: 'oklch(0.66 0.17 45)',
+    ink: '#fff',
+    get container() {
+      return t('integrations.container.gitlab');
+    },
+    get placeholder() {
+      return t('integrations.searchHint.gitlab');
+    },
+  },
 };
 
 /** How a service names itself in a sentence (« depuis GitHub »). */
-const SHORT: Record<Service, string> = { jira: 'Jira', trello: 'Trello', github: 'GitHub', linear: 'Linear', clickup: 'ClickUp' };
+const SHORT: Record<Service, string> = {
+  jira: 'Jira',
+  trello: 'Trello',
+  github: 'GitHub',
+  linear: 'Linear',
+  clickup: 'ClickUp',
+  gitlab: 'GitLab',
+};
 
 export const shortName = (service: Service) => SHORT[service];
 

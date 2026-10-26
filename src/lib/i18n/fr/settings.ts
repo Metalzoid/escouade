@@ -14,7 +14,10 @@ export default {
     notifications: { label: 'Notifications', desc: 'Alertes visuelles et sonores' },
     projects: { label: 'Projets', desc: 'Réglages propres à chaque projet' },
     board: { label: 'Kanban', desc: 'Pilote auto et tickets validés' },
-    integrations: { label: 'Intégrations', desc: 'Hébergeurs de code, Jira, Trello, GitHub Issues, Linear et ClickUp' },
+    integrations: {
+      label: 'Intégrations',
+      desc: 'Sources du Kanban (Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues) et hébergeurs de code',
+    },
     terminals: { label: 'Terminaux', desc: 'Shells disponibles dans les terminaux intégrés' },
     network: {
       label: 'Réseau',
@@ -100,7 +103,7 @@ export default {
     claudeLanguage: 'Langue des textes rédigés par les agents',
     sameAsUi: 'Comme l’interface (par défaut)',
     claudeLanguageHelp:
-      'Messages de commit et descriptions de pull request proposés, commentaires publiés dans Jira, Trello, GitHub, Linear et ClickUp, consignes données aux agents (par défaut, le message de commit proposé reprend la langue des derniers commits du dépôt).',
+      'Messages de commit et descriptions de pull request proposés, commentaires publiés dans Jira, Trello, GitHub, Linear, ClickUp et GitLab, consignes données aux agents (par défaut, le message de commit proposé reprend la langue des derniers commits du dépôt).',
     /** A language named in the interface's (the choices name each in itself: `LANG_NAMES`). */
     langName: { fr: 'Français', en: 'Anglais' },
     /** « Modèle des textes rédigés »: the harness the texts written by a model go to, among those found. */

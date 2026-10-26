@@ -575,10 +575,10 @@ Les traits qui deviennent le contrat : `Engine` et `EngineProcess` (`engine/mod.
 Chaque étape est livrable seule, garde ses tests et ses essais réels inchangés, et ne migre qu'une intégration à la fois. L'ordre va du plus simple au plus risqué ; **le transport en process (PLG-2) et le banc (PLG-3) passent avant toute migration de première main**.
 
 0. **Les mesures de référence** (INT-0), avant tout : le flux de chaque harness, le démarrage, la mémoire. Ce sont les chiffres « avant ».
-1. **Les contrats dans le cœur**, sans rien sortir : `TicketSource` et `Service` ouvert (les cinq sources derrière, sans changer de comportement), `forge::Registry` ouvert, `EngineId` ouvert. Des refactors, livrables en 2.0.x ou avec la 2.1.0.
+1. **Les contrats dans le cœur**, sans rien sortir : `TicketSource` et `Service` ouvert (les six sources derrière, sans changer de comportement), `forge::Registry` ouvert, `EngineId` ouvert. Des refactors, livrables en 2.0.x ou avec la 2.1.0.
 2. **Le socle** : le manifeste (PLG-1), **le transport en process (PLG-2)** et **le banc (PLG-3)** ; le registre des plugins de première main et l'exécutable `escouade-plugins` empaqueté et signé, d'abord vide ; les adaptateurs en process des sources et des hébergeurs, essayés sur le faux plugin.
 3. **Les comptes partagés** : un genre de compte par plugin ; l'exception de github.com (`Accounts::github`) devient la règle. Migration des comptes enregistrés (`integrations.json`) et des noms au coffre, réversible.
-4. **Les sources du Kanban en process**, une par ticket : Trello, Linear, Jira, ClickUp. Le plus simple : quelques appels HTTP, des types sérialisables.
+4. **Les sources du Kanban en process**, une par ticket : Trello, Linear, Jira, ClickUp. Le plus simple : quelques appels HTTP, des types sérialisables. GitHub Issues et GitLab Issues sortent avec leur hébergeur (étape 5).
 5. **Les hébergeurs en process**, un par ticket : **GitHub d'abord, avec ses Issues** (le plugin « GitHub » complet), puis GitLab avec ses Issues (ESC-56 et ESC-165), Bitbucket, Gitea.
 6. **Le contrat des harness en process** : la traduction séparée de l'état, `engine/launch`, les lots, `agent/attach`, la vue terminal ; prouvé sur le faux moteur minimal (`engine/minimal/`) devenu un plugin, mesuré contre INT-0.
 7. **Les harness en process**, un par ticket, du moins utilisé au plus utilisé : Cursor CLI (avec le plugin ACP générique de PLG-6), OpenCode, Copilot CLI, Codex, **Claude Code en dernier**. Chacun mesuré avant et après, banc, e2e et essais réels rejoués.
@@ -589,7 +589,7 @@ Chaque étape est livrable seule, garde ses tests et ses essais réels inchangé
 | Tickets | Effet | Décidé |
 | --- | --- | --- |
 | ESC-201, ClickUp (en cours) | Il ajoute une variante à `Service` et à `integrations::Client`, comme Linear. | **Fini tel quel** : l'étape 1 le passe derrière le contrat avec les autres, l'étape 4 le sort en process. |
-| ESC-165, GitLab Issues | Une source de plus, sur un compte GitLab que l'hébergeur (ESC-56) utilisera aussi. | **Réécrit** : une source du plugin « GitLab », en process, sur le compte partagé (étapes 2, 3 et 5). |
+| ESC-165, GitLab Issues | Une source de plus, sur les comptes de l'hébergeur GitLab (`forge::accounts`) : une variante de `Service` et de `integrations::Client`, comme ClickUp. | **Fait dans le cœur pour la 2.0.3** (décidé le 2026-10-26, à la demande d'un testeur) : l'étape 1 le passe derrière le contrat avec les autres, l'étape 5 le sort avec le plugin « GitLab » (INT-8.2, ESC-218), son compte déjà partagé avec l'hébergeur. |
 | ESC-56, 57, 58, clients GitLab, Bitbucket, Gitea | Le trait `Forge` existe ; les `Provider` sont écrits. | **Écrits directement dans la crate de leur plugin** si l'étape 2 est faite ; sinon dans le cœur, et sortis à l'étape 5. Pas d'attente. |
 | ESC-59 à 63, 65 à 68, PR, CI, relectures, déploiements, vues | Ce sont des fonctions du cœur qui appellent `Forge`. | **Inchangés** : ils restent au cœur et marchent pour tout plugin d'hébergeur. |
 | ESC-69, 70, docs et essais des hébergeurs | Les pages parlent des plugins. | La page « Hébergeurs » dit qu'ils sont des plugins de première main ; l'essai réel passe aussi par « plugin arrêté puis relancé ». |

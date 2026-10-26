@@ -251,7 +251,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// Its credentials, its CLI's token asked when it has none of its own.
-    async fn credentials(&self, a: &ForgeAccount) -> Result<Credentials> {
+    pub(crate) async fn credentials(&self, a: &ForgeAccount) -> Result<Credentials> {
         let mut creds = a.credentials();
         if a.via_cli {
             creds.token = self
@@ -350,7 +350,8 @@ impl<R: Runtime> Core<R> {
                     label: a.label.clone(),
                     via_cli: a.via_cli,
                     in_file: a.in_file,
-                    issues: host == GITHUB_COM,
+                    // GitLab Issues takes every GitLab account.
+                    issues: host == GITHUB_COM || a.kind == "gitlab",
                     status,
                     projects: by_host.remove(&host).map(|(_, _, p)| p).unwrap_or_default(),
                     host,

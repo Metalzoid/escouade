@@ -3,10 +3,10 @@
   import { trapFocus } from '../../lib/focus';
   import { fInt } from '../../lib/format';
   import { t } from '../../lib/i18n';
-  import { importedLabel, issueKey, SERVICE_IDS, SERVICES } from '../../lib/integrations';
+  import { HOSTED, importedLabel, issueKey, linkSource, SERVICE_IDS, SERVICES } from '../../lib/integrations';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
-  import type { ExternalIssue, IssuePage, Service } from '../../lib/types';
+  import type { Container, ExternalIssue, IssuePage, Service } from '../../lib/types';
   import { tip } from '../../lib/tip';
   import Icon from '../Icon.svelte';
 
@@ -98,8 +98,63 @@
     app.modal = null;
   }
 
+  /** Réglages › Intégrations, at the sources of the Kanban (not the code hosts above them). */
   function manage() {
-    app.modal = { kind: 'settings', tab: 'integrations', projectId };
+    app.modal = { kind: 'settings', tab: 'integrations', projectId, section: 'sources' };
+  }
+
+  /**
+   * Without a source: the project's own repository on a code host whose source is connected (its GitHub repository, its
+   * GitLab project), to link in one click.
+   */
+  let offers = $state<{ service: Service; container: Container }[]>([]);
+  let linkingOwn = $state(false);
+
+  $effect(() => {
+    if (current && link) return;
+    const id = projectId;
+    const hosted = HOSTED.filter(
+      (s) => app.accounts.find((a) => a.service === s)?.connected && !project?.integrations.links.some((l) => l.service === s),
+    );
+    let alive = true;
+    Promise.all(
+      hosted.map((service) =>
+        api.integrationContainers(service, id).then(
+          (list) => {
+            const own = list.find((c) => c.own);
+            return own ? { service, container: own } : null;
+          },
+          () => null,
+        ),
+      ),
+    ).then((found) => {
+      if (alive) offers = found.filter((o) => o !== null);
+    });
+    return () => {
+      alive = false;
+    };
+  });
+
+  /** Its path as the service names it: `owner/repo`, a GitLab project's without its instance. */
+  const ownName = (o: { service: Service; container: Container }) =>
+    o.service === 'gitlab' ? o.container.id.split('/').slice(1).join('/') : o.container.id;
+
+  /** Linked with the states its columns give by default (none when they cannot be read: set in the settings). */
+  async function linkOwn(o: { service: Service; container: Container }) {
+    const p = project;
+    if (!p || linkingOwn) return;
+    linkingOwn = true;
+    try {
+      const v = await api.integrationStates(o.service, o.container.id).catch(() => ({ states: [], defaults: {} }));
+      const integrations = linkSource($state.snapshot(p.integrations), o.service, { id: o.container.id, name: ownName(o) }, v.defaults);
+      const saved = await app.run(api.updateProject({ ...$state.snapshot(p), integrations }).then(() => true));
+      if (saved) {
+        p.integrations = integrations;
+        chosen = o.service;
+      }
+    } finally {
+      linkingOwn = false;
+    }
   }
 
   function pickSource(id: Service) {
@@ -216,7 +271,16 @@
       <div class="none">
         <span class="nt">{t('integrations.modal.noSource')}</span>
         <span class="nd">{t('integrations.modal.noSourceBody', { project: project?.name ?? t('integrations.modal.thisProject') })}</span>
-        <button class="btn primary" onclick={manage}>{t('integrations.modal.linkSource')}</button>
+        {#each offers as o (o.service)}
+          <button class="btn primary own" disabled={linkingOwn} onclick={() => linkOwn(o)}
+            >{@render badge(o.service)}{linkingOwn
+              ? t('integrations.modal.linking')
+              : t('integrations.modal.linkOwn', { name: ownName(o), service: SERVICES[o.service].name })}</button
+          >
+        {/each}
+        <button class="btn" class:primary={!offers.length} onclick={manage}
+          >{offers.length ? t('integrations.modal.otherSource') : t('integrations.modal.linkSource')}</button
+        >
       </div>
     {:else}
       <div class="sources" role="tablist" aria-label={t('integrations.modal.sources')}>
@@ -419,6 +483,12 @@
   }
   .none .btn {
     margin-top: 8px;
+  }
+  .none .btn + .btn {
+    margin-top: 0;
+  }
+  .own {
+    gap: 8px;
   }
   .badge {
     min-width: 20px;

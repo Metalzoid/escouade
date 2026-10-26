@@ -597,6 +597,7 @@ fn container(list: &Value, place: &[String]) -> Container {
         id: id_of(&list["id"]),
         name: name_of(list),
         group: Some(place.join(" › ")),
+        own: false,
     }
 }
 

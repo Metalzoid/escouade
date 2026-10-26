@@ -71,7 +71,7 @@ outcome: null
 | `author`, `taken_by`, `updated_by` | Qui l’a partagé, qui l’a lancé, qui a changé le fichier en dernier : `{ name, id }`. |
 | `after` | Les `id` des tickets partagés qu’il attend (« Après »). |
 | `images`, `files` | Ses images et ses fichiers joints, dans le dossier de son `id`. |
-| `external` | Le ticket Jira, Trello, GitHub, Linear ou ClickUp d’où il a été importé. |
+| `external` | Le ticket Jira, Trello, GitHub, Linear, ClickUp ou GitLab d’où il a été importé. |
 | `outcome` | Ce qu’a fait sa validation, une fois terminé. |
 
 Restent sur ton poste : les boucles, le coût, l’avancement de l’agent, les critères cochés, le compte, le modèle, l’agent et sa branche. Le schéma JSON du format est publié à `https://escouade.dev/schemas/escouade-ticket.schema.json`.
@@ -88,7 +88,7 @@ Un ticket partagé garde partout la clé que lui a donnée son auteur : le DEM-1
 - **Un fichier en conflit git.** Escouade ne le lit pas : la carte garde son dernier état et propose « Garder le mien » (Escouade réécrit le fichier avec ta version, ce qui lève le conflit) ou « Prendre le sien » (le côté reçu). Rien n’est commité.
 - **Un fichier illisible.** Il devient une carte « Ticket partagé illisible », avec la ligne en cause ; Escouade ne le réécrit jamais et ne le lance pas.
 - **Un ticket que son auteur ne partage plus.** Il quitte ton Kanban à ton pull, sauf si tu l’avais lancé : il reste alors chez toi, comme un des tiens.
-- **Un import déjà partagé.** Importer un ticket Jira, Trello, GitHub, Linear ou ClickUp qu’un coéquipier a déjà partagé ne crée pas de doublon : ton import, s’il n’a pas commencé, devient le ticket partagé.
+- **Un import déjà partagé.** Importer un ticket Jira, Trello, GitHub, Linear, ClickUp ou GitLab qu’un coéquipier a déjà partagé ne crée pas de doublon : ton import, s’il n’a pas commencé, devient le ticket partagé.
 - **Un projet privé.** Il se partage aussi : « privé » dit ce que voient les autres projets d’Escouade, pas ton équipe sur le dépôt. Ses tickets partagés restent invisibles des agents des autres projets.
 
 ## Avec le serveur MCP

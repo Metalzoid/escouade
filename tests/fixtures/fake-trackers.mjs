@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-// Test double of Jira Cloud, Trello, GitHub Issues and ClickUp on one local HTTP server, for the end-to-end
+// Test double of Jira Cloud, Trello, GitHub Issues, ClickUp and a self-hosted GitLab on one local HTTP server, for the end-to-end
 // tests and to try the integrations without real accounts:
 //   node tests/fixtures/fake-trackers.mjs --port 4101
 // then, in Escouade: Jira's site = http://127.0.0.1:4101 (any e-mail, any token but "bad"), and the
 // app started with ESCOUADE_TRELLO_API=http://127.0.0.1:4101/1 and
 // ESCOUADE_GITHUB_API=http://127.0.0.1:4101/github, ESCOUADE_CLICKUP_API=http://127.0.0.1:4101/clickup/api/v2
-// (any key or token but "bad").
+// (any key or token but "bad"); GitLab: connect a code host of kind GitLab at http://127.0.0.1:4101 (its API at
+// the root, /api/v4), its projects then GitLab Issues' sources.
 // What the app changed is kept in memory: GET /__writes lists the writes received.
 
 import http from 'node:http';
@@ -149,6 +150,35 @@ function seed() {
         },
       ],
     },
+    // GitLab: the project acme/api of the instance, its labels, a board's lists, and its issues.
+    gitlab: {
+      projects: ['acme/api', 'acme/web/app'],
+      labels: ['bug', 'claude-ready', 'Doing', 'To review'],
+      lists: ['Doing', 'To review'],
+      issues: [
+        {
+          iid: 7,
+          title: 'Paginer la liste des factures',
+          description:
+            'La liste charge tout d’un coup.\n\n## Critères d’acceptation\n- [ ] 50 factures par page\n- [ ] Un lien vers la page suivante',
+          state: 'opened',
+          labels: ['claude-ready'],
+          author: 'grace',
+          assignee: null,
+        },
+        {
+          iid: 8,
+          title: 'Exporter les factures en PDF',
+          description: '',
+          state: 'opened',
+          labels: ['bug'],
+          author: 'ada',
+          assignee: 'ada',
+        },
+        { iid: 3, title: 'Ancienne issue fermée', description: '', state: 'closed', labels: [], author: 'ada', assignee: null },
+      ],
+      notes: [],
+    },
     writes: [],
   };
 }
@@ -172,6 +202,11 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       send.text = (status, text) => {
         res.writeHead(status, { 'Content-Type': 'text/plain' });
         res.end(text);
+      };
+      // With headers of its own (GitLab's pages).
+      send.with = (status, value, headers) => {
+        res.writeHead(status, { 'Content-Type': 'application/json', ...headers });
+        res.end(JSON.stringify(value));
       };
       const json = () => {
         try {
@@ -227,6 +262,82 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
     if (p === '/api/v4/user') return send(200, { username: 'ada' });
     // A token that may only read: the API right is missing.
     if (p === '/api/v4/personal_access_tokens/self') return send(200, { scopes: ['read_api', 'read_user'] });
+    // GitLab Issues: its projects (their path encoded as one segment), labels, boards and issues.
+    const gl = db.gitlab;
+    const glIssue = (i, path) => ({
+      iid: i.iid,
+      title: i.title,
+      description: i.description,
+      state: i.state,
+      labels: i.labels,
+      author: { username: i.author },
+      assignees: i.assignee ? [{ username: i.assignee }] : [],
+      issue_type: 'issue',
+      web_url: `https://gitlab.acme.dev/${path}/-/issues/${i.iid}`,
+    });
+    if (p === '/api/v4/projects')
+      return send(
+        200,
+        gl.projects.map((path, i) => ({ id: i + 1, path_with_namespace: path })),
+      );
+    let g4 = p.match(/^\/api\/v4\/projects\/([^/]+)(\/.*)?$/);
+    if (g4) {
+      const path = decodeURIComponent(g4[1]);
+      const r = g4[2] ?? '';
+      if (!gl.projects.includes(path)) return send(404, { message: '404 Project Not Found' });
+      if (r === '/labels')
+        return send(
+          200,
+          gl.labels.map((name, id) => ({ id, name })),
+        );
+      if (r === '/boards')
+        return send(200, [
+          { id: 1, name: 'Development', lists: gl.lists.map((name, position) => ({ id: position, position, label: { name } })) },
+        ]);
+      if (r === '/issues') {
+        const q = (k) => url.searchParams.get(k);
+        const text = (q('search') ?? '').toLowerCase();
+        const all = gl.issues
+          .filter((i) => !q('state') || i.state === q('state'))
+          .filter((i) => !q('assignee_username') || i.assignee === q('assignee_username'))
+          .filter(
+            (i) =>
+              !q('labels') ||
+              q('labels')
+                .split(',')
+                .every((l) => i.labels.includes(l)),
+          )
+          .filter((i) => !text || `${i.title} ${i.description}`.toLowerCase().includes(text));
+        const per = Number(q('per_page') ?? 20);
+        const page = Number(q('page') ?? 1);
+        const items = all.slice((page - 1) * per, page * per);
+        const next = page * per < all.length ? String(page + 1) : '';
+        return send.with(
+          200,
+          items.map((i) => glIssue(i, path)),
+          { 'X-Total': String(all.length), 'X-Next-Page': next, 'X-Page': String(page) },
+        );
+      }
+      g4 = r.match(/^\/issues\/(\d+)(\/notes)?$/);
+      if (g4) {
+        const issue = gl.issues.find((i) => i.iid === Number(g4[1]));
+        if (!issue) return send(404, { message: '404 Issue Not Found' });
+        if (g4[2]) {
+          gl.notes.push({ iid: issue.iid, body: json()?.body });
+          return send(201, { id: gl.notes.length, body: json()?.body });
+        }
+        if (method === 'PUT') {
+          const b = json() ?? {};
+          if (b.state_event === 'close') issue.state = 'closed';
+          if (b.state_event === 'reopen') issue.state = 'opened';
+          const off = (b.remove_labels ?? '').split(',').filter(Boolean);
+          issue.labels = issue.labels.filter((l) => !off.includes(l));
+          for (const l of (b.add_labels ?? '').split(',').filter(Boolean)) if (!issue.labels.includes(l)) issue.labels.push(l);
+        }
+        return send(200, glIssue(issue, path));
+      }
+      return send(404, { message: `404 Not Found: ${method} ${p}` });
+    }
 
     // ---------- Jira ----------
     const j = db.jira;
@@ -537,9 +648,9 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const i = process.argv.indexOf('--port');
   const port = Number(i > 0 ? process.argv[i + 1] : process.env.PORT || 4101);
   startFakeTrackers(port).then(({ url }) => {
-    console.log(`fake Jira, Trello, GitHub and ClickUp on ${url}`);
+    console.log(`fake Jira, Trello, GitHub, ClickUp and GitLab on ${url}`);
     console.log(
-      `  Jira : site ${url} · Trello : ESCOUADE_TRELLO_API=${url}/1 · GitHub : ESCOUADE_GITHUB_API=${url}/github · ClickUp : ESCOUADE_CLICKUP_API=${url}/clickup/api/v2`,
+      `  Jira : site ${url} · Trello : ESCOUADE_TRELLO_API=${url}/1 · GitHub : ESCOUADE_GITHUB_API=${url}/github · ClickUp : ESCOUADE_CLICKUP_API=${url}/clickup/api/v2 · GitLab : hébergeur GitLab à ${url}`,
     );
   });
 }

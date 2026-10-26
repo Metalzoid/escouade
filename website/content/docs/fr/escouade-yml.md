@@ -277,7 +277,7 @@ Le fichier est commité et lu par toute l’équipe, et un dépôt public le mon
 - « En parallèle » et le pilote auto : ils dépensent ton quota ; une personne qui ne fait que relire ne veut pas que des tickets démarrent seuls chez elle ;
 - le mode `bypassPermissions` des agents des tickets : un dépôt ne lève pas les autorisations de qui l’ouvre ;
 - la clé des tickets : chaque machine a son Kanban et numérote ses propres tickets, et la clé est fixée par le premier ticket ;
-- les intégrations (Jira, Trello, GitHub, Linear, ClickUp) : elles tiennent à tes comptes connectés ;
+- les intégrations (Jira, Trello, GitHub, Linear, ClickUp, GitLab) : elles tiennent à tes comptes connectés ;
 - les chemins complets : ils ne valent que sur une machine (d’où le refus d’un `dir` ou d’un `cwd` complet) ;
 - les jetons et mots de passe : aucune clé n’en prend, et « Exporter vers .escouade.yml » n’en écrit jamais.
 

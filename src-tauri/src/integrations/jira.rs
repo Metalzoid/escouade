@@ -199,6 +199,7 @@ impl Jira {
                     id: key.to_string(),
                     name: format!("{key} — {name}"),
                     group: None,
+                    own: false,
                 });
             }
             if v["isLast"].as_bool() != Some(false) {
@@ -517,11 +518,13 @@ mod tests {
                     id: "ATL".into(),
                     name: "ATL — Atlas".into(),
                     group: None,
+                    own: false,
                 },
                 Container {
                     id: "MOB".into(),
                     name: "MOB — Mobile".into(),
                     group: None,
+                    own: false,
                 }
             ]
         );

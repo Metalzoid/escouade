@@ -1,6 +1,6 @@
-# Jira, Trello, GitHub, Linear et ClickUp
+# Jira, Trello, GitHub, Linear, ClickUp et GitLab
 
-Escouade importe les tickets de Jira, Trello, GitHub Issues, Linear et ClickUp dans le Kanban, avec leurs critères d’acceptation, puis tient leur statut à jour et y laisse des commentaires au fil du travail. Cette page couvre la connexion, l’import et la synchronisation.
+Escouade importe les tickets de Jira, Trello, GitHub Issues, Linear, ClickUp et GitLab Issues dans le Kanban, avec leurs critères d’acceptation, puis tient leur statut à jour et y laisse des commentaires au fil du travail. Cette page couvre la connexion, l’import et la synchronisation.
 
 ![La fenêtre « Importer des tickets » : des tickets Jira filtrés par « Assignés à moi », avec leurs critères détectés](/images/integrations.jpg)
 
@@ -14,7 +14,12 @@ Les comptes se connectent dans Réglages › Intégrations, groupe « Comptes c
 | Trello | « Clé d’API » et « Jeton » | « Obtenir une clé d’API », puis « Obtenir un jeton pour cette clé » (disponible une fois la clé saisie : un jeton en lecture et écriture, sans expiration) |
 | GitHub | « Jeton », facultatif | « Créer un jeton GitHub ». Laissé vide, Escouade utilise celui de la CLI `gh` (`gh auth login`) ; le compte s’affiche alors avec « · via gh » |
 | Linear | « Clé d’API » | « Créer une clé d’API Linear » |
+| GitLab | Rien de plus : le compte de l’hébergeur GitLab (gitlab.com ou ton instance, jeton `api` ou celui de `glab`) | « Connecter GitLab… » ouvre le formulaire de Réglages › Intégrations › « Hébergeurs de code ». Un seul compte sert aux merge requests et aux tickets |
 | ClickUp | « Clé d’API » (`pk_…`) | « Créer une clé d’API ClickUp » (Réglages › Apps de ClickUp). La ligne dit alors « Connecté · » suivi de ton nom chez ClickUp |
+
+### Hébergeur de code ou source de tickets
+
+Un hébergeur de code (GitHub, GitLab, Bitbucket, Gitea) sert aux pull requests, à la CI et aux déploiements des agents ; une source du Kanban sert aux tickets. Réglages › Intégrations les montre en deux parties nommées. Connecter son GitLab comme hébergeur ne met aucun ticket dans le Kanban : il faut encore lier un projet GitLab comme source (voir plus bas), ce que la fenêtre d’import propose d’un clic. Bitbucket et Gitea n’ont pas de source : leur ligne dit « Pas de tickets : PR et CI seulement ».
 
 « Déconnecter » oublie le compte et ses secrets. Les projets gardent leurs liens, inutilisés jusqu’à une nouvelle connexion.
 
@@ -26,11 +31,11 @@ Quand le trousseau refuse un jeton sous Windows ou macOS, il reste dans ce fichi
 
 ## Lier un projet à une source
 
-Un projet se lie à un endroit par service : un projet Jira, un tableau Trello, un dépôt GitHub, une équipe Linear ou une liste ClickUp. Dans Réglages › Intégrations, le groupe « Sources liées à `<projet>` » propose, pour chaque service connecté, une liste : « Projet Jira », « Tableau Trello », « Dépôt GitHub Issues », « Équipe Linear », « Liste ClickUp ». « Aucun » délie le service. Pour GitHub, le dépôt du projet, quand son remote est sur GitHub, vient en premier (« (dépôt du projet) »). Pour ClickUp, les listes de tous tes espaces de travail sont rangées par espace et par dossier (« Produit › Sprints »), comme dans la barre latérale de ClickUp : les listes hors dossier d’abord, les archivées en moins ; taper les premières lettres d’un nom, menu ouvert, y va.
+Un projet se lie à un endroit par service : un projet Jira, un tableau Trello, un dépôt GitHub, une équipe Linear, une liste ClickUp ou un projet GitLab. Dans Réglages › Intégrations, le groupe « Sources liées à `<projet>` » propose, pour chaque service connecté, une liste : « Projet Jira », « Tableau Trello », « Dépôt GitHub Issues », « Équipe Linear », « Liste ClickUp », « Projet GitLab Issues ». « Aucun » délie le service. Pour GitHub, le dépôt du projet, quand son remote est sur GitHub, vient en premier (« (dépôt du projet) ») ; de même pour GitLab, quand le remote est sur une instance connectée. Les projets GitLab sont rangés par instance, avec leurs groupes et sous-groupes dans le chemin (« acme/back/api »). Pour ClickUp, les listes de tous tes espaces de travail sont rangées par espace et par dossier (« Produit › Sprints »), comme dans la barre latérale de ClickUp : les listes hors dossier d’abord, les archivées en moins ; taper les premières lettres d’un nom, menu ouvert, y va.
 
 Choisir une source charge ses statuts et pré-remplit la correspondance des statuts (voir plus bas). Enregistre ensuite les réglages.
 
-Depuis le Kanban, « Importer » sans source liée affiche « Aucune source liée à ce projet » et « Lier une source », qui ouvre ce même onglet.
+Depuis le Kanban, « Importer » sans source liée affiche « Aucune source liée à ce projet », nomme les six sources et propose « Lier une source », qui ouvre ce même onglet sur « Sources du Kanban ». Quand le remote du projet est sur un hébergeur connecté dont la source existe (GitHub, GitLab), elle propose directement « Lier acme/api (GitLab Issues) » : un clic lie le projet avec les statuts par défaut, et ses tickets s’affichent aussitôt.
 
 ## Importer des tickets
 
@@ -46,11 +51,12 @@ Dans le [Kanban](board), « Importer » (⤓) ouvre la fenêtre « Importer d
 | Trello | « Rechercher une carte… » | « Mes cartes », puis une puce par liste du tableau |
 | GitHub | « Rechercher une issue… » (un numéro, `42` ou `#42`, trouve l’issue) | « Assignées à moi », puis les étiquettes du dépôt (douze au plus) |
 | Linear | « Rechercher par identifiant (ENG-42) ou par titre… » | « Mes issues », puis une puce par état du workflow qui n’est ni terminé ni annulé |
+| GitLab | « Rechercher une issue (#12) ou par texte… » (un numéro, `12` ou `#12`, trouve l’issue ; un texte cherche dans le titre et la description) | « Assignées à moi », puis les étiquettes du projet (douze au plus) |
 | ClickUp | « Rechercher par id (#86abx3, ABC-12) ou par titre… » (l’id d’une tâche, avec ou sans `#`, ou son id personnalisé quand l’espace en a, trouve la tâche si elle est dans la liste) | « Mes tâches », puis une puce par statut de la liste qui n’est ni fini ni fermé |
 
-Seuls les tickets ouverts sont proposés : pas ceux de la catégorie « Done » de Jira, ni les issues fermées de GitHub (les pull requests sont laissées de côté), ni les issues terminées ou annulées de Linear, ni les tâches de ClickUp dont le statut est de type fini ou fermé. ClickUp n’ayant pas de recherche par titre, Escouade lit la liste 100 tâches à la fois et garde celles dont le nom contient le texte, jusqu’à 5 pages avant de montrer ce qu’elle a trouvé ; « Afficher plus » continue.
+Seuls les tickets ouverts sont proposés : pas ceux de la catégorie « Done » de Jira, ni les issues fermées de GitHub (les pull requests sont laissées de côté), ni les issues terminées ou annulées de Linear, ni les issues fermées de GitLab, ni les tâches de ClickUp dont le statut est de type fini ou fermé. ClickUp n’ayant pas de recherche par titre, Escouade lit la liste 100 tâches à la fois et garde celles dont le nom contient le texte, jusqu’à 5 pages avant de montrer ce qu’elle a trouvé ; « Afficher plus » continue.
 
-Chaque ligne montre la clé (pour ClickUp, l’id personnalisé, sinon `#` et l’id de la tâche), le titre, le type (Bug, Story, Tâche, Carte, Issue), la priorité, la personne assignée et l’état, et « ✓ 2 critères détectés » (au survol : lesquels). Un ticket déjà dans le Kanban est grisé (« Déjà dans le Kanban ») et ne se choisit pas. Les tickets arrivent par pages ; « Afficher plus » charge la suivante, et la ligne au-dessus de la liste dit « 50 affichés sur 312 » quand le service compte plus de tickets qu’il n’en a envoyé.
+Chaque ligne montre la clé (pour ClickUp, l’id personnalisé, sinon `#` et l’id de la tâche), le titre, le type (Bug, Story, Tâche, Carte, Issue, Incident), la priorité, la personne assignée et l’état, et « ✓ 2 critères détectés » (au survol : lesquels). Un ticket déjà dans le Kanban est grisé (« Déjà dans le Kanban ») et ne se choisit pas. Les tickets arrivent par pages ; « Afficher plus » charge la suivante, et la ligne au-dessus de la liste dit « 50 affichés sur 312 » quand le service compte plus de tickets qu’il n’en a envoyé.
 
 Pour importer :
 
@@ -66,7 +72,7 @@ Avec « Extraire les critères d’acceptation » activé (par défaut), Escou
 
 - Jira et GitHub : les éléments de liste sous un titre ou une ligne qui les nomme (« Critères d’acceptation », « Acceptance criteria », « Definition of done », « AC », « DoD »), sinon les cases à cocher (`- [ ]`) de la description ;
 - Trello : les éléments de la checklist qui porte ce nom, sinon ceux de toutes les checklists, sinon ceux que la description liste ;
-- Linear : comme pour Jira et GitHub, dans la description ;
+- Linear et GitLab : comme pour Jira et GitHub, dans la description ;
 - ClickUp : comme pour Trello, les éléments de la checklist qui porte ce nom, sinon ceux de toutes les checklists de la tâche, sinon ceux que sa description (en Markdown) liste.
 
 Il garde vingt critères au plus, de 300 caractères au plus. Sans critère trouvé, ou avec le réglage éteint, le ticket reçoit les deux critères par défaut. La description Jira est convertie en Markdown avant d’être cherchée.
@@ -78,7 +84,7 @@ Réglages › Intégrations › « Import automatique » laisse Escouade impor
 | Réglage | Rôle | Par défaut |
 |---|---|---|
 | « Importer les tickets étiquetés » | Les tickets ouverts des sources liées qui portent l’étiquette arrivent dans « À faire » | Éteint |
-| « Étiquette » | Le label Jira, l’étiquette Trello, GitHub, Linear ou ClickUp (un tag de tâche) | `claude-ready` |
+| « Étiquette » | Le label Jira, l’étiquette Trello, GitHub, Linear, ClickUp ou GitLab (un tag de tâche) | `claude-ready` |
 | « Vérifier toutes les » | L’intervalle entre deux passes : 5, 15 ou 60 min | 15 min |
 
 Une passe regarde, dans chaque projet, les sources liées dont le compte est connecté. Les tickets arrivent avec 5 boucles maximum, et un message l’annonce (« 3 tickets importés depuis Jira dans demo »). Un ticket que le projet a déjà importé n’est jamais ramené, même si tu l’as supprimé du Kanban depuis. La première passe a lieu peu après l’activation.
@@ -97,7 +103,7 @@ Le groupe « Correspondance des statuts » (une fois une source liée) a une l
 
 Pour ClickUp, chaque liste a ses propres statuts : la correspondance se règle donc par projet, sur ceux de la liste liée. Quand leurs noms ne disent rien de ce qui précède, leur type décide : le premier statut personnalisé (entre l’ouvert et les fermés) pour « En cours » et « À tester », le suivant pour « Terminé », sinon le statut de type fini. Une liste qui n’a qu’un statut ouvert et un fermé ne déplace rien par défaut. Si la liste n’a plus le statut choisi (renommé, retiré), la carte le dit (« La liste « Sprint 12 » de ClickUp n’a pas le statut « review » : ABC-12 reste où il est ; choisis un autre statut dans Réglages › Intégrations ») au lieu d’échouer sans un mot.
 
-Ce que « statut » veut dire dépend du service : une transition de workflow pour Jira, la liste où la carte se range pour Trello, un état du workflow pour Linear, un statut de la liste pour ClickUp. Pour GitHub, ce sont « Ouverte », « Fermée » ou une étiquette du dépôt (marquée ◆) : « Fermée » ferme l’issue, une étiquette la rouvre si besoin et retire les autres étiquettes de la correspondance.
+Ce que « statut » veut dire dépend du service : une transition de workflow pour Jira, la liste où la carte se range pour Trello, un état du workflow pour Linear, un statut de la liste pour ClickUp. Pour GitHub, ce sont « Ouverte », « Fermée » ou une étiquette du dépôt (marquée ◆) : « Fermée » ferme l’issue, une étiquette la rouvre si besoin et retire les autres étiquettes de la correspondance. GitLab fait de même, avec en tête les étiquettes des listes des tableaux du projet (« Doing », « To review »…), puis ses autres étiquettes ; une issue change d’étiquettes et d’état en un seul appel, et le commentaire est une note.
 
 La dernière colonne, « Commenter », choisit les colonnes dont l’arrivée écrit un commentaire (par défaut « À tester » et « Terminé »). Le commentaire dit où en est le ticket :
 

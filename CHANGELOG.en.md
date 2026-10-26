@@ -15,11 +15,13 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - The sidebar of the agents and the Kanban widens or narrows by dragging its right edge, and the side panel closes by its × button even when it sits beside the conversation.
 - The status bar shows the branch of the agent open, its worktree’s as git sees it, and the state of its pull request beside it, which a click opens in the browser. Its picker moves the agent’s worktree to a branch that already exists: the agent learns it with your next message.
 - An agent’s pull requests are found on the branch it really is on, whoever opened them: a branch taken up, a pull request opened from a fork into the original repository, the project folder’s branch, or a ticket agent’s. Thanks to @Metalzoid (#17).
+- GitLab Issues becomes a source of the Kanban, on gitlab.com as on your own instance: it takes the GitLab account already connected as a code host, asking nothing again, and its issues come in with their criteria, then change label or state and get a note as their ticket moves on.
 
 ### Fixes
 
 - `/compact` now really compacts the context of a Codex, Copilot CLI or OpenCode agent instead of reaching the model as a message: the conversation shows its start and its end, and the context gauge goes down.
 - The commands menu also opens on a `/` typed after a space or at the start of a line, in the middle of a message, but never in a path or an address.
+- Settings › Integrations sets the code hosts (PRs, CI) apart from the Kanban sources (tickets), each in its own named part, and the import window with no source names the six sources and offers to link the project’s GitHub repository or GitLab project in one click, so that a connected GitLab no longer suggests its tickets come on their own.
 
 ## [2.0.2] — 2026-10-26
 
