@@ -78,6 +78,7 @@ const REDRAWN = {
     'src/components/DiffView.svelte',
     'src/components/DiffModal.svelte',
     'src/components/GitGraph.svelte',
+    'src/components/WorkflowPanel.svelte',
     'src/components/branches/BranchPicker.svelte',
     'src/components/branches/NewBranchModal.svelte',
     'src/components/branches/MergedBranchesModal.svelte',

@@ -5,16 +5,22 @@
   import type { Agent, Project } from '../lib/types';
   import FilesPanel from './FilesPanel.svelte';
   import GitGraph from './GitGraph.svelte';
+  import WorkflowPanel from './WorkflowPanel.svelte';
+  import { workflows } from '../lib/workflows.svelte';
+  import { followers } from '../lib/workflow-view';
   import Icon from './Icon.svelte';
   import { tip } from '../lib/tip';
 
-  // The agent's side panel: its uncommitted files, the repository history, and the place of the code hosts' pull
-  // requests, CI and deployments, kept for after the 2.0 (ESC-53 to 70) without drawing them.
+  // The agent's side panel: its uncommitted files, the repository history, the project's workflow (ESC-194), and the
+  // place of the code hosts' pull requests, CI and deployments, kept for after the 2.0 (ESC-53 to 70) without drawing them.
   // `docked`: beside the conversation in the split layout (always shown), else an optional panel.
   let { project, agent, docked = false }: { project: Project; agent: Agent | null; docked?: boolean } = $props();
 
   let count = $state(0);
   const tab = $derived(app.panelTab);
+  /** The agents that follow a workflow of the project (ESC-194): the count of its tab. */
+  const following = $derived(followers(workflows.list(project.id).filter((tr) => app.agents[tr.agentId])));
+  $effect(() => void workflows.loadTracks(project.id));
 </script>
 
 <aside class="git-side" class:docked aria-label={t('common.files')}>
@@ -24,6 +30,9 @@
     </button>
     <button role="tab" id="side-tab-history" aria-selected={tab === 'history'} onclick={() => (app.panelTab = 'history')}>
       {t('nav.sidePanel.history')}
+    </button>
+    <button role="tab" id="side-tab-workflow" aria-selected={tab === 'workflow'} onclick={() => (app.panelTab = 'workflow')}>
+      {t('workflow.tab')}{#if following}{' '}<span class="n">{following}</span>{/if}
     </button>
     <button role="tab" id="side-tab-hosts" aria-selected={tab === 'hosts'} onclick={() => (app.panelTab = 'hosts')}>
       {t('nav.sidePanel.hosts')} <span class="soon">{t('nav.sidePanel.soon')}</span>
@@ -50,6 +59,8 @@
       <FilesPanel {project} {agent} {docked} bind:count />
     {:else if tab === 'history'}
       <GitGraph {project} {agent} />
+    {:else if tab === 'workflow'}
+      <WorkflowPanel {project} {agent} />
     {:else}
       <div class="later">
         <b>{t('nav.sidePanel.laterTitle')}</b>
@@ -125,6 +136,18 @@
   /* Narrow, « dans la 2.1 » goes: the tabs hold on one line. */
   @container git-side (max-width: 400px) {
     .utabs .soon {
+      display: none;
+    }
+  }
+  /* Narrower still (340 px beside the classic layout, the window of 1028 px), the tabs draw closer, the Workflow tab's
+     count goes (choice 132) and « PR et CI », empty until the 2.1, leaves the strip for the × (choice 189). */
+  @container git-side (max-width: 420px) {
+    .utabs {
+      gap: 12px;
+      padding: 0 14px;
+    }
+    #side-tab-workflow .n,
+    #side-tab-hosts {
       display: none;
     }
   }

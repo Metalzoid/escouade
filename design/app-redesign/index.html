@@ -8310,7 +8310,8 @@
           gap: 12px;
           padding: 0 14px;
         }
-        #tab-loop .n {
+        #tab-loop .n,
+        #side [data-side='hosts'] {
           display: none;
         }
         .ev {
@@ -9794,6 +9795,7 @@
               <div class="utabs" role="tablist">
                 <button role="tab" aria-selected="true" data-side="files">Non commités <span class="n">3</span></button>
                 <button role="tab" aria-selected="false" data-side="history">Historique</button>
+                <button role="tab" aria-selected="false" data-side="loop" id="tab-loop">Workflow</button>
                 <button role="tab" aria-selected="false" data-side="hosts">PR et CI <span class="soon">dans la 2.1</span></button>
                 <button class="icon-btn side-x" id="side-close" aria-label="Fermer le panneau"><svg class="i s14"><use href="#i-close" /></svg></button>
               </div>
@@ -12517,6 +12519,7 @@ Chaque PR cite l’autre : à merger ensemble.</div>
         $('#side-files').hidden = which !== 'files';
         $('#side-history').hidden = which !== 'history';
         $('#side-hosts').hidden = which !== 'hosts';
+        $('#side-loop') && ($('#side-loop').hidden = which !== 'loop');
       }
       $$('.utabs [data-side]').forEach((b) => b.addEventListener('click', () => sideTab(b.dataset.side)));
       $('.foot-row .changes').closest('.foot-row').addEventListener('click', () => (show('agents'), split(true), sideTab('files')));
@@ -13665,7 +13668,8 @@ Chaque PR cite l’autre : à merger ensemble.</div>
       /** The workflow tab beside Git, opened on its pane. */
       function loopPane(html, n = '3') {
         split(true);
-        $('#side .utabs [data-side="history"]').insertAdjacentHTML('afterend', `<button role="tab" aria-selected="false" data-side="loop" id="tab-loop">Workflow${n ? ` <span class="n">${n}</span>` : ''}</button>`);
+        // The tab is always there (ESC-194), with the count of the agents that follow a workflow when there are some.
+        $('#tab-loop').innerHTML = `Workflow${n ? ` <span class="n">${n}</span>` : ''}`;
         $('#side').insertAdjacentHTML('beforeend', `<div class="side-pane wf" id="side-loop">${html}</div>`);
         $$('.utabs [data-side]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.side === 'loop')));
         $$('#side .side-pane').forEach((p) => (p.hidden = p.id !== 'side-loop'));

@@ -73,6 +73,8 @@ import type {
   VoiceStarted,
   WorktreeSuggestion,
   SetupInfo,
+  Workflow,
+  WorkflowTrack,
 } from './types';
 
 /**
@@ -384,6 +386,10 @@ export const api = {
   gitDiff: (projectId: string, agentId: string | null, paths: string[]) => invoke<string>('git_diff', { projectId, agentId, paths }),
   gitProjectDiff: (projectId: string) => invoke<OwnedDiff[]>('git_project_diff', { projectId }),
   /** `repo`: one of the project's repositories when it has several (ESC-169); the first one when null. */
+  /** The project's workflows as the user corrected them (ESC-195), those dismissed left out: what the Workflow tab shows. */
+  effectiveWorkflows: (id: string) => invoke<Workflow[]>('effective_workflows', { id }),
+  /** Where each agent of the project is in its workflows, and where it has been (ESC-193). */
+  getWorkflowTracks: (id: string) => invoke<WorkflowTrack[]>('get_workflow_tracks', { id }),
   gitLog: (projectId: string, agentId: string | null, repo: string | null = null) =>
     invoke<GitLog>('git_log', { projectId, agentId, ...inRepo(repo) }),
   gitShow: (projectId: string, hash: string, repo: string | null = null) =>

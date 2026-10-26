@@ -298,8 +298,11 @@ test('git beside the conversation looks as the preview draws it, in both themes,
           await preview.screenshot({ path: path.join(SHOTS, `${n}.preview.png`) });
         }
 
-        // « PR et CI » (`#hosts`): its place, not its detail.
-        await side.getByRole('tab', { name: /^PR et CI/ }).click();
+        // « PR et CI » (`#hosts`): its place, not its detail; under 420 px, gone from the strip for the × (choice 189).
+        const hosts = side.getByRole('tab', { name: /^PR et CI/ });
+        expect.soft(await hosts.isVisible(), `« PR et CI » in the strip, ${where}`).toBe(size.width > 1100);
+        if (!(await hosts.isVisible())) continue;
+        await hosts.click();
         await page.mouse.move(size.width / 2, 20);
         await previewAt(preview, 'hosts', t);
         const later = side.locator('.later');
@@ -362,6 +365,8 @@ test.describe('in English', () => {
     for (const size of SIZES) {
       await page.setViewportSize(size);
       for (const tab of [/^Uncommitted/, /^History/, /^PR and CI/]) {
+        // Under 420 px, « PR and CI » leaves the strip for the × (choice 189).
+        if (!(await side.getByRole('tab', { name: tab }).isVisible())) continue;
         await side.getByRole('tab', { name: tab }).click();
         await page.mouse.move(size.width / 2, 20);
         // What is cut short, or overflows its box: none of it, but the names of the user's files, branches, commits and
@@ -379,7 +384,8 @@ test.describe('in English', () => {
         );
         expect(cut, `${size.width}×${size.height} ${tab}`).toEqual([]);
         // The tabs hold on one line.
-        for (const b of await side.locator('.utabs [role="tab"]').all()) expect((await b.boundingBox())!.height).toBeLessThanOrEqual(41);
+        for (const b of await side.locator('.utabs [role="tab"]:visible').all())
+          expect((await b.boundingBox())!.height).toBeLessThanOrEqual(41);
         if (SHOTS) {
           fs.mkdirSync(SHOTS, { recursive: true });
           await page.screenshot({ path: path.join(SHOTS, `git-${tab.source.replace(/\W/g, '')}${size.name}-en.app.png`) });

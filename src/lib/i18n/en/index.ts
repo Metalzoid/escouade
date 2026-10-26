@@ -28,6 +28,7 @@ import stats from './stats';
 import subagents from './subagents';
 import wizard from './wizard';
 import voice from './voice';
+import workflow from './workflow';
 import workflowSettings from './workflowSettings';
 
 export const en = defineCatalog({
@@ -59,4 +60,5 @@ export const en = defineCatalog({
   voice,
   workflowSettings,
   share,
+  workflow,
 });

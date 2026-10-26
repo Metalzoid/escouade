@@ -880,6 +880,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         if let Some(s) = self.wf_tracks.lock().scans.get(project_id) {
             return s.clone();
         }
+        self.read_if_never_read(project_id);
         let scan =
             std::sync::Arc::new(self.corrected_scan(project_id, &self.stored_scan(project_id)));
         self.wf_tracks
@@ -888,6 +889,40 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             .entry(project_id.to_string())
             .or_insert(scan)
             .clone()
+    }
+
+    /// A project never read (added while the app runs, ESC-194): read now and kept as « Relire »
+    /// would keep it (its reading, the files of its workflows), so that the first door of its
+    /// agents is not lost.
+    fn read_if_never_read(&self, project_id: &str) {
+        let file = self.data.workflows_file(project_id);
+        if file.exists() {
+            return;
+        }
+        let Ok(p) = self.project(project_id) else {
+            return;
+        };
+        let scan = crate::workflow::read(
+            std::path::Path::new(&p.path),
+            &p.repos,
+            &crate::workflow::Roots::of_user(),
+            &[],
+        );
+        if let Some(dir) = file.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        if let Ok(json) = serde_json::to_vec_pretty(&scan) {
+            let _ = crate::paths::write_atomic(&file, &json);
+        }
+        // Into the files of the workflows (ESC-195), as `refresh_workflows` puts them: what is followed.
+        let places = crate::workflowfiles::places(&p, &self.data);
+        let folder = crate::workflowfiles::load_all(&places);
+        crate::workflowfiles::merge_reading_all(
+            &places,
+            &folder,
+            &scan.workflows,
+            std::path::Path::new(&p.path).is_dir(),
+        );
     }
 
     /// The tracks of the project's agents, read from their file the first time.

@@ -27,6 +27,7 @@ import stats from './stats';
 import subagents from './subagents';
 import wizard from './wizard';
 import voice from './voice';
+import workflow from './workflow';
 import workflowSettings from './workflowSettings';
 
 export const fr = {
@@ -58,6 +59,7 @@ export const fr = {
   voice,
   workflowSettings,
   share,
+  workflow,
 } as const;
 
 export type Catalog = typeof fr;

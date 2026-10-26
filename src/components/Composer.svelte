@@ -218,6 +218,23 @@
     queueMicrotask(autosize);
   });
 
+  // A door of the Workflow tab (ESC-194): its command at the head of the message, in place of a command already there;
+  // nothing is sent.
+  $effect(() => {
+    const put = app.composerPut;
+    if (!put || put.agentId !== agentId) return;
+    untrack(() => {
+      app.composerPut = null;
+      const rest = text.replace(/^\/\S*\s*/, '');
+      text = rest ? `${put.text} ${rest}` : `${put.text} `;
+      queueMicrotask(() => {
+        autosize();
+        ta?.focus();
+        ta?.setSelectionRange(text.length, text.length);
+      });
+    });
+  });
+
   $effect(() => {
     void app.focusComposer;
     queueMicrotask(() => ta?.focus());

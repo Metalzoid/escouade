@@ -804,6 +804,29 @@ async fn the_fake_claude_plays_the_facts_of_a_workflow_through_the_whole_path() 
     assert!(t.subagents.is_empty());
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn a_project_never_read_is_read_at_the_first_fact_of_its_agents() {
+    // A project added while the app runs: nothing has read its workflows yet when its agent types
+    // its first door (ESC-194). That door is not lost.
+    let h = crate::core_tests::harness("workflow-track-unread");
+    let (p, dir) = h.project(false).await;
+    let cmds = dir.join(".claude/commands");
+    std::fs::create_dir_all(&cmds).unwrap();
+    std::fs::write(cmds.join("one.md"), "Do one, then /two.\n").unwrap();
+    std::fs::write(cmds.join("two.md"), "Do two. Back to /one when red.\n").unwrap();
+    assert!(!h.core.data.workflows_file(&p.id).exists());
+    let agent = crate::core_tests::agent_on(&h, &p, "principal").await;
+
+    h.core
+        .track_workflow(&agent.id, &p.id, &ops_user("/one"), 0.0, None);
+
+    let tracks = h.core.workflow_tracks(&p.id);
+    assert_eq!(tracks.len(), 1);
+    assert_eq!(tracks[0].track.step.as_deref(), Some("one"));
+    // The reading is kept, as « Relire » would.
+    assert!(h.core.data.workflows_file(&p.id).is_file());
+}
+
 // ---------- the workflows as the user corrected them (ESC-195) ----------
 
 use crate::workflowfix::{corrected, Fix, FixStep, Signal};

@@ -23,6 +23,7 @@ import type { SettingsTab } from './settings.svelte';
 import type { FormFile } from './ticket-files';
 import type { FormImage } from './ticket-images';
 import { applyTheme } from './theme';
+import { workflows } from './workflows.svelte';
 import type {
   AccountView,
   Agent,
@@ -285,8 +286,10 @@ class AppState {
   version = $state('');
   filesOpen = $state(false);
   filesScope = $state<'agent' | 'project'>('agent');
-  /** Tab of the side panel: uncommitted files or the repository history. */
-  panelTab = $state<'files' | 'history' | 'hosts'>('files');
+  /** Tab of the side panel: uncommitted files, the repository history or the project's workflow (ESC-194). */
+  panelTab = $state<'files' | 'history' | 'workflow' | 'hosts'>('files');
+  /** A text to put in an agent's composer without sending it (a door of the Workflow tab): taken by its composer, which then clears it. */
+  composerPut = $state<{ agentId: string; text: string } | null>(null);
   /** Side-by-side diffs (else unified), shared by the diff dialog and the split layout. */
   diffSplit = $state(readPref('diffSplit') === '1');
   showArchived = $state(false);
@@ -605,6 +608,7 @@ class AppState {
       }
       case 'agentRemoved':
         this.runHooks(this.removalHooks, e.id);
+        workflows.drop(e.projectId, e.id);
         delete this.agents[e.id];
         delete this.attention[e.id];
         this.dropSetupOutput(e.id);
@@ -617,6 +621,9 @@ class AppState {
         this.noteTicketDone(prev, e.ticket);
         break;
       }
+      case 'workflowTrack':
+        workflows.take(e.track);
+        break;
       case 'ticketRemoved':
         delete this.tickets[e.id];
         break;

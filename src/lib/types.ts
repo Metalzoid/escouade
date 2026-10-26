@@ -776,72 +776,6 @@ export interface WorkflowFix {
   removed?: string[];
 }
 
-/** A step of a workflow as the reading found it (`workflow::Step`). */
-export interface WorkflowStep {
-  name: string;
-  command: string;
-  order: number;
-  description: string;
-  path: string;
-  agents: { name: string; path: string | null; description: string }[];
-  reads: string[];
-  writes: string[];
-  /** « deviné »: dotted until « Garder » or « Retirer ». */
-  guessed?: boolean;
-}
-
-export interface WorkflowTransition {
-  from: string;
-  to: string;
-  back: boolean;
-  condition: string | null;
-  max: number | null;
-}
-
-/** A workflow of the project, as read (`workflow::Workflow`, ESC-192). */
-export interface Workflow {
-  id: string;
-  name: string;
-  kind: 'cycle' | 'prompt';
-  harness: EngineId | null;
-  /** The repository of a project of several; empty for the root. */
-  repo: string;
-  doors: {
-    name: string;
-    command: string;
-    kind: 'command' | 'skill' | 'agent';
-    scope: 'project' | 'user';
-    path: string;
-    role: 'entry' | 'step' | 'other';
-  }[];
-  steps: WorkflowStep[];
-  transitions: WorkflowTransition[];
-  stateFiles: { path: string; exists: boolean }[];
-  exit: string | null;
-  promptLoop: unknown;
-}
-
-/** What the reading of a project's workflows found (`workflow::Scan`). */
-export interface WorkflowScan {
-  /** When, in milliseconds. */
-  readAt: number;
-  workflows: Workflow[];
-  /** What is no workflow (a command alone). */
-  alone: { name: string; command: string; harness: EngineId; repo: string; path: string; description: string }[];
-  untraced: { name: string; harness: EngineId; steps: number }[];
-  /** Every file looked at: `command`, `skill`, `agent`, `include`, `state`, `prompt`, `instruction`. */
-  sources: { path: string; kind: string; modified: number; len: number }[];
-  searched: string[];
-  /** Where the sources' paths start: the project's folder, Claude Code's folder, the home folder (absent before ESC-195). */
-  root?: string;
-  claude?: string;
-  home?: string;
-  /** The files of the workflows (ESC-195): one per workflow; `local` when this machine reads it too; `updated`, what the last reading changed of it. */
-  files?: { id: string; path: string; local: boolean; inRepo: boolean; updated: string | null }[];
-  /** The files that could not be read, with why. */
-  unreadable?: { path: string; why: string }[];
-}
-
 /** Something of a `.escouade.yml` that was left out, with its line. */
 export interface SharedWarning {
   line: number | null;
@@ -2067,6 +2001,102 @@ export interface ConvSearchResult {
   capped: boolean;
   /** Stopped after 5 s, before the end of the conversations. */
   timedOut: boolean;
+}
+
+/** A door of a workflow (ESC-192): a command, a skill or a prompt one types; `other`: of the family, no step of it (the « +38 »). */
+export interface WorkflowDoor {
+  name: string;
+  /** As typed: `/gsd:plan-phase`. */
+  command: string;
+  kind: 'command' | 'skill' | 'agent';
+  scope: 'project' | 'user';
+  path: string;
+  description: string;
+  role: 'entry' | 'step' | 'other';
+  /** For an entry that runs several steps: which. */
+  enters: string[];
+}
+
+/** A step of a workflow: its door, its subagents, the files it reads and writes. */
+export interface WorkflowStep {
+  name: string;
+  command: string;
+  order: number;
+  description: string;
+  path: string;
+  agents: { name: string; path: string | null; description: string }[];
+  reads: string[];
+  writes: string[];
+  /** « deviné »: dotted until « Garder » or « Retirer » (Réglages › Projets › Workflow). */
+  guessed?: boolean;
+  /** What else signals it once corrected (ESC-195): the steps merged in, its name as read when renamed. */
+  also?: string[];
+  /** Named by the user (the window's own mark, ESC-194): its name is shown as is. */
+  named?: boolean;
+}
+
+export interface WorkflowTransition {
+  from: string;
+  to: string;
+  /** A way back to a step already passed (or to the same one, again). */
+  back: boolean;
+  condition: string | null;
+  max: number | null;
+}
+
+export interface WorkflowProgress {
+  done: number;
+  total: number;
+}
+
+export interface WorkflowStateFile {
+  path: string;
+  exists: boolean;
+  writtenBy: string[];
+  readBy: string[];
+  says: { phase: WorkflowProgress | null; checked: WorkflowProgress | null; status: string | null } | null;
+}
+
+/** A workflow of a project, as the rules read it (ESC-192). */
+export interface Workflow {
+  id: string;
+  name: string;
+  kind: 'cycle' | 'prompt';
+  harness: EngineId | null;
+  /** The repository of a project of several; empty for the root. */
+  repo: string;
+  doors: WorkflowDoor[];
+  steps: WorkflowStep[];
+  transitions: WorkflowTransition[];
+  stateFiles: WorkflowStateFile[];
+  /** The line that says when it is over. */
+  exit: string | null;
+  promptLoop: {
+    via: string;
+    prompt: string;
+    list: WorkflowStateFile | null;
+    steps: { n: number; text: string }[];
+    returns: WorkflowTransition[];
+    maxTurns: number | null;
+  } | null;
+}
+
+/** The reading of a project's workflows: what was found, and where it was looked for. */
+export interface WorkflowScan {
+  readAt: number;
+  workflows: Workflow[];
+  alone: { name: string; command: string; harness: EngineId; repo: string; path: string; description: string }[];
+  untraced: { name: string; harness: EngineId; steps: number }[];
+  sources: { path: string; kind: string; modified: number; len: number }[];
+  searched: string[];
+  /** Where the sources' paths start: the project's folder, Claude Code's folder, the home folder (absent before ESC-195). */
+  root?: string;
+  claude?: string;
+  home?: string;
+  /** The files of the workflows (ESC-195): one per workflow; `local` when this machine reads it too; `updated`, what the last reading changed of it. */
+  files?: { id: string; path: string; local: boolean; inRepo: boolean; updated: string | null }[];
+  /** The files that could not be read, with why. */
+  unreadable?: { path: string; why: string }[];
 }
 
 /** How an agent's stay in a step, or outside the workflow (`step` null), ended. */

@@ -12,6 +12,7 @@ import { conversation } from '../lib/conversation.svelte';
 import { clearDrafts } from '../lib/question-answers.svelte';
 import { trees } from '../lib/editor/trees.svelte';
 import { app } from '../lib/state.svelte';
+import { workflows } from '../lib/workflows.svelte';
 import type {
   AccountUsage,
   Agent,
@@ -394,6 +395,8 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.bgOpen = {};
   app.filesScope = 'agent';
   app.panelTab = 'files';
+  app.composerPut = null;
+  workflows.reset();
   app.diffSplit = false;
   app.modal = null;
   app.toasts = [];

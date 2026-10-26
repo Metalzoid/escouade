@@ -34,6 +34,20 @@ function setup(over: Parameters<typeof agent>[0] = {}, items: unknown[] = []) {
 describe('Composer', () => {
   beforeEach(() => resetApp());
 
+  it('takes a door of the Workflow tab at the head of its message, in place of a command there, without sending it (ESC-194)', async () => {
+    const { a, backend, textarea } = setup();
+    app.composerPut = { agentId: 'other', text: '/gsd:next' };
+    await Promise.resolve();
+    expect(textarea.value).toBe('');
+    app.composerPut = { agentId: a.id, text: '/gsd:next' };
+    await waitFor(() => expect(textarea.value).toBe('/gsd:next '));
+    expect(app.composerPut).toBeNull();
+    await userEvent.type(textarea, 'phase 3');
+    app.composerPut = { agentId: a.id, text: '/gsd:verify-work' };
+    await waitFor(() => expect(textarea.value).toBe('/gsd:verify-work phase 3'));
+    expect(backend.called('send_message')).toEqual([]);
+  });
+
   it('offers the xhigh effort level in the effort menu and applies it to the agent', async () => {
     const { a, backend } = setup({ model: 'opus', effort: 'high' });
     await userEvent.click(screen.getByRole('button', { name: 'Effort : Élevé' }));
