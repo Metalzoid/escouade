@@ -4,6 +4,7 @@
   import { rankFiles } from '../../lib/editor/quick-open';
   import { trapFocus } from '../../lib/focus';
   import { gitSync, repoSyncInfo, type SyncOp } from '../../lib/git-sync.svelte';
+  import { pointerMoves } from '../../lib/hover';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { menu, type MenuItem } from '../../lib/menu.svelte';
@@ -267,15 +268,29 @@
     return b.upstream ? t('branches.picker.tracks', { upstream: b.upstream, ahead: b.ahead, behind: b.behind }) : '';
   });
 
-  // The row under the cursor stays in view as the arrows move through a long list.
+  /** Whether the cursor moved last by the keyboard (the arrows, a search): not by the mouse. */
+  let byKeys = true;
+  const moved = pointerMoves();
+
+  // The row under the cursor stays in view as the arrows move through a long list; never under the mouse, which would
+  // scroll a row half shown, and blink as the next one came under the pointer (ESC-188).
   $effect(() => {
     void rows;
-    list?.querySelector(`#${optionId(cursor)}`)?.scrollIntoView?.({ block: 'nearest' });
+    const at = cursor;
+    if (byKeys) list?.querySelector(`#${optionId(at)}`)?.scrollIntoView?.({ block: 'nearest' });
   });
+
+  /** The row the pointer moves onto becomes the cursor's. */
+  function hover(e: MouseEvent, to: string) {
+    if (!moved(e)) return;
+    byKeys = false;
+    active = to;
+  }
 
   function move(by: number) {
     const n = count;
     if (!n) return;
+    byKeys = true;
     const next = (cursor + by + n) % n;
     active = next < rows.length ? rows[next].b.name : next === rows.length ? CREATE : CREATE_FROM;
   }
@@ -431,7 +446,10 @@
       aria-controls="branch-list"
       aria-autocomplete="list"
       aria-activedescendant={count ? optionId(cursor) : undefined}
-      oninput={() => (active = null)}
+      oninput={() => {
+        byKeys = true;
+        active = null;
+      }}
       onkeydown={onKeydown}
     />
   </div>
@@ -466,7 +484,7 @@
               aria-describedby={r.index === cursor ? 'branch-description' : undefined}
               use:tip={r.why ?? undefined}
               onclick={() => pick(r)}
-              onmousemove={() => (active = b.name)}
+              onmousemove={(e) => hover(e, b.name)}
               oncontextmenu={(e) => onContextMenu(e, b)}
             >
               <span class="chk" aria-hidden="true"
@@ -506,7 +524,7 @@
           aria-describedby={onCreate ? 'branch-description' : undefined}
           use:tip={problem ?? undefined}
           onclick={() => create()}
-          onmousemove={() => (active = CREATE)}
+          onmousemove={(e) => hover(e, CREATE)}
         >
           <span class="chk mk" aria-hidden="true"><Icon name="plus" size={14} /></span>
           <span class="label">{t('branches.agent.create', { branch: wanted })}</span>
@@ -525,7 +543,7 @@
             aria-disabled={problem ? 'true' : undefined}
             aria-describedby={onCreateFrom ? 'branch-description' : undefined}
             onclick={() => create(true)}
-            onmousemove={() => (active = CREATE_FROM)}
+            onmousemove={(e) => hover(e, CREATE_FROM)}
           >
             <span class="chk mk" aria-hidden="true"><Icon name="branch" size={14} /></span>
             <span class="label">{t('branches.agent.createFromOther', { branch: wanted })}</span>
@@ -546,7 +564,7 @@
     {#if switching}
       <p role="status">{t('branches.picker.switching')}</p>
     {:else}
-      <p id="branch-description">{description}</p>
+      <p id="branch-description" use:tip={{ text: description, cut: true }}>{description}</p>
     {/if}
   </div>
   {#if !picking}
@@ -681,8 +699,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* Cut short like the name: a long one (« suivie par … ») would scroll the list across. */
   .tag {
-    flex: none;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     padding: 0 6px;
     border-radius: 5px;
     box-shadow: inset 0 0 0 1px var(--line-2);
@@ -713,17 +735,24 @@
   .none.error {
     color: var(--del);
   }
+  /* Two lines, whatever the row says: a line that grew or went would move the list under the pointer (ESC-188). */
   .note {
     flex: none;
-    min-height: 30px;
     padding: 7px 14px;
     border-top: 1px solid var(--line);
     font-size: 12px;
+    line-height: 16px;
     color: var(--muted);
   }
   .note p {
+    display: -webkit-box;
+    height: 32px;
     margin: 0;
+    overflow: hidden;
     overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
   .foot {
     flex: none;

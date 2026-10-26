@@ -4,6 +4,7 @@
   import { editorJump, parseQuickQuery, QUICK_OPEN_MAX, rankFiles, recentFiles } from '../lib/editor/quick-open';
   import { trees } from '../lib/editor/trees.svelte';
   import { trapFocus } from '../lib/focus';
+  import { pointerMoves } from '../lib/hover';
   import { basename, fInt } from '../lib/format';
   import { t } from '../lib/i18n';
   import { keyLabel } from '../lib/platform';
@@ -64,11 +65,23 @@
     trees.load(projectId, source).catch((e) => (failure = String(e)));
   });
 
-  // The chosen file stays in view as the arrows move through a long list.
+  /** Whether the cursor moved last by the keyboard (the arrows, a search): not by the mouse. */
+  let byKeys = true;
+  const moved = pointerMoves();
+
+  // The chosen file stays in view as the arrows move through a long list; never under the mouse (ESC-188).
   $effect(() => {
     void shown;
-    list?.querySelector(`#${optionId(cursor)}`)?.scrollIntoView?.({ block: 'nearest' });
+    const at = cursor;
+    if (byKeys) list?.querySelector(`#${optionId(at)}`)?.scrollIntoView?.({ block: 'nearest' });
   });
+
+  /** The file the pointer moves onto becomes the cursor's. */
+  function hover(e: MouseEvent, rank: number) {
+    if (!moved(e)) return;
+    byKeys = false;
+    active = rank;
+  }
 
   const optionId = (rank: number) => `quick-open-${rank}`;
   const folder = (path: string) => path.slice(0, Math.max(0, path.lastIndexOf('/')));
@@ -79,7 +92,9 @@
 
   function move(by: number) {
     const n = shown.length;
-    if (n) active = (cursor + by + n) % n;
+    if (!n) return;
+    byKeys = true;
+    active = (cursor + by + n) % n;
   }
 
   function onKeydown(e: KeyboardEvent) {
@@ -138,7 +153,10 @@
         aria-controls="quick-open-files"
         aria-autocomplete="list"
         aria-activedescendant={shown.length ? optionId(cursor) : undefined}
-        oninput={() => (active = 0)}
+        oninput={() => {
+          byKeys = true;
+          active = 0;
+        }}
         onkeydown={onKeydown}
       />
       <span class="where" use:tip={{ text: place, cut: true }}>{place}</span>
@@ -155,7 +173,7 @@
           tabindex="-1"
           aria-selected={rank === cursor}
           onclick={() => open(path)}
-          onmousemove={() => (active = rank)}
+          onmousemove={(e) => hover(e, rank)}
         >
           <FileIcon />
           <span class="name">{basename(path)}</span>

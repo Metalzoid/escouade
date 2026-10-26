@@ -1,7 +1,7 @@
-import { render, screen, waitFor, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { conversationOf } from '../lib/conversations.svelte';
 import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
@@ -135,6 +135,24 @@ describe('ConvSearch', () => {
     expect(app.agent?.id).toBe('a1');
     // Its conversation is asked to show the message, by its id.
     expect(conversationOf('a1').jump).toBe('m1:0');
+  });
+
+  it('scrolls to the result the arrows reach, never to the one the mouse is on (ESC-188)', async () => {
+    const { field } = setup();
+    await userEvent.type(field, 'pagination');
+    const options = await screen.findAllByRole('option');
+    const selected = () => options.findIndex((o) => o.getAttribute('aria-selected') === 'true');
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView');
+    await fireEvent.mouseMove(options[2], { clientX: 40, clientY: 300 });
+    expect(selected()).toBe(2);
+    await fireEvent.mouseMove(options[1], { clientX: 40, clientY: 300 });
+    expect(selected()).toBe(2);
+    expect(scrolled).not.toHaveBeenCalled();
+    await userEvent.keyboard('{ArrowUp}');
+    expect(selected()).toBe(1);
+    expect(scrolled).toHaveBeenCalledOnce();
+    expect(scrolled.mock.contexts[0]).toBe(options[1]);
+    scrolled.mockRestore();
   });
 
   it('opens an archived agent, to read, in its project', async () => {

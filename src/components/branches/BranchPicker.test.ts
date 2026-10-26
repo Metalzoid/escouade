@@ -120,6 +120,29 @@ describe('BranchPicker', () => {
     expect(cursor()).toBe(4);
   });
 
+  it('scrolls to the row the arrows reach, never to the one the mouse is on, and takes no move of the pointer that stays (ESC-188)', async () => {
+    setup();
+    await loaded();
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView');
+    // A row half shown under the pointer: it is the cursor's, and the list does not move.
+    await fireEvent.mouseMove(option('origin/hotfix'), { clientX: 40, clientY: 300 });
+    expect(cursor()).toBe(4);
+    expect(scrolled).not.toHaveBeenCalled();
+    // What Chromium sends when the list moves under a pointer that stays: the row that came under it is not taken.
+    await fireEvent.mouseMove(option('origin/feat/login'), { clientX: 40, clientY: 300 });
+    expect(cursor()).toBe(4);
+    // The arrows bring the row they reach into view.
+    await userEvent.keyboard('{ArrowDown}');
+    expect(cursor()).toBe(0);
+    expect(scrolled).toHaveBeenCalledOnce();
+    expect(scrolled.mock.contexts[0]).toBe(screen.getAllByRole('option')[0]);
+    // A move of the pointer, then, is the mouse's again.
+    await fireEvent.mouseMove(option('feat/login'), { clientX: 40, clientY: 120 });
+    expect(cursor()).toBe(1);
+    expect(scrolled).toHaveBeenCalledOnce();
+    scrolled.mockRestore();
+  });
+
   it('closes on Escape, and on a click away from it', async () => {
     const { onclose } = setup();
     await loaded();

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { NavTarget } from '../../lib/editor/goto';
+  import { pointerMoves } from '../../lib/hover';
   import { t } from '../../lib/i18n';
 
   /** More places than that are not listed. */
@@ -49,16 +50,29 @@
     };
   });
 
+  /** Whether the cursor moved last by the keyboard: not by the mouse. */
+  let byKeys = true;
+  const moved = pointerMoves();
+
+  // The chosen place stays in view as the arrows move; never under the mouse (ESC-188).
   $effect(() => {
     void sel;
-    list?.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block: 'nearest' });
+    if (byKeys) list?.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block: 'nearest' });
   });
+
+  /** The place the pointer moves onto becomes the cursor's. */
+  function hover(e: MouseEvent, i: number) {
+    if (!moved(e)) return;
+    byKeys = false;
+    sel = i;
+  }
 
   function key(e: KeyboardEvent) {
     const n = shown.length;
-    if (e.key === 'ArrowDown') sel = (sel + 1) % n;
-    else if (e.key === 'ArrowUp') sel = (sel - 1 + n) % n;
-    else if (e.key === 'Enter' && shown[sel]) onpick(shown[sel]);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      byKeys = true;
+      sel = (sel + (e.key === 'ArrowDown' ? 1 : n - 1)) % n;
+    } else if (e.key === 'Enter' && shown[sel]) onpick(shown[sel]);
     else if (e.key === 'Escape') {
       before?.focus();
       onclose();
@@ -90,7 +104,7 @@
         class:on={i === sel}
         role="option"
         aria-selected={i === sel}
-        onmouseenter={() => (sel = i)}
+        onmousemove={(e) => hover(e, i)}
         onmousedown={(e) => e.preventDefault()}
         onclick={() => onpick(target)}
       >

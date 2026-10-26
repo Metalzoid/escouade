@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { NavTarget } from '../../lib/editor/goto';
@@ -48,6 +48,22 @@ describe('TargetPicker', () => {
     expect(screen.getAllByRole('option')[2]).toHaveAttribute('aria-selected', 'true');
     await userEvent.keyboard('{ArrowUp}{Enter}');
     expect(onpick).toHaveBeenCalledExactlyOnceWith(targets[1]);
+  });
+
+  it('scrolls to the place the arrows reach, never to the one the mouse is on (ESC-188)', async () => {
+    open();
+    const options = screen.getAllByRole('option');
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView');
+    await fireEvent.mouseMove(options[2], { clientX: 40, clientY: 300 });
+    expect(options[2]).toHaveAttribute('aria-selected', 'true');
+    await fireEvent.mouseMove(options[1], { clientX: 40, clientY: 300 });
+    expect(options[2]).toHaveAttribute('aria-selected', 'true');
+    expect(scrolled).not.toHaveBeenCalled();
+    await userEvent.keyboard('{ArrowUp}');
+    expect(options[1]).toHaveAttribute('aria-selected', 'true');
+    expect(scrolled).toHaveBeenCalledOnce();
+    expect(scrolled.mock.contexts[0]).toBe(options[1]);
+    scrolled.mockRestore();
   });
 
   it('closes with Escape, the focus back where it was, and when clicked away', async () => {

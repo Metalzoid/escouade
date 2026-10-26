@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { recentFiles, setEditorJump } from '../lib/editor/quick-open';
@@ -120,6 +120,23 @@ describe('QuickOpen', () => {
     await userEvent.keyboard('{ArrowDown}{ArrowDown}');
     expect(selected()).toBe(1);
     expect(field).toHaveAttribute('aria-activedescendant', screen.getAllByRole('option')[1].id);
+  });
+
+  it('scrolls to the file the arrows reach, never to the one the mouse is on (ESC-188)', async () => {
+    setup();
+    await loaded();
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView');
+    const options = screen.getAllByRole('option');
+    await fireEvent.mouseMove(options[4], { clientX: 40, clientY: 300 });
+    expect(selected()).toBe(4);
+    await fireEvent.mouseMove(options[3], { clientX: 40, clientY: 300 });
+    expect(selected()).toBe(4);
+    expect(scrolled).not.toHaveBeenCalled();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(selected()).toBe(5);
+    expect(scrolled).toHaveBeenCalledOnce();
+    expect(scrolled.mock.contexts[0]).toBe(options[5]);
+    scrolled.mockRestore();
   });
 
   it('opens the chosen file with Enter, at its top, and closes', async () => {

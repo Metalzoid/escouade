@@ -9,6 +9,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### Fixes
 
 - A very long description no longer hides the fields of a ticket’s form: the window scrolls down to the criteria, the account, the model and the other fields, and its buttons always stay in view.
+- The branch picker no longer flickers on hover: its list no longer scrolls under the mouse and the branch’s description keeps its height, as “Open a file”, the search through conversations and the editor’s definitions no longer scroll on hover.
 
 ## [2.0.1] — 2026-10-25
 

@@ -2,6 +2,7 @@
   import Icon from './Icon.svelte';
   import { conversationOf } from '../lib/conversations.svelte';
   import { trapFocus } from '../lib/focus';
+  import { pointerMoves } from '../lib/hover';
   import { fAgo, fInt } from '../lib/format';
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
@@ -27,6 +28,9 @@
   let failure = $state<string | null>(null);
   /** The result Enter opens, by its rank among all of them. */
   let active = $state(0);
+  /** Whether the cursor moved last by the keyboard (the arrows, new results): not by the mouse. */
+  let byKeys = true;
+  const moved = pointerMoves();
   /** Only the last search's answer counts. */
   let asked = 0;
 
@@ -84,6 +88,7 @@
           result = r;
           failure = null;
           loading = false;
+          byKeys = true;
           active = 0;
         })
         .catch((e) => {
@@ -96,11 +101,19 @@
     return () => clearTimeout(timer);
   });
 
-  // The chosen result stays in view as the arrows move through a long list.
+  // The chosen result stays in view as the arrows move through a long list; never under the mouse (ESC-188).
   $effect(() => {
     void hits;
-    list?.querySelector(`#${optionId(active)}`)?.scrollIntoView({ block: 'nearest' });
+    const at = active;
+    if (byKeys) list?.querySelector(`#${optionId(at)}`)?.scrollIntoView({ block: 'nearest' });
   });
+
+  /** The result the pointer moves onto becomes the cursor's. */
+  function hover(e: MouseEvent, rank: number) {
+    if (!moved(e)) return;
+    byKeys = false;
+    active = rank;
+  }
 
   function optionId(rank: number) {
     return `conv-hit-${rank}`;
@@ -112,7 +125,9 @@
 
   function move(by: number) {
     const n = hits.length;
-    if (n) active = (active + by + n) % n;
+    if (!n) return;
+    byKeys = true;
+    active = (active + by + n) % n;
   }
 
   function onKeydown(e: KeyboardEvent) {
@@ -207,7 +222,7 @@
               tabindex="-1"
               aria-selected={rank === active}
               onclick={() => open(hit)}
-              onmousemove={() => (active = rank)}
+              onmousemove={(e) => hover(e, rank)}
             >
               <span class="snip"
                 >{hit.snippet.slice(0, hit.mark[0])}<mark>{hit.snippet.slice(hit.mark[0], hit.mark[1])}</mark>{hit.snippet.slice(
