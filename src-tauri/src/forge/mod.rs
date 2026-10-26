@@ -123,6 +123,15 @@ pub struct PullRequest {
     /// Of an agent of several repositories (ESC-169): the repository it was opened in.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub repo: String,
+    /// The repository on the host its branch is in (`ada/demo`), when the host tells it: a
+    /// fork's, for one opened from a fork.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub head_repo: String,
+    /// The repository on the host it is in (`acme/demo`), when it was read elsewhere than on the
+    /// remote of the project's target: on the remote the agent's branch tracks, or on the
+    /// repository that one was forked from. Empty: the target's.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub host_repo: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -268,6 +277,11 @@ pub trait Forge: Send + Sync {
         _branch: &'a str,
     ) -> BoxFuture<'a, Result<Vec<PullRequest>>> {
         unsupported("pull_requests_of_branch")
+    }
+
+    /// The repository `repo` was forked from; none when it is no fork, or the host does not say.
+    fn parent<'a>(&'a self, _repo: &'a RepoRef) -> BoxFuture<'a, Result<Option<RepoRef>>> {
+        Box::pin(async { Ok(None) })
     }
 
     /// Several pull requests of a repository, in as few calls as the host allows.

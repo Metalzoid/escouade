@@ -25,10 +25,10 @@ export const ownBranch = (a: Agent) => a.worktree?.branch ?? a.foundWorktree?.br
 export const hasOwnBranch = (a: Agent) => !a.ticketId && !a.archived && !!ownBranch(a);
 
 /**
- * Whether its pull requests are to be read: such an agent, or one without a worktree of its own, which may have gone into
- * one by itself since it was last read (ESC-161: the backend finds it from its session).
+ * Whether its pull requests are to be read: any agent not archived. The backend reads those of the branch it is really on
+ * (its worktree's, a ticket's agent's too, the one it went into by itself, else the project's folder's but the trunk).
  */
-export const mayHavePrs = (a: Agent) => !a.ticketId && !a.archived;
+export const mayHavePrs = (a: Agent) => !a.archived;
 
 /**
  * Such an agent whose project's code host opens pull requests (`prWord`, set by the backend once the project has a remote
@@ -36,6 +36,9 @@ export const mayHavePrs = (a: Agent) => !a.ticketId && !a.archived;
  * client yet, or without an account.
  */
 export const canOpenPr = (a: Agent) => hasOwnBranch(a) && !!a.prWord;
+
+/** What tells it from the others in a list: read from several repositories, two may bear the same number. */
+export const prKey = (p: PullRequest) => `${p.hostRepo ?? ''}|${p.repo ?? ''}#${p.number}`;
 
 /** Its pull request still open, if any: « Voir la PR #n » rather than opening another. */
 export const openPrOf = (a: Agent) => a.prs.find((p) => p.state === 'open') ?? null;
@@ -111,7 +114,7 @@ export function prMenuItem(a: Agent, before?: () => unknown): MenuItem | null {
 
 /** « L'agent corrige » / « L'agent corrige les retours »: on the user's click, the host's say goes to the agent. */
 export async function fixPr(a: Agent, p: PullRequest, fix: PrFix) {
-  const sent = await app.run(api.agentPrFix(a.id, p.number, fix));
+  const sent = await app.run(api.agentPrFix(a.id, p.number, fix, p.hostRepo));
   if (sent !== undefined) app.toast(t('prs.fixSent', { agent: a.name }), 'ok');
 }
 

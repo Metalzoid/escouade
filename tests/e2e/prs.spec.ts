@@ -110,8 +110,10 @@ test('an ordinary agent opens its pull request, and its card follows its CI and 
     },
   ]);
   expect(git(bare, 'log', '-1', '--format=%s', branch)).toBe('feat: connexion par jeton');
-  // Its number in the header and under the card; « Ouvrir une PR » gone while it is open.
-  await expect(page.getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (brouillon)' })).toHaveCount(2);
+  // Its number in the header, under the card and beside its branch in the status bar; « Ouvrir une PR » gone while it is open.
+  await expect(page.getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (brouillon)' })).toHaveCount(3);
+  await expect(page.locator('footer').getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (brouillon)' })).toBeVisible();
+  await expect(page.locator('footer .sync')).toContainText(branch);
   await expect(page.getByRole('button', { name: 'Ouvrir une PR' })).toHaveCount(0);
 
   // Its CI fails and a reviewer asks for changes: read again when the agent is shown.

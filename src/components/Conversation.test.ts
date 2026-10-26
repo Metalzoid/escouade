@@ -2383,13 +2383,14 @@ describe('Conversation header — the agent’s pull requests (ESC-64)', () => {
     expect(screen.queryByRole('button', { name: 'Ouvrir une MR' })).not.toBeInTheDocument();
   });
 
-  it('offers nothing to a ticket’s agent nor to one without a worktree, and is said in English', () => {
+  it('offers nothing to open to a ticket’s agent, whose pull request is only read, and is said in English', () => {
     const a = agent({ id: 'pr3', worktree: WT, ticketId: 't1' });
     resetApp({ projects: [project()], agents: [a] });
     const b = fakeBackend({ get_conversation: () => [] });
     const r = render(Conversation, { agent: a, project: project() });
     expect(screen.queryByRole('button', { name: 'Ouvrir une PR' })).not.toBeInTheDocument();
-    expect(b.called('agent_prs_refresh')).toHaveLength(0);
+    // Its board opened it: read for the status bar, never offered to open.
+    expect(b.called('agent_prs_refresh').map((c) => c.args)).toEqual([{ id: 'pr3', now: false }]);
     r.unmount();
     setLang('en');
     const c = agent({ id: 'pr4', worktree: WT, prWord: 'PR' });

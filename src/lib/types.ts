@@ -1509,6 +1509,19 @@ export interface UiState {
   layout?: '' | 'split';
 }
 
+/** The checkout of an agent's own folder (`GitInfo.agentGit`): the branch HEAD is really on, whatever its worktree was made on. */
+export interface AgentGit {
+  /** "(detached)" for a detached HEAD; of several repositories, theirs when they share it (empty otherwise). */
+  branch: string;
+  upstream: string | null;
+  upstreamGone: boolean;
+  ahead: number;
+  behind: number;
+  hasRemote: boolean;
+  /** Of an agent of several repositories (ESC-169), each one's: the fields above are then their sums. */
+  repos?: RepoGit[];
+}
+
 export interface GitInfo {
   isRepo: boolean;
   /** "(detached)" for a detached HEAD. */
@@ -1528,6 +1541,11 @@ export interface GitInfo {
   deleted: number;
   total: number;
   agents: Record<string, number>;
+  /**
+   * The checkout of each agent that works in a folder of its own (its worktree, or the one it went into by itself,
+   * ESC-161), as git tells it: what the status bar shows of the agent open. None for an agent in the project's folder.
+   */
+  agentGit?: Record<string, AgentGit>;
   /** Of a project of several repositories (ESC-169): each one's; the fields above are their sums, `branch` theirs when they share it (empty otherwise). */
   repos?: RepoGit[];
 }
@@ -2337,6 +2355,13 @@ export interface PullRequest {
   fork: boolean;
   /** Of an agent of several repositories (ESC-169): the repository it was opened in. */
   repo?: string;
+  /** The repository on the host its branch is in (`ada/demo`), when the host tells it: a fork's, for one opened from a fork. */
+  headRepo?: string;
+  /**
+   * The repository on the host it is in (`acme/demo`), when it was read elsewhere than on the remote of the project's
+   * target: on the remote the agent's branch tracks, or the repository that one was forked from.
+   */
+  hostRepo?: string;
 }
 
 /** « Ouvrir une PR »: what the model proposes, which the user reads and edits (`agentprs::PrProposal`). */

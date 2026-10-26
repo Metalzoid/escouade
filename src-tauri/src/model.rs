@@ -1574,6 +1574,10 @@ pub struct AgentMeta {
     pub prs: Vec<crate::forge::PullRequest>,
     /// The code host's word for them: « MR » on GitLab, « PR » elsewhere. None until read.
     pub pr_word: Option<String>,
+    /// Its worktree was switched to another branch by the user (the status bar's picker): the
+    /// agent is told with the next message it gets, then this goes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch_moved: Option<BranchMove>,
     /// Appended to Claude Code's system prompt at every start (the ticket's protocol), on one line.
     pub append_prompt: Option<String>,
     /// First of the 10 ports reserved for its test launches.
@@ -1952,8 +1956,39 @@ pub struct GitInfo {
     pub total: u32,
     /// Dirty file count attributed to each agent of the project.
     pub agents: HashMap<String, u32>,
+    /// The checkout of each agent that works in a folder of its own (its worktree, or the one it
+    /// went into by itself, ESC-161), as git tells it: what the status bar shows of the agent
+    /// open. None for an agent in the project's folder: the fields above are its.
+    pub agent_git: HashMap<String, AgentGit>,
     /// Of a project of several repositories (ESC-169), each one's: the fields above are then
     /// their sums, and `branch` theirs when they share it (empty otherwise).
+    pub repos: Vec<RepoGit>,
+}
+
+/// An agent's worktree switched from one branch to another (`AgentMeta::branch_moved`).
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchMove {
+    pub from: String,
+    pub to: String,
+}
+
+/// The checkout of an agent's own folder (`GitInfo::agent_git`): the branch HEAD is really on,
+/// whatever the agent's worktree was made on.
+#[derive(Debug, Clone, Serialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentGit {
+    /// "(detached)" for a detached HEAD. Of several repositories, theirs when they share it
+    /// (empty otherwise).
+    pub branch: String,
+    pub upstream: Option<String>,
+    pub upstream_gone: bool,
+    pub ahead: u32,
+    pub behind: u32,
+    pub has_remote: bool,
+    /// Of an agent of several repositories (ESC-169), each one's: the fields above are then
+    /// their sums.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub repos: Vec<RepoGit>,
 }
 

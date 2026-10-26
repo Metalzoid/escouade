@@ -7,6 +7,7 @@
   import { api } from '../lib/ipc';
   import { withoutPassage } from '../lib/conversation';
   import { canSwitchView, inHarnessView, switchView } from '../lib/agent-actions';
+  import { agentGitOf } from '../lib/agent-branch';
   import {
     askOpenPr,
     canOpenPr,
@@ -15,6 +16,7 @@
     openPrOf,
     ownBranch,
     prIcon,
+    prKey,
     prTip,
     prTone,
     prWord,
@@ -150,6 +152,15 @@
     untrack(() => refreshPrs(app.agents[id]));
     const timer = setInterval(() => refreshPrs(app.agents[id]), PRS_EVERY_MS);
     return () => clearInterval(timer);
+  });
+  // The branch its folder is really on (`GitInfo.agentGit`), else the one it shows: switched from the status bar, by the
+  // agent itself, or the project's folder moved, the new one's pull requests are read at once.
+  const realBranch = $derived(agentGitOf(agent, app.git[project.id])?.branch ?? branch);
+  let readOn: string | null = null;
+  $effect(() => {
+    const now = realBranch;
+    if (readOn !== null && now !== readOn) untrack(() => refreshPrs(app.agents[agentId], true));
+    readOn = now;
   });
   const used = $derived(spent(agent));
   // How full the context is, out of the window of the conversation's model (once a turn told it).
@@ -607,7 +618,7 @@
             >· {changedRepos.join(', ')}</span
           >{/if}
         <!-- Its pull requests, each opening in the browser (ESC-64), beside its branch (choice 26). -->
-        {#each prs as p (p.number)}
+        {#each prs as p (prKey(p))}
           <button
             class="prnum {prTone(p)}"
             aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}

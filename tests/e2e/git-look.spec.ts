@@ -336,7 +336,12 @@ test('the diff window and the branch picker open still with prefers-reduced-moti
   await expect(win.locator('.file .letter')).toHaveText(['M', 'A']);
   await expect(win.getByRole('button', { name: 'Fermer' }).locator('svg[data-icon="close"]')).toBeVisible();
   await page.keyboard.press('Escape');
+  // The agent shown works in its worktree: the button opens its picker, which opens the project's folder's.
   await page.locator('footer .sync').click();
+  const own = page.getByRole('dialog', { name: /^Branche de / });
+  await expect(own).toBeVisible();
+  expect(await motion(own)).toBe('none');
+  await own.getByRole('button', { name: 'Dossier du projet…' }).click();
   const picker = page.getByRole('dialog', { name: 'Branches' });
   await expect(picker).toBeVisible();
   expect(await motion(picker)).toBe('none');

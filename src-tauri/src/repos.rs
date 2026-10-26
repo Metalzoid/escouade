@@ -433,6 +433,31 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             };
             let count = match wt {
                 Some(wt) => {
+                    // Its branch in each repository, for the status bar.
+                    let mut repos = Vec::new();
+                    for c in wt.checkouts() {
+                        if !Path::new(&c.dir).is_dir() {
+                            repos.push(RepoGit {
+                                repo: c.repo.clone(),
+                                gone: true,
+                                ..Default::default()
+                            });
+                            continue;
+                        }
+                        let st = crate::git::status(&c.dir).await.unwrap_or_default();
+                        repos.push(RepoGit {
+                            repo: c.repo.clone(),
+                            branch: st.branch,
+                            upstream: st.upstream,
+                            ahead: st.ahead,
+                            behind: st.behind,
+                            has_remote: info.repos.iter().any(|r| r.repo == c.repo && r.has_remote),
+                            has_commit: true,
+                            ..Default::default()
+                        });
+                    }
+                    info.agent_git
+                        .insert(id.clone(), crate::agentbranch::agent_git_of_repos(repos));
                     let changes = changes_of(&wt.checkouts(), false).await.unwrap_or_default();
                     for f in &changes {
                         let c = f.status.chars().next().unwrap_or('M');

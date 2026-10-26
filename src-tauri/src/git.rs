@@ -2696,6 +2696,24 @@ pub async fn remotes(repo: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// The default branch of each remote, as the last clone or `remote set-head` left it
+/// (`refs/remotes/<remote>/HEAD`), under its short name (`main`).
+pub async fn default_branches(repo: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for remote in remotes(repo).await {
+        let head = format!("refs/remotes/{remote}/HEAD");
+        let Ok(to) = text(repo, &["symbolic-ref", "-q", &head]).await else {
+            continue;
+        };
+        if let Some(short) = to.strip_prefix(&format!("refs/remotes/{remote}/")) {
+            if !out.iter().any(|b| b == short) {
+                out.push(short.to_string());
+            }
+        }
+    }
+    out
+}
+
 /// The remote to sync with: the upstream's, else origin, else the only one.
 pub fn sync_remote<'a>(remotes: &'a [String], upstream: Option<&str>) -> Option<&'a str> {
     let of_upstream = upstream.and_then(|u| {

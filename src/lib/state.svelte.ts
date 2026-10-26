@@ -413,6 +413,11 @@ class AppState {
     );
   });
 
+  /** The agent whose conversation is on screen: its project's view, without the board, the editor, a run or a terminal over it. */
+  agentShown = $derived(
+    this.ui.view === 'project' && !this.term && !this.runCommand && !this.editorOn && !this.boardOn ? this.agent : null,
+  );
+
   /** What else goes when the backend removes an agent: what other modules (the launches' logs) hold of it. */
   private removalHooks = new Set<(agentId: string) => void>();
   /** What goes stale when an agent's launch recipe changes: its test launches, kept by the index of their step. */
@@ -760,8 +765,7 @@ class AppState {
 
   /** True when the user can see `id`'s conversation: selected, shown, window in front. */
   private onScreen(id: string): boolean {
-    const shown = this.ui.view === 'project' && this.agent?.id === id && !this.term && !this.runCommand && !this.editorOn && !this.boardOn;
-    return shown && (typeof document === 'undefined' || document.hasFocus());
+    return this.agentShown?.id === id && (typeof document === 'undefined' || document.hasFocus());
   }
 
   /** An agent that comes to ask, finish or fail out of sight needs a look. */

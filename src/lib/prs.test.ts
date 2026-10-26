@@ -126,18 +126,20 @@ describe('the pull requests of an agent', () => {
     expect(app.toasts.at(-1)).toMatchObject({ text: 'Aucun retour à traiter sur la PR #7.', kind: 'error' });
   });
 
-  it('reads them again only for an agent that can have some', () => {
+  it('reads them again for any agent not archived, a ticket’s too', () => {
     const backend = fakeBackend();
-    refreshPrs(agent({ worktree: WT, ticketId: 't1' }));
     refreshPrs(agent({ worktree: WT, archived: true }));
     refreshPrs(null);
     expect(backend.called('agent_prs_refresh')).toHaveLength(0);
     refreshPrs(agent({ worktree: WT }), true);
-    // Without a worktree of its own: it may have gone into one by itself since (ESC-161), which the backend finds.
+    // Without a worktree of its own: the project's folder's branch, or one it went into by itself (ESC-161).
     refreshPrs(agent({ id: 'a2' }));
+    // A ticket's agent: its board opened it, it is shown in the status bar.
+    refreshPrs(agent({ id: 'a3', worktree: WT, ticketId: 't1' }));
     expect(backend.called('agent_prs_refresh').map((c) => c.args)).toEqual([
       { id: 'a1', now: true },
       { id: 'a2', now: false },
+      { id: 'a3', now: false },
     ]);
   });
 

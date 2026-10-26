@@ -1,5 +1,5 @@
-// The sync of a project's checkout with its remote (pull, push, fetch), asked from the branch picker and shown by the
-// status bar's branch button while it runs.
+// The sync of a project's checkout, or of the agent open's own folder, with its remote (pull, push, fetch), asked from
+// the branch picker and shown by the status bar's branch button while it runs.
 
 import { api } from './ipc';
 import { app } from './state.svelte';
@@ -63,6 +63,15 @@ class GitSync {
     if (this.running[projectId]) return;
     this.running[projectId] = op;
     const summary = await app.run(CALLS[op](projectId, repo));
+    delete this.running[projectId];
+    if (summary) app.toast(summary, 'ok');
+  }
+
+  /** Runs `op` on the agent's own folder (its worktree), shown by its project's branch button while it runs. */
+  async runAgent(op: SyncOp, agentId: string, projectId: string) {
+    if (this.running[projectId]) return;
+    this.running[projectId] = op;
+    const summary = await app.run(api.agentGitSync(agentId, op));
     delete this.running[projectId];
     if (summary) app.toast(summary, 'ok');
   }

@@ -3,11 +3,15 @@
 //! card follows them, and « L'agent corrige » / « L'agent corrige les retours » hand it the failed
 //! checks' logs or the review's comments, on a click only. Through the code hosts' interface
 //! (`forge`), whatever the host and the harness: a host whose client does not read pull requests
-//! yet shows none, without an error.
+//! yet shows none, without an error. They are read on the branch the agent is really on, whoever
+//! opened them: its worktree's (a ticket's agent's too), the one it went into by itself, else the
+//! project's folder's; on the remote of the project's target, the one its branch tracks and the
+//! repository that one was forked from.
 
 use crate::core::Core;
 use crate::forge::{
-    CheckState, Forge, PrState, Provider, PullRequest, PullRequestDraft, Remote, ReviewState,
+    CheckState, Forge, PrState, Provider, PullRequest, PullRequestDraft, Remote, RepoRef,
+    ReviewState,
 };
 use crate::git;
 use crate::i18n::Lang;
@@ -29,6 +33,17 @@ fn read_every() -> Duration {
         .ok()
         .and_then(|v| v.parse().ok())
         .map_or(READ_EVERY, Duration::from_millis)
+}
+
+/// How long a repository whose host did not say its parent waits before it is asked again.
+const PARENT_RETRY: Duration = Duration::from_secs(600);
+
+/// What a repository's host said of the repository it was forked from (`Core::repo_parents`).
+pub(crate) enum ParentRead {
+    /// None: it is no fork.
+    Known(Option<RepoRef>),
+    /// Its host did not answer, then.
+    Failed(Instant),
 }
 
 /// How much of a failed job's log goes to the agent: its end, where the failure is told.
@@ -110,11 +125,53 @@ pub fn sort_prs(prs: &mut [PullRequest]) {
     prs.sort_by(|a, b| rank(a).cmp(&rank(b)).then(b.number.cmp(&a.number)));
 }
 
-/// The pull requests of the branch as the host listed them, a fork's left out: ordered.
-pub fn own_prs(found: Vec<PullRequest>) -> Vec<PullRequest> {
-    let mut prs: Vec<PullRequest> = found.into_iter().filter(|p| !p.fork).collect();
+/// The pull requests of the branch as the hosts listed them, ordered, once each: a fork's left
+/// out, but for the one whose branch is in `own` (`ada/demo`), the repository the agent's branch
+/// is pushed to: a pull request opened from a fork into the repository it was forked from.
+pub fn own_prs(found: Vec<PullRequest>, own: Option<&str>) -> Vec<PullRequest> {
+    let mut prs: Vec<PullRequest> = Vec::new();
+    for p in found {
+        let ours = !p.fork || own.is_some_and(|o| p.head_repo.eq_ignore_ascii_case(o));
+        if ours
+            && !prs
+                .iter()
+                .any(|q| q.number == p.number && q.host_repo == p.host_repo)
+        {
+            prs.push(p);
+        }
+    }
     sort_prs(&mut prs);
     prs
+}
+
+/// The branch is the project's trunk: the board's target, or a remote's default branch (`main`
+/// when no remote says one). Its pull requests (a `main → prod`) are none of an agent's.
+pub fn is_trunk(branch: &str, target: &str, defaults: &[String]) -> bool {
+    if branch == target.trim() {
+        return true;
+    }
+    if defaults.is_empty() {
+        return matches!(branch, "main" | "master");
+    }
+    defaults.iter().any(|d| d == branch)
+}
+
+/// Where an agent's pull requests are read: the folder it works in, and the branch checked out
+/// there.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Watched {
+    pub dir: String,
+    pub branch: String,
+}
+
+/// A repository on a code host its pull requests may be in, with an account's client there.
+struct Source {
+    remote: Remote,
+    client: Box<dyn Forge>,
+    /// The host's word: « MR » on GitLab, « PR » elsewhere.
+    word: String,
+    /// The remote of the project's target: its pull requests keep no `host_repo`.
+    target: bool,
 }
 
 /// Nothing more to ask of the host: all its pull requests are merged (a merged one never changes;
@@ -339,16 +396,6 @@ pub fn reviews_message(
     truncate(&out, FIX_MAX)
 }
 
-/// The branch the agent's pull requests are read on: its worktree's, else the one of the worktree it
-/// went into by itself (ESC-161). None in the project's folder.
-pub fn own_branch(meta: &AgentMeta) -> Option<&str> {
-    match (&meta.worktree, &meta.found_worktree) {
-        (Some(wt), _) => Some(wt.branch.as_str()),
-        (None, Some(f)) => Some(f.branch.as_str()),
-        (None, None) => None,
-    }
-}
-
 /// How much of the end of a session's transcript is read for the folder it was last in.
 const TRANSCRIPT_TAIL: u64 = 256 * 1024;
 
@@ -467,6 +514,115 @@ impl<R: Runtime> Core<R> {
             self.emit_agent(h);
             self.request_save();
         }
+    }
+
+    /// The folder and the branch whose pull requests are the agent's: its worktree's (a ticket's
+    /// agent's too), the one it went into by itself, else the project's folder's, but for the
+    /// project's trunk (`is_trunk`). None for an archived agent, one of several repositories
+    /// (`prs_refresh_multi`), a detached HEAD.
+    pub(crate) async fn watched(&self, meta: &AgentMeta) -> Option<Watched> {
+        if meta.archived {
+            return None;
+        }
+        let (dir, branch) = match (&meta.worktree, &meta.found_worktree) {
+            (Some(wt), _) if wt.is_multi() => return None,
+            (Some(wt), _) => (wt.path.clone(), wt.branch.clone()),
+            (None, Some(f)) => (f.path.clone(), f.branch.clone()),
+            (None, None) => {
+                let project = self.project(&meta.project_id).ok()?;
+                if project.is_multi() {
+                    return None;
+                }
+                let branch = git::head_branch(&project.path).await;
+                let defaults = git::default_branches(&project.path).await;
+                if is_trunk(&branch, &project.board.target, &defaults) {
+                    return None;
+                }
+                (project.path, branch)
+            }
+        };
+        (!branch.is_empty()).then_some(Watched { dir, branch })
+    }
+
+    /// The repository `remote.repo` was forked from, as its host told it once; asked again
+    /// `PARENT_RETRY` after its host did not answer.
+    async fn parent_of(&self, remote: &Remote, client: &dyn Forge) -> Option<RepoRef> {
+        let key = format!("{}/{}", remote.host, remote.repo.full()).to_lowercase();
+        match self.repo_parents.lock().get(&key) {
+            Some(ParentRead::Known(parent)) => return parent.clone(),
+            Some(ParentRead::Failed(at)) if at.elapsed() < PARENT_RETRY => return None,
+            _ => {}
+        }
+        let read = client.parent(&remote.repo).await;
+        let parent = read.as_ref().ok().cloned().flatten();
+        let kept = match read {
+            Ok(parent) => ParentRead::Known(parent),
+            Err(e) => {
+                log::info!("{key}: its parent not read: {e:#}");
+                ParentRead::Failed(Instant::now())
+            }
+        };
+        self.repo_parents.lock().insert(key, kept);
+        parent
+    }
+
+    /// `remote` with its host's client, when that host reads pull requests and has an account.
+    async fn source_of(&self, remote: Remote, target: bool) -> Option<Source> {
+        let provider = remote
+            .kind
+            .as_deref()
+            .and_then(|k| self.forges.read().get(k))?;
+        if !provider.capabilities().pull_requests {
+            return None;
+        }
+        let (client, _) = self.forge_client(&remote.host).await.ok()?;
+        Some(Source {
+            word: provider.request_word().to_string(),
+            remote,
+            client,
+            target,
+        })
+    }
+
+    /// Where the pull requests of `branch`, checked out in `dir`, may be: the remote of the
+    /// project's target (where « Ouvrir une PR » opens one), the remote the branch tracks (else
+    /// origin), and the repository that one was forked from; each once. With the repository the
+    /// branch is pushed to (`ada/demo`), whose forks' pull requests are the agent's.
+    async fn pr_sources(
+        &self,
+        project: &Project,
+        dir: &str,
+        branch: &str,
+    ) -> (Vec<Source>, Option<String>) {
+        let mut sources: Vec<Source> = Vec::new();
+        let same = |a: &Remote, b: &Remote| {
+            a.host.eq_ignore_ascii_case(&b.host)
+                && a.repo.full().eq_ignore_ascii_case(&b.repo.full())
+        };
+        if let Some(target) = self.project_forge(&project.id).await {
+            sources.extend(self.source_of(target, true).await);
+        }
+        let Some(own) = self.remote_of(dir, branch).await else {
+            return (sources, None);
+        };
+        let own_repo = own.repo.full();
+        let parent = match self.source_of(own.clone(), false).await {
+            Some(s) => {
+                let parent = self.parent_of(&s.remote, s.client.as_ref()).await;
+                if !sources.iter().any(|t| same(&t.remote, &s.remote)) {
+                    sources.push(s);
+                }
+                parent
+            }
+            None => None,
+        };
+        if let Some(repo) = parent {
+            let remote = Remote { repo, ..own };
+            if !sources.iter().any(|t| same(&t.remote, &remote)) {
+                sources.extend(self.source_of(remote, false).await);
+            }
+        }
+        (sources, Some(own_repo))
     }
 
     /// The agent's branch, its project's code host and its client; refused for a ticket's agent
@@ -654,19 +810,40 @@ impl<R: Runtime> Core<R> {
         Ok(pr)
     }
 
-    /// Asks the host for the agent's pull requests (one call), at most every `READ_EVERY` unless
-    /// `now`; none asked once they are all merged. Silent for an agent without one to have (a
-    /// ticket's, no worktree, no host, no account, no client yet): nothing shows.
+    /// Asks the hosts for the pull requests of the branch the agent is on (`watched`, from each
+    /// of `pr_sources`), at most every `READ_EVERY` unless `now`; none asked once they are all
+    /// merged. Silent for an agent without one to have (no branch of its own but the trunk, no
+    /// host, no account, no client yet): nothing shows.
     pub async fn agent_prs_refresh(self: &Arc<Self>, id: &str, now: bool) -> Result<()> {
         let h = self.agent(id)?;
         self.follow_found_worktree(&h).await;
-        {
-            let rt = h.lock();
-            if rt.meta.ticket_id.is_some()
-                || rt.meta.archived
-                || own_branch(&rt.meta).is_none()
-                || settled(&rt.meta.prs)
-            {
+        let meta = h.lock().meta.clone();
+        if meta.archived {
+            return Ok(());
+        }
+        // Of several repositories (ESC-169): each one's, when there is one to have.
+        let multi = meta.worktree.as_ref().is_some_and(|w| w.is_multi());
+        if multi && (meta.ticket_id.is_some() || settled(&meta.prs)) {
+            return Ok(());
+        }
+        let watched = if multi {
+            None
+        } else {
+            match self.watched(&meta).await {
+                Some(w) => Some(w),
+                None => {
+                    // On the trunk, or a detached HEAD: another branch's are not kept.
+                    if !meta.prs.is_empty() {
+                        h.lock().meta.prs.clear();
+                        self.emit_agent(&h);
+                        self.request_save();
+                    }
+                    return Ok(());
+                }
+            }
+        };
+        if let Some(w) = &watched {
+            if settled(&meta.prs) && meta.prs.iter().all(|p| p.head == w.branch) {
                 return Ok(());
             }
         }
@@ -677,51 +854,73 @@ impl<R: Runtime> Core<R> {
             }
             reads.insert(id.to_string(), Instant::now());
         }
-        // Of several repositories (ESC-169): each one's, when there is one to have.
-        let multi = h
-            .lock()
-            .meta
-            .worktree
-            .as_ref()
-            .is_some_and(|w| w.is_multi());
         if multi {
             return match self.pr_targets_multi(id).await {
                 Ok(Some(targets)) => self.prs_refresh_multi(id, targets).await,
                 _ => Ok(()),
             };
         }
-        // Its host's word says it can have one (`pr_word`): set as soon as the project's host, its
+        let Some(w) = watched else { return Ok(()) };
+        // Its host's word says it can open one (`pr_word`): set as soon as the project's host, its
         // client and an account are there, before the host is asked anything (a host that does not
         // answer leaves « Ouvrir une PR »); taken back when they no longer are (no remote, a host
-        // without a client yet, no account), and « Ouvrir une PR » shows no more.
-        let word = match self.pr_target(id).await {
-            Ok(t) => Some((t.provider.request_word().to_string(), t)),
-            Err(_) => None,
-        };
-        let had = h.lock().meta.pr_word.clone();
-        let now_word = word.as_ref().map(|(w, _)| w.clone());
-        if had != now_word {
-            h.lock().meta.pr_word = now_word;
+        // without a client yet, no account), and « Ouvrir une PR » shows no more. Never for a
+        // ticket's agent nor one in the project's folder: they read theirs, but open none.
+        let word = self
+            .pr_target(id)
+            .await
+            .ok()
+            .map(|t| t.provider.request_word().to_string());
+        if meta.pr_word != word {
+            h.lock().meta.pr_word = word;
             self.emit_agent(&h);
             self.request_save();
         }
-        let Some((word, t)) = word else {
+        let project: Project = self.project(&meta.project_id)?;
+        let (sources, own) = self.pr_sources(&project, &w.dir, &w.branch).await;
+        let reads = futures_util::future::join_all(
+            sources
+                .iter()
+                .map(|s| s.client.pull_requests_of_branch(&s.remote.repo, &w.branch)),
+        )
+        .await;
+        let mut found = Vec::new();
+        for (s, read) in sources.iter().zip(reads) {
+            let there = s.remote.repo.full();
+            match read {
+                Ok(prs) => found.extend(prs.into_iter().map(|mut p| {
+                    if !s.target {
+                        p.host_repo = there.clone();
+                    }
+                    p
+                })),
+                // The target's own: what was read last stays, whole.
+                Err(e) if s.target => return Err(e),
+                // Another repository that does not answer (its rights, a fork gone): what was read
+                // there last stays.
+                Err(e) => {
+                    log::info!("agent {id}: pull requests of {there} not read: {e:#}");
+                    found.extend(
+                        meta.prs
+                            .iter()
+                            .filter(|p| {
+                                p.head == w.branch && p.host_repo.eq_ignore_ascii_case(&there)
+                            })
+                            .cloned(),
+                    );
+                }
+            }
+        }
+        let prs = own_prs(found, own.as_deref());
+        // The branch moved meanwhile (renamed after the agent, switched): its own are read next time.
+        let now_meta = h.lock().meta.clone();
+        if self.watched(&now_meta).await.as_ref() != Some(&w) {
             return Ok(());
-        };
-        let found = t
-            .client
-            .pull_requests_of_branch(&t.remote.repo, &t.branch)
-            .await?;
-        let prs = own_prs(found);
+        }
         let changed = {
             let mut rt = h.lock();
-            // The branch moved meanwhile (renamed after the agent): its own are read next time.
-            if own_branch(&rt.meta) != Some(t.branch.as_str()) {
-                return Ok(());
-            }
-            let changed = rt.meta.prs != prs || rt.meta.pr_word.as_deref() != Some(&word);
+            let changed = rt.meta.prs != prs;
             rt.meta.prs = prs;
-            rt.meta.pr_word = Some(word);
             changed
         };
         if changed {
@@ -731,27 +930,75 @@ impl<R: Runtime> Core<R> {
         Ok(())
     }
 
+    /// The host, the repository and the branch of the agent's pull request `pr` (`number`): the
+    /// repository it was read in (`host_repo`), else the target's. Refused for a ticket's agent
+    /// (its board follows its pull request) and one without a branch of its own but the trunk.
+    async fn fix_target(
+        &self,
+        id: &str,
+        meta: &AgentMeta,
+        pr: Option<&PullRequest>,
+    ) -> Result<(Box<dyn Forge>, RepoRef, String, String)> {
+        if meta.ticket_id.is_some() || meta.worktree.as_ref().is_some_and(|w| w.is_multi()) {
+            let t = self.pr_target(id).await?;
+            let word = t.provider.request_word().to_string();
+            return Ok((t.client, t.remote.repo, word, t.branch));
+        }
+        let w = self.watched(meta).await.ok_or_else(no_branch)?;
+        let project: Project = self.project(&meta.project_id)?;
+        let (sources, _) = self.pr_sources(&project, &w.dir, &w.branch).await;
+        let host_repo = pr.map(|p| p.host_repo.as_str()).unwrap_or("");
+        let s = sources
+            .into_iter()
+            .find(|s| {
+                if host_repo.is_empty() {
+                    s.target
+                } else {
+                    s.remote.repo.full().eq_ignore_ascii_case(host_repo)
+                }
+            })
+            .ok_or_else(|| {
+                anyhow!(tr!(
+                    "Ce projet n'a pas de dépôt distant chez un hébergeur de code.",
+                    "This project has no remote on a code host."
+                ))
+            })?;
+        Ok((s.client, s.remote.repo, s.word, w.branch))
+    }
+
     /// « L'agent corrige » (`Checks`) or « L'agent corrige les retours » (`Reviews`) on pull
     /// request `number`: what the host says goes to the agent as a message, sent on the user's
     /// click only. Refused when there is nothing to correct.
-    pub async fn agent_pr_fix(self: &Arc<Self>, id: &str, number: u64, fix: PrFix) -> Result<()> {
-        let t = self.pr_target(id).await?;
-        let word = t.provider.request_word().to_string();
-        let pr = match t.meta.prs.iter().find(|p| p.number == number) {
-            Some(p) => p.clone(),
-            None => t.client.pull_request(&t.remote.repo, number).await?,
+    pub async fn agent_pr_fix(
+        self: &Arc<Self>,
+        id: &str,
+        number: u64,
+        host_repo: &str,
+        fix: PrFix,
+    ) -> Result<()> {
+        let meta = self.agent(id)?.lock().meta.clone();
+        // Read from several repositories, two may bear the same number: told by where they are.
+        let known = meta
+            .prs
+            .iter()
+            .find(|p| p.number == number && p.host_repo.eq_ignore_ascii_case(host_repo))
+            .cloned();
+        let (client, repo, word, branch) = self.fix_target(id, &meta, known.as_ref()).await?;
+        let pr = match known {
+            Some(p) => p,
+            None => client.pull_request(&repo, number).await?,
         };
         let lang = self.lang().claude;
         let message = match fix {
             PrFix::Checks => {
-                let checks = t.client.checks(&t.remote.repo, number).await?;
+                let checks = client.checks(&repo, number).await?;
                 let mut failed = Vec::new();
                 for c in checks
                     .into_iter()
                     .filter(|c| c.state == CheckState::Failure)
                 {
                     let log = match &c.job {
-                        Some(job) => t.client.job_log(&t.remote.repo, job).await.ok(),
+                        Some(job) => client.job_log(&repo, job).await.ok(),
                         None => None,
                     };
                     failed.push((c.name, c.url, log));
@@ -762,11 +1009,11 @@ impl<R: Runtime> Core<R> {
                         "The CI of {word} #{number} has no failed check."
                     ));
                 }
-                checks_message(lang, &word, &pr, &t.branch, &failed)
+                checks_message(lang, &word, &pr, &branch, &failed)
             }
             PrFix::Reviews => {
-                let reviews = t.client.reviews(&t.remote.repo, number).await?;
-                let comments = t.client.comments(&t.remote.repo, number).await?;
+                let reviews = client.reviews(&repo, number).await?;
+                let comments = client.comments(&repo, number).await?;
                 let asks = reviews
                     .iter()
                     .any(|r| r.state == ReviewState::ChangesRequested || !r.body.trim().is_empty())
@@ -777,7 +1024,7 @@ impl<R: Runtime> Core<R> {
                         "No feedback to address on {word} #{number}."
                     ));
                 }
-                reviews_message(lang, &word, &pr, &t.branch, &reviews, &comments)
+                reviews_message(lang, &word, &pr, &branch, &reviews, &comments)
             }
         };
         self.send_message(id, message, Vec::new()).await
@@ -1035,7 +1282,7 @@ impl<R: Runtime> Core<R> {
                 .client
                 .pull_requests_of_branch(&t.remote.repo, &t.branch)
                 .await?;
-            prs.extend(own_prs(found).into_iter().map(|mut p| {
+            prs.extend(own_prs(found, None).into_iter().map(|mut p| {
                 p.repo = repo.clone();
                 p
             }));

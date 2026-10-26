@@ -33,8 +33,46 @@ fn a_forks_branch_of_the_same_name_is_left_out_and_the_ones_to_merge_come_first(
         pr(2, PrState::Closed, false),
         pr(6, PrState::Open, false),
     ];
-    let numbers: Vec<u64> = own_prs(found).iter().map(|p| p.number).collect();
+    let numbers: Vec<u64> = own_prs(found, None).iter().map(|p| p.number).collect();
     assert_eq!(numbers, [6, 4, 5, 3, 2]);
+}
+
+#[test]
+fn a_forks_pull_request_is_the_agents_when_its_branch_is_in_the_agents_repository() {
+    let from = |number: u64, head_repo: &str, host_repo: &str| {
+        let mut p = pr(number, PrState::Open, false);
+        p.fork = true;
+        p.head_repo = head_repo.into();
+        p.host_repo = host_repo.into();
+        p
+    };
+    let found = vec![
+        from(21, "Ada/Demo", "acme/demo"),
+        from(22, "eve/demo", "acme/demo"),
+        // Read twice (the target's remote and its fork's parent are one): kept once.
+        from(21, "ada/demo", "acme/demo"),
+        pr(5, PrState::Open, false),
+    ];
+    let numbers = |own| {
+        own_prs(found.clone(), own)
+            .iter()
+            .map(|p| p.number)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(numbers(Some("ada/demo")), [21, 5]);
+    assert_eq!(numbers(None), [5], "without its repository, no fork's");
+}
+
+#[test]
+fn the_trunks_pull_requests_are_no_agents() {
+    let none: Vec<String> = Vec::new();
+    assert!(is_trunk("dev", "dev", &none), "the board's target");
+    assert!(is_trunk("main", "", &none), "no remote says its default");
+    assert!(is_trunk("master", "", &none));
+    assert!(!is_trunk("feat/a", "", &none));
+    let defaults = vec!["develop".to_string()];
+    assert!(is_trunk("develop", "", &defaults));
+    assert!(!is_trunk("main", "", &defaults), "the remote says another");
 }
 
 #[test]
@@ -433,7 +471,10 @@ async fn an_ordinary_agent_opens_its_pull_request_and_its_card_follows_it() {
         "npm test\nFAIL src/login.test.ts\n",
         &[],
     );
-    h.core.agent_pr_fix(&id, 7, PrFix::Checks).await.unwrap();
+    h.core
+        .agent_pr_fix(&id, 7, "", PrFix::Checks)
+        .await
+        .unwrap();
     h.wait("the fix sent", |h| user_said(h, &id, "La CI de la PR #7"))
         .await;
     assert!(user_said(
@@ -463,7 +504,10 @@ async fn an_ordinary_agent_opens_its_pull_request_and_its_card_follows_it() {
         ] } } } } }),
     );
     server.on("GET", "/repos/acme/demo/issues/7/comments", 200, json!([]));
-    h.core.agent_pr_fix(&id, 7, PrFix::Reviews).await.unwrap();
+    h.core
+        .agent_pr_fix(&id, 7, "", PrFix::Reviews)
+        .await
+        .unwrap();
     h.wait("the reviews sent", |h| {
         user_said(h, &id, "a des retours de relecture")
     })
@@ -525,7 +569,7 @@ async fn nothing_to_correct_and_nothing_to_propose_are_said() {
     );
     let e = h
         .core
-        .agent_pr_fix(&id, 7, PrFix::Checks)
+        .agent_pr_fix(&id, 7, "", PrFix::Checks)
         .await
         .unwrap_err();
     assert_eq!(e.to_string(), "La CI de la PR #7 n'a aucun check en échec.");
@@ -539,7 +583,7 @@ async fn nothing_to_correct_and_nothing_to_propose_are_said() {
     server.on("GET", "/repos/acme/demo/issues/7/comments", 200, json!([]));
     let e = h
         .core
-        .agent_pr_fix(&id, 7, PrFix::Reviews)
+        .agent_pr_fix(&id, 7, "", PrFix::Reviews)
         .await
         .unwrap_err();
     assert_eq!(e.to_string(), "Aucun retour à traiter sur la PR #7.");
@@ -697,11 +741,8 @@ async fn each_agent_follows_the_pull_requests_of_the_worktree_it_works_in_never_
     let numbers = |id: &str| h.agent(id).prs.iter().map(|p| p.number).collect::<Vec<_>>();
     assert_eq!(numbers(&a), [11], "a: feat/a's");
     assert_eq!(numbers(&b), [12], "b: feat/b's");
-    assert!(
-        numbers(&c).is_empty(),
-        "c works in the project's folder: none of dev's"
-    );
-    assert_eq!(branches_asked(&server), ["feat/a", "feat/b"]);
+    assert_eq!(numbers(&c), [13], "c works in the project's folder: dev's");
+    assert_eq!(branches_asked(&server), ["feat/a", "feat/b", "dev"]);
     // Their headers say the branch they work on, the project's folder's for c.
     let found = |id: &str| h.agent(id).found_worktree.map(|f| f.branch);
     assert_eq!(found(&a).as_deref(), Some("feat/a"));
@@ -753,7 +794,16 @@ async fn each_agent_follows_the_pull_requests_of_the_worktree_it_works_in_never_
     session_in(&h, &b, "s-161-b", &wt_d);
     h.core.agent_prs_refresh(&b, true).await.unwrap();
     assert_eq!(found(&b), None);
-    assert_eq!(branches_asked(&server), ["feat/a", "feat/b", "feat/a"]);
+    // b is back in the project's folder, on dev, as c.
+    assert_eq!(
+        branches_asked(&server),
+        ["feat/a", "feat/b", "dev", "feat/a", "dev", "dev"]
+    );
+    // The folder back on the trunk: none of an agent's.
+    git(&r, &["checkout", "-q", "main"]);
+    h.core.agent_prs_refresh(&c, true).await.unwrap();
+    assert!(numbers(&c).is_empty());
+    assert_eq!(branches_asked(&server).len(), 6, "the trunk's not asked");
 }
 
 #[test]
@@ -773,6 +823,133 @@ fn the_folder_of_a_session_is_its_latest_entrys() {
         Some(r"C:\repo\.claude\worktrees\a")
     );
     assert_eq!(last_cwd(&config, "../s-1"), None, "a session id only");
+}
+
+/// A branch pushed to the user's fork, its pull request opened into the repository it was forked
+/// from: read there, kept as the agent's by its branch's repository, and corrected there.
+#[tokio::test]
+async fn a_pull_request_from_a_fork_is_read_in_the_repository_it_was_forked_from() {
+    let h = harness("agent-pr-fork");
+    let server = FakeServer::start().await;
+    let (id, _, branch) = github_agent(&h, &server).await;
+    let pid = h.agent(&id).project_id.clone();
+    let r = PathBuf::from(h.core.project(&pid).unwrap().path);
+    git(
+        &r,
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            "https://github.com/ada/demo.git",
+        ],
+    );
+    server.on(
+        "POST",
+        "/graphql#RepoParent",
+        200,
+        json!({ "data": { "repository": { "parent": { "name": "demo", "owner": { "login": "acme" } } } } }),
+    );
+    let mut theirs = node(22, &branch, "SUCCESS", true);
+    theirs["headRepository"] = json!({ "nameWithOwner": "eve/demo" });
+    let mut ours = node(21, &branch, "FAILURE", true);
+    ours["headRepository"] = json!({ "nameWithOwner": "ada/demo" });
+    // The fork has none; the repository it was forked from has two, one of them the agent's.
+    server.on(
+        "POST",
+        "/graphql#PullsOfBranch@ada",
+        200,
+        json!({ "data": { "repository": { "pullRequests": { "nodes": [] } } } }),
+    );
+    server.on(
+        "POST",
+        "/graphql#PullsOfBranch@acme",
+        200,
+        json!({ "data": { "repository": { "pullRequests": { "nodes": [theirs, ours] } } } }),
+    );
+    h.core.agent_prs_refresh(&id, true).await.unwrap();
+    let prs = h.agent(&id).prs;
+    assert_eq!(prs.iter().map(|p| p.number).collect::<Vec<_>>(), [21]);
+    assert_eq!(prs[0].host_repo, "acme/demo");
+    assert_eq!(prs[0].head_repo, "ada/demo");
+    let mut owners: Vec<String> = server
+        .requests()
+        .iter()
+        .filter(|r| r.path() == "/graphql" && r.json()["operationName"] == "PullsOfBranch")
+        .map(|r| {
+            r.json()["variables"]["owner"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string()
+        })
+        .collect();
+    owners.sort();
+    assert_eq!(owners, ["acme", "ada"], "both asked, at once");
+    // The parent is asked once; a repository other than the target's that does not answer keeps
+    // what was read there last.
+    server.on("POST", "/graphql#PullsOfBranch@acme", 502, json!({}));
+    h.core.agent_prs_refresh(&id, true).await.unwrap();
+    assert_eq!(
+        h.agent(&id)
+            .prs
+            .iter()
+            .map(|p| p.number)
+            .collect::<Vec<_>>(),
+        [21]
+    );
+    let parents = server
+        .requests()
+        .iter()
+        .filter(|r| r.path() == "/graphql" && r.json()["operationName"] == "RepoParent")
+        .count();
+    assert_eq!(parents, 1);
+
+    // « L'agent corrige » reads its checks where it is.
+    server.on(
+        "GET",
+        "/repos/acme/demo/pulls/21",
+        200,
+        json!({ "number": 21, "head": { "sha": "abc" } }),
+    );
+    server.on(
+        "GET",
+        "/repos/acme/demo/commits/abc/check-runs",
+        200,
+        json!({ "check_runs": [] }),
+    );
+    server.on(
+        "GET",
+        "/repos/acme/demo/commits/abc/status",
+        200,
+        json!({ "statuses": [] }),
+    );
+    let e = h
+        .core
+        .agent_pr_fix(&id, 21, "acme/demo", PrFix::Checks)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        e.to_string(),
+        "La CI de la PR #21 n'a aucun check en échec."
+    );
+}
+
+/// A ticket's agent reads the pull request of its branch (its board opened it), but opens none.
+#[tokio::test]
+async fn a_ticket_agents_pull_request_is_read_but_never_offered_to_open() {
+    let h = harness("agent-pr-ticket");
+    let server = FakeServer::start().await;
+    let (id, _, branch) = github_agent(&h, &server).await;
+    h.core.agent(&id).unwrap().lock().meta.ticket_id = Some("t1".into());
+    server.on(
+        "POST",
+        "/graphql#PullsOfBranch",
+        200,
+        json!({ "data": { "repository": { "pullRequests": { "nodes": [node(31, &branch, "SUCCESS", false)] } } } }),
+    );
+    h.core.agent_prs_refresh(&id, true).await.unwrap();
+    let a = h.agent(&id);
+    assert_eq!(a.prs.iter().map(|p| p.number).collect::<Vec<_>>(), [31]);
+    assert_eq!(a.pr_word, None, "its board opens it: no « Ouvrir une PR »");
 }
 
 /// ESC-160: an agent's pull request goes to the branch its worktree started from, the project's

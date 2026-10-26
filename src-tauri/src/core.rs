@@ -934,6 +934,10 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) forge_cli_tokens: Mutex<HashMap<String, String>>,
     /// When the pull requests of each agent were last asked of its code host (`agentprs`).
     pub(crate) pr_reads: Mutex<HashMap<String, Instant>>,
+    /// The repository each repository on a code host was forked from (`host/namespace/name`),
+    /// none for one that is no fork, as its host told it once, or when it did not answer
+    /// (`agentprs`).
+    pub(crate) repo_parents: Mutex<HashMap<String, crate::agentprs::ParentRead>>,
     /// What the sync of imported tickets is asked to do (a change to tell, failed operations to
     /// try again), one at a time and in order, by a single worker (made at the first one).
     pub(crate) sync_queue: Mutex<Option<integrations::sync::SyncSender>>,
@@ -1818,6 +1822,7 @@ impl<R: Runtime> Core<R> {
             forge_health: Mutex::default(),
             forge_cli_tokens: Mutex::default(),
             pr_reads: Mutex::default(),
+            repo_parents: Mutex::default(),
             sync_queue: Mutex::default(),
             pending_syncs: Mutex::new(integrations::sync::SyncQueue::new(pending_syncs)),
             import_lock: tokio::sync::Mutex::new(()),
@@ -4512,6 +4517,13 @@ impl<R: Runtime> Core<R> {
         let naming = if names { text.as_str() } else { "" };
         // In the Claude Code view: typed in its interface.
         let h = self.agent(id)?;
+        // Its worktree went to another branch since it was last told (`agentbranch`): the agent
+        // reads it first, the conversation shows the message alone.
+        let note = self.branch_note(id);
+        let with_note = |text: &str| match &note {
+            Some((_, n)) => format!("{n}\n\n{text}"),
+            None => text.to_string(),
+        };
         if h.lock().meta.terminal {
             if !attachments.is_empty() || !files.is_empty() {
                 bail!(tr!(
@@ -4519,17 +4531,24 @@ impl<R: Runtime> Core<R> {
                     "No attachments in the Claude Code view: paste them in its terminal."
                 ));
             }
+            // Typed in its interface as it is: the conversation read from its transcript shows it
+            // whole, and the user, there, sees the line of the switch. The note is not kept for later,
+            // where it could be stale.
+            let message = delivered.clone();
             // Its entry in the transcript, read later, is told from the user's by its text.
             if !names {
-                h.lock().unprompted = Some(delivered.clone());
+                h.lock().unprompted = Some(message.clone());
             }
             // Off the runtime's threads: it waits for the paste to be written, then pauses.
-            let (core, agent, message) = (self.clone(), id.to_string(), delivered.clone());
+            let (core, agent) = (self.clone(), id.to_string());
             let sent = tokio::task::spawn_blocking(move || core.send_to_tui(&agent, &message))
                 .await
                 .unwrap_or_else(|e| Err(anyhow!(e)));
             if sent.is_err() && !names {
                 h.lock().unprompted = None;
+            }
+            if let (Ok(()), Some((mv, _))) = (&sent, &note) {
+                self.branch_told(id, mv);
             }
             return sent;
         }
@@ -4554,7 +4573,7 @@ impl<R: Runtime> Core<R> {
         // Refused before starting Claude: the composer keeps the message.
         let files = self.checked_files(id, files)?;
         let delivered = attachfiles::message_with_files(self.lang().claude, &delivered, &files);
-        let content = engine::of(&h.lock().meta).message(&delivered, &attachments)?;
+        let content = engine::of(&h.lock().meta).message(&with_note(&delivered), &attachments)?;
         // Before its turn: its first question about one of them finds the right to ask it.
         self.grant_files(id, &files);
         // Its worktree, when it waited for this message (ESC-156): the agent named first, then its
@@ -4571,6 +4590,9 @@ impl<R: Runtime> Core<R> {
         for attempt in 0..2 {
             let proc = self.ensure_process(id).await?;
             if self.deliver(id, &proc, &delivered, naming, &content, &attachments, kind)? {
+                if let Some((mv, _)) = &note {
+                    self.branch_told(id, mv);
+                }
                 // Named before it ran: its session takes the name.
                 if lazy && h.lock().meta.named {
                     self.retitle_soon(id, proc);
@@ -6904,6 +6926,11 @@ impl<R: Runtime> Core<R> {
         // Of several repositories (ESC-169): the branch of each, or of none.
         let checkouts = wt.checkouts();
         for c in &checkouts {
+            // The agent went to another branch by itself, not followed yet (`follow_agent_branch`):
+            // `git branch -m` would rename that one, which may be anyone's.
+            if git::head_branch(&c.dir).await != wt.branch {
+                return Ok(None);
+            }
             if git::is_pushed(&c.dir, &wt.branch).await {
                 return kept(BranchKept::Pushed);
             }
@@ -8060,6 +8087,9 @@ impl<R: Runtime> Core<R> {
         let Ok(project) = self.project(project_id) else {
             return;
         };
+        // The branch each agent's worktree is really on: one the agent switched to by itself is
+        // followed (`follow_agent_branch`).
+        let mut heads: Vec<(String, String)> = Vec::new();
         let info = match self.toplevel(&project.path).await {
             // Of several repositories (ESC-169): each one's.
             _ if project.is_multi() => self.multi_git(&project).await,
@@ -8087,7 +8117,8 @@ impl<R: Runtime> Core<R> {
                 for e in &st.entries {
                     tally(e.status, &mut info);
                 }
-                let agents: Vec<(String, Option<Worktree>, Vec<String>)> = self
+                type Row = (String, Option<Worktree>, Option<String>, Vec<String>);
+                let agents: Vec<Row> = self
                     .project_agents(project_id)
                     .iter()
                     .map(|h| {
@@ -8095,17 +8126,33 @@ impl<R: Runtime> Core<R> {
                         (
                             rt.meta.id.clone(),
                             rt.meta.worktree.clone(),
+                            rt.meta.found_worktree.as_ref().map(|f| f.path.clone()),
                             rt.meta.touched_files.clone(),
                         )
                     })
                     .collect();
-                for (aid, wt, touched) in agents {
+                for (aid, wt, found, touched) in agents {
+                    // The worktree it went into by itself (ESC-161): its branch, its files being
+                    // counted in the project's folder as they were.
+                    if let (None, Some(found)) = (&wt, found) {
+                        if let Ok(fs) = git::status(&found).await {
+                            info.agent_git.insert(
+                                aid.clone(),
+                                crate::agentbranch::agent_git_of(&fs, info.has_remote),
+                            );
+                        }
+                    }
                     let count = match wt {
                         Some(wt) => match git::status(&wt.path).await {
                             Ok(ws) => {
                                 for e in &ws.entries {
                                     tally(e.status, &mut info);
                                 }
+                                info.agent_git.insert(
+                                    aid.clone(),
+                                    crate::agentbranch::agent_git_of(&ws, info.has_remote),
+                                );
+                                heads.push((aid.clone(), ws.branch.clone()));
                                 ws.entries.len() as u32
                             }
                             Err(_) => 0,
@@ -8126,6 +8173,9 @@ impl<R: Runtime> Core<R> {
                 info
             }
         };
+        for (aid, head) in heads {
+            self.follow_agent_branch(&aid, &head).await;
+        }
         self.git.invalidate_files();
         self.git_cache
             .write()
@@ -8969,7 +9019,7 @@ impl<R: Runtime> Core<R> {
 
     /// True when the folder `root` itself has `branch` checked out; refused when another worktree
     /// has it: an agent's (`IN_WORKTREE`), or one of no agent (said in words).
-    async fn checked_out_here(&self, root: &str, branch: &str) -> Result<bool> {
+    pub(crate) async fn checked_out_here(&self, root: &str, branch: &str) -> Result<bool> {
         let Some(path) = git::checkout_of(root, branch).await? else {
             return Ok(false);
         };
@@ -9024,7 +9074,7 @@ impl<R: Runtime> Core<R> {
     /// aside) in the middle of a merge, cherry-pick, revert or rebase, which a switch would
     /// scramble, and from a detached HEAD whose commits no branch has, which the switch would
     /// leave to the reflog. `head_kept`: the branch it goes to starts at HEAD, so it keeps them.
-    async fn may_leave(&self, root: &str, head_kept: bool) -> Result<()> {
+    pub(crate) async fn may_leave(&self, root: &str, head_kept: bool) -> Result<()> {
         if let Some(operation) = git::operation_in_progress(root).await {
             bail!(git::operation_refusal(i18n::ui(), operation));
         }
