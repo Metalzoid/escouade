@@ -876,6 +876,12 @@ impl Engine for Cursor {
             env: Vec::new(),
         }
     }
+
+    /// Its ACP reads no `/compact` (its prompt's `/` commands are `/copy-request-id` and the
+    /// user's own, read in 2026.10.22): its interface's `/summarize` alone compacts (ESC-205).
+    fn compaction(&self) -> super::Compaction {
+        super::Compaction::InItsInterface("/summarize")
+    }
 }
 
 #[cfg(test)]

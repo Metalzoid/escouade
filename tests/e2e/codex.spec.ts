@@ -209,6 +209,56 @@ test.describe('an agent on Codex', () => {
     expect(thread).toBeTruthy();
   });
 
+  test('compacts its context by /compact from the composer’s menu, never through its model, in the runner’s window (ESC-205)', async ({
+    app,
+  }) => {
+    const { page } = app;
+    // The runner's screen is 1024 × 768.
+    await page.setViewportSize({ width: 1024, height: 728 });
+    await addProject(page, app.repo);
+    await newCodexAgent(page);
+    await send(page, 'bonjour Codex');
+    await expect(page.getByText('Bonjour, tu as dit : bonjour Codex')).toBeVisible();
+    await send(page, 'encore');
+    await expect(page.getByText('Bonjour, tu as dit : encore')).toBeVisible();
+    // The context gauge of its header, in % of the model's window.
+    const gauge = page.locator('header.head .fig', { hasText: 'Contexte' }).locator('.ctx-meter i');
+    const filled = async () => parseFloat(((await gauge.getAttribute('style')) ?? '').replace(/[^\d.]/g, '')) || 0;
+    await expect.poll(filled).toBeGreaterThan(0);
+    const before = await filled();
+    // « / » offers Codex's one command there, `/compact`, and none of Claude Code's.
+    const box = page.getByRole('textbox').last();
+    await box.pressSequentially('/');
+    const menu = page.getByRole('listbox');
+    await expect(menu.getByRole('option')).toHaveCount(1);
+    await expect(menu.getByRole('option')).toContainText('/compact');
+    await expect(menu.getByRole('option')).toContainText('Compacter le contexte de la conversation');
+    await expect(menu).toBeInViewport();
+    await box.press('Enter');
+    await expect(box).toHaveValue('/compact ');
+    await box.press('Enter');
+    // Its start, then its end; the gauge goes down.
+    await expect(page.getByText('Compaction du contexte…')).toBeVisible();
+    await expect(page.getByText('Contexte compacté')).toBeVisible();
+    await expect.poll(filled).toBeLessThan(before);
+    expect(requests(app, 'thread/compact/start')).toHaveLength(1);
+    expect(requests(app, 'turn/start')).toHaveLength(2);
+    await expect(page.getByText('tu as dit : /compact')).toHaveCount(0);
+    // In the middle of a message too, never in a path.
+    await box.pressSequentially('Relis src/');
+    await expect(menu).toHaveCount(0);
+    await box.pressSequentially(' puis /');
+    await expect(menu.getByRole('option')).toContainText('/compact');
+    await box.press('Escape');
+    await box.fill('');
+    // With an instruction, which Codex does not take: refused, the text kept.
+    await box.fill('/compact garde les décisions');
+    await box.press('Enter');
+    await expect(page.getByText('Codex ne prend pas d’instruction pour /compact : envoie /compact seul.')).toBeVisible();
+    await expect(box).toHaveValue('/compact garde les décisions');
+    expect(requests(app, 'thread/compact/start')).toHaveLength(1);
+  });
+
   test('a question of the mode Plan is answered on its card, and the plan approved starts its work', async ({ app }) => {
     const { page } = app;
     await addProject(page, app.repo);

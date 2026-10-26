@@ -36,6 +36,9 @@ type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value, String>>>>>;
 /// How long a request of the process to Copilot may take.
 const REQUEST_LIMIT: Duration = Duration::from_secs(60);
 
+/// How long a compaction may take: a call to the model that summarizes the whole conversation.
+const COMPACT_LIMIT: Duration = Duration::from_secs(600);
+
 /// The version of the protocol Escouade speaks (`connect`).
 pub(super) const PROTOCOL: u64 = 3;
 
@@ -1110,6 +1113,25 @@ impl EngineProcess for CopilotProcess {
 
     fn remote_control(&self, _: Remote, _: Duration) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async { Err(anyhow!(unsupported())) })
+    }
+
+    /// `session.history.compact` (ESC-205), with what to keep (`customInstructions`): it answers
+    /// once the compaction is over (8 s in full-turn.jsonl), told meanwhile by
+    /// `session.compaction_start` and `_complete`.
+    fn compact<'a>(&'a self, instructions: &'a str) -> BoxFuture<'a, Result<bool>> {
+        Box::pin(async move {
+            let mut params = json!({ "sessionId": self.session()?, "trigger": "manual" });
+            if !instructions.is_empty() {
+                params["customInstructions"] = json!(instructions);
+            }
+            let r = self
+                .request("session.history.compact", params, COMPACT_LIMIT)
+                .await?;
+            if r["success"] == false {
+                bail!("{}", r["error"].as_str().unwrap_or("failed"));
+            }
+            Ok(true)
+        })
     }
 
     /// A request in Copilot's protocol: `{"method", "params"}`.

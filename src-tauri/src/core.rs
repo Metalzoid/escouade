@@ -4533,6 +4533,24 @@ impl<R: Runtime> Core<R> {
             }
             return sent;
         }
+        // `/compact` typed by the user, to a harness that compacts by a request of its own: no
+        // message to its model (ESC-205).
+        if origin.is_none() && kind.is_none() && names && !spoken && attachments.is_empty() {
+            if let Some(instructions) = engine::compact_command(&text) {
+                let harness = engine::of(&h.lock().meta);
+                match harness.compaction() {
+                    engine::Compaction::Message => {}
+                    engine::Compaction::InItsInterface(command) => {
+                        let name = harness.name();
+                        bail!(tr!(
+                            "{name} ne compacte pas depuis Escouade : tape {command} dans sa vue terminal.",
+                            "{name} doesn’t compact from Escouade: type {command} in its terminal view."
+                        ));
+                    }
+                    _ => return self.compact(id, text.trim(), instructions).await,
+                }
+            }
+        }
         // Refused before starting Claude: the composer keeps the message.
         let files = self.checked_files(id, files)?;
         let delivered = attachfiles::message_with_files(self.lang().claude, &delivered, &files);
@@ -4620,6 +4638,92 @@ impl<R: Runtime> Core<R> {
             tauri::async_runtime::spawn(async move { c.auto_name(&id, &naming).await });
         }
         Ok(true)
+    }
+
+    /// `/compact` (`typed`, its `instructions` after it) to an agent whose harness compacts by a
+    /// request (`Engine::compaction`, ESC-205): the conversation shows the command, then what its
+    /// harness says of the compaction. Refused, the composer keeping the text, during a turn (the
+    /// compaction would cut it), before the conversation began (nothing to compact), and with an
+    /// instruction its harness does not take.
+    async fn compact(self: &Arc<Self>, id: &str, typed: &str, instructions: &str) -> Result<()> {
+        let h = self.agent(id)?;
+        let harness = engine::of(&h.lock().meta);
+        let name = harness.name();
+        {
+            let rt = h.lock();
+            if rt.meta.status.is_active() {
+                bail!(tr!(
+                    "Un tour est en cours : envoie /compact une fois qu’il est fini.",
+                    "A turn is under way: send /compact once it’s over."
+                ));
+            }
+            if rt.meta.session_id.is_none() {
+                bail!(tr!(
+                    "Rien à compacter : la conversation n’a pas commencé.",
+                    "Nothing to compact: the conversation hasn’t started."
+                ));
+            }
+        }
+        if !instructions.is_empty() && harness.compaction() == engine::Compaction::Bare {
+            bail!(tr!(
+                "{name} ne prend pas d’instruction pour /compact : envoie /compact seul.",
+                "{name} takes no instruction for /compact: send /compact alone."
+            ));
+        }
+        let proc = self.ensure_process(id).await?;
+        let mut fx = Effects::default();
+        let (pid, agent_name, view) = {
+            let mut rt = h.lock();
+            rt.push_user_from(
+                &uuid::Uuid::new_v4().to_string(),
+                typed,
+                0,
+                &[],
+                None,
+                &mut fx,
+            );
+            (rt.meta.project_id.clone(), rt.meta.name.clone(), rt.view())
+        };
+        self.apply(id, &pid, &agent_name, fx, Some(view));
+        // Copilot answers once it is over: the composer does not wait for it.
+        let (core, id, instructions) = (self.clone(), id.to_string(), instructions.to_string());
+        tauri::async_runtime::spawn(async move {
+            let over = proc.compact(&instructions).await;
+            core.compacted(&id, name, over);
+        });
+        Ok(())
+    }
+
+    /// The end of a compaction asked by `/compact` (`over`, as `EngineProcess::compact` says).
+    fn compacted(self: &Arc<Self>, id: &str, name: &str, over: Result<bool>) {
+        if matches!(over, Ok(false)) {
+            // A turn of its harness's, which ends it.
+            return;
+        }
+        let Ok(h) = self.agent(id) else {
+            return;
+        };
+        let mut fx = Effects::default();
+        let (pid, agent_name, view) = {
+            let mut rt = h.lock();
+            if let Err(e) = &over {
+                log::warn!("agent {id}: compaction refused: {e:#}");
+                rt.notice(
+                    "error",
+                    tr!(
+                        "{name} n’a pas compacté le contexte : {e}",
+                        "{name} didn’t compact the context: {e}"
+                    ),
+                    &mut fx,
+                );
+            }
+            // Over (or never begun): the agent is at rest again, as after a turn.
+            if rt.meta.status.is_active() {
+                rt.set_status(AgentStatus::Done, &mut fx);
+            }
+            (rt.meta.project_id.clone(), rt.meta.name.clone(), rt.view())
+        };
+        self.apply(id, &pid, &agent_name, fx, Some(view));
     }
 
     pub async fn interrupt(self: &Arc<Self>, id: &str) -> Result<()> {

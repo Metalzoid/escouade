@@ -9,7 +9,7 @@
 // `OPENCODE_SERVER_PASSWORD` (Basic `opencode:<password>`, 401 otherwise). Its sessions are kept by folder in
 // `<FAKE_OPENCODE_HOME | XDG_DATA_HOME | tmp/fake-opencode>/<hash of the folder>.json`, so that a server started again resumes
 // them. It answers `/config/providers`, `/config`, `/session` (create, get, patch, messages, fork, prompt_async,
-// abort), `/permission/:id/reply`, `/question/:id/reply`, `/instance/dispose`. What a prompt plays is picked by its
+// abort, summarize), `/permission/:id/reply`, `/question/:id/reply`, `/instance/dispose`. What a prompt plays is picked by its
 // message (French words, as the scenarios of the fake `claude`):
 // - "raisonnement": a reasoning (by deltas), then a reply;
 // - "commande": `rm -rf build` (bash), which asks its permission under a rule `ask`: run once allowed, refused
@@ -318,6 +318,59 @@ const asked = new Map();
 const turns = new Map();
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** `POST /session/:id/summarize`, as OpenCode 1.19.3 does it (SessionCompaction): a message of the user's holding a part
+ * `compaction`, the summary written by the model (`summary: true`, its `step-finish` says what it holds), then
+ * `session.compacted` and `idle`. Answers once it is over. */
+async function summarize(s, body) {
+  const dir = s.directory;
+  const sid = s.id;
+  emit(dir, 'session.status', { sessionID: sid, status: { type: 'busy' } });
+  const user = { id: id('msg'), sessionID: sid, role: 'user', time: { created: now() }, model: body };
+  const marker = { id: id('prt'), type: 'compaction', auto: false, messageID: user.id, sessionID: sid };
+  s.messages.push({ info: user, parts: [marker] });
+  emit(dir, 'message.updated', { sessionID: sid, info: user });
+  emit(dir, 'message.part.updated', { sessionID: sid, part: marker, time: now() });
+  await sleep(30);
+  const msg = {
+    id: id('msg'),
+    parentID: user.id,
+    sessionID: sid,
+    role: 'assistant',
+    agent: 'compaction',
+    mode: 'compaction',
+    summary: true,
+    modelID: body.modelID,
+    providerID: body.providerID,
+    time: { created: now() },
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  };
+  emit(dir, 'message.updated', { sessionID: sid, info: msg });
+  const text = { id: id('prt'), type: 'text', text: 'Résumé de la conversation (summarize).', messageID: msg.id, sessionID: sid };
+  text.time = { start: now(), end: now() };
+  emit(dir, 'message.part.updated', { sessionID: sid, part: text, time: now() });
+  const tokens = { input: 900, output: 40, reasoning: 0, cache: { read: 0, write: 0 } };
+  const finish = {
+    id: id('prt'),
+    type: 'step-finish',
+    reason: 'stop',
+    tokens: { total: 940, ...tokens },
+    cost: 0,
+    messageID: msg.id,
+    sessionID: sid,
+  };
+  emit(dir, 'message.part.updated', { sessionID: sid, part: finish, time: now() });
+  msg.tokens = tokens;
+  msg.finish = 'stop';
+  msg.time.completed = now();
+  s.messages.push({ info: msg, parts: [text, finish] });
+  emit(dir, 'message.updated', { sessionID: sid, info: msg });
+  emit(dir, 'session.compacted', { sessionID: sid });
+  emit(dir, 'session.status', { sessionID: sid, status: { type: 'idle' } });
+  emit(dir, 'session.idle', { sessionID: sid });
+  save(dir);
+}
 
 /** The action of the rules of `session` for `permission` on `pattern` (the last that matches wins). */
 function action(session, permission, pattern) {
@@ -779,7 +832,7 @@ const server = http.createServer(async (req, res) => {
       return json(sessionInfo(s));
     }
   }
-  if ((m = p.match(/^\/session\/([^/]+)\/(message|fork|prompt_async|abort)$/))) {
+  if ((m = p.match(/^\/session\/([^/]+)\/(message|fork|prompt_async|abort|summarize)$/))) {
     const s = sessionOf(dir, m[1]);
     if (!s) return notFound();
     switch (m[2]) {
@@ -792,6 +845,15 @@ const server = http.createServer(async (req, res) => {
         save(s.directory);
         return json(sessionInfo(copy));
       }
+      case 'summarize':
+        if (turns.has(s.id)) return json({ name: 'BusyError', data: { message: `Session ${s.id} is busy` } }, 400);
+        summarize(s, body || {})
+          .then(() => json(true))
+          .catch((e) =>
+            process.stderr.write(`fake opencode: ${e.stack}
+`),
+          );
+        return;
       case 'prompt_async':
         res.writeHead(204).end();
         play(s, body || {}).catch((e) => process.stderr.write(`fake opencode: ${e.stack}\n`));

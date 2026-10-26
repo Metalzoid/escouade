@@ -14,6 +14,11 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - ClickUp rejoint Jira, Trello, GitHub Issues et Linear : une clé d’API, une liste liée à chaque projet, et ses tâches s’importent avec leur checklist en critères puis changent de statut et reçoivent un commentaire à mesure que leur ticket avance.
 - La barre des agents et du Kanban s’élargit ou se rétrécit en tirant son bord droit, et le panneau de droite se ferme par son bouton × aussi quand il est côte à côte avec la conversation.
 
+### Corrections
+
+- `/compact` compacte vraiment le contexte d’un agent Codex, Copilot CLI ou OpenCode au lieu de partir au modèle comme un message : la conversation montre son début et sa fin, et la jauge de contexte redescend.
+- Le menu des commandes s’ouvre aussi sur un `/` tapé après une espace ou en début de ligne, au milieu d’un message, mais jamais dans un chemin ni une adresse.
+
 ## [2.0.2] — 2026-10-26
 
 ### Corrections

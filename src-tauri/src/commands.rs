@@ -1117,6 +1117,11 @@ pub async fn get_commands(core: CoreState<'_>, id: String) -> Res<Vec<Value>> {
     if !cached.is_empty() {
         return Ok(cached);
     }
+    // A harness's own few (ESC-205: Codex's `/compact`): no process started for them.
+    let fixed = crate::engine::fixed_commands(crate::engine::of(&h.lock().meta));
+    if !fixed.is_empty() {
+        return Ok(fixed);
+    }
     core.ensure_process(&id).await.map_err(err)?;
     let cmds = h.lock().commands.clone();
     Ok(cmds)

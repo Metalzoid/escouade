@@ -325,6 +325,11 @@
     {
       "kind": "notice",
       "level": "info",
+      "text": "Compaction du contexte…"
+    },
+    {
+      "kind": "notice",
+      "level": "info",
       "text": "Contexte compacté"
     },
     {

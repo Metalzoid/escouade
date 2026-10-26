@@ -170,7 +170,8 @@ pub fn caps() -> EngineCaps {
         resume_other_account: false,
         // `immediate`: the running turn takes it at once.
         mid_turn: MidTurn::Immediate,
-        slash_commands: false,
+        // `/compact` alone, by its request (`compaction`, ESC-205).
+        slash_commands: true,
         // The credits of the month (`quotaSnapshots`).
         quota: QuotaKind::Credits,
         quota_windows: Vec::new(),
@@ -902,6 +903,11 @@ impl Engine for Copilot {
 
     fn user_config(&self) -> Option<&'static UserConfig> {
         Some(&USER_CONFIG)
+    }
+
+    /// `session.history.compact`, which takes what to keep (`customInstructions`).
+    fn compaction(&self) -> super::Compaction {
+        super::Compaction::WithInstructions
     }
 }
 

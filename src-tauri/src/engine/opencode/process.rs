@@ -617,6 +617,51 @@ impl EngineProcess for OpencodeProcess {
         })
     }
 
+    /// `POST /session/:id/summarize` (ESC-205), as its own `/compact` does: with the model of the
+    /// next turn, no instruction. It answers once the compaction is over, which may take longer
+    /// than a request here: not waited for. The compaction is a turn of its session (`busy`, its
+    /// `compaction` part, `session.compacted`, `idle`); its refusal ends it in error.
+    fn compact<'a>(&'a self, _instructions: &'a str) -> BoxFuture<'a, Result<bool>> {
+        let inner = self.inner.clone();
+        Box::pin(async move {
+            let session = inner.session()?;
+            let body = {
+                let mut s = inner.state.lock();
+                let Some((provider, model)) = split_model(&s.settings.model) else {
+                    bail!(no_model(i18n::ui()));
+                };
+                let body = json!({ "providerID": provider, "modelID": model });
+                s.busy = true;
+                s.saw_busy = false;
+                body
+            };
+            tokio::spawn(async move {
+                let path = format!("/session/{session}/summarize");
+                if let Err(e) = inner
+                    .server
+                    .call(Method::POST, &path, &inner.cwd, Some(body))
+                    .await
+                {
+                    // A compaction that lasts past the request's limit still runs: told by its
+                    // events, and its end by `idle`.
+                    if e.chain().any(|c| {
+                        c.downcast_ref::<reqwest::Error>()
+                            .is_some_and(reqwest::Error::is_timeout)
+                    }) {
+                        return;
+                    }
+                    log::warn!("opencode: {e:#}");
+                    inner.state.lock().busy = false;
+                    (inner.on_frame)(json!({
+                        "type": "escouade.prompt.failed",
+                        "properties": { "sessionID": session, "message": format!("{e:#}") },
+                    }));
+                }
+            });
+            Ok(false)
+        })
+    }
+
     fn send_message(&self, _uuid: &str, message: &Message) -> Result<()> {
         let parts: Vec<Value> = message.0.as_array().cloned().unwrap_or_default();
         {

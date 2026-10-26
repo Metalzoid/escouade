@@ -730,3 +730,187 @@ async fn the_menu_of_a_codex_account_has_the_model_its_config_toml_names() {
     assert_eq!(h.core.engine_models.read()[&EngineId::Codex].len(), 2);
     h.core.stop_for_good();
 }
+
+/// The context gauge of the agent `id`: the tokens of its context.
+fn context_of(h: &Harness, id: &str) -> u64 {
+    h.core.agent(id).unwrap().lock().context_tokens
+}
+
+/// ESC-205: `/compact` typed to an agent of Codex is no message to its model. Codex compacts its
+/// thread (`thread/compact/start`), the conversation says when it starts and when it ends, and the
+/// context gauge goes down. During a turn it is refused with its reason, and so is an instruction
+/// after it: Codex's request takes none.
+#[tokio::test]
+async fn compact_typed_to_a_codex_agent_compacts_its_thread_and_not_through_its_model() {
+    let h = harness("esc205-compact");
+    let (p, _) = h.project(false).await;
+    codex_accounts(&h);
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(EngineId::Codex),
+                account: Some("work".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    h.turn(&id, "Bonjour").await;
+    h.turn(&id, "Encore").await;
+    let before = context_of(&h, &id);
+    assert!(before > 0);
+    h.turn(&id, "/compact").await;
+    let methods = sent(&h);
+    assert_eq!(
+        methods
+            .iter()
+            .filter(|m| *m == "thread/compact/start")
+            .count(),
+        1,
+        "{methods:?}"
+    );
+    assert_eq!(
+        methods.iter().filter(|m| *m == "turn/start").count(),
+        2,
+        "{methods:?}"
+    );
+    let items = h.items(&id);
+    let texts: Vec<String> = items
+        .iter()
+        .filter(|i| i["kind"] == "user" || i["kind"] == "notice")
+        .map(|i| {
+            format!(
+                "{}: {}",
+                i["kind"].as_str().unwrap(),
+                i["text"].as_str().unwrap()
+            )
+        })
+        .collect();
+    let tail = &texts[texts.len() - 3..];
+    assert_eq!(
+        tail,
+        [
+            "user: /compact",
+            "notice: Compaction du contexte…",
+            "notice: Contexte compacté",
+        ],
+        "{texts:?}"
+    );
+    assert!(
+        !items
+            .iter()
+            .any(|i| i["kind"] == "text" && i["text"].as_str().unwrap().contains("/compact")),
+        "the model was told /compact"
+    );
+    let after = context_of(&h, &id);
+    assert!(after < before, "{before} → {after}");
+    // An instruction after it: Codex takes none, the composer keeps the text.
+    let e = h
+        .core
+        .send_message(&id, "/compact garde les décisions".into(), vec![])
+        .await
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("instruction"), "{e:#}");
+    // During a turn: refused, with its reason.
+    h.core
+        .send_message(&id, "lent 20s".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("the slow turn", |h| h.agent(&id).status.is_active())
+        .await;
+    let e = h
+        .core
+        .send_message(&id, "/compact".into(), vec![])
+        .await
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("tour"), "{e:#}");
+    h.core.interrupt(&id).await.unwrap();
+    h.wait("the turn interrupted", |h| !h.agent(&id).status.is_active())
+        .await;
+    let methods = sent(&h);
+    assert_eq!(
+        methods
+            .iter()
+            .filter(|m| *m == "thread/compact/start")
+            .count(),
+        1,
+        "{methods:?}"
+    );
+    h.core.stop_for_good();
+}
+
+/// ESC-205, by hand: `/compact` with the real `codex` that `ESCOUADE_REAL_CODEX` names (0.163.0
+/// or later), on the machine's own Codex folder (`~/.codex`): two short turns, then the
+/// compaction, its start and its end shown and the context gauge lower. `cargo test --lib
+/// real_codex_compact -- --ignored --nocapture`; save `~/.codex/config.toml` before and check it
+/// byte for byte after, and take the thread it prints out of `~/.codex/sessions` and
+/// `session_index.jsonl`.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "the real codex: run by hand"]
+async fn real_codex_compact() {
+    let program = std::env::var("ESCOUADE_REAL_CODEX").expect("ESCOUADE_REAL_CODEX");
+    let h = harness("esc205-real");
+    let (p, _) = h.project(false).await;
+    let home = dirs::home_dir().unwrap().join(".codex");
+    let mut s = h.core.settings.read().clone();
+    s.accounts.push(Account {
+        id: "cx".into(),
+        name: "Codex".into(),
+        engine: EngineId::Codex,
+        config_dir: home.to_string_lossy().into(),
+        claude_path: program,
+        ..Default::default()
+    });
+    h.core.save_settings(s).unwrap();
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(EngineId::Codex),
+                account: Some("cx".into()),
+                mode: Some("default".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    for text in [
+        "Réponds seulement par le mot : bonjour.",
+        "Réponds seulement par le mot : merci.",
+    ] {
+        h.turn(&id, text).await;
+    }
+    let before = context_of(&h, &id);
+    let started = std::time::Instant::now();
+    h.turn(&id, "/compact").await;
+    let after = context_of(&h, &id);
+    let shown: Vec<String> = h
+        .items(&id)
+        .iter()
+        .filter(|i| ["user", "notice", "text"].contains(&i["kind"].as_str().unwrap_or("")))
+        .map(|i| {
+            format!(
+                "{}: {}",
+                i["kind"].as_str().unwrap(),
+                i["text"].as_str().unwrap_or("")
+            )
+        })
+        .collect();
+    println!("thread: {:?}", h.agent(&id).session_id);
+    println!(
+        "context: {before} → {after}, compaction in {} ms",
+        started.elapsed().as_millis()
+    );
+    println!("{shown:#?}");
+    assert!(shown.contains(&"notice: Compaction du contexte…".to_string()));
+    assert!(shown.contains(&"notice: Contexte compacté".to_string()));
+    assert!(after < before, "{before} → {after}");
+    h.core.stop_for_good();
+}

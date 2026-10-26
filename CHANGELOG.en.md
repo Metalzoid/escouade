@@ -14,6 +14,11 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - ClickUp joins Jira, Trello, GitHub Issues and Linear: an API key, a list linked to each project, and its tasks come in with their checklist as criteria, then change status and get a comment as their ticket moves on.
 - The sidebar of the agents and the Kanban widens or narrows by dragging its right edge, and the side panel closes by its × button even when it sits beside the conversation.
 
+### Fixes
+
+- `/compact` now really compacts the context of a Codex, Copilot CLI or OpenCode agent instead of reaching the model as a message: the conversation shows its start and its end, and the context gauge goes down.
+- The commands menu also opens on a `/` typed after a space or at the start of a line, in the middle of a message, but never in a path or an address.
+
 ## [2.0.2] — 2026-10-26
 
 ### Fixes

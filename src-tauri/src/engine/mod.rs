@@ -246,6 +246,45 @@ pub struct Ready {
     pub catalog: Option<Vec<registry::ToldModel>>,
 }
 
+/// How `/compact` typed in an agent's conversation goes to its harness (ESC-205).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Compaction {
+    /// As any message: its harness reads the command itself (Claude Code), or has none.
+    Message,
+    /// By a request of its protocol (`EngineProcess::compact`) that takes no instruction.
+    Bare,
+    /// By a request of its protocol that takes the instruction written after the command.
+    WithInstructions,
+    /// Not from Escouade: its protocol has no request for it, and its model would take the
+    /// command for a message. Its interface's own command does it (Cursor CLI: `/summarize`).
+    InItsInterface(&'static str),
+}
+
+/// The command, the user's instruction after it (`/compact keep the decisions`) when it is
+/// `/compact`; None for any other text.
+pub fn compact_command(text: &str) -> Option<&str> {
+    let rest = text.trim().strip_prefix("/compact")?;
+    (rest.is_empty() || rest.starts_with(char::is_whitespace)).then(|| rest.trim())
+}
+
+/// The `/` commands the composer lists for a harness that tells none to a client (`Ready`): its
+/// `/compact` when it compacts by a request (`Compaction`), none otherwise. Known without
+/// starting its process.
+pub fn fixed_commands(harness: &dyn Engine) -> Vec<Value> {
+    let how = harness.compaction();
+    if !matches!(how, Compaction::Bare | Compaction::WithInstructions) {
+        return Vec::new();
+    }
+    let mut entry = serde_json::json!({
+        "name": "compact",
+        "description": tr!("Compacter le contexte de la conversation", "Compact the conversation’s context"),
+    });
+    if how == Compaction::WithInstructions {
+        entry["argumentHint"] = serde_json::json!(tr!("[ce qu’il faut garder]", "[what to keep]"));
+    }
+    vec![entry]
+}
+
 /// A message to an agent, in its engine's own form (`Engine::message`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Message(pub(crate) Value);
@@ -513,6 +552,10 @@ pub trait Engine: Send + Sync {
     fn user_config(&self) -> Option<&'static userconfig::UserConfig> {
         None
     }
+    /// How `/compact` goes to it.
+    fn compaction(&self) -> Compaction {
+        Compaction::Message
+    }
     /// What its user config `config` (`Target.config`) says of Escouade's server.
     fn declared(&self, config: &Path) -> Standing {
         match self.user_config() {
@@ -618,6 +661,15 @@ pub trait EngineProcess: Send + Sync {
     /// Links it to claude.ai or unlinks it (Remote Control): `request` says how, its answer the
     /// session it holds there.
     fn remote_control(&self, request: Remote, timeout: Duration) -> BoxFuture<'_, Result<Value>>;
+    /// Compacts its conversation's context, `instructions` (none: empty) telling what to keep,
+    /// as `Engine::compaction` says it can. True when it is over once its harness answered
+    /// (Copilot); false when the harness took the request and runs it as a turn it ends itself
+    /// (Codex). What it says meanwhile tells the compaction.
+    fn compact<'a>(&'a self, _instructions: &'a str) -> BoxFuture<'a, Result<bool>> {
+        Box::pin(std::future::ready(Err(anyhow::anyhow!(
+            "no compaction request in this harness"
+        ))))
+    }
 
     // ----- its own protocol -----
 

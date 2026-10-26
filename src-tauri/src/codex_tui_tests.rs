@@ -584,3 +584,34 @@ async fn an_agent_handed_over_from_the_claude_code_view_goes_on_in_the_codex_vie
     let o = h.agent(&in_escouade);
     assert_eq!((o.engine, o.terminal), (EngineId::Codex, false));
 }
+
+/// ESC-205: in the Codex view, `/compact` goes to its interface as it was typed, which runs it
+/// itself: Escouade neither asks its app-server for it nor refuses it.
+#[tokio::test]
+async fn compact_in_the_codex_view_goes_to_its_interface_as_typed() {
+    let h = harness("tui-codex-compact");
+    let (id, home) = new_codex_agent(&h, true).await;
+    h.core
+        .send_message(&id, "Premier".into(), Vec::new())
+        .await
+        .unwrap();
+    h.wait("the stream's first turn over", |h| {
+        h.agent(&id).status == AgentStatus::Done && items_of(h, &id, "turn").len() == 1
+    })
+    .await;
+    h.core.set_agent_view(&id, true).await.unwrap();
+    open_codex(&h, &id, "fake-codex-tui").await;
+    h.core
+        .send_message(&id, "/compact".into(), Vec::new())
+        .await
+        .unwrap();
+    h.wait("/compact typed in its interface", |h| {
+        items_of(h, &id, "text")
+            .iter()
+            .any(|t| t["text"] == "Fini : /compact")
+    })
+    .await;
+    let asked = std::fs::read_to_string(home.join("requests.jsonl")).unwrap_or_default();
+    assert!(!asked.contains("thread/compact/start"), "{asked}");
+    h.core.stop_for_good();
+}

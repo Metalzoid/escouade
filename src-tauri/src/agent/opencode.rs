@@ -17,6 +17,9 @@ use crate::engine::opencode::plan_approval;
 /// What the translation keeps of OpenCode's conversation between its events (not saved).
 #[derive(Default)]
 pub(crate) struct OpencodeState {
+    /// A compaction under way (ESC-205): its call to the model writes the summary the context
+    /// holds alone afterwards.
+    compacting: bool,
     /// The sessions of its subagents, and the call (`Task`) of each.
     children: HashMap<String, String>,
     /// Sessions of subagents not linked to their call yet.
@@ -293,6 +296,10 @@ impl AgentRt {
                     }
                 }
             }
+            "session.compacted" if own => {
+                self.opencode.compacting = false;
+                self.notice("info", tr!("Contexte compacté", "Context compacted"), fx);
+            }
             "session.idle" if own => {
                 if std::mem::take(&mut self.opencode.busy) {
                     self.oc_turn_end(fx);
@@ -411,7 +418,16 @@ impl AgentRt {
         };
         let msg = part["messageID"].as_str().unwrap_or_default();
         if self.opencode.roles.get(msg).is_some_and(|r| r == "user") {
-            if parent.is_none() && self.opencode.elsewhere.contains(msg) {
+            // A compaction starts, asked (`/compact`, ESC-205) or by OpenCode itself: a message
+            // of the user's that holds a part `compaction` (`session.compacted` tells its end).
+            if part["type"] == "compaction" {
+                if parent.is_none() && !self.conv.contains(id) {
+                    self.opencode.compacting = true;
+                    let text = tr!("Compaction du contexte…", "Compacting the context…");
+                    let item = json!({ "kind": "notice", "id": id, "ts": now_ms(), "level": "info", "text": text });
+                    self.append(item, fx);
+                }
+            } else if parent.is_none() && self.opencode.elsewhere.contains(msg) {
                 self.oc_typed_elsewhere(id, part, fx);
             }
             return;
@@ -462,7 +478,12 @@ impl AgentRt {
                 };
                 match &parent {
                     None => {
-                        self.context_tokens = input + cache;
+                        // After a compaction, its summary is what the context holds.
+                        self.context_tokens = if self.opencode.compacting {
+                            output
+                        } else {
+                            input + cache
+                        };
                         self.oc_window(fx);
                         fx.agent_changed = true;
                     }
@@ -482,9 +503,6 @@ impl AgentRt {
                 for f in files {
                     self.touch(&f, fx);
                 }
-            }
-            "compaction" => {
-                self.notice("info", tr!("Contexte compacté", "Context compacted"), fx);
             }
             _ => {}
         }

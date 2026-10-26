@@ -251,16 +251,19 @@ describe('Composer', () => {
     expect(backend.called('send_message')).toHaveLength(0);
   });
 
-  it('completes slash commands only at the start of the message', async () => {
+  it('completes a slash command in the middle of a message, and nowhere in a path', async () => {
     const { textarea } = setup();
-    await userEvent.type(textarea, '/com');
+    await userEvent.type(textarea, 'Relis src/co');
+    expect(screen.queryAllByRole('option')).toEqual([]);
+    await userEvent.clear(textarea);
+    await userEvent.type(textarea, 'Relis le diff puis /com');
     const options = await screen.findAllByRole('option');
     expect(options.map((o) => o.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
       '/compact Compacte le contexte',
       '/commit Crée un commit',
     ]);
     await userEvent.keyboard('{ArrowDown}{Tab}');
-    expect(textarea.value).toBe('/commit ');
+    expect(textarea.value).toBe('Relis le diff puis /commit ');
   });
 
   it('answers a pending question with the free text instead of sending a message', async () => {

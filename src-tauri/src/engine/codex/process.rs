@@ -783,6 +783,21 @@ impl EngineProcess for CodexProcess {
         ready(Err(anyhow!(unsupported())))
     }
 
+    /// `thread/compact/start` (ESC-205): it takes no instruction, and answers at once; the
+    /// compaction is a turn of its own (`contextCompaction`).
+    fn compact<'a>(&'a self, _instructions: &'a str) -> BoxFuture<'a, Result<bool>> {
+        Box::pin(async move {
+            let thread = self.thread()?;
+            self.request(
+                "thread/compact/start",
+                json!({ "threadId": thread }),
+                REQUEST_LIMIT,
+            )
+            .await
+            .map(|_| false)
+        })
+    }
+
     /// A request in Codex's protocol: `{"method", "params"}`.
     fn control(&self, request: Value, timeout: Duration) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {

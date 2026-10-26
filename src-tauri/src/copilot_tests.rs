@@ -825,3 +825,68 @@ async fn real_copilot_models() {
     );
     assert!(!listed.is_empty());
 }
+
+/// ESC-205: `/compact` typed to an agent of Copilot is no message to its model. Copilot compacts
+/// its session (`session.history.compact`, the instruction after the command given as what to
+/// keep), the conversation says when it starts and when it ends, the context gauge goes down, and
+/// the agent is at rest again once Copilot answered.
+#[tokio::test]
+async fn compact_typed_to_a_copilot_agent_compacts_its_session_with_its_instruction() {
+    let h = harness("esc205-copilot");
+    let (p, _) = h.project(false).await;
+    let work = copilot_accounts(&h, json!({}));
+    let id = copilot_agent(&h, &p).await;
+    h.turn(&id, "bonjour").await;
+    let context = |h: &Harness| h.core.agent(&id).unwrap().lock().context_tokens;
+    let before = context(&h);
+    assert!(before > 0);
+    h.core
+        .send_message(&id, "/compact garde les décisions".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("the compaction over", |h| {
+        !h.agent(&id).status.is_active()
+            && h.items(&id)
+                .iter()
+                .any(|i| i["text"] == "Contexte compacté")
+    })
+    .await;
+    let calls = noted(&work, "calls.jsonl");
+    let compact: Vec<&Value> = calls
+        .iter()
+        .filter(|c| c["method"] == "session.history.compact")
+        .collect();
+    assert_eq!(compact.len(), 1, "{calls:?}");
+    assert_eq!(
+        compact[0]["params"]["customInstructions"],
+        "garde les décisions"
+    );
+    let sends = calls
+        .iter()
+        .filter(|c| c["method"] == "session.send")
+        .count();
+    assert_eq!(sends, 1, "the model was told /compact");
+    let shown: Vec<String> = h
+        .items(&id)
+        .iter()
+        .filter(|i| i["kind"] == "user" || i["kind"] == "notice")
+        .map(|i| {
+            format!(
+                "{}: {}",
+                i["kind"].as_str().unwrap(),
+                i["text"].as_str().unwrap()
+            )
+        })
+        .collect();
+    assert_eq!(
+        shown[shown.len() - 3..],
+        [
+            "user: /compact garde les décisions",
+            "notice: Compaction du contexte…",
+            "notice: Contexte compacté",
+        ],
+        "{shown:?}"
+    );
+    assert!(context(&h) < before, "{before} → {}", context(&h));
+    h.core.stop_for_good();
+}

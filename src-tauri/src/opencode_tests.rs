@@ -1622,3 +1622,60 @@ async fn the_models_of_an_opencode_account_are_read_without_an_agent_and_kept_af
     assert_eq!(menu(&reloaded).len(), 3);
     h.core.stop_for_good();
 }
+
+/// ESC-205: `/compact` typed to an agent of OpenCode is no message to its model. OpenCode
+/// compacts its session (`POST /session/:id/summarize`, as its own `/compact` does), the
+/// conversation says when it starts and when it ends, the context gauge holds its summary alone,
+/// and the agent is at rest again once its session is.
+#[tokio::test]
+async fn compact_typed_to_an_opencode_agent_summarizes_its_session() {
+    let h = harness("esc205-opencode");
+    let (p, _) = h.project(false).await;
+    opencode_account(&h);
+    let id = new_agent(&h, &p.id).await;
+    h.turn(&id, "bonjour").await;
+    let context = |h: &Harness| h.core.agent(&id).unwrap().lock().context_tokens;
+    let before = context(&h);
+    assert!(before > 0);
+    h.turn(&id, "/compact").await;
+    let all = texts(&h, &id);
+    assert!(
+        all.contains(&"Résumé de la conversation (summarize).".to_string()),
+        "{all:?}"
+    );
+    assert!(
+        !all.iter().any(|t| t.contains("tu as dit : /compact")),
+        "the model was told /compact: {all:?}"
+    );
+    let shown: Vec<String> = h
+        .items(&id)
+        .iter()
+        .filter(|i| i["kind"] == "user" || i["kind"] == "notice")
+        .map(|i| {
+            format!(
+                "{}: {}",
+                i["kind"].as_str().unwrap(),
+                i["text"].as_str().unwrap()
+            )
+        })
+        .collect();
+    assert_eq!(
+        shown[shown.len() - 3..],
+        [
+            "user: /compact",
+            "notice: Compaction du contexte…",
+            "notice: Contexte compacté",
+        ],
+        "{shown:?}"
+    );
+    assert!(context(&h) < before, "{before} → {}", context(&h));
+    assert!(!h.agent(&id).status.is_active());
+    // An instruction after it: OpenCode's request takes none.
+    let e = h
+        .core
+        .send_message(&id, "/compact garde les décisions".into(), vec![])
+        .await
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("instruction"), "{e:#}");
+    h.core.stop_for_good();
+}

@@ -379,7 +379,8 @@ pub fn caps() -> EngineCaps {
         // A message during a turn would be taken into it, the first one's request lost: held by
         // Escouade until the turn ends.
         mid_turn: MidTurn::Queued,
-        slash_commands: false,
+        // `/compact` alone, by its request (`compaction`, ESC-205).
+        slash_commands: true,
         // It goes through the providers' APIs: no quota of its own.
         quota: QuotaKind::None,
         quota_windows: Vec::new(),
@@ -720,6 +721,11 @@ impl Engine for Opencode {
 
     fn user_config(&self) -> Option<&'static UserConfig> {
         Some(&USER_CONFIG)
+    }
+
+    /// `POST /session/:id/summarize`, which takes no instruction.
+    fn compaction(&self) -> super::Compaction {
+        super::Compaction::Bare
     }
 }
 

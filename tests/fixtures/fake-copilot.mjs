@@ -742,6 +742,28 @@ function main() {
         const w = waiting.get(params.requestId);
         return result(id, { success: !!w && w.finish(params.response, (a) => a) });
       }
+      case 'session.history.compact': {
+        // As full-turn.jsonl recorded it: its start, its end, the context after it, then the answer. Its instructions
+        // are kept in the summary, for the tests to read them.
+        if (!s) return write({ id, error: { code: -32603, message: 'Session not found' } });
+        if (s.busy) return write({ id, error: { code: -32603, message: 'Cannot compact while the session is busy' } });
+        emit(s, 'session.compaction_start', { systemTokens: 7539, conversationTokens: 7461, currentTokens: 15000, tokenLimit: 272000 });
+        setTimeout(() => {
+          const summaryContent = `<overview>Résumé${params.customInstructions ? ` (${params.customInstructions})` : ''}</overview>`;
+          const done = {
+            success: true,
+            preCompactionTokens: 7461,
+            postCompactionTokens: 1619,
+            messagesRemoved: 4,
+            tokensRemoved: 5842,
+            summaryContent,
+          };
+          emit(s, 'session.compaction_complete', done);
+          emit(s, 'session.usage_info', { tokenLimit: 272000, currentTokens: 9158 }, { ephemeral: true });
+          result(id, { success: true, tokensRemoved: 5842, messagesRemoved: 4, summaryContent });
+        }, 50);
+        return;
+      }
       case 'session.plan.readSqlTodosWithDependencies':
         return result(id, { rows: s ? s.todos : [], dependencies: [] });
       case 'runtime.shutdown':

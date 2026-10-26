@@ -1,4 +1,6 @@
-// Autocomplete triggers of the composer: "@path" mentions and a leading "/command".
+// Autocomplete triggers of the composer: "@path" mentions and "/command"s, each at the start of the text or after a
+// space or a line break (never in a word, a path or an address). Completed further on, a command goes as typed: its
+// harness runs one at the head of a message alone, and reads the rest as text (ESC-205).
 
 export interface Trigger {
   kind: 'file' | 'command';
@@ -11,8 +13,8 @@ export interface Trigger {
 
 export function detectTrigger(text: string, caret: number): Trigger | null {
   const before = text.slice(0, caret);
-  const cmd = before.match(/^\/([\w:.-]*)$/);
-  if (cmd) return { kind: 'command', query: cmd[1], start: 0, end: caret };
+  const cmd = before.match(/(^|\s)\/([\w:.-]*)$/);
+  if (cmd) return { kind: 'command', query: cmd[2], start: caret - cmd[2].length - 1, end: caret };
   const at = before.match(/(^|\s)@([^\s@]*)$/);
   if (at) {
     const start = caret - at[2].length - 1;

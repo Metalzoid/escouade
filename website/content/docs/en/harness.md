@@ -80,7 +80,7 @@ Codex doesn’t give the cost: Escouade estimates it from the turn’s tokens an
 
 ### What Codex doesn’t do
 
-It doesn’t read PDFs (the button refuses them and says so) and offers no `/` commands in Escouade. A Codex agent doesn’t resume on another account: it waits for the reset, or continues on another harness. No remote control or background tasks.
+It doesn’t read PDFs (the button refuses them and says so) and offers only the `/compact` command in Escouade, which compacts its conversation’s context. A Codex agent doesn’t resume on another account: it waits for the reset, or continues on another harness. No remote control or background tasks.
 
 ## OpenCode
 
@@ -109,7 +109,7 @@ A turn’s cost is the one OpenCode gives, at the provider’s price: 0 with a l
 
 ### What OpenCode doesn’t do
 
-No “Auto” mode (OpenCode has no reviewer), no sandbox, a single account, no attached PDFs, no `/` commands in Escouade, no remote control or background tasks.
+No “Auto” mode (OpenCode has no reviewer), no sandbox, a single account, no attached PDFs, no `/` command in Escouade but `/compact`, no remote control or background tasks.
 
 ## Copilot CLI
 
@@ -139,7 +139,7 @@ A turn’s cost comes from the AI credits of its calls (one credit is $0.01). Th
 
 ### What Copilot CLI doesn’t do
 
-No “Always allow”, no `assisted` mode (experimental), no attached PDFs, no `/` commands in Escouade, no remote control or background tasks. A Copilot agent doesn’t resume on another account.
+No “Always allow”, no `assisted` mode (experimental), no attached PDFs, no `/` command in Escouade but `/compact` (followed, if you like, by what to keep), no remote control or background tasks. A Copilot agent doesn’t resume on another account.
 
 ## Cursor CLI
 
@@ -166,7 +166,7 @@ The Claude Code skills, commands, agents and hooks of your account and of the pr
 
 ### Cost, quota and what Cursor doesn’t do
 
-Cursor tells neither the tokens nor the cost of a turn when Escouade drives it: the conversation shows none, and the statistics count its turns and their length. Nor does it tell its usage of the month: no bar in the status bar, but “Usage on cursor.com” in Settings › Accounts and in the quota panel, which opens its dashboard. A limit reached (“Upgrade your plan to continue”) stops the turn on an amber card that says so, with, when there is one, the account or harness to go on with. No “Duplicate the conversation” (Cursor doesn’t copy a session), no attached PDFs, no `/` commands in Escouade, no remote control or background tasks. It gets Escouade’s MCP server through its session; the switch doesn’t declare it in Cursor’s config yet. The “Cursor CLI view” runs the agent in Cursor’s interface, with a limited following (see [the terminal view](claude-code-view#with-cursor-cli)).
+Cursor tells neither the tokens nor the cost of a turn when Escouade drives it: the conversation shows none, and the statistics count its turns and their length. Nor does it tell its usage of the month: no bar in the status bar, but “Usage on cursor.com” in Settings › Accounts and in the quota panel, which opens its dashboard. A limit reached (“Upgrade your plan to continue”) stops the turn on an amber card that says so, with, when there is one, the account or harness to go on with. No “Duplicate the conversation” (Cursor doesn’t copy a session), no attached PDFs, no `/` commands in Escouade (to compact its context, type `/summarize` in its terminal view), no remote control or background tasks. It gets Escouade’s MCP server through its session; the switch doesn’t declare it in Cursor’s config yet. The “Cursor CLI view” runs the agent in Cursor’s interface, with a limited following (see [the terminal view](claude-code-view#with-cursor-cli)).
 
 ## The MCP server
 

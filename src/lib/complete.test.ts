@@ -2,10 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { applyCompletion, detectTrigger, filterCommands } from './complete';
 
 describe('detectTrigger', () => {
-  it('detects a slash command only at the very start', () => {
+  it('detects a slash command at the start, after a space or after a line break', () => {
     expect(detectTrigger('/comp', 5)).toEqual({ kind: 'command', query: 'comp', start: 0, end: 5 });
-    expect(detectTrigger('fais /comp', 10)).toBeNull();
+    expect(detectTrigger('fais /comp', 10)).toEqual({ kind: 'command', query: 'comp', start: 5, end: 10 });
+    expect(detectTrigger('Relis ça\n/comp', 14)).toEqual({ kind: 'command', query: 'comp', start: 9, end: 14 });
+    expect(detectTrigger('fais /', 6)).toEqual({ kind: 'command', query: '', start: 5, end: 6 });
+    // The word typed after the command is no longer its name.
     expect(detectTrigger('/compact now', 12)).toBeNull();
+  });
+
+  it('detects no slash command in a word, a path or an address', () => {
+    expect(detectTrigger('et/ou', 3)).toBeNull();
+    expect(detectTrigger('Relis src/lib', 13)).toBeNull();
+    expect(detectTrigger('Relis a/b', 9)).toBeNull();
+    expect(detectTrigger('Va sur https://exemple.fr', 25)).toBeNull();
+    expect(detectTrigger('Relis /usr/lib', 14)).toBeNull();
   });
 
   it('accepts namespaced commands', () => {
@@ -38,6 +49,14 @@ describe('applyCompletion', () => {
     const text = 'Relis @auxxx';
     const t = detectTrigger(text, 9)!;
     expect(applyCompletion(text, t, 'src/auth.ts').text).toBe('Relis @src/auth.ts ');
+  });
+
+  it('replaces only the command under the caret, in the middle of a message', () => {
+    const text = 'Puis lance /co sur la PR';
+    const t = detectTrigger(text, 14)!;
+    expect(applyCompletion(text, t, 'commit')).toEqual({ text: 'Puis lance /commit sur la PR', caret: 19 });
+    const two = 'Relis ça\n/rev\nmerci';
+    expect(applyCompletion(two, detectTrigger(two, 13)!, 'review').text).toBe('Relis ça\n/review \nmerci');
   });
 
   it('inserts a command with a trailing space', () => {

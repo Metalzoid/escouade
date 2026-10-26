@@ -182,8 +182,12 @@ impl AgentRt {
                     .tokens
                     .insert(t.to_string(), Tokens::of(&usage["total"]));
                 if own {
-                    let last = Tokens::of(&usage["last"]);
-                    self.context_tokens = last.input;
+                    // What its context holds, as Codex counts it (`totalTokens` of the last
+                    // call): after a compaction, its `inputTokens` are 0 (full-turn.jsonl).
+                    let last = &usage["last"];
+                    self.context_tokens = last["totalTokens"]
+                        .as_u64()
+                        .unwrap_or_else(|| Tokens::of(last).input);
                     if let Some(w) = usage["modelContextWindow"].as_u64() {
                         self.context_window = w;
                     }
@@ -494,8 +498,14 @@ impl AgentRt {
                     _ => {}
                 }
             }
-            "contextCompaction" if done => {
-                self.notice("info", tr!("Contexte compacté", "Context compacted"), fx);
+            // Asked (`/compact`, ESC-205) or by Codex itself: from its start to its end.
+            "contextCompaction" if main => {
+                let text = if done {
+                    tr!("Contexte compacté", "Context compacted")
+                } else {
+                    tr!("Compaction du contexte…", "Compacting the context…")
+                };
+                self.notice("info", text, fx);
             }
             // The plan of the mode Plan: approved once the turn is over on it.
             "plan" if done && main => {

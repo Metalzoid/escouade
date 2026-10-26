@@ -370,3 +370,56 @@ fn the_schema_of_claude_code_holds_every_field_of_its_recorded_runs() {
     assert!(runs >= 5, "the recorded runs are in tests/fixtures");
     assert!(missing.is_empty(), "not in the schema: {missing:?}");
 }
+
+/// ESC-205: `/compact` and the instruction after it; the composer lists it for the harnesses that
+/// compact by a request of their own (with what it takes), and a harness offers `/` commands in
+/// the composer only when it has some there.
+#[test]
+fn compact_is_read_with_its_instruction_and_listed_where_a_request_does_it() {
+    use crate::engine::{by_id, compact_command, fixed_commands, Compaction};
+    use crate::model::EngineId;
+    assert_eq!(compact_command("/compact"), Some(""));
+    assert_eq!(
+        compact_command("  /compact garde les décisions \n"),
+        Some("garde les décisions")
+    );
+    assert_eq!(
+        compact_command("/compact\nles décisions"),
+        Some("les décisions")
+    );
+    assert_eq!(compact_command("/compacter"), None);
+    assert_eq!(compact_command("fais /compact"), None);
+    let listed = |id: EngineId| -> Vec<(String, bool)> {
+        fixed_commands(by_id(id))
+            .iter()
+            .map(|c| {
+                (
+                    c["name"].as_str().unwrap().to_string(),
+                    c.get("argumentHint").is_some(),
+                )
+            })
+            .collect()
+    };
+    let compact = |hint: bool| vec![("compact".to_string(), hint)];
+    assert_eq!(listed(EngineId::Claude), []);
+    assert_eq!(listed(EngineId::Codex), compact(false));
+    assert_eq!(listed(EngineId::Copilot), compact(true));
+    assert_eq!(listed(EngineId::Opencode), compact(false));
+    assert_eq!(listed(EngineId::Cursor), []);
+    assert_eq!(
+        by_id(EngineId::Cursor).compaction(),
+        Compaction::InItsInterface("/summarize")
+    );
+    for id in [
+        EngineId::Codex,
+        EngineId::Copilot,
+        EngineId::Opencode,
+        EngineId::Cursor,
+    ] {
+        assert_eq!(
+            by_id(id).caps().slash_commands,
+            !listed(id).is_empty(),
+            "{id:?}"
+        );
+    }
+}

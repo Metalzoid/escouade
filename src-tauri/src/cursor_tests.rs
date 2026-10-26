@@ -494,3 +494,34 @@ async fn real_cursor_models() {
     );
     assert!(listed.len() > 1);
 }
+
+/// ESC-205: Cursor CLI's ACP has no compaction request, and its model would take `/compact` for a
+/// message: refused in Escouade's view with what does it (its interface's `/summarize`), the
+/// composer keeping the text, and nothing sent.
+#[tokio::test]
+async fn compact_typed_to_a_cursor_agent_is_refused_with_where_it_works() {
+    let h = harness("esc205-cursor");
+    let (p, _) = h.project(false).await;
+    cursor_account(&h, &crate::engine::fake_cursor());
+    let id = cursor_agent(&h, &p.id, "default").await;
+    h.core
+        .send_message(&id, "bonjour".into(), vec![])
+        .await
+        .unwrap();
+    wait_long(&h, &id, "its turn", 30, |h| {
+        h.items(&id).iter().any(|i| i["kind"] == "turn") && !h.agent(&id).status.is_active()
+    })
+    .await;
+    let e = h
+        .core
+        .send_message(&id, "/compact".into(), vec![])
+        .await
+        .unwrap_err();
+    assert_eq!(
+        format!("{e:#}"),
+        "Cursor CLI ne compacte pas depuis Escouade : tape /summarize dans sa vue terminal."
+    );
+    assert!(!h.items(&id).iter().any(|i| i["text"] == "/compact"));
+    assert!(!h.agent(&id).status.is_active());
+    h.core.stop_for_good();
+}

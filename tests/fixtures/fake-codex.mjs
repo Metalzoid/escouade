@@ -11,8 +11,8 @@
 // It answers `initialize`, `thread/start`
 // (a new thread `thr-<pid>-<n>`), `thread/resume` (any thread but one whose id starts with "perdu": refused),
 // `thread/fork` (a new thread), `model/list`, `account/rateLimits/read`, `turn/start`, `turn/steer`,
-// `turn/interrupt`, `thread/name/set`. What a turn plays is picked by its message (French words, as the
-// scenarios of the fake `claude`):
+// `turn/interrupt`, `thread/name/set`, `thread/compact/start` (a turn of its own, as `compact` says). What a
+// turn plays is picked by its message (French words, as the scenarios of the fake `claude`):
 // - "raisonnement": a reasoning (its summary by deltas), then a reply;
 // - "commande": a command (`rm -rf build`) that asks its approval (item/commandExecution/requestApproval):
 //   run once accepted, declined otherwise;
@@ -565,6 +565,44 @@ async function startTurn(params) {
   return { turn: { id: tid, rootTurnId: tid, items: [], status: 'inProgress', error: null } };
 }
 
+/** `thread/compact/start`, as full-turn.jsonl recorded it: a turn of its own with a `contextCompaction` item, the
+ * history's tokens after it in `last.totalTokens` (its `inputTokens` 0). */
+function compact() {
+  const tid = id('turn');
+  turn = { id: tid, started: Date.now(), wake: null };
+  notify('thread/status/changed', { threadId: thread, status: { type: 'active', activeFlags: [] } });
+  notify('turn/started', { threadId: thread, turn: { id: tid, rootTurnId: tid, items: [], status: 'inProgress', error: null } });
+  const cid = id('compact');
+  item(true, { type: 'contextCompaction', id: cid });
+  setTimeout(() => {
+    const n = ++serial;
+    const total = {
+      totalTokens: 1200 * n,
+      inputTokens: 1000 * n,
+      cachedInputTokens: 400 * n,
+      cacheWriteInputTokens: 0,
+      outputTokens: 200 * n,
+      reasoningOutputTokens: 0,
+    };
+    const last = {
+      totalTokens: 300,
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheWriteInputTokens: 0,
+      outputTokens: 0,
+      reasoningOutputTokens: 0,
+    };
+    notify('thread/tokenUsage/updated', { threadId: thread, turnId: tid, tokenUsage: { total, last, modelContextWindow: 258400 } });
+    item(false, { type: 'contextCompaction', id: cid });
+    notify('thread/status/changed', { threadId: thread, status: { type: 'idle' } });
+    notify('turn/completed', {
+      threadId: thread,
+      turn: { id: tid, rootTurnId: tid, items: [], status: 'completed', error: null, durationMs: Date.now() - turn.started },
+    });
+    turn = null;
+  }, 50);
+}
+
 function handle(msg) {
   log({ in: msg });
   noteInHome({ in: msg });
@@ -637,6 +675,10 @@ function handle(msg) {
       }));
       return reply({ data: (p.cwds ?? [cwd]).map((c) => ({ cwd: c, hooks })) });
     }
+    case 'thread/compact/start':
+      if (turn) return refuse('a turn is already running');
+      reply({});
+      return compact();
     case 'thread/name/set':
       return reply({});
     case 'turn/start':

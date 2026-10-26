@@ -80,7 +80,7 @@ Codex ne donne pas le coût : Escouade l’estime d’après les tokens du tour 
 
 ### Ce que Codex ne fait pas
 
-Il ne lit pas les PDF (le bouton les refuse en le disant) et ne propose pas de commandes `/` dans Escouade. Un agent Codex ne reprend pas sur un autre compte : il attend la remise à zéro, ou continue sur un autre harness. Pas de remote control ni de tâches de fond.
+Il ne lit pas les PDF (le bouton les refuse en le disant) et ne propose dans Escouade que la commande `/compact`, qui compacte le contexte de sa conversation. Un agent Codex ne reprend pas sur un autre compte : il attend la remise à zéro, ou continue sur un autre harness. Pas de remote control ni de tâches de fond.
 
 ## OpenCode
 
@@ -109,7 +109,7 @@ Le coût d’un tour est celui qu’OpenCode donne, au prix du fournisseur : 0 a
 
 ### Ce qu’OpenCode ne fait pas
 
-Pas de mode « Auto » (OpenCode n’a pas de relecteur), pas de bac à sable, un seul compte, pas de PDF joints, pas de commandes `/` dans Escouade, pas de remote control ni de tâches de fond.
+Pas de mode « Auto » (OpenCode n’a pas de relecteur), pas de bac à sable, un seul compte, pas de PDF joints, pas d’autre commande `/` que `/compact` dans Escouade, pas de remote control ni de tâches de fond.
 
 ## Copilot CLI
 
@@ -139,7 +139,7 @@ Le coût d’un tour vient des crédits d’IA de ses appels (un crédit vaut 0,
 
 ### Ce que Copilot CLI ne fait pas
 
-Pas de « Toujours autoriser », pas de mode `assisted` (expérimental), pas de PDF joints, pas de commandes `/` dans Escouade, pas de remote control ni de tâches de fond. Un agent Copilot ne reprend pas sur un autre compte.
+Pas de « Toujours autoriser », pas de mode `assisted` (expérimental), pas de PDF joints, pas d’autre commande `/` que `/compact` dans Escouade (suivie, si tu veux, de ce qu’il faut garder), pas de remote control ni de tâches de fond. Un agent Copilot ne reprend pas sur un autre compte.
 
 ## Cursor CLI
 
@@ -166,7 +166,7 @@ Les skills, commandes, agents et hooks de Claude Code de ton compte et du projet
 
 ### Coût, quota et ce que Cursor ne fait pas
 
-Cursor ne dit ni les tokens ni le coût d’un tour quand Escouade le pilote : la conversation n’en montre pas, et les statistiques comptent ses tours et leur durée. Il ne dit pas non plus son usage du mois : pas de barre dans la barre d’état, mais « Usage sur cursor.com » dans Réglages › Comptes et dans le panneau des quotas, qui ouvre son tableau de bord. Une limite atteinte (« Upgrade your plan to continue ») arrête le tour sur une carte ambre qui le dit, avec, s’il y en a, le compte ou le harness où continuer. Pas de « Dupliquer la conversation » (Cursor ne copie pas une session), pas de PDF joints, pas de commandes `/` dans Escouade, ni remote control ni tâches de fond. Il reçoit le serveur MCP d’Escouade par sa session ; l’interrupteur ne le déclare pas encore dans la config de Cursor. La « Vue Cursor CLI » fait tourner l’agent dans l’interface de Cursor, avec un suivi limité (voir [la vue terminal](claude-code-view#avec-cursor-cli)).
+Cursor ne dit ni les tokens ni le coût d’un tour quand Escouade le pilote : la conversation n’en montre pas, et les statistiques comptent ses tours et leur durée. Il ne dit pas non plus son usage du mois : pas de barre dans la barre d’état, mais « Usage sur cursor.com » dans Réglages › Comptes et dans le panneau des quotas, qui ouvre son tableau de bord. Une limite atteinte (« Upgrade your plan to continue ») arrête le tour sur une carte ambre qui le dit, avec, s’il y en a, le compte ou le harness où continuer. Pas de « Dupliquer la conversation » (Cursor ne copie pas une session), pas de PDF joints, pas de commandes `/` dans Escouade (pour compacter son contexte, tape `/summarize` dans sa vue terminal), ni remote control ni tâches de fond. Il reçoit le serveur MCP d’Escouade par sa session ; l’interrupteur ne le déclare pas encore dans la config de Cursor. La « Vue Cursor CLI » fait tourner l’agent dans l’interface de Cursor, avec un suivi limité (voir [la vue terminal](claude-code-view#avec-cursor-cli)).
 
 ## Le serveur MCP
 

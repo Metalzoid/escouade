@@ -28,8 +28,8 @@ use super::registry::{
 };
 use super::userconfig::{Format, UserConfig};
 use super::{
-    mcp, BoxFuture, Engine, Escouade, Message, OneShot, Process, Program, Room, Spawn, StartLost,
-    Weight,
+    mcp, BoxFuture, Compaction, Engine, Escouade, Message, OneShot, Process, Program, Room, Spawn,
+    StartLost, Weight,
 };
 use crate::agent::{AgentRt, Effects};
 use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL};
@@ -374,7 +374,8 @@ pub fn caps() -> EngineCaps {
         // To be tried with a second account (docs/TODO-1.8.md, point 0).
         resume_other_account: false,
         mid_turn: MidTurn::Immediate,
-        slash_commands: false,
+        // `/compact` alone, by its request (`compaction`, ESC-205).
+        slash_commands: true,
         quota: QuotaKind::Windows,
         quota_windows: vec![crate::model::FIVE_HOURS, crate::model::WEEK],
         // Estimated from its tokens and the public prices of OpenAI's models (`pricing`).
@@ -743,6 +744,11 @@ impl Engine for Codex {
 
     fn user_config(&self) -> Option<&'static UserConfig> {
         Some(&USER_CONFIG)
+    }
+
+    /// `thread/compact/start`, which takes only the thread.
+    fn compaction(&self) -> Compaction {
+        Compaction::Bare
     }
 }
 

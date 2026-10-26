@@ -43,7 +43,7 @@ Les cinq, sur le même plan (les faits et les formats : docs/PROTOCOL.md ; l'int
 | **Serveur MCP d'Escouade (agents)** | `--mcp-config` | `-c mcp_servers.escouade…`, jeton dans l'environnement | une entrée par dossier (`POST /mcp`) | `--additional-mcp-config`, jeton dans l'environnement | `mcpServers` de `session/new`, jeton dans son en-tête |
 | **Déclaré pour l'utilisateur** | `claude mcp add` (`.claude.json`) | `config.toml` | `opencode.json` | `mcp-config.json` | pas encore |
 | **Textes rédigés** | « Claude Haiku » (`claude -p`) | « Codex (GPT-6-Luna) » (`codex exec`) | le modèle choisi (`opencode run`) | « Copilot (GPT-5 mini) » (`copilot -p`) | « Cursor (Auto) » (`agent acp`, mode Ask) |
-| **Pas pris en charge** | — | PDF, Reprendre sur <compte>, commandes `/`, Remote Control, tâches de fond | OpenCode 2, Auto, plusieurs comptes, PDF, Reprendre sur <compte>, commandes `/`, Remote Control, tâches de fond | mode `assisted`, « Toujours autoriser », PDF, Reprendre sur <compte>, commandes `/`, Remote Control, tâches de fond | Auto, quota lu, Dupliquer, PDF, Reprendre sur <compte>, commandes `/`, Remote Control, tâches de fond |
+| **Pas pris en charge** | — | PDF, Reprendre sur <compte>, commandes `/` sauf `/compact`, Remote Control, tâches de fond | OpenCode 2, Auto, plusieurs comptes, PDF, Reprendre sur <compte>, commandes `/` sauf `/compact`, Remote Control, tâches de fond | mode `assisted`, « Toujours autoriser », PDF, Reprendre sur <compte>, commandes `/` sauf `/compact`, Remote Control, tâches de fond | Auto, quota lu, Dupliquer, PDF, Reprendre sur <compte>, commandes `/` (`/compact` refusé : `/summarize` de sa vue terminal), Remote Control, tâches de fond |
 
 Le site en a une page qui les compare (`/docs/harness/`, `/en/docs/harness/`).
 

@@ -383,6 +383,14 @@ impl AgentRt {
                 };
                 self.cp_set_mode(mode, fx);
             }
+            // Asked (`/compact`, ESC-205) or by Copilot itself: from its start to its end.
+            "session.compaction_start" if own => {
+                self.notice(
+                    "info",
+                    tr!("Compaction du contexte…", "Compacting the context…"),
+                    fx,
+                );
+            }
             "session.compaction_complete" if own && d["success"] == true => {
                 self.notice("info", tr!("Contexte compacté", "Context compacted"), fx);
             }
