@@ -36,6 +36,8 @@
   import BranchPicker from '../branches/BranchPicker.svelte';
   import Modal from '../modals/Modal.svelte';
   import { tip } from '../../lib/tip';
+  import { authorName, isTheirs, sharedFile } from '../../lib/sharing';
+  import Switch from '../settings/Switch.svelte';
   import { DEFAULT_TICKET_PREFIX } from '../../lib/worktrees';
 
   // The form of a ticket, new or edited, in a large window to write long texts in. `onsubmit` saves the ticket and tells
@@ -67,6 +69,13 @@
     files: ticket?.files.map((f) => f.file) ?? [],
   }));
   const uid = $props.id();
+  /** « Partager avec l'équipe » (ESC-190): a new ticket starts as its project's « Partager chaque nouveau ticket » says. */
+  const sharedStart = untrack(() =>
+    ticket ? !!ticket.shared && !ticket.shared.gone : !!app.projects.find((p) => p.id === projectId)?.shareNew,
+  );
+  let shared = $state(sharedStart);
+  /** Another one's ticket: not ours to share or not, what changes goes into its file for the team. */
+  const theirs = $derived(!!ticket && isTheirs(ticket));
 
   let title = $state(untrack(() => resume?.title ?? start.title));
   let description = $state(untrack(() => resume?.description ?? start.description));
@@ -112,6 +121,11 @@
    * there while its copy is written). Never a file where it lies: the agent reads a ticket's files later, when it may be gone.
    */
   let files = $state<FormFile[]>(untrack(() => resume?.files ?? ticket?.files.map(keptFile) ?? []));
+  /** What sharing does, in the tooltip of the footer's switch: its file, what goes with it, who commits it. */
+  const shareHelp = $derived(
+    (ticket?.shared ? t('share.form.help', { file: sharedFile(ticket) ?? '' }) : t('share.form.helpNew')) +
+      (files.some((x) => (x.size ?? 0) > 5 * 1024 * 1024) ? ' ' + t('share.form.big') : ''),
+  );
   /** Files being read: the ticket waits for them before it is added or saved. */
   let reading = $state(0);
   /** A copy is being written: its chip has no path yet, the ticket waits for it as well. */
@@ -154,7 +168,8 @@
       after.length !== start.after.length ||
       after.some((id) => !start.after.includes(id)) ||
       imagesChanged(images, held) ||
-      filesChanged(files, start.files),
+      filesChanged(files, start.files) ||
+      shared !== sharedStart,
   );
   /** What it may come after: the other tickets of the project not done yet, oldest first. */
   const candidates = $derived(
@@ -608,6 +623,8 @@
         ...(imagesChanged(images, start.images) ? { images: draftImages(images) } : {}),
         // The same for the files: the whole list, those kept by their file and the copies by their path.
         ...(filesChanged(files, start.files) ? { files: draftFiles(files) } : {}),
+        // Shared or no longer (ESC-190): a new ticket says it always, an edited one when it changed.
+        ...(!theirs && (!ticket || shared !== sharedStart) ? { shared } : {}),
       });
     } finally {
       busy = false;
@@ -876,6 +893,21 @@
     </div>
   </div>
   {#snippet footer()}
+    <!-- Shared with the team (ESC-190, choice 115), in the footer: the body keeps all its height for the description. What
+         its file is, what goes with it and who commits it, in its tooltip. -->
+    {#if theirs && ticket?.shared}
+      <span class="share-foot" use:tip={t('share.form.theirs', { name: authorName(ticket) })}
+        ><Icon name="team" size={14} /><span class="sr">{t('share.form.theirs', { name: authorName(ticket) })}</span><span
+          aria-hidden="true">{t('share.card.by', { name: authorName(ticket) })}</span
+        ></span
+      >
+    {:else}
+      <span class="share-foot" use:tip={shareHelp}
+        ><Switch label={t('share.form.label')} bind:on={shared} describedby="{uid}-share" /><span aria-hidden="true"
+          >{t('share.form.label')}</span
+        ><span class="sr" id="{uid}-share">{shareHelp}</span></span
+      >
+    {/if}
     <span class="hint">{hint[0]}<kbd>{keyLabel('Ctrl+Enter')}</kbd>{hint[1]}</span>
     <button class="btn" onclick={leave}>{t('common.cancel')}</button>
     <button class="btn primary" disabled={!ready} aria-keyshortcuts={ariaEnter()} onclick={submit}
@@ -1107,6 +1139,19 @@
     grid-column: 1 / -1;
     color: var(--muted);
     font-size: 11.5px;
+  }
+  /* « Partager avec l'équipe » (ESC-190): the switch and its words at the left of the footer. */
+  .share-foot {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    align-self: center;
+    color: var(--soft);
+    font-size: 12.5px;
+    white-space: nowrap;
+  }
+  .share-foot > :global(.icon) {
+    color: var(--muted);
   }
   .sr {
     position: absolute;

@@ -526,3 +526,17 @@ La liste sous la carte d’un agent, la puce de sa carte et la vue de chaque tâ
 | lue dans le fichier de sortie | read from the output file | la source de la sortie quand le process n’est plus là, ou en vue Claude Code |
 | Pas de sortie à suivre pour ce type de tâche | No output to follow for this type of task | un workflow, un agent distant ou un coéquipier n’écrivent pas dans une sortie à eux |
 | Arrêter (une tâche) | Stop | arrête cette tâche seule (`stop_task`) ; l’infobulle dit que Claude Code l’annonce ensuite à l’agent, ce qui lui coûte un tour ; absent en vue Claude Code, où la tâche s’arrête « depuis l’interface de Claude Code » (“from Claude Code’s own interface”) |
+
+## Le Kanban partagé (ESC-190)
+
+| Français | English | Note |
+| --- | --- | --- |
+| Partager avec l’équipe | Share with the team | un ticket : son fichier `.escouade/tickets/<id>.yml` dans le dossier du projet |
+| Arrêter le partage | Stop sharing | |
+| Ajouté par Alice | Added by Alice | un ticket partagé par un autre |
+| Pris par Bob | Taken by Bob | celui qui l’a lancé |
+| Masquer chez moi | Hide for me | le fichier reste, l’équipe le voit toujours |
+| Supprimer pour l’équipe | Delete for the team | supprime son fichier, à commiter |
+| Garder le mien / Prendre le sien | Keep mine / Take theirs | un fichier en conflit git |
+| Ton nom | Your name | Réglages › Application › Équipe (“Team”), et par projet |
+| Kanban partagé | Shared Kanban | le groupe de Réglages › Projets |

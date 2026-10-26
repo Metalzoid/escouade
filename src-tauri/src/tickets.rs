@@ -367,6 +367,9 @@ pub struct TicketDraft {
     pub account: Option<String>,
     pub model: Option<String>,
     pub effort: Option<String>,
+    /// « Partager avec l'équipe » (ESC-190): shared, or no longer; None, absent: as it is (a new
+    /// ticket: as « Partager chaque nouveau ticket » of its project says).
+    pub shared: Option<bool>,
 }
 
 /// A field that is there, null or not: Some, its value (null: None); absent, it is None by its
@@ -486,6 +489,14 @@ impl<R: Runtime> Core<R> {
             return Err(title_missing());
         }
         let project = self.project(project_id)?;
+        // Shared from the start (ESC-190): asked, or the project's « Partager chaque nouveau
+        // ticket » when this machine's user gave a name. Asked without a name: refused first.
+        let share = d
+            .shared
+            .unwrap_or(project.share_new && !self.me_in(&project).name.is_empty());
+        if d.shared == Some(true) && self.me_in(&project).name.is_empty() {
+            return Err(crate::sharing::name_missing());
+        }
         // Refused before a key is used up.
         let engine = d.engine.flatten().unwrap_or(project.engine());
         let account = self.ticket_account(&project, engine, d.account.as_deref())?;
@@ -612,6 +623,9 @@ impl<R: Runtime> Core<R> {
         });
         self.request_save();
         self.schedule();
+        if share {
+            return self.ticket_share(&ticket.id, true);
+        }
         Ok(ticket)
     }
 
@@ -813,7 +827,10 @@ impl<R: Runtime> Core<R> {
         }
         let (ticket, ..) = saved?;
         self.schedule();
-        Ok(ticket)
+        match d.shared {
+            Some(on) if on != ticket.shared.is_some() => self.ticket_share(&ticket.id, on),
+            _ => Ok(ticket),
+        }
     }
 
     /// The images of the ticket, with their content: for its form, edited, to show.
@@ -1028,6 +1045,10 @@ impl<R: Runtime> Core<R> {
             id: id.to_string(),
             project_id: t.project_id.clone(),
         });
+        // Shared: its file goes too, to be committed (« Supprimer pour l'équipe », ESC-190).
+        if let (Some(s), Ok(p)) = (&t.shared, self.project(&t.project_id)) {
+            crate::sharing::remove_file_of(&crate::sharing::dir_of(&p), &s.id);
+        }
         self.request_save();
         if !t.images.is_empty() || !t.files.is_empty() {
             // The state without the ticket is on disk before its images and files go: a crash in
@@ -2242,6 +2263,8 @@ impl<R: Runtime> Core<R> {
             .read()
             .iter()
             .filter(|t| t.column == Column::Doing && t.blocked.is_none())
+            // Under way on a teammate's machine (ESC-190): theirs to go on with.
+            .filter(|t| !crate::sharing::elsewhere(t))
             .map(|t| (t.id.clone(), t.key.clone(), t.agent_id.clone()))
             .collect();
         for (ticket_id, key, agent_id) in doing {
@@ -2856,7 +2879,7 @@ impl<R: Runtime> Core<R> {
         }
         let (dir, temporary) = match checkout {
             Some(p) if same_dir(&p, &repo) => {
-                if git::has_tracked_changes(&repo).await? {
+                if git::has_tracked_changes_but_tickets(&repo).await? {
                     bail!(tr!(
                         "Le dossier du projet a des modifications non commitées sur {target}",
                         "The project’s folder has uncommitted changes on {target}"

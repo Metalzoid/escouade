@@ -9,6 +9,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Nouveautés
 
 - Escouade lit le workflow de ton projet à partir des commandes, skills, sous-agents et prompts de tes harness (GSD, Superpowers, une boucle `PROMPT.md`…) : ses étapes, leurs sous-agents, leurs retours et ses fichiers d’état, sans rien dépenser. Chaque dépôt d’un projet a le sien, et la lecture se refait quand un fichier change.
+- Un ticket du Kanban se partage avec l’équipe : Escouade en écrit un fichier dans le dépôt, tient son statut à jour, et tu le commites avec ton travail. Chez tes coéquipiers, il arrive dans « À faire » avec ton nom ; leur pilote auto ne le lance jamais, mais ils peuvent le lancer à la main. Escouade te demande ton nom au premier lancement.
 
 ## [2.0.2] — 2026-10-26
 

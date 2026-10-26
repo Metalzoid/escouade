@@ -41,6 +41,7 @@
   import TestLaunchModal from './components/modals/TestLaunchModal.svelte';
   import ImportModal from './components/modals/ImportModal.svelte';
   import TelemetryModal from './components/modals/TelemetryModal.svelte';
+  import TeamNameModal from './components/modals/TeamNameModal.svelte';
   import UpdateModal from './components/modals/UpdateModal.svelte';
   import Overview from './components/Overview.svelte';
   import ProjectRail from './components/ProjectRail.svelte';
@@ -238,6 +239,8 @@
   <UpdateModal version={app.update.version} notes={app.update.notes} />
 {:else if app.modal?.kind === 'telemetry'}
   <TelemetryModal />
+{:else if app.modal?.kind === 'teamName'}
+  <TeamNameModal projectId={app.modal.projectId} then={app.modal.then} />
 {:else if app.modal?.kind === 'notes'}
   <UpdateModal version={app.modal.version} notes={app.modal.notes} installed />
 {:else if app.modal?.kind === 'convSearch'}

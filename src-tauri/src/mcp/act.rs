@@ -506,6 +506,7 @@ pub(super) async fn create_ticket<R: Runtime>(
         account: account_setting(core, a.account.as_deref()),
         model: model_setting(core, auto_off(a.model.as_deref()))?,
         effort: effort_setting(i18n::ui(), auto_off(a.effort.as_deref()))?,
+        shared: a.shared,
     };
     let made = core
         .ticket_create(&project.id, draft)
@@ -543,11 +544,32 @@ pub(super) async fn update_ticket<R: Runtime>(
         && a.account.is_none()
         && a.model.is_none()
         && a.effort.is_none()
+        && a.shared.is_none()
     {
         return Err(ToolError::Failed(tr!(
-            "Rien à modifier : donne au moins un des champs title, description, criteria, after, addImages, removeImages, addFiles, removeFiles, account, model ou effort.",
-            "Nothing to change: give at least one of the fields title, description, criteria, after, addImages, removeImages, addFiles, removeFiles, account, model or effort."
+            "Rien à modifier : donne au moins un des champs title, description, criteria, after, addImages, removeImages, addFiles, removeFiles, account, model, effort ou shared.",
+            "Nothing to change: give at least one of the fields title, description, criteria, after, addImages, removeImages, addFiles, removeFiles, account, model, effort or shared."
         )));
+    }
+    // Shared or no longer, and nothing else (ESC-190): in any column.
+    let only_shared = a.title.is_none()
+        && a.description.is_none()
+        && a.criteria.is_none()
+        && a.after.is_none()
+        && add.is_empty()
+        && remove.is_empty()
+        && add_files.is_empty()
+        && remove_files.is_empty()
+        && a.account.is_none()
+        && a.model.is_none()
+        && a.effort.is_none();
+    if let (true, Some(on)) = (only_shared, a.shared) {
+        let (c, id) = (core.clone(), t.id.clone());
+        let updated = tokio::task::spawn_blocking(move || c.ticket_share(&id, on))
+            .await
+            .map_err(|e| failure(e.into()))?
+            .map_err(refusal)?;
+        return json(&ticket_view(core, &updated));
     }
     let project = project_of(core, &t.project_id)?;
     // The words of the ticket changed (not its dependencies alone): the description ends with who
@@ -590,6 +612,7 @@ pub(super) async fn update_ticket<R: Runtime>(
         account: account_setting(core, a.account.as_deref()),
         model: model_setting(core, auto_off(a.model.as_deref()))?,
         effort: effort_setting(i18n::ui(), auto_off(a.effort.as_deref()))?,
+        shared: a.shared,
     };
     let (images_given, files_given) = (
         !add.is_empty() || !remove.is_empty(),
@@ -662,6 +685,10 @@ pub(super) fn start_ticket<R: Runtime>(
 ) -> Result<String, ToolError> {
     let t = resolve::ticket(core, caller, &a.ticket)?;
     may_act_on(core, caller, &t.project_id)?;
+    // Another one's shared ticket is started by hand alone (ESC-190, choice 130).
+    if let Some(why) = crate::sharing::start_refusal(i18n::ui(), &t) {
+        return Err(ToolError::Refused(why));
+    }
     // Before anything: a model or an effort that does not fit starts nothing, writes nothing.
     let model = model_setting(core, auto_off(a.model.as_deref()))?;
     let effort = effort_setting(i18n::ui(), auto_off(a.effort.as_deref()))?;
@@ -1344,6 +1371,15 @@ pub(super) async fn delete_ticket<R: Runtime>(
     let t = resolve::ticket(core, caller, &a.ticket)?;
     may_act_on(core, caller, &t.project_id)?;
     not_own_ticket(core, caller, &t, own_ticket_with_this_tool())?;
+    // Another one's shared ticket: hidden or deleted for the team by hand alone (ESC-190).
+    if let Some(s) = t.shared.as_ref().filter(|s| !s.mine) {
+        let who = s.author.name.clone();
+        return Err(ToolError::Refused(tr!(
+            "{} est partagé par {who} : seul l’utilisateur le masque ou le supprime pour l’équipe, depuis le Kanban.",
+            "{} is shared by {who}: only the user hides it or deletes it for the team, from the Kanban.",
+            t.key
+        )));
+    }
     // Its approval would go on without it: merging a ticket that is gone.
     if t.step.is_some() {
         return Err(ToolError::Refused(tr!(
@@ -1915,6 +1951,7 @@ fn sub_draft<R: Runtime>(
         account: None,
         model: None,
         effort: None,
+        shared: None,
     })
 }
 

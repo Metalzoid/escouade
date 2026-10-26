@@ -109,6 +109,8 @@ describe('TicketForm', () => {
         account: '',
         model: '',
         effort: '',
+        // A new ticket says whether it is shared (ESC-190).
+        shared: false,
       });
     });
 
@@ -919,6 +921,7 @@ describe('TicketForm, its files', () => {
         account: '',
         model: '',
         effort: '',
+        shared: false,
       });
     });
 

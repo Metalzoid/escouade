@@ -1501,6 +1501,8 @@ pub(crate) fn blank_project(path: &str) -> Project {
         logo: String::new(),
         tile_label: false,
         tile_label_text: String::new(),
+        user_name: String::new(),
+        share_new: false,
         worktree_per_agent: false,
         created_at: 0,
         run_commands: Vec::new(),
@@ -1871,6 +1873,17 @@ impl<R: Runtime> Core<R> {
         self.refresh_all_repos();
         // And their workflows, read again if a file changed meanwhile (ESC-192).
         self.refresh_all_workflows();
+        // The shared tickets' files read before the window asks for the tickets (ESC-190): what a pull brought while
+        // the app was closed is on the board from the start. This machine's user's id is made once, then they are read
+        // again with it.
+        self.sync_all_shared();
+        if self.settings.read().user_id.is_empty() {
+            let c = self.clone();
+            tauri::async_runtime::spawn(async move {
+                c.ensure_identity().await;
+                c.sync_all_shared();
+            });
+        }
         let c = self.clone();
         tauri::async_runtime::spawn(async move { c.git_loop(git_rx).await });
         let c = self.clone();
@@ -1887,6 +1900,8 @@ impl<R: Runtime> Core<R> {
                 tokio::time::sleep(Duration::from_millis(400)).await;
                 if c.dirty.swap(false, Ordering::AcqRel) {
                     c.save_now();
+                    // A ticket shared with the team writes its file at each change (ESC-190).
+                    c.sync_all_shared();
                 }
             }
         });
@@ -2086,6 +2101,10 @@ impl<R: Runtime> Core<R> {
     pub fn save_settings(self: &Arc<Self>, mut s: Settings) -> Result<()> {
         // The MCP server's port is the backend's own (`sync_mcp`): the window's copy may be older.
         s.mcp_port = self.settings.read().mcp_port;
+        // The user's id is the backend's too (`ensure_identity`): a window's copy may be older.
+        if s.user_id.is_empty() {
+            s.user_id = self.settings.read().user_id.clone();
+        }
         s.normalize_attachments();
         s.normalize_display();
         accounts::normalize(&mut s);
@@ -7316,7 +7335,7 @@ impl<R: Runtime> Core<R> {
             self.git.refresh(&pid);
             return out;
         }
-        if git::has_tracked_changes(&project.path).await? {
+        if git::has_tracked_changes_but_tickets(&project.path).await? {
             bail!(tr!(
                 "Le dépôt principal a des modifications non commitées : commite-les ou mets-les de côté avant de merger.",
                 "The main repository has uncommitted changes: commit or stash them before merging."
@@ -7921,6 +7940,8 @@ impl<R: Runtime> Core<R> {
     pub(crate) async fn compute_git(self: &Arc<Self>, project_id: &str) {
         // Its folder changed: its `.escouade.yml` too, maybe (a pull, another branch).
         self.read_shared(project_id, false);
+        // Its shared tickets' files too (ESC-190): read again, a teammate's change followed.
+        self.sync_shared(project_id);
         let Ok(project) = self.project(project_id) else {
             return;
         };

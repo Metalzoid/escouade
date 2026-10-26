@@ -555,6 +555,10 @@ pub struct CreateTicketArgs {
         description = "The effort of its agents (low, medium, high, xhigh or max), or auto (the default): the Kanban's, else its account's (a model that takes none, Haiku, goes without)."
     )]
     pub effort: Option<String>,
+    #[schemars(
+        description = "Share it with the team (true): Escouade writes its file .escouade/tickets/<id>.yml in the project's folder and keeps its status up to date; the user commits it, Escouade never does. Left out: as the project's « Partager chaque nouveau ticket » says. Refused while the user has given no name."
+    )]
+    pub shared: Option<bool>,
 }
 
 /// A file to attach to a ticket, as `create_ticket` and `update_ticket` take it.
@@ -673,6 +677,10 @@ pub struct UpdateTicketArgs {
         description = "The effort of its agents (low, medium, high, xhigh or max), or auto: the Kanban's, else its account's (a model that takes none, Haiku, goes without). Leave it out to keep it."
     )]
     pub effort: Option<String>,
+    #[schemars(
+        description = "true shares it with the team (its file .escouade/tickets/<id>.yml, committed by the user), false stops sharing it (its file is deleted, to be committed). Any column. Leave it out to keep it."
+    )]
+    pub shared: Option<bool>,
 }
 
 /// Where `move_ticket` puts a ticket.

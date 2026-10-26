@@ -411,7 +411,11 @@ impl<R: Runtime> Core<R> {
             }
             let (add, del) = git::diff_counts(&repo_dir, &c.base, &wt.branch).await;
             (m.add, m.del) = (add, del);
-            if m.problem.is_none() && git::has_tracked_changes(&repo_dir).await.unwrap_or(true) {
+            if m.problem.is_none()
+                && git::has_tracked_changes_but_tickets(&repo_dir)
+                    .await
+                    .unwrap_or(true)
+            {
                 m.problem = Some(tr!(
                     "le dépôt a des modifications non commitées",
                     "the repository has uncommitted changes"

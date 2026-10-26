@@ -149,7 +149,35 @@
   </Row>
 </Group>
 
+<!-- The user's name for the shared tickets (ESC-190, choice 113), and the id that tells a namesake apart. -->
+<Group title={t('share.settings.group')}>
+  <Row label={t('share.settings.name')} desc={t('share.settings.nameDesc')}>
+    <input
+      class="field input"
+      aria-label={t('share.settings.name')}
+      spellcheck="false"
+      placeholder={t('share.settings.noName')}
+      bind:value={() => s.userName ?? '', (v) => (s.userName = v)}
+    />
+  </Row>
+  {#if s.userId}
+    <Row label={t('share.settings.id')} desc={t('share.settings.idDesc')}>
+      <span class="chip mono">{s.userId}</span>
+    </Row>
+  {/if}
+</Group>
+
 <style>
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 6px;
+    background: rgba(var(--fg-rgb), 0.06);
+    color: var(--soft);
+    font-size: 11.5px;
+  }
   .held {
     margin: 0 0 12px;
     font-size: 12px;

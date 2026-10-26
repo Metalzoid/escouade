@@ -291,7 +291,8 @@ describe('TicketCard', () => {
     const backend = fakeBackend();
     show(doing());
     await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-1/ }));
-    expect(menu.open!.items.map((i) => i.label)).toEqual(["Ouvrir l'agent", '', 'Supprimer']);
+    // « Partager avec l’équipe » too (ESC-190), between its separators.
+    expect(menu.open!.items.map((i) => i.label)).toEqual(["Ouvrir l'agent", '', 'Partager avec l’équipe', '', 'Supprimer']);
     menu.open!.items.find((i) => i.label === 'Supprimer')!.onClick!();
     expect(app.modal).toMatchObject({
       kind: 'confirm',
@@ -308,7 +309,7 @@ describe('TicketCard', () => {
     const backend = fakeBackend();
     show(ticket());
     await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-1/ }));
-    expect(menu.open!.items.map((i) => i.label)).toEqual(['Modifier', 'Passer en tête', '', 'Supprimer']);
+    expect(menu.open!.items.map((i) => i.label)).toEqual(['Modifier', 'Passer en tête', '', 'Partager avec l’équipe', '', 'Supprimer']);
     menu.open!.items.find((i) => i.label === 'Supprimer')!.onClick!();
     expect(app.modal).toMatchObject({
       kind: 'confirm',
@@ -1024,7 +1025,7 @@ describe('TicketCard in English', () => {
   it('writes the menu of a ticket to do, and the confirmation to delete it, in English', async () => {
     show(ticket());
     await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-1/ }));
-    expect(menu.open!.items.map((i) => i.label)).toEqual(['Edit', 'Move to top', '', 'Delete']);
+    expect(menu.open!.items.map((i) => i.label)).toEqual(['Edit', 'Move to top', '', 'Share with the team', '', 'Delete']);
     menu.open!.items.find((i) => i.label === 'Delete')!.onClick!();
     expect(app.modal).toMatchObject({
       kind: 'confirm',
@@ -1073,7 +1074,7 @@ describe('TicketCard in English', () => {
   it('writes the menu of a ticket under way in English', async () => {
     show(doing());
     await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-1/ }));
-    expect(menu.open!.items.map((i) => i.label)).toEqual(['Open agent', '', 'Delete']);
+    expect(menu.open!.items.map((i) => i.label)).toEqual(['Open agent', '', 'Share with the team', '', 'Delete']);
     menu.open!.items.find((i) => i.label === 'Delete')!.onClick!();
     expect(app.modal).toMatchObject({
       title: 'Delete ticket DEM-1?',

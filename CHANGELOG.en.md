@@ -9,6 +9,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### New
 
 - Escouade reads your project’s workflow from the commands, skills, sub-agents and prompts of your harnesses (GSD, Superpowers, a `PROMPT.md` loop…): its steps, their sub-agents, their ways back and its state files, at no cost. Each repository of a project has its own, and the reading is redone when a file changes.
+- A ticket of the Kanban can be shared with the team: Escouade writes a file of it in the repository, keeps its status up to date, and you commit it with your work. For your teammates, it lands in “To do” with your name; their autopilot never starts it, but they can start it by hand. Escouade asks for your name at the first launch.
 
 ## [2.0.2] — 2026-10-26
 

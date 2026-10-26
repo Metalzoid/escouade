@@ -1438,7 +1438,18 @@ describe('SettingsModal in English', () => {
       within(panel())
         .getAllByRole('heading', { level: 2 })
         .map((h) => h.textContent),
-    ).toEqual(['Identity', 'Remote control', 'Privacy', 'Git', 'Worktrees', 'Launch', '.escouade.yml', 'Danger zone', 'New projects']);
+    ).toEqual([
+      'Identity',
+      'Remote control',
+      'Privacy',
+      'Git',
+      'Worktrees',
+      'Launch',
+      '.escouade.yml',
+      'Shared Kanban',
+      'Danger zone',
+      'New projects',
+    ]);
     // The assistant is a row of the identity (2.0 design).
     expect(screen.getByRole('button', { name: 'Open the assistant…' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Project name' })).toHaveValue('demo-api');

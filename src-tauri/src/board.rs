@@ -352,7 +352,8 @@ pub fn turn_end(
 /// (every account of its harness waits for its quota: an agent waits for its reset, or
 /// `autopilot_pause` holds them back), a ticket of another harness going on. The autopilot
 /// leaves a ticket that comes after one not "Terminé" yet for the next; one launched by hand
-/// starts all the same (the window asked first).
+/// starts all the same (the window asked first). The autopilot never starts a ticket another one of
+/// the team shared (ESC-190): only « Lancer » does.
 pub fn to_start(
     tickets: &[Ticket],
     project_id: &str,
@@ -361,8 +362,11 @@ pub fn to_start(
 ) -> Vec<String> {
     let mut held = held;
     let mine = || tickets.iter().filter(|t| t.project_id == project_id);
+    // A ticket under way on a teammate's machine (ESC-190) takes no place here.
     let busy = mine()
-        .filter(|t| t.column == Column::Doing && t.blocked.is_none())
+        .filter(|t| {
+            t.column == Column::Doing && t.blocked.is_none() && !crate::sharing::elsewhere(t)
+        })
         .count();
     let free = (s.max_parallel.clamp(1, 6) as usize).saturating_sub(busy);
     // A ticket gone, or of another project, holds nothing back.
@@ -371,8 +375,17 @@ pub fn to_start(
         .map(|t| t.id.as_str())
         .collect();
     let waits = |t: &Ticket| t.after.iter().any(|a| unfinished.contains(a.as_str()));
+    let theirs = crate::sharing::theirs;
     let mut todo: Vec<&Ticket> = mine()
-        .filter(|t| t.column == Column::Todo && (t.forced || (s.autopilot && !waits(t))))
+        .filter(|t| {
+            t.column == Column::Todo && (t.forced || (s.autopilot && !waits(t) && !theirs(t)))
+        })
+        // A shared ticket whose file cannot be read, or hidden here, never starts (ESC-190).
+        .filter(|t| {
+            t.shared
+                .as_ref()
+                .is_none_or(|sh| sh.problem.is_none() && !sh.hidden)
+        })
         .filter(|t| !held(t))
         .collect();
     todo.sort_by_key(|t| (t.rank, t.created_at));

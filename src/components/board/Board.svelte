@@ -4,6 +4,7 @@
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { hasPending } from '../../lib/shared-file';
+  import { shownOnBoard } from '../../lib/sharing';
   import { app } from '../../lib/state.svelte';
   import type { Project } from '../../lib/types';
   import Icon from '../Icon.svelte';
@@ -15,7 +16,11 @@
   // The project as the app holds it now (its board settings change under this view).
   const project = $derived(app.projects.find((p) => p.id === given.id) ?? given);
   const s = $derived(project.board);
-  const tickets = $derived(Object.values(app.tickets).filter((x) => x.projectId === project.id));
+  const all = $derived(Object.values(app.tickets).filter((x) => x.projectId === project.id));
+  /** « Masquer chez moi » (ESC-190): another one's tickets taken off this board, shown back on demand. */
+  let showHidden = $state(false);
+  const hiddenCount = $derived(all.filter((x) => x.shared?.hidden).length);
+  const tickets = $derived(shownOnBoard(all, showHidden));
   const busyCount = $derived(busy(tickets));
   const looping = $derived(tickets.filter((x) => x.column === 'doing').length);
   /** When the agents waiting for their quota resume, if every account this project could use waits for its own. */
@@ -109,6 +114,15 @@
       <span class="why" use:tip={{ text: t('settings.shared.banner'), cut: true }}>{t('settings.shared.banner')}</span>
       <button class="btn" onclick={() => (app.modal = { kind: 'settings', tab: 'projects', projectId: project.id })}
         >{t('settings.shared.bannerButton')}</button
+      >
+    </div>
+  {/if}
+  {#if hiddenCount}
+    <div class="band hidden-band" role="status">
+      <Icon name="team" size={14} />
+      <span class="why">{t('share.board.hidden', { count: hiddenCount })}</span>
+      <button class="btn" aria-pressed={showHidden} onclick={() => (showHidden = !showHidden)}
+        >{showHidden ? t('share.board.hide') : t('share.board.show')}</button
       >
     </div>
   {/if}
@@ -303,6 +317,14 @@
   }
   .band > :global(.icon) {
     color: var(--wait);
+  }
+  /* Hidden tickets of the team (ESC-190): said quietly, not a warning. */
+  .band.hidden-band {
+    background: rgba(var(--fg-rgb), 0.035);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .band.hidden-band > :global(.icon) {
+    color: var(--muted);
   }
   .band .btn {
     flex: none;

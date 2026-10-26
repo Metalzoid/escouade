@@ -416,6 +416,7 @@ export const fr: Catalog = {
       autopilot: 'Le pilote auto',
       testing: 'Tester et valider',
       integrations: 'Jira, Trello, GitHub, Linear',
+      'shared-board': 'Partager le Kanban',
       mcp: 'Le serveur MCP',
       accounts: 'Plusieurs comptes',
       usage: 'Quotas et coût',

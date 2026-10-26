@@ -97,6 +97,9 @@ mod selfupdate;
 mod sentfiles;
 #[cfg(test)]
 mod sentfiles_tests;
+mod sharing;
+#[cfg(test)]
+mod sharing_tests;
 #[cfg(unix)]
 mod shellenv;
 mod signin;
@@ -580,6 +583,10 @@ pub fn run() {
             commands::clean_worktrees,
             commands::ticket_images,
             commands::ticket_prioritize,
+            commands::ticket_share,
+            commands::ticket_hide,
+            commands::shared_resolve,
+            commands::git_user_name,
             commands::ticket_start,
             commands::ticket_resume,
             commands::ticket_approve,

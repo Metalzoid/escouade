@@ -8299,6 +8299,179 @@
             inset 0 0 0 1.5px var(--run);
         }
       }
+
+      /* ---------- The shared Kanban (ESC-190): a .yml per shared ticket, its author and its status ---------- */
+      /* A teammate: the initial on a disc of a hue drawn from their id, then their name. */
+      .mate {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
+        color: var(--soft);
+        font-weight: 550;
+        white-space: nowrap;
+      }
+      .mate > i {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: oklch(0.42 0.08 var(--h));
+        color: oklch(0.97 0.02 var(--h));
+        font: normal 600 9.5px/1 var(--font);
+      }
+      :root[data-theme='light'] .mate > i {
+        background: oklch(0.9 0.05 var(--h));
+        color: oklch(0.36 0.1 var(--h));
+      }
+      .card-top .mate {
+        margin-left: auto;
+        font-size: 11.5px;
+      }
+      .card-top .mate + .loop {
+        margin-left: 0;
+      }
+      /* One's own shared ticket: a discreet mark after the key. */
+      .share-mark {
+        flex: none;
+        display: inline-flex;
+        color: var(--p-ink);
+      }
+      .share-mark svg {
+        width: 14px;
+        height: 14px;
+      }
+      .card .theirs-line {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        padding-top: 9px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .card .theirs-line {
+        align-items: flex-start;
+        line-height: 1.4;
+      }
+      .card .theirs-line .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .card .theirs-line svg {
+        margin-top: 1px;
+      }
+      .card .theirs-line svg {
+        flex: none;
+        color: var(--muted);
+      }
+      .card .row-btns .btn .ell {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* What a shared file asks of you: a conflict, a teammate on the same ticket, a ticket no longer shared. */
+      .card .clash {
+        display: grid;
+        grid-template-columns: 14px minmax(0, 1fr);
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: color-mix(in oklch, var(--wait) 7%, transparent);
+        box-shadow: inset 0 0 0 1px var(--wait-line);
+        color: var(--soft);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .card .clash > svg {
+        margin-top: 1px;
+        color: var(--wait);
+      }
+      .card .clash.quiet {
+        background: rgba(var(--fg-rgb), 0.035);
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .card .clash.quiet > svg {
+        color: var(--muted);
+      }
+      .card:has(.clash) .row-btns {
+        flex-wrap: wrap;
+      }
+      /* The ticket's form: share it, and where its file goes. */
+      .share-row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: 4px 10px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .share-row .lab {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+      }
+      .share-row .lab b {
+        font-size: 13px;
+        font-weight: 590;
+      }
+      .share-row .lab span {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .share-row .lab .mono {
+        color: var(--soft);
+        font-size: 11.5px;
+      }
+      /* The panel's group of ticket files, at the head of « Tout le projet ». */
+      .file .fn .tkey {
+        margin: 0 6px 0 0;
+        color: var(--p-ink);
+        font: 600 11px var(--mono);
+      }
+      .file .cnt .to {
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .repo-h .rn.sans {
+        font: 600 12px var(--font);
+      }
+      .repo-h .tk-ic {
+        color: var(--p-ink);
+      }
+      .files .tnote {
+        margin: 2px 12px 8px 34px;
+        color: var(--muted);
+        font-size: 11.5px;
+        line-height: 1.4;
+      }
+      /* The first launch: your name for the team. */
+      .name-modal .mate-prev {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(var(--fg-rgb), 0.035);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .name-modal .mate-prev .card-top {
+        flex: 1;
+      }
+      /* The shared ticket's file in the editor: YAML. */
+      .code-ed .yk {
+        color: var(--p-ink);
+      }
+      .code-ed .yc {
+        color: var(--muted);
+        font-style: italic;
+      }
     </style>
   </head>
   <body>
@@ -8365,6 +8538,7 @@
         <symbol id="i-plug" viewBox="0 0 16 16"><path d="M6 2.75v3M10 2.75v3M4.25 5.75h7.5v2a3.75 3.75 0 0 1-7.5 0zM8 11.5v2" /></symbol>
         <symbol id="i-star" viewBox="0 0 16 16"><path d="M8 2.6l1.6 3.4 3.7.4-2.8 2.5.8 3.7L8 10.7l-3.3 1.9.8-3.7-2.8-2.5 3.7-.4z" /></symbol>
         <symbol id="i-gift" viewBox="0 0 16 16"><path d="M8 3.5v10M3 6.75h10v2.5H3zM4 9.25v4h8v-4M8 6.75C6.75 4.5 4.5 4 4.5 5.4 4.5 6.4 6.25 6.75 8 6.75 9.75 6.75 11.5 6.4 11.5 5.4 11.5 4 9.25 4.5 8 6.75z" /></symbol>
+        <symbol id="i-team" viewBox="0 0 16 16"><circle cx="6" cy="5.75" r="2.25" /><path d="M2 13c.5-2 2-3.25 4-3.25S9.5 11 10 13M10.5 3.6a2.25 2.25 0 0 1 0 4.3M11.6 9.9c1.3.45 2.1 1.5 2.4 3.1" /></symbol>
       </defs>
     </svg>
 
@@ -10039,6 +10213,27 @@ If your browser did not open, navigate to this URL to authenticate:
       </div>
     </div>
 
+    <!-- The shared Kanban (ESC-190): the card's menu, and the first launch's question, your name for the team. -->
+    <div class="menu" id="tk-menu" role="menu" aria-label="Actions du ticket" hidden style="position: fixed; min-width: 300px"></div>
+    <div class="scrim" id="name-modal" hidden>
+      <div class="modal name-modal" role="dialog" aria-modal="true" aria-labelledby="nm-title" style="width: min(500px, 100vw - 48px)">
+        <div class="m-head"><svg class="i" style="color: var(--muted)"><use href="#i-user" /></svg><h2 id="nm-title">Ton nom pour l’équipe</h2></div>
+        <div class="m-body">
+          <p style="margin: 0; color: var(--soft)">Quand tu partages un ticket du Kanban, ou fais avancer celui d’un autre, ton nom est écrit dans son fichier : c’est ce que tes coéquipiers liront.</p>
+          <div class="fld">
+            <label for="nm-in">Ton nom</label>
+            <input class="inp" id="nm-in" value="Bob Durand" />
+            <span class="help">Repris de <span class="mono">git config user.name</span>. Modifiable dans Réglages › Application, et par projet.</span>
+          </div>
+          <div class="who-prev"><span>Chez eux :</span><div class="card-top"><span>DEM-7</span><span class="mate" style="margin-left: 0"><i style="--h: 250" aria-hidden="true">B</i>Bob Durand</span></div></div>
+        </div>
+        <div class="m-foot">
+          <button class="btn" data-close-any style="margin-right: auto">Plus tard</button>
+          <button class="btn primary">Enregistrer</button>
+        </div>
+      </div>
+    </div>
+
     <!-- The new project's assistant, form A: steps on a rail; a step at a time, the checks before creating. -->
     <div class="scrim" id="wiz-modal" hidden>
       <div class="modal xwide" role="dialog" aria-modal="true" aria-labelledby="wiz-title" style="height: min(640px, 100vh - 80px)">
@@ -10908,6 +11103,26 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
       <span class="row"><svg class="i s14"><use href="#i-clock" /></svg>Claude Code le relance à 15:30</span>
     </div>
     <!-- ESC-169: a project whose folder holds several git repositories (front, api, infra, docs). -->
+    <!-- The shared Kanban (ESC-190): the ticket files Escouade wrote in the project's folder, at the head of the panel. -->
+    <template id="tpl-sfiles">
+      <div class="side-top">
+        <div class="seg small" role="tablist" aria-label="Portée">
+          <button role="tab" aria-selected="false">Cet agent</button>
+          <button role="tab" aria-selected="true">Tout le projet</button>
+        </div>
+        <div class="caption">Dossier du projet · <span class="mono">main</span></div>
+      </div>
+      <div class="files">
+        <button class="repo-h" aria-expanded="true"><svg class="i s14"><use href="#i-down" /></svg><span class="rn sans">Tickets partagés</span><span class="rb">.escouade/tickets</span><span class="cnt"><span class="to">3</span></span></button>
+        <button class="file in" title=".escouade/tickets/q4w7c2na.yml et son image"><span class="letter a" aria-label="Ajouté">A</span><span class="fn"><b><span class="tkey">DEM-7</span>Journal d’audit des connexions</b><span>+ 1 image</span></span><span class="cnt"><span class="to">partagé</span></span></button>
+        <button class="file in" aria-current="true" title=".escouade/tickets/h8m2v6kd.yml"><span class="letter m" aria-label="Modifié">M</span><span class="fn"><b><span class="tkey">DEM-12</span>Export des factures en PDF</b><span>d’Alice</span></span><span class="cnt"><span class="to">→ En cours · toi</span></span></button>
+        <button class="file in" title=".escouade/tickets/w6n3b8te.yml"><span class="letter m" aria-label="Modifié">M</span><span class="fn"><b><span class="tkey">DEM-5</span>Export CSV des factures</b></span><span class="cnt"><span class="to">→ À tester</span></span></button>
+        <p class="tnote">Écrits par Escouade dans le dossier du projet ; elle ne les commite jamais. Commite-les avec ton travail, l’équipe les reçoit à son pull. Ils ne bloquent ni un merge ni une validation.</p>
+        <button class="repo-h" aria-expanded="true"><svg class="i s14"><use href="#i-down" /></svg><span class="rn sans">Code</span><span class="rb">main</span><span class="cnt"><span class="add">+18</span><span class="del">−4</span></span></button>
+        <button class="file in"><span class="letter m" aria-label="Modifié">M</span><span class="fn"><b>limiter.ts</b><span>src/auth</span></span><span class="cnt"><span class="add">+14</span><span class="del">−3</span></span></button>
+        <button class="file in"><span class="letter m" aria-label="Modifié">M</span><span class="fn"><b>README.md</b></span><span class="cnt"><span class="add">+4</span><span class="del">−1</span></span></button>
+      </div>
+    </template>
     <template id="tpl-rfiles">
       <div class="side-top">
         <div class="seg small" role="tablist" aria-label="Portée">
@@ -12939,6 +13154,251 @@ Chaque PR cite l’autre : à merger ensemble.</div>
           </section>`,
         );
         settingsAt('projects', route === 'loops-settings' ? 'sg-workflow' : 'sh-wf-found');
+      }
+
+      // ---------- The shared Kanban (ESC-190) ----------
+      // Seen from Bob's Escouade on demo-api: he shares his DEM-7; Alice's DEM-12 came with his last pull (À faire, never
+      // started by his autopilot), her DEM-10 is under way at hers, her DEM-9 done. #share: the board and the card's menu;
+      // #share-ticket: the form; #share-name: the first launch; #share-settings, #share-settings-project: the settings;
+      // #share-git: the files to commit; #share-file: a ticket's file; #share-edge: what can go wrong.
+      if (route.startsWith('share')) shareBoard();
+      function shareBoard() {
+        const who = (name, h, extra = '') => `<span class="mate"${extra}><i style="--h: ${h}" aria-hidden="true">${name[0]}</i>${name}</span>`;
+        window.WHO = who;
+        const mark = '<span class="share-mark" role="img" aria-label="Partagé avec l’équipe" title="Partagé avec l’équipe · .escouade/tickets/q4w7c2na.yml"><svg class="i"><use href="#i-team" /></svg></span>';
+        const cols = $$('#view-board .col');
+        // Bob's own DEM-5, shared: the mark after its key.
+        const dem5 = $$('.card', cols[1]).find((c) => c.textContent.includes('DEM-5'));
+        dem5.querySelector('.card-top > span').insertAdjacentHTML('afterend', mark);
+        // Alice's DEM-12, in « À faire ».
+        cols[0].querySelector('.col-h .n').textContent = '2';
+        cols[0].insertAdjacentHTML(
+          'beforeend',
+          `<div class="card" id="card-alice">
+            <div class="card-top"><span>DEM-12</span>${who('Alice', 20)}</div>
+            <h2>Export des factures en PDF</h2>
+            <ul class="crit">
+              <li><svg class="i"><use href="#i-circle" /></svg>Chaque facture s’exporte en PDF A4</li>
+              <li><svg class="i"><use href="#i-circle" /></svg>Le numéro de facture est dans le nom du fichier</li>
+              <li><svg class="i"><use href="#i-circle" /></svg>Tests verts</li>
+            </ul>
+            <div class="theirs-line"><svg class="i s14"><use href="#i-team" /></svg><span class="grow">Ajouté par Alice · le pilote auto ne le lance pas</span></div>
+            <div class="row-btns"><button class="btn"><svg class="i s14"><use href="#i-play" /></svg>Lancer</button></div>
+          </div>`,
+        );
+        // Alice's DEM-10, under way at hers: no agent here, nothing to do.
+        cols[1].querySelector('.col-h .n').textContent = '3';
+        cols[1].insertAdjacentHTML(
+          'beforeend',
+          `<button class="card" id="card-alice-run">
+            <div class="card-top"><span>DEM-10</span>${who('Alice', 20)}</div>
+            <h2>Relances des factures impayées</h2>
+            <div class="theirs-line"><svg class="i s14"><use href="#i-team" /></svg><span class="grow">Pris par Alice · à 14:37, dans son fichier</span></div>
+          </button>`,
+        );
+        // Alice's DEM-9, done at hers.
+        cols[3].querySelector('.col-h .n').textContent = '4';
+        cols[3].querySelector('.col-h').insertAdjacentHTML(
+          'afterend',
+          `<button class="card past" id="card-alice-done">
+            <div class="card-top"><span>DEM-9</span>${who('Alice', 20)}</div>
+            <h2>Avoirs sur facture</h2>
+            <span class="outcome"><svg class="i s14"><use href="#i-merge" /></svg>Fait par Alice · Mergé dans main</span>
+          </button>`,
+        );
+        $('#view-board .crumbs .num').textContent = '10 tickets · 4 partagés · 2 en boucle';
+        $('#proj-path').textContent = '~/dev/demo-api';
+      }
+      function cardMenu(card, html) {
+        const m = $('#tk-menu');
+        m.innerHTML = html;
+        m.hidden = false;
+        const r = $(card).getBoundingClientRect();
+        Object.assign(m.style, { left: `${Math.min(r.left + 40, innerWidth - 330)}px`, top: `${r.top + 34}px` });
+      }
+      if (route === 'share') {
+        show('board');
+        const dem7 = $$('#view-board .col')[0].querySelector('.card');
+        dem7.id = 'card-dem7';
+        dem7.style.boxShadow = 'inset 0 0 0 1px var(--line-2)';
+        cardMenu(
+          '#card-dem7',
+          `<button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-edit" /></svg><span class="ml"><b>Modifier</b></span></button>
+          <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-up" /></svg><span class="ml"><b>Mettre en tête</b></span></button>
+          <div class="menu-sep"></div>
+          <button class="mi no-mark" role="menuitem" style="background: var(--hover)"><svg class="i s14 ic"><use href="#i-team" /></svg><span class="ml"><b>Partager avec l’équipe</b><span class="d">Écrit .escouade/tickets/q4w7c2na.yml, à commiter</span></span></button>
+          <div class="menu-sep"></div>
+          <button class="mi no-mark danger" role="menuitem"><svg class="i s14 ic"><use href="#i-trash" /></svg><span class="ml"><b>Supprimer</b></span></button>`,
+        );
+      }
+      if (route === 'share-theirs') {
+        show('board');
+        cardMenu(
+          '#card-alice',
+          `<div class="menu-h split"><span>DEM-12 · ajouté par Alice</span></div>
+          <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-play" /></svg><span class="ml"><b>Lancer</b><span class="d">Ton agent le prend : son fichier dira « pris par Bob »</span></span></button>
+          <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-edit" /></svg><span class="ml"><b>Modifier</b><span class="d">Pour toute l’équipe, dans son fichier</span></span></button>
+          <div class="menu-sep"></div>
+          <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-close" /></svg><span class="ml"><b>Masquer chez moi</b><span class="d">Son fichier reste, l’équipe le voit toujours</span></span></button>
+          <button class="mi no-mark danger" role="menuitem"><svg class="i s14 ic"><use href="#i-trash" /></svg><span class="ml"><b>Supprimer pour l’équipe…</b><span class="d">Supprime son fichier, à commiter</span></span></button>`,
+        );
+      }
+      if (route === 'share-ticket') {
+        show('board');
+        openModal('#ticket-modal');
+        $('#tk-title').textContent = 'Modifier le ticket';
+        $('#ticket-modal .m-head .chip-sm').textContent = 'DEM-7';
+        $('#tk-t').value = 'Journal d’audit des connexions';
+        const areas = $$('#ticket-modal .inp.area');
+        areas[0].textContent = 'Chaque tentative de connexion laisse une ligne : qui, quand, d’où, et si elle a réussi. La maquette du journal est jointe.';
+        areas[1].innerHTML = 'Chaque connexion, réussie ou non, est journalisée<br />Le journal se filtre par compte<br />Tests verts';
+        const atts = $$('#ticket-modal .att b');
+        atts[0].textContent = 'maquette-journal.png';
+        atts[1].textContent = 'connexions-prod.csv';
+        $('#ticket-modal .m-body .fgrid').insertAdjacentHTML(
+          'afterend',
+          `<div class="share-row">
+            <span class="tgl" role="switch" aria-checked="true" aria-label="Partager avec l’équipe"></span>
+            <div class="lab"><b>Partager avec l’équipe</b><span>Escouade écrit <span class="mono">.escouade/tickets/q4w7c2na.yml</span> dans le dossier du projet et le tient à jour à chaque statut ; tu le commites avec ton travail. Son image va dans <span class="mono">.escouade/tickets/q4w7c2na/</span> ; <b>connexions-prod.csv</b> reste chez toi : au-delà de 5 Mo, un fichier joint n’est pas partagé.</span></div>
+          </div>`,
+        );
+        $('#ticket-modal .m-foot .btn.primary').textContent = 'Enregistrer';
+        $('#ticket-modal .m-foot span').innerHTML = '<kbd>Ctrl ↵</kbd> pour enregistrer';
+      }
+      if (route === 'share-name') (show('agents'), openModal('#name-modal'));
+      if (route === 'share-settings') {
+        openSettings('app');
+        $('#settings [data-pane="app"]').insertAdjacentHTML(
+          'afterbegin',
+          `<section class="sg" id="sg-me">
+            <h2>Équipe</h2>
+            <div class="sr">
+              <div class="lab"><b>Ton nom</b><span>Écrit dans les tickets que tu partages et dans ceux que tu fais avancer : tes coéquipiers le voient sur leur Kanban. Un projet peut avoir le sien (Réglages › Projets).</span></div>
+              <div class="ctl"><input class="inp w-m" value="Bob Durand" aria-label="Ton nom" /></div>
+            </div>
+            <div class="sr">
+              <div class="lab"><b>Ton identifiant</b><span>Ce qui distingue tes tickets de ceux d’un homonyme : tiré de ton e-mail git (<span class="mono">bob@acme.fr</span>), donc le même sur tes autres postes. L’e-mail lui-même n’est écrit nulle part.</span></div>
+              <div class="ctl"><span class="chip-sm mono">5d0e77b1</span></div>
+            </div>
+          </section>`,
+        );
+        settingsAt('app', 'sg-me');
+      }
+      if (route === 'share-settings-project') {
+        openSettings('projects');
+        $('#settings [data-pane="projects"] .sg').insertAdjacentHTML(
+          'afterend',
+          `<section class="sg" id="sg-share">
+            <h2>Kanban partagé</h2>
+            <div class="sr">
+              <div class="lab"><b>Ton nom dans ce projet</b><span>Vide : celui de Réglages › Application (Bob Durand). Pour un projet où l’équipe t’appelle autrement. Gardé sur ce poste, jamais dans .escouade.yml.</span></div>
+              <div class="ctl"><input class="inp w-m" value="" placeholder="Bob Durand" aria-label="Ton nom dans ce projet" /></div>
+            </div>
+            <div class="sr">
+              <div class="lab"><b>Tickets partagés</b><span>4 fichiers dans <span class="mono">.escouade/tickets/</span> : 2 de toi, 2 d’Alice. Relus quand ils changent (un pull, un changement de branche, une modification).</span></div>
+              <div class="ctl"><button class="btn">Ouvrir le dossier</button></div>
+            </div>
+            <div class="sr">
+              <div class="lab"><b>Partager chaque nouveau ticket</b><span>Un ticket créé ici, à la main, par un import ou par MCP, est partagé d’office ; on peut toujours arrêter.</span></div>
+              <div class="ctl"><span class="tgl" role="switch" aria-checked="false" aria-label="Partager chaque nouveau ticket"></span></div>
+            </div>
+          </section>`,
+        );
+        settingsAt('projects', 'sg-share');
+      }
+      if (route === 'share-git') {
+        split(true);
+        sideTab('files');
+        const pane = $('#side-files');
+        pane.querySelector('.side-top').remove();
+        pane.querySelector('.files').replaceWith($('#tpl-sfiles').content.cloneNode(true));
+        pane.prepend(pane.querySelector('.side-top'));
+        $('#side .utabs .n').textContent = '5';
+        toast('DEM-7 partagé : .escouade/tickets/q4w7c2na.yml est à commiter avec ton travail', { link: 'Voir dans Git' });
+      }
+      if (route === 'share-file') {
+        show('editor');
+        const tree = $('nav.tree');
+        tree.querySelectorAll('.node').forEach((n) => n.remove());
+        tree.querySelector('.tree-h .caption').textContent = 'Dossier du projet · ~/dev/demo-api';
+        tree.querySelector('.tree-h b').innerHTML = 'Fichiers <span>132 · 2 modif.</span>';
+        tree.insertAdjacentHTML(
+          'beforeend',
+          `<button class="node" style="--lv: 0"><svg class="i s14 fd"><use href="#i-down" /></svg>.escouade<i class="mdot"></i></button>
+          <button class="node" style="--lv: 1"><svg class="i s14 fd"><use href="#i-down" /></svg>tickets<i class="mdot"></i></button>
+          <button class="node" style="--lv: 2"><svg class="i s14 fd"><use href="#i-right" /></svg>q4w7c2na</button>
+          <button class="node" style="--lv: 2"><span class="fd"></span>h8m2v6kd.yml</button>
+          <button class="node" style="--lv: 2"><span class="fd"></span>p2v8c4ma.yml</button>
+          <button class="node" style="--lv: 2" aria-current="true"><span class="fd"></span>q4w7c2na.yml<span class="letter a">A</span></button>
+          <button class="node" style="--lv: 2"><span class="fd"></span>x3t9f5rb.yml<span class="letter m">M</span></button>
+          <button class="node" style="--lv: 0"><svg class="i s14 fd"><use href="#i-right" /></svg>src</button>
+          <button class="node" style="--lv: 0"><svg class="i s14 fd"><use href="#i-right" /></svg>tests</button>
+          <button class="node" style="--lv: 0"><span class="fd"></span>.escouade.yml</button>
+          <button class="node" style="--lv: 0"><span class="fd"></span>package.json</button>`,
+        );
+        $('.ed-tabs').innerHTML = '<span class="ed-tab" role="tab" aria-selected="true">q4w7c2na.yml<span class="x" aria-label="Fermer"><svg class="i s14" style="width: 10px; height: 10px"><use href="#i-close" /></svg></span></span>';
+        $('.ed-crumbs').innerHTML = '.escouade<svg class="i"><use href="#i-right" /></svg>tickets<svg class="i"><use href="#i-right" /></svg><span style="color: var(--soft)">q4w7c2na.yml</span><span class="vs">DEM-7 · partagé par toi · écrit par Escouade, commité par toi</span>';
+        $('#view-editor .find').hidden = true;
+        $('#view-editor .ed-bar .agent-pick').innerHTML = '<i class="d"></i>Dossier du projet<svg class="i s14" style="color: var(--muted)"><use href="#i-down" /></svg>';
+        const Y = [
+          '<span class="yc"># Ticket du Kanban partagé par Escouade : https://escouade.dev/docs/kanban-partage</span>',
+          '<span class="yc"># Escouade le réécrit à chaque statut ; commite-le avec ton travail, elle ne le commite jamais.</span>',
+          '<span class="yc"># yaml-language-server: $schema=https://escouade.dev/schemas/ticket-1.json</span>',
+          '<span class="yk">version</span>: <span class="n">1</span>',
+          '<span class="yk">id</span>: q4w7c2na',
+          '<span class="yk">key</span>: DEM-7',
+          '<span class="yk">title</span>: <span class="s">Journal d’audit des connexions</span>',
+          '<span class="yk">status</span>: todo  <span class="yc"># todo | in-progress | review | done</span>',
+          '<span class="yk">author</span>: { <span class="yk">name</span>: Bob Durand, <span class="yk">id</span>: 5d0e77b1 }',
+          '<span class="yk">taken_by</span>: <span class="k">null</span>',
+          '<span class="yk">updated_by</span>: { <span class="yk">name</span>: Bob Durand, <span class="yk">id</span>: 5d0e77b1 }',
+          '<span class="yk">created</span>: 2026-10-26T09:12:04+01:00',
+          '<span class="yk">updated</span>: 2026-10-26T15:02:40+01:00',
+          '<span class="yk">after</span>: [p2v8c4ma]  <span class="yc"># DEM-6, par son id</span>',
+          '<span class="yk">description</span>: |',
+          '  <span class="s">Chaque tentative de connexion laisse une ligne : qui, quand, d’où, et si elle a réussi.</span>',
+          '<span class="yk">criteria</span>:',
+          '  - <span class="s">Chaque connexion, réussie ou non, est journalisée</span>',
+          '  - <span class="s">Le journal se filtre par compte</span>',
+          '  - <span class="s">Tests verts</span>',
+          '<span class="yk">images</span>: [maquette-journal.png]  <span class="yc"># dans q4w7c2na/</span>',
+          '<span class="yk">files</span>: []  <span class="yc"># connexions-prod.csv (6,2 Mo) gardé chez toi</span>',
+          '<span class="yk">external</span>: <span class="k">null</span>  <span class="yc"># { source: jira, key: ACME-41, url: … } pour un ticket importé</span>',
+          '<span class="yk">outcome</span>: <span class="k">null</span>  <span class="yc"># « Mergé dans main · squash » une fois terminé</span>',
+        ];
+        $('#view-editor .code-ed').innerHTML = Y.map((l, i) => `<span class="l${i === 7 ? ' cur' : ''}"><span class="nb">${i + 1}</span><span class="gm"></span><span>${l}</span></span>`).join('');
+        $('#view-editor .ed-status').innerHTML = '<span>Ln 8, Col 15</span><span>YAML · schéma ticket-1</span><span>UTF-8</span><span>LF</span><span class="end">dossier du projet · <span class="mono">main</span></span>';
+      }
+      if (route === 'share-edge') {
+        show('board');
+        const W = window.WHO;
+        // Bob took Alice's DEM-12; her pull brought a file where she took it too: both files changed, git conflict.
+        const a = $('#card-alice');
+        a.querySelector('.theirs-line').remove();
+        a.querySelector('.crit').remove();
+        a.querySelector('.row-btns').outerHTML = `<div class="clash"><svg class="i s14"><use href="#i-shield" /></svg><span><b>Son fichier est en conflit</b> après ton pull : Alice et toi l’avez modifié. Le ticket garde son dernier état lisible.</span></div>
+          <div class="row-btns"><button class="btn">Garder le mien</button><button class="btn">Prendre le sien</button></div>`;
+        // A file that does not read.
+        $$('#view-board .col')[0].querySelector('.col-h .n').textContent = '3';
+        $$('#view-board .col')[0].insertAdjacentHTML(
+          'beforeend',
+          `<div class="card">
+            <div class="card-top"><span class="mono" style="font-weight: 500">x3t9f5rb.yml</span></div>
+            <h2 style="color: var(--soft)">Ticket partagé illisible</h2>
+            <div class="clash"><svg class="i s14"><use href="#i-shield" /></svg><span>Ligne 14 : <span class="mono">criteria</span> doit être une liste. Rien n’en est lu tant qu’il ne se lit pas ; Escouade ne le réécrit pas.</span></div>
+            <div class="row-btns"><button class="btn"><svg class="i s14"><use href="#i-file" /></svg>Ouvrir le fichier</button></div>
+          </div>`,
+        );
+        // Bob's DEM-6 under way, and Alice took it too at hers (the files did not clash: hers came after).
+        const dem6 = $$('#view-board .col')[1].querySelectorAll('.card')[1];
+        dem6.querySelector('.card-top > span').insertAdjacentHTML('afterend', '<span class="share-mark" role="img" aria-label="Partagé avec l’équipe"><svg class="i"><use href="#i-team" /></svg></span>');
+        dem6.querySelector('.crit').outerHTML = `<div class="clash"><svg class="i s14"><use href="#i-team" /></svg><span><b>Alice y travaille aussi</b> d’après son fichier (14:52). Ton agent continue ; ton prochain statut réécrit le fichier.</span></div>`;
+        // Alice stopped sharing DEM-10 while Bob's agent had it: it stays, as his own.
+        const r = $('#card-alice-run');
+        r.querySelector('.mate').remove();
+        r.querySelector('.theirs-line').outerHTML = `<div class="clash quiet"><svg class="i s14"><use href="#i-info" /></svg><span>Alice ne le partage plus. Ton agent l’avait pris : il reste chez toi, comme un des tiens.</span></div>`;
+        // An import that is already shared.
+        toast('ACME-41 est déjà partagé par Alice (DEM-12) : pas de doublon importé', { sticky: true });
       }
 
       // The English labels, to check what is tight (the agents' own words stay as they came).

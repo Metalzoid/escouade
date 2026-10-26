@@ -1,6 +1,7 @@
 // The board's labels and counts, without state: what its header, columns and cards say.
 
 import { fList, fPct, fTime, fUsd, fWhen } from './format';
+import { elsewhere, isTheirs, theirsLine } from './sharing';
 import { t } from './i18n';
 import type { IconName } from './icons';
 import { fSpentUsd, spent, type Spent } from './spend';
@@ -35,7 +36,8 @@ export function columnTickets(tickets: Ticket[], column: Column): Ticket[] {
 
 /** Tickets "En cours" holding a place (a blocked one gives it up). */
 export function busy(tickets: Ticket[]): number {
-  return tickets.filter((ticket) => ticket.column === 'doing' && !ticket.blocked).length;
+  // One under way on a teammate's machine (ESC-190) takes no place here.
+  return tickets.filter((ticket) => ticket.column === 'doing' && !ticket.blocked && !elsewhere(ticket)).length;
 }
 
 /** When the agents stopped by the usage limit resume, if one is waiting: nothing starts until then. */
@@ -117,6 +119,8 @@ export function waitLabel(
   if (waiting.length && !ticket.forced) return t('boardSettings.wait.after', { keys: keyList(waiting) });
   if (pause) return t('boardSettings.wait.pause');
   if (ticket.forced) return t('boardSettings.wait.forced');
+  // Another one's shared ticket (ESC-190): the autopilot never starts it.
+  if (isTheirs(ticket)) return theirsLine(ticket) ?? t('boardSettings.wait.autopilotOff');
   if (!s.autopilot) return t('boardSettings.wait.autopilotOff');
   return queueIndex === 0 ? t('boardSettings.wait.next') : t('boardSettings.wait.place', { busy: busyCount, max: s.maxParallel });
 }
@@ -178,7 +182,10 @@ export function canStart(
   issue: string | null = null,
   pause: AutopilotPause | null = null,
 ): boolean {
-  return !issue && !pause && !s.autopilot && !ticket.forced && !quota && busyCount < s.maxParallel;
+  // Another one's shared ticket (ESC-190) is launched by hand whatever the autopilot: it never starts it. One whose file
+  // cannot be read never starts.
+  if (ticket.shared?.problem) return false;
+  return !issue && !pause && (!s.autopilot || isTheirs(ticket)) && !ticket.forced && !quota && busyCount < s.maxParallel;
 }
 
 /** As the backend fixes it: the first three letters of the project's name (accents folded), TIC without any. */

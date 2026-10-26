@@ -31,6 +31,8 @@
   import RejectForm from './RejectForm.svelte';
   import { tip } from '../../lib/tip';
   import { isMulti, repoLabel, touchedRepos } from '../../lib/repos';
+  import { alsoOn, authorName, hueOf, initialOf, isMine, isTheirs, sharedFile, theirsLine } from '../../lib/sharing';
+  import { shareTicket } from '../../lib/share-actions';
 
   const uid = $props.id();
 
@@ -105,6 +107,10 @@
   const hidden = $derived(ticket.progress.length - steps.length);
   /** The keys of the tickets it comes after that are not done yet: the autopilot leaves it until they are. */
   const awaited = $derived(ticket.column === 'todo' ? waitingFor(ticket, app.tickets) : []);
+  /** Shared with the team (ESC-190): another one's ticket, the line it says, someone else on it too. */
+  const theirs = $derived(isTheirs(ticket));
+  const theirLine = $derived(theirsLine(ticket));
+  const other = $derived(alsoOn(ticket, app.settings.userId));
   let rejecting = $state(false);
   /** The ⚠ of a failed sync shows its reason and « Resynchroniser ». */
   let syncOpen = $state(false);
@@ -176,6 +182,7 @@
           : t('board.card.removeBodyImportedFiles', { count: attachments, service });
     } else if (service === null) body = count ? t('board.card.removeBodyImages', { count }) : t('board.card.removeBody');
     else body = count ? t('board.card.removeBodyImportedImages', { count, service }) : t('board.card.removeBodyImported', { service });
+    if (isMine(ticket)) body += ' ' + t('share.menu.removeShared');
     app.modal = {
       kind: 'confirm',
       title: t('board.card.removeTitle', { key: ticket.key }),
@@ -186,19 +193,61 @@
     };
   }
 
+  /** « Supprimer pour l'équipe… » of another one's ticket (ESC-190): its file goes, to be committed. */
+  function confirmRemoveTheirs() {
+    app.modal = {
+      kind: 'confirm',
+      title: t('share.menu.removeTheirsTitle', { key: ticket.key }),
+      body: t('share.menu.removeTheirsBody', { name: authorName(ticket) }),
+      confirm: t('common.delete'),
+      danger: true,
+      onConfirm: remove,
+    };
+  }
+
+  /** « Partager avec l'équipe », « Arrêter le partage » (ESC-190), for a ticket of ours. */
+  function shareItems(): MenuItem[] {
+    if (theirs) return [];
+    const on = !!ticket.shared && !ticket.shared.gone;
+    return [
+      on
+        ? { label: t('share.menu.unshare'), onClick: () => shareTicket(ticket, project, false) }
+        : { label: t('share.menu.share'), onClick: () => shareTicket(ticket, project, true) },
+    ];
+  }
+
   function contextMenu(e: MouseEvent) {
     // A text field keeps the browser's menu (copy, paste), as in main.ts.
     if ((e.target as Element).closest('input, textarea')) return;
+    if (theirs) {
+      // Another one's ticket (ESC-190, choice 118): launched by hand, changed for the team, hidden here or deleted for all.
+      const run = ticket.column === 'todo' && canStart(ticket, s, busyCount, quota, issue, pause);
+      menu.show(e, [
+        ...(run ? [{ label: t('board.card.launch'), onClick: launch }] : []),
+        ...(ticket.column === 'todo' ? [{ label: t('common.edit'), onClick: onedit }] : []),
+        ...(ticket.column !== 'todo' ? [{ label: t('board.card.openAgent'), onClick: open, disabled: !agent }] : []),
+        { label: '', separator: true },
+        ticket.shared?.hidden
+          ? { label: t('share.board.show'), onClick: () => app.run(api.ticketHide(ticket.id, false)) }
+          : { label: t('share.menu.hide'), onClick: () => app.run(api.ticketHide(ticket.id, true)) },
+        { label: t('share.menu.deleteForTeam'), danger: true, onClick: confirmRemoveTheirs },
+      ]);
+      return;
+    }
     const items: MenuItem[] =
       ticket.column === 'todo'
         ? [
             { label: t('common.edit'), onClick: onedit },
             { label: t('board.card.prioritize'), onClick: () => app.run(api.ticketPrioritize(ticket.id)) },
             { label: '', separator: true },
+            ...shareItems(),
+            { label: '', separator: true },
             { label: t('common.delete'), danger: true, onClick: confirmRemove },
           ]
         : [
             { label: t('board.card.openAgent'), onClick: open, disabled: !agent },
+            { label: '', separator: true },
+            ...shareItems(),
             { label: '', separator: true },
             {
               label: t('common.delete'),
@@ -297,7 +346,16 @@
           onclick={(e) => act(e, () => (syncOpen = !syncOpen))}><Icon name="info" size={14} /></button
         >{/if}
     {/if}
-    <span class="key">{ticket.key}</span>
+    <span class="key">{ticket.key.split('@')[0]}</span>
+    {#if isMine(ticket) && !ticket.shared?.gone}
+      <!-- Shared with the team by this machine's user (ESC-190, choice 116): a discreet mark, its file in the tooltip. -->
+      <span
+        class="mark"
+        role="img"
+        aria-label={t('share.card.mark', { file: sharedFile(ticket) ?? '' })}
+        use:tip={t('share.card.mark', { file: sharedFile(ticket) ?? '' })}><Icon name="team" size={14} /></span
+      >
+    {/if}
     {#if engine}<EngineMark {engine} />{/if}
     {#if attached}
       <!-- The images and the files attached in its form, which its agent gets with its first message. -->
@@ -312,6 +370,14 @@
         use:tip={t('board.card.ownAccount', { account: ownAccount })}>{ownAccount}</span
       >{/if}
     {#if own}<span class="own" role="img" aria-label={own.label} use:tip={own.label}>{own.text}</span>{/if}
+    {#if theirs && ticket.shared?.author.name}
+      <!-- Another one's ticket (choice 117): their name, a disc of a hue drawn from their id. -->
+      <span class="who" aria-label={t('share.card.by', { name: authorName(ticket) })}
+        ><i style:--h={hueOf(ticket.shared.author.id || ticket.shared.author.name)} aria-hidden="true"
+          >{initialOf(ticket.shared.author.name)}</i
+        ><span aria-hidden="true">{ticket.shared.author.name}</span></span
+      >
+    {/if}
     {#if ticket.column === 'doing'}
       <span class="loop"
         >{t('board.card.loop', { iteration: ticket.iteration, max: ticket.maxLoops })}<span class="loops" aria-hidden="true"
@@ -335,7 +401,39 @@
       </div>
     </div>
   {/if}
-  <h2 class="title">{ticket.title}</h2>
+  <h2 class="title">{ticket.shared?.problem && !ticket.shared.author.name ? t('share.card.unreadable') : ticket.title}</h2>
+  {#if ticket.shared?.problem}
+    <!-- Its file is in conflict, or cannot be read (choice 125): the ticket keeps its last state, its file is left alone. -->
+    <div class="clash" role="status">
+      <Icon name="shield" size={14} /><span>{ticket.shared.problem}</span>
+      {#if ticket.shared.conflict}
+        <div class="row">
+          <button class="btn small" onclick={(e) => act(e, () => app.run(api.sharedResolve(ticket.id, true)))}
+            >{t('share.card.keepMine')}</button
+          >
+          <button class="btn small" onclick={(e) => act(e, () => app.run(api.sharedResolve(ticket.id, false)))}
+            >{t('share.card.takeTheirs')}</button
+          >
+        </div>
+      {/if}
+    </div>
+  {:else if other}
+    <div class="clash" role="status"><Icon name="team" size={14} /><span>{t('share.card.alsoOn', { name: other })}</span></div>
+  {:else if ticket.shared?.left}
+    <div class="clash quiet" role="status">
+      <Icon name="info" size={14} /><span>{t('share.card.left', { name: authorName(ticket) })}</span>
+    </div>
+  {:else if ticket.shared?.gone && ticket.shared.mine}
+    <div class="clash quiet" role="status">
+      <Icon name="info" size={14} /><span>{t('share.card.gone')}</span>
+      <div class="row">
+        <button class="btn small" onclick={(e) => act(e, () => shareTicket(ticket, project, true))}>{t('share.card.shareAgain')}</button>
+        <button class="btn small" onclick={(e) => act(e, () => shareTicket(ticket, project, false))}>{t('share.menu.unshare')}</button>
+      </div>
+    </div>
+  {:else if ticket.shared?.newer}
+    <div class="clash quiet" role="status"><Icon name="info" size={14} /><span>{t('share.card.newer')}</span></div>
+  {/if}
   {#if changedRepos.length}
     <span class="repos-line"
       ><Icon name="branch" size={14} /><span>{t('repos.card.changed', { repos: changedRepos.join(', ') })}</span></span
@@ -422,14 +520,18 @@
   <!-- The card's last line: why a ticket to do waits, or what the agent of one under way does and what it cost. -->
   {#if ticket.column === 'todo'}
     {@const why = waitLabel(ticket, queueIndex, s, busyCount, issue, pause, awaited)}
-    <div class="act">
-      <Icon name={awaited.length && !ticket.forced ? 'link' : 'clock'} size={14} /><span class="grow" use:tip={{ text: why, cut: true }}
-        >{why}</span
+    <div class="act" class:theirs={theirs && !ticket.forced}>
+      <Icon name={theirs && !ticket.forced ? 'team' : awaited.length && !ticket.forced ? 'link' : 'clock'} size={14} /><span
+        class="grow"
+        use:tip={{ text: why, cut: true }}>{why}</span
       >
       {#if canStart(ticket, s, busyCount, quota, issue, pause)}
         <button class="btn small" onclick={(e) => act(e, launch)}><Icon name="play" size={14} />{t('board.card.launch')}</button>
       {/if}
     </div>
+  {:else if theirLine}
+    <!-- Another one's ticket, under way, to test or done at theirs: who has it (choice 117). -->
+    <div class="act theirs"><Icon name="team" size={14} /><span class="grow">{theirLine}</span></div>
   {:else if ticket.column === 'doing' && !ticket.blocked && (waiting || agent?.resumeAt || agent?.setup || activity || used)}
     <div class="act" class:wait={waiting}>
       {#if waiting}
@@ -477,7 +579,7 @@
     </div>
   {/if}
 
-  {#if ticket.column === 'review' && !ticket.step && !ticket.conflict}
+  {#if ticket.column === 'review' && !ticket.step && !ticket.conflict && !theirLine}
     {#if rejecting}
       <RejectForm onsubmit={reject} oncancel={() => (rejecting = false)} />
     {:else}
@@ -865,6 +967,81 @@
   }
   .act .btn {
     flex: none;
+  }
+  /* Another one's ticket (ESC-190): its line wraps rather than cuts, the button stays at the end. */
+  .act.theirs {
+    align-items: flex-start;
+    line-height: 1.4;
+  }
+  .act.theirs .grow {
+    white-space: normal;
+  }
+  .act.theirs > :global(.icon) {
+    margin-top: 1px;
+  }
+  .mark {
+    flex: none;
+    display: inline-flex;
+    color: var(--p-ink);
+  }
+  .who {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    margin-left: auto;
+    color: var(--soft);
+    font-size: 11.5px;
+    font-weight: 550;
+    white-space: nowrap;
+  }
+  .who + :global(*) {
+    margin-left: 0;
+  }
+  .who > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .who > i {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    /* The theme's own: dark ink on a pale disc in the light one. */
+    background: light-dark(oklch(0.9 0.05 var(--h)), oklch(0.42 0.08 var(--h)));
+    color: light-dark(oklch(0.36 0.1 var(--h)), oklch(0.97 0.02 var(--h)));
+    font: normal 600 9.5px/1 var(--font);
+  }
+  /* What a shared file asks of the user (ESC-190): a conflict, someone else on it, a ticket no longer shared. */
+  .clash {
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr);
+    gap: 6px 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
+    color: var(--soft);
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  .clash > :global(.icon) {
+    margin-top: 1px;
+    color: var(--wait);
+  }
+  .clash .row {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+  }
+  .clash.quiet {
+    background: rgba(var(--fg-rgb), 0.035);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .clash.quiet > :global(.icon) {
+    color: var(--muted);
   }
   .sr {
     position: absolute;

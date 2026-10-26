@@ -2622,6 +2622,22 @@ pub async fn has_tracked_changes(repo: &str) -> Result<bool> {
     )
 }
 
+/// `has_tracked_changes`, the shared tickets' files left out (ESC-190, choice 121): Escouade writes them in the
+/// project's folder at each status, and they block no merge (an agent's branch never touches them).
+pub async fn has_tracked_changes_but_tickets(repo: &str) -> Result<bool> {
+    let out = run(repo, &["status", "--porcelain", "--untracked-files=no"]).await?;
+    Ok(String::from_utf8_lossy(&out)
+        .lines()
+        .any(|l| !l.trim().is_empty() && !is_shared_ticket_line(l)))
+}
+
+/// A line of `git status --porcelain` about a shared ticket's file (or one of its images and files).
+pub fn is_shared_ticket_line(line: &str) -> bool {
+    let path = line.get(3..).unwrap_or_default();
+    let path = path.rsplit(" -> ").next().unwrap_or(path).trim_matches('"');
+    path.starts_with(".escouade/tickets/") || path.contains("/.escouade/tickets/")
+}
+
 pub async fn merge(repo: &str, branch: &str, squash: bool, message: &str) -> Result<String> {
     if squash {
         if let Err(e) = run_hooks(repo, &["merge", "--squash", branch]).await {

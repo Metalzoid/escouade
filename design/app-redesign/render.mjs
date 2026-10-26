@@ -12,6 +12,7 @@ const url = pathToFileURL(join(dir, 'index.html')).href;
 const BIG = { width: 1440, height: 900 };
 const SMALL = { width: 1028, height: 779 };
 const EN = { lang: 'en' };
+const SHARE = ['share', 'share-theirs', 'share-ticket', 'share-name', 'share-settings', 'share-settings-project', 'share-git', 'share-file', 'share-edge'];
 const shots = [
   { name: 'agents', ...BIG },
   { name: 'kanban', ...BIG, hash: 'board' },
@@ -159,6 +160,10 @@ const shots = [
   // A project of several git repositories (ESC-169): the folder holds front, api, infra and docs.
   ...['repos', 'repos-history', 'repos-branch', 'repos-commit', 'repos-merge', 'repos-pr', 'repos-board', 'repos-wizard', 'repos-settings', 'repos-new-agent', 'repos-editor', 'repos-run', 'repos-overview'].map((h) => ({ name: h, ...BIG, hash: h })),
   ...['repos', 'repos-two', 'repos-board', 'repos-merge', 'repos-branch'].map((h) => ({ name: h + '-small', ...SMALL, hash: h })),
+  // The shared Kanban (ESC-190): Bob's board with Alice's tickets, the card's menu, the form, the first launch, the settings,
+  // the files to commit, a ticket's file, what can go wrong; each at 1440×900 and 1028×779, dark and light.
+  ...SHARE.map((h) => ({ name: h, ...BIG, hash: h })),
+  ...SHARE.map((h) => ({ name: h + '-small', ...SMALL, hash: h })),
   // The loops of a project (ESC-191): the workflow tab (GSD), the history folded, the settings, a loop of one prompt,
   // nothing found, the edge cases; each at 1440 and 1028 px.
   ...['loops', 'loops-history', 'loops-settings', 'loops-simple', 'loops-empty', 'loops-edge'].flatMap((h) => [
@@ -169,7 +174,7 @@ const shots = [
   // The theme selector, on Système (its default): the window follows the emulated system theme.
   { name: 'settings-app', ...BIG, hash: 'settings-app', system: true },
 ];
-const LIGHT_SMALL = ['kanban-small', 'pr-small-en', 'models-small-en', 'waiting-small-en', 'private-small-en', 'agents-small', 'git-small', 'overview-small', 'settings-small', 'agents-small-en', 'quota-small-en', 'terminal-view-small-en', 'settings-harness-small-en', 'rail-small', 'rail-small-en', 'tile-small', 'tile-settings-small-en', 'labels-small', 'labels-wide-small-en', 'labels-settings-small-en', 'repos-small', 'repos-two-small', 'repos-board-small', 'repos-merge-small', 'repos-branch-small', ...['loops', 'loops-history', 'loops-settings', 'loops-simple', 'loops-empty', 'loops-edge'].map((h) => h + '-small')];
+const LIGHT_SMALL = ['kanban-small', 'pr-small-en', 'models-small-en', 'waiting-small-en', 'private-small-en', 'agents-small', 'git-small', 'overview-small', 'settings-small', 'agents-small-en', 'quota-small-en', 'terminal-view-small-en', 'settings-harness-small-en', 'rail-small', 'rail-small-en', 'tile-small', 'tile-settings-small-en', 'labels-small', 'labels-wide-small-en', 'labels-settings-small-en', 'repos-small', 'repos-two-small', 'repos-board-small', 'repos-merge-small', 'repos-branch-small', ...['loops', 'loops-history', 'loops-settings', 'loops-simple', 'loops-empty', 'loops-edge'].map((h) => h + '-small'), ...SHARE.map((h) => h + '-small')];
 shots.push(
   ...shots
     .filter((s) => (s.width === BIG.width && !s.lang) || LIGHT_SMALL.includes(s.name))

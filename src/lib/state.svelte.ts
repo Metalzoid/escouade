@@ -79,6 +79,8 @@ export type Modal =
   | { kind: 'newProject'; path?: string; historyId?: string; projectId?: string }
   /** The question of the first start: the usage statistics. */
   | { kind: 'telemetry' }
+  /** The first launch's other question (ESC-190): the user's name for the team; `then`, what waited for it (a share). */
+  | { kind: 'teamName'; projectId?: string; then?: () => void }
   /**
    * On a tab (Claude Code by default) and, for a project's tabs, a project (the one on screen by default),
    * scrolled to a section of it; `resume`: with the draft it had, back from a modal it opened; `suggest`: Claude
@@ -544,6 +546,8 @@ class AppState {
     this.failedUpdate = s.failedUpdate ?? null;
     // Not answered yet (closed without a choice: asked again at the next start).
     if (s.settings.telemetry === null) this.modal = { kind: 'telemetry' };
+    // The user's name for the shared tickets (ESC-190), asked once, after the statistics' question.
+    else if (!s.settings.nameAsked) this.modal = { kind: 'teamName' };
     if (s.installed) {
       const { version, notes } = s.installed;
       const tell = () =>

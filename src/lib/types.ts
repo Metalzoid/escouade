@@ -92,6 +92,12 @@ export interface Settings {
   editorFontSize: number;
   /** The width of the projects’ rail chosen by its edge (ESC-168), in CSS pixels; 0 (or absent) is its usual width. */
   railWidth?: number;
+  /** « Ton nom » (ESC-190): written in the tickets shared with the team. Absent from the window’s tests made before it. */
+  userName?: string;
+  /** The id beside the name: from the git e-mail, else drawn once. */
+  userId?: string;
+  /** The first launch’s window asking the name was shown. */
+  nameAsked?: boolean;
   /** « Voix »: the dictation. */
   voice: VoiceSettings;
 }
@@ -686,6 +692,10 @@ export interface Project {
   tileLabel?: boolean;
   /** Its text, shorter than the name; empty is the name. */
   tileLabelText?: string;
+  /** « Ton nom dans ce projet » (ESC-190): empty is the app’s. Of this machine. */
+  userName?: string;
+  /** « Partager chaque nouveau ticket » (ESC-190). */
+  shareNew?: boolean;
   worktreePerAgent: boolean;
   /** « Créer le worktree au premier message, au nom de l’agent » (ESC-156): on unless switched off. Absent from a project of the window’s tests made before it. */
   worktreeAtFirstMessage?: boolean;
@@ -903,6 +913,41 @@ export interface Ticket {
   images: TicketImage[];
   /** The files attached in its form that are no image it can show (any format, any size): its agent gets their paths with its first message. */
   files: TicketFile[];
+  /** Shared with the team (ESC-190): its file `.escouade/tickets/<id>.yml`. Absent or null: this machine's alone. */
+  shared?: Shared | null;
+}
+
+/** Someone of the team, as the shared tickets' files name them (ESC-190). */
+export interface Person {
+  name: string;
+  id: string;
+}
+
+/** What a shared ticket's file says beside the ticket, and how it stands with it (ESC-190). */
+export interface Shared {
+  /** Its file's name, without `.yml`. */
+  id: string;
+  /** Its key as its author gave it. */
+  key: string;
+  author: Person;
+  takenBy: Person | null;
+  updatedBy: Person | null;
+  created: string;
+  after: string[];
+  external: { source: string; key: string; url: string } | null;
+  /** Its author is this machine's user: only then does the autopilot start it. */
+  mine: boolean;
+  seen: string;
+  /** Why its file is not read (a git conflict, a file that cannot be read). */
+  problem: string | null;
+  conflict: boolean;
+  newer: boolean;
+  /** Its file is gone from the folder. */
+  gone: boolean;
+  /** Its author stopped sharing it while this machine's agent had it. */
+  left: boolean;
+  /** « Masquer chez moi ». */
+  hidden: boolean;
 }
 
 /** A file of a ticket other than an image: a copy in the ticket's folder, `files/<file>`. */
@@ -988,6 +1033,8 @@ export interface TicketDraft {
   account?: string;
   model?: string;
   effort?: string;
+  /** « Partager avec l’équipe » (ESC-190): absent, as it is (a new ticket: as the project’s « Partager chaque nouveau ticket »). */
+  shared?: boolean;
 }
 
 export interface RecipeStep {

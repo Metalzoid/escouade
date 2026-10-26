@@ -466,6 +466,14 @@ export const api = {
   /** The images of a ticket with their content, for its form; those whose file is gone are left out. */
   ticketImages: (id: string) => invoke<TicketImageData[]>('ticket_images', { id }),
   ticketPrioritize: (id: string) => invoke<void>('ticket_prioritize', { id }),
+  /** « Partager avec l’équipe », « Arrêter le partage » (ESC-190). */
+  ticketShare: (id: string, on: boolean) => invoke<Ticket>('ticket_share', { id, on }),
+  /** « Masquer chez moi » of another one’s shared ticket, or back on the board. */
+  ticketHide: (id: string, hidden: boolean) => invoke<Ticket>('ticket_hide', { id, hidden }),
+  /** « Garder le mien », « Prendre le sien » of a shared ticket’s file in conflict. */
+  sharedResolve: (id: string, keepMine: boolean) => invoke<Ticket>('shared_resolve', { id, keepMine }),
+  /** `git config user.name`, offered by the first launch’s window. */
+  gitUserName: (projectId?: string) => invoke<string>('git_user_name', { projectId: projectId ?? null }),
   /** "Lancer": starts even with the autopilot off. */
   ticketStart: (id: string) => invoke<void>('ticket_start', { id }),
   ticketResume: (id: string) => invoke<void>('ticket_resume', { id }),

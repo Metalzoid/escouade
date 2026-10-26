@@ -4777,3 +4777,66 @@ async fn a_tickets_account_model_and_effort_are_set_read_and_given_at_its_start(
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }
+
+/// The shared Kanban (ESC-190, choice 130): the ticket tools say the sharing, `update_ticket` shares, and an agent never
+/// starts nor deletes a ticket another one of the team shared.
+#[tokio::test]
+async fn a_shared_ticket_is_said_by_the_tools_and_another_ones_is_never_started_by_them() {
+    let h = harness("mcp-act-shared");
+    {
+        let mut s = h.core.settings.write();
+        s.user_name = "Bob Durand".into();
+        s.user_id = "5d0e77b1".into();
+    }
+    let p = project(&h).await;
+    let mine = made(&h, &p, "Le mien").await;
+    let hers = made(&h, &p, "Le sien").await;
+    let c = external(&h).await;
+    // Shared by `update_ticket` alone: its file written, said by `get_ticket`.
+    let v = read(
+        &c,
+        "update_ticket",
+        json!({ "ticket": mine.key, "shared": true }),
+    )
+    .await;
+    assert_eq!(v["shared"]["by"], "Bob Durand");
+    assert_eq!(v["shared"]["byMe"], true);
+    let file = v["shared"]["file"].as_str().unwrap().to_string();
+    assert!(file.starts_with(".escouade/tickets/"), "{file}");
+    assert!(std::path::Path::new(&p.path).join(&file).is_file());
+    // Another one's ticket, as a pull brings it.
+    {
+        let mut tickets = h.core.tickets.write();
+        let t = tickets.iter_mut().find(|t| t.id == hers.id).unwrap();
+        t.shared = Some(Shared {
+            id: "h8m2v6kd".into(),
+            key: t.key.clone(),
+            author: Person {
+                name: "Alice Martin".into(),
+                id: "a91f03c2".into(),
+            },
+            mine: false,
+            ..Default::default()
+        });
+    }
+    let v = read(&c, "get_ticket", json!({ "ticket": hers.key })).await;
+    assert_eq!(v["shared"]["by"], "Alice Martin");
+    assert_eq!(v["shared"]["byMe"], false);
+    let start = refused(&c, "start_ticket", json!({ "ticket": hers.key })).await;
+    assert!(start.contains("partagé par Alice Martin"), "{start}");
+    assert!(start.contains("à la main"), "{start}");
+    let delete = refused(&c, "delete_ticket", json!({ "ticket": hers.key })).await;
+    assert!(delete.contains("partagé par Alice Martin"), "{delete}");
+    assert_eq!(stored(&h, &hers.id).column, Column::Todo);
+    // The list says it of both.
+    let rows = read(&c, "list_tickets", json!({ "project": p.name })).await;
+    let shared: Vec<bool> = rows
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r.get("shared").is_some())
+        .collect();
+    assert_eq!(shared, [true, true]);
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}

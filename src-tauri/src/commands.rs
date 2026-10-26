@@ -2002,6 +2002,30 @@ pub async fn clean_worktrees(
         .map_err(err)
 }
 
+/// « Partager avec l'équipe », « Arrêter le partage » (ESC-190).
+#[tauri::command(async)]
+pub fn ticket_share(core: CoreState, id: String, on: bool) -> Res<Ticket> {
+    core.ticket_share(&id, on).map_err(err)
+}
+
+/// « Masquer chez moi », or back on the board (ESC-190).
+#[tauri::command(async)]
+pub fn ticket_hide(core: CoreState, id: String, hidden: bool) -> Res<Ticket> {
+    core.ticket_hide(&id, hidden).map_err(err)
+}
+
+/// « Garder le mien », « Prendre le sien » of a shared ticket's file in conflict (ESC-190).
+#[tauri::command(async)]
+pub fn shared_resolve(core: CoreState, id: String, keep_mine: bool) -> Res<Ticket> {
+    core.shared_resolve(&id, keep_mine).map_err(err)
+}
+
+/// `git config user.name`, offered by the first launch's window (ESC-190).
+#[tauri::command]
+pub async fn git_user_name(core: CoreState<'_>, project_id: Option<String>) -> Res<String> {
+    Ok(core.git_user_name(project_id).await)
+}
+
 #[tauri::command(async)]
 pub fn ticket_prioritize(core: CoreState, id: String) -> Res<()> {
     core.ticket_prioritize(&id).map_err(err)

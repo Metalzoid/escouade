@@ -158,6 +158,14 @@ pub struct Settings {
     pub quota_projection: bool,
     /// « Voix »: the dictation (`voice`).
     pub voice: VoiceSettings,
+    /// « Ton nom » (Réglages › Application › Équipe, ESC-190): written in the tickets shared with
+    /// the team and in those this machine moves on; a project may have its own
+    /// (`Project::user_name`). Empty until given (`git config user.name` is offered).
+    pub user_name: String,
+    /// The id beside the name (`sharing::person_id`): from the git e-mail, else drawn once.
+    pub user_id: String,
+    /// The first launch's window asking the name was shown (answered or put off).
+    pub name_asked: bool,
 }
 
 /// The widths the projects' rail is dragged to (ESC-168): its tiles alone, up to a list of names.
@@ -561,6 +569,9 @@ impl Default for Settings {
             rail_width: 0,
             quota_projection: true,
             voice: VoiceSettings::default(),
+            user_name: String::new(),
+            user_id: String::new(),
+            name_asked: false,
         }
     }
 }
@@ -589,6 +600,13 @@ pub struct Project {
     /// it beside the tile, on or not.
     #[serde(default)]
     pub tile_label_text: String,
+    /// « Ton nom dans ce projet » (ESC-190): the name its shared tickets carry; empty is the
+    /// app's (`Settings::user_name`). Of this machine, never in `.escouade.yml`.
+    #[serde(default)]
+    pub user_name: String,
+    /// « Partager chaque nouveau ticket »: a ticket made here is shared from the start.
+    #[serde(default)]
+    pub share_new: bool,
     #[serde(default)]
     pub worktree_per_agent: bool,
     #[serde(default)]
@@ -1037,6 +1055,80 @@ pub struct Ticket {
     /// folder (`DataDir::ticket_files`), whose paths its agent is given with its first message.
     /// Always in the JSON, empty for a ticket saved before.
     pub files: Vec<TicketFile>,
+    /// Shared with the team (ESC-190): its file `.escouade/tickets/<id>.yml` in the project's
+    /// folder, written by Escouade and committed by the user (`sharing`). None: this machine's
+    /// alone, and for a ticket saved before.
+    pub shared: Option<Shared>,
+}
+
+/// Someone of the team, as the files of the shared tickets name them (ESC-190): the name they
+/// gave, and the id that tells two of the same name apart (`sharing::person_id`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Person {
+    pub name: String,
+    pub id: String,
+}
+
+/// An image or a file of a shared ticket, as its file lists it: its name, and where it is in the
+/// ticket's folder beside the file (`.escouade/tickets/<id>/<file>`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SharedMedia {
+    pub name: String,
+    pub file: String,
+}
+
+/// The ticket of an outside service a shared ticket was imported from, as its file says it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SharedExternal {
+    /// `jira`, `trello`, `github` or `linear`.
+    pub source: String,
+    pub key: String,
+    pub url: String,
+}
+
+/// What a shared ticket's file says beside the ticket itself, and how it stands with its file
+/// (`Ticket::shared`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Shared {
+    /// Its file's name, without `.yml`: stable, never its key.
+    pub id: String,
+    /// Its key as its author gave it (the ticket's own may have `@author` after it, when this
+    /// machine has a ticket of that key already).
+    pub key: String,
+    pub author: Person,
+    /// Who took it (started it): None while nobody did.
+    pub taken_by: Option<Person>,
+    /// Who last changed its file.
+    pub updated_by: Option<Person>,
+    /// When it was made, as its file writes it.
+    pub created: String,
+    /// The tickets it comes after, by the ids of their files (some may not be on this machine).
+    pub after: Vec<String>,
+    /// The ticket of an outside service it was imported from, as its file says it.
+    pub external: Option<SharedExternal>,
+    /// Its author is this machine's user (`Person::id`): only then may the autopilot start it.
+    pub mine: bool,
+    /// The fingerprint of its file as last read or written: one that differs was changed outside
+    /// Escouade (a pull, a checkout, a hand).
+    pub seen: String,
+    /// Why its file is not read (a git conflict, a file that cannot be read): the ticket keeps its
+    /// last state, and its file is not written until the user settles it.
+    pub problem: Option<String>,
+    /// The problem is a git conflict: « Garder le mien », « Prendre le sien ».
+    pub conflict: bool,
+    /// Written by a newer Escouade: read for what it knows, never written.
+    pub newer: bool,
+    /// Its file is gone from the folder (another branch, deleted by a teammate): not written again
+    /// until it comes back, or the ticket is shared again.
+    pub gone: bool,
+    /// Its author stopped sharing it while this machine's agent had it: it stays, as one of ours.
+    pub left: bool,
+    /// « Masquer chez moi »: not on this board, its file kept.
+    pub hidden: bool,
 }
 
 /// A file of a ticket that is no image the chat reads: a copy in the ticket's `files` folder

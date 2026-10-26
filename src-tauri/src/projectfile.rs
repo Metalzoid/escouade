@@ -297,7 +297,7 @@ fn line_at(text: &str, node: &YamlNode) -> u32 {
     pos.line as u32
 }
 
-fn node_of(text: &str, node: &YamlNode) -> Node {
+pub(crate) fn node_of(text: &str, node: &YamlNode) -> Node {
     let line = line_at(text, node);
     let v = match node {
         YamlNode::Scalar(s) => N::Scalar {
@@ -1068,7 +1068,7 @@ fn plain_node(s: &str) -> Option<YamlNode> {
 
 /// Whether `s` may be written plain: no indicator where a plain scalar starts, no `: ` nor ` #`, no
 /// flow indicator, no control character, no word another type reads as (`yes`, a number…).
-fn plain_safe(s: &str) -> bool {
+pub(crate) fn plain_safe(s: &str) -> bool {
     const INDICATORS: &[char] = &[
         '-', '?', ':', ',', '[', ']', '{', '}', '#', '&', '*', '!', '|', '>', '\'', '"', '%', '@',
         '`',

@@ -273,7 +273,7 @@ describe('Board', () => {
     expect(backend.called('ticket_update')[0].args).toEqual({ id: 't1', draft });
     expect(await screen.findByText('Ajouter le fichier du ticket')).toBeInTheDocument();
     await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-2/ }));
-    expect(menu.open!.items.map((i) => i.label)).toEqual(['Modifier', 'Passer en tête', '', 'Supprimer']);
+    expect(menu.open!.items.map((i) => i.label)).toEqual(['Modifier', 'Passer en tête', '', 'Partager avec l’équipe', '', 'Supprimer']);
     menu.open!.items.find((i) => i.label === 'Passer en tête')!.onClick!();
     expect(backend.called('ticket_prioritize')).toEqual([{ cmd: 'ticket_prioritize', args: { id: 't2' } }]);
     await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-2/ }));

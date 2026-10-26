@@ -412,6 +412,7 @@ export const en: Catalog = {
       autopilot: 'Autopilot',
       testing: 'Review and approve',
       integrations: 'Jira, Trello, GitHub, Linear',
+      'shared-board': 'Sharing the Kanban',
       mcp: 'The MCP server',
       accounts: 'Several accounts',
       usage: 'Quotas and cost',

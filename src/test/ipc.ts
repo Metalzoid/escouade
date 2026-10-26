@@ -83,6 +83,8 @@ export const SETTINGS: Settings = {
   switchAt: 100,
   autoUpdate: true,
   telemetry: false,
+  // The first start's question of the name for the shared tickets (ESC-190): asked already.
+  nameAsked: true,
   integrations: {
     syncStates: true,
     loopComments: false,

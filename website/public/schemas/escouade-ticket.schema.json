@@ -1,0 +1,185 @@
+{
+  "$id": "https://escouade.dev/schemas/escouade-ticket.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "after": {
+      "description": "The ids of the shared tickets it comes after.",
+      "items": {
+        "pattern": "^[A-Za-z0-9_-]{1,40}$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "author": {
+      "description": "Who shared it: { name, id }.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "id"],
+      "type": "object"
+    },
+    "created": {
+      "description": "When it was made (ISO 8601).",
+      "type": "string"
+    },
+    "criteria": {
+      "description": "Its acceptance criteria.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "description": {
+      "description": "Its description.",
+      "type": "string"
+    },
+    "external": {
+      "description": "The outside ticket it was imported from: { source, key, url }, or null.",
+      "oneOf": [
+        {
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "source": {
+              "enum": ["jira", "trello", "github", "linear"],
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": ["source", "key"],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "files": {
+      "description": "Its joined files up to 5 MB, in the same folder.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": ["file"],
+            "type": "object"
+          }
+        ]
+      },
+      "type": "array"
+    },
+    "id": {
+      "description": "The ticket's stable id: the file's name, never its key.",
+      "type": "string"
+    },
+    "images": {
+      "description": "Its images, in the folder of its id beside this file.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": ["file"],
+            "type": "object"
+          }
+        ]
+      },
+      "type": "array"
+    },
+    "key": {
+      "description": "Its key, as its author's board gave it (DEM-12).",
+      "type": "string"
+    },
+    "outcome": {
+      "description": "What its validation did, once done.",
+      "type": ["string", "null"]
+    },
+    "status": {
+      "description": "Its column: todo, in-progress, review or done.",
+      "enum": ["todo", "in-progress", "review", "done"],
+      "type": "string"
+    },
+    "taken_by": {
+      "description": "Who started it, or null.",
+      "oneOf": [
+        {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": ["name", "id"],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "title": {
+      "description": "Its title.",
+      "type": "string"
+    },
+    "updated": {
+      "description": "When this file last changed (ISO 8601).",
+      "type": "string"
+    },
+    "updated_by": {
+      "description": "Who last changed this file.",
+      "oneOf": [
+        {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": ["name", "id"],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "version": {
+      "description": "The version of this file's format (1 today).",
+      "minimum": 1,
+      "type": "integer"
+    }
+  },
+  "required": ["version", "id", "key", "title", "status", "author"],
+  "title": "A ticket of Escouade's shared Kanban (.escouade/tickets/<id>.yml)",
+  "type": "object"
+}

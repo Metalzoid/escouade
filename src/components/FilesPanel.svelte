@@ -11,6 +11,7 @@
   import { tip } from '../lib/tip';
   import { worktreeLabel } from '../lib/worktrees';
   import { agentRepos, groupByRepo, inRepo, isMulti, quietRepos, repoLabel } from '../lib/repos';
+  import { SHARED_DIR, isTicketPath, ticketOfPath } from '../lib/sharing';
 
   // The side panel's uncommitted files. `docked`: right half of the split layout, showing the
   // picked file's diff under the list. `count`: number of files listed, for the panel's tab.
@@ -176,6 +177,14 @@
   const multi = $derived(isMulti(project));
   const repos = $derived(scope === 'agent' ? agentRepos(project, agent) : (project.repos ?? []));
   const groups = $derived(multi ? groupByRepo(listed, repos) : []);
+  /**
+   * The shared tickets' files Escouade wrote in the project's folder (ESC-190, choice 120), at the head of the list: each by
+   * its ticket's key and title. Written by Escouade, committed by the user, never by Escouade.
+   */
+  const ticketRows = $derived(multi ? [] : listed.filter((x) => isTicketPath(x.path)));
+  const otherRows = $derived(multi ? listed : listed.filter((x) => !isTicketPath(x.path)));
+  const projectTickets = $derived(Object.values(app.tickets).filter((x) => x.projectId === project.id));
+  let ticketsFolded = $state(false);
   const quiet = $derived(multi && listFor !== null ? quietRepos(repos, groupByRepo(files, repos)) : []);
   let folded = $state<Record<string, boolean>>({});
   /** The branch a repository's group is on: the agent's, else the repository's own. */
@@ -241,11 +250,23 @@
       {/each}
       {#if quiet.length}<p class="quiet">{t('repos.files.quiet', { repos: quiet.map(repoLabel).join(', ') })}</p>{/if}
     {:else}
-      {#each listed as f (keyOf(f))}{@render row(f, null)}{/each}
+      {#if ticketRows.length}
+        <button class="repo-h tickets-h" aria-expanded={!ticketsFolded} onclick={() => (ticketsFolded = !ticketsFolded)}
+          ><Icon name="down" size={14} /><span class="rn sans">{t('share.git.group')}</span><span class="rb">{SHARED_DIR}</span><span
+            class="cnt">{ticketRows.length}</span
+          ></button
+        >
+        {#if !ticketsFolded}
+          {#each ticketRows as f (keyOf(f))}{@render row(f, null)}{/each}
+          <p class="tnote">{t('share.git.note')}</p>
+        {/if}
+      {/if}
+      {#each otherRows as f (keyOf(f))}{@render row(f, null)}{/each}
     {/if}
     {#snippet row(f: FileChange, repo: string | null)}
       {@const on = current !== null && keyOf(current) === keyOf(f)}
       {@const shown = repo === null ? f.path : inRepo(f.path, repo)}
+      {@const tk = repo === null && f.path.endsWith('.yml') && isTicketPath(f.path) ? ticketOfPath(f.path, projectTickets) : undefined}
       <div class="filerow" class:on class:in={repo !== null}>
         <button
           class="file"
@@ -254,9 +275,13 @@
           oncontextmenu={(e) => fileMenu(e, f)}
         >
           <span class="letter {f.status.toLowerCase()}">{f.status}</span>
-          <span class="fn"
-            ><b>{basename(shown)}</b>{#if dirname(shown)}<span class="dir">{dirname(shown)}</span>{/if}</span
-          >
+          {#if tk}
+            <span class="fn" use:tip={f.path}><b><span class="tkey">{tk.key.split('@')[0]}</span>{tk.title}</b></span>
+          {:else}
+            <span class="fn"
+              ><b>{basename(shown)}</b>{#if dirname(shown)}<span class="dir">{dirname(shown)}</span>{/if}</span
+            >
+          {/if}
           {#if scope === 'project' && f.agentId}<span class="tag">{agentName(f.agentId)}</span>{/if}
           <span class="cnt"><span class="add">+{f.add}</span><span class="del">−{f.del}</span></span>
         </button>
@@ -404,6 +429,24 @@
     font-size: 12px;
     text-align: left;
     cursor: pointer;
+  }
+  /* The shared tickets' group (ESC-190): named in the interface's font, its keys in the project's ink. */
+  .repo-h .rn.sans {
+    font-family: var(--font);
+  }
+  .tickets-h .cnt {
+    color: var(--muted);
+  }
+  .tkey {
+    margin-right: 6px;
+    color: var(--p-ink);
+    font: 600 11px var(--mono);
+  }
+  .tnote {
+    margin: 2px 12px 8px 34px;
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.4;
   }
   .repo-h:hover {
     background: var(--hover);

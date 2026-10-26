@@ -83,7 +83,7 @@ export const SETTINGS_TABS: TabInfo[] = [
 
 /** The app's settings each tab sets. */
 const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
-  app: ['language', 'claudeLanguage', 'writerEngine', 'writerModel'],
+  app: ['language', 'claudeLanguage', 'writerEngine', 'writerModel', 'userName'],
   claude: [
     'claudePath',
     'autoResume',
@@ -136,6 +136,8 @@ type ProjectFields = Pick<
   | 'engine'
   | 'private'
   | 'sharedOnLimit'
+  | 'userName'
+  | 'shareNew'
 >;
 
 /** Which commands of a project's worktrees: run once one is made, or before one is removed. */
@@ -180,6 +182,10 @@ export interface ProjectDraft {
   private: boolean;
   /** « Comptes partagés à la limite ». */
   sharedOnLimit: boolean;
+  /** « Ton nom dans ce projet » (ESC-190): empty is the app's. */
+  userName: string;
+  /** « Partager chaque nouveau ticket » (ESC-190). */
+  shareNew: boolean;
   board: BoardSettings;
   /** Its sources in external ticket systems (the « Intégrations » tab). */
   integrations: ProjectIntegrations;
@@ -209,6 +215,8 @@ function draftOf(p: Project): ProjectDraft {
     engine,
     private: isPrivate,
     sharedOnLimit,
+    userName,
+    shareNew,
     board,
     integrations,
   } = $state.snapshot(p);
@@ -242,6 +250,9 @@ function draftOf(p: Project): ProjectDraft {
     private: !!isPrivate,
     // Absent from a project of the window's tests made before ESC-141.
     sharedOnLimit: !!sharedOnLimit,
+    // Absent from a project of the window's tests made before ESC-190.
+    userName: userName ?? '',
+    shareNew: !!shareNew,
     board,
     integrations,
   };
@@ -299,6 +310,8 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     engine: d.engine,
     private: d.private,
     sharedOnLimit: d.sharedOnLimit,
+    userName: d.userName.trim(),
+    shareNew: d.shareNew,
   };
 }
 

@@ -29,6 +29,11 @@ export interface App {
    * started anew (the projects, the agents and their conversations, as it saved them). Gives the new window, also in `app.page`.
    */
   restart: () => Promise<Page>;
+  /**
+   * `restart()` on another data folder (ESC-190: a second user of the same repository, with settings of their own): from then
+   * on, every start is on it. Its `settings.json` is the test's to write first.
+   */
+  restartAs: (data: string) => Promise<Page>;
   /** A git repository with one commit, ready to be added as a project. */
   repo: string;
   data: string;
@@ -323,6 +328,8 @@ export const test = base.extend<{
         language,
         // The question of the first start answered (a sandbox never sends anything anyway).
         telemetry: false,
+        // And the other question of the first start, the user's name for the shared tickets (ESC-190): put off.
+        nameAsked: true,
         // Settings of this version: no update to bring them through (ESC-128), unless a test says otherwise.
         accountsVersion: 1,
         // No automatic restart for an update of Escouade: the hidden window of the tests reads as nobody there, and a
@@ -438,6 +445,10 @@ export const test = base.extend<{
           instance = startApp(env, stderr);
           app.page = await attach(instance);
           return app.page;
+        },
+        restartAs: (other: string) => {
+          env.ESCOUADE_DATA_DIR = other;
+          return app.restart();
         },
       };
       // What the app showed and logged, for a failure on CI (annotations are all we get there).

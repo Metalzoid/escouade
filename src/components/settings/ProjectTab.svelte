@@ -26,6 +26,7 @@
   import WorktreeBaseField from './WorktreeBaseField.svelte';
   import { tip } from '../../lib/tip';
   import { repoLabel } from '../../lib/repos';
+  import { SHARED_DIR } from '../../lib/sharing';
   import { DEFAULT_WORKTREES, worktreesRoot, type WorktreesProblem } from '../../lib/worktrees';
 
   // A project's own settings: who it is, its worktrees and what runs in them, its launch commands (its draft: the
@@ -33,6 +34,11 @@
   let { project }: { project: Project } = $props();
 
   const draft = $derived(settingsForm.project!);
+  /** Its shared tickets (ESC-190): all of them, and those of this machine's user. */
+  const sharedCount = $derived.by(() => {
+    const list = Object.values(app.tickets).filter((x) => x.projectId === settingsForm.projectId && x.shared && !x.shared.gone);
+    return { all: list.length, mine: list.filter((x) => x.shared?.mine).length };
+  });
   /** Its repositories as the backend last found them (ESC-169), whatever the draft says. */
   const live = $derived(app.projects.find((p) => p.id === project.id) ?? project);
   const liveRepos = $derived(live.repos ?? []);
@@ -622,6 +628,31 @@
 
 <!-- Its .escouade.yml after what it sets (2.0 design, #sg-yml): its commands that wait are also said on the Kanban. -->
 <SharedSection {project} />
+
+<!-- The shared Kanban (ESC-190, choice 113): the name in this project, its shared tickets, « Partager chaque nouveau ticket ». -->
+<Group title={t('share.settings.projectGroup')} anchor="share">
+  <Row
+    label={t('share.settings.projectName')}
+    desc={t('share.settings.projectNameDesc', { name: settingsForm.settings.userName?.trim() || t('share.settings.noName') })}
+  >
+    <input
+      class="field input"
+      aria-label={t('share.settings.projectName')}
+      spellcheck="false"
+      placeholder={settingsForm.settings.userName?.trim() || ''}
+      bind:value={draft.userName}
+    />
+  </Row>
+  <Row
+    label={t('share.settings.files')}
+    desc={sharedCount.all
+      ? t('share.settings.filesDesc', { count: sharedCount.all, dir: SHARED_DIR, mine: sharedCount.mine })
+      : t('share.settings.filesNone', { dir: SHARED_DIR })}
+  />
+  <Row label={t('share.settings.shareNew')} desc={t('share.settings.shareNewDesc')}>
+    <Switch label={t('share.settings.shareNew')} bind:on={draft.shareNew} />
+  </Row>
+</Group>
 
 <Group title={t('settings.project.danger')}>
   <Row label={t('settings.project.close')} desc={t('settings.project.closeDesc')}>

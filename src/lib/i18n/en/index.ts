@@ -22,6 +22,7 @@ import prs from './prs';
 import repos from './repos';
 import runs from './runs';
 import settings from './settings';
+import share from './share';
 import shell from './shell';
 import stats from './stats';
 import subagents from './subagents';
@@ -55,4 +56,5 @@ export const en = defineCatalog({
   bgtasks,
   wizard,
   voice,
+  share,
 });

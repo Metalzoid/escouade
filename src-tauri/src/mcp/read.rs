@@ -339,6 +339,31 @@ fn ticket_keys<R: Runtime>(core: &Core<R>) -> HashMap<String, String> {
         .collect()
 }
 
+/// A shared ticket, as the tools say it (ESC-190): who shared it, whether it is the user's, who
+/// took it, its file, and why its file is not read.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SharedView {
+    by: String,
+    by_me: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    taken_by: Option<String>,
+    file: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    problem: Option<String>,
+}
+
+pub(crate) fn shared_view(t: &Ticket) -> Option<SharedView> {
+    let s = t.shared.as_ref()?;
+    Some(SharedView {
+        by: s.author.name.clone(),
+        by_me: s.mine,
+        taken_by: s.taken_by.as_ref().map(|p| p.name.clone()),
+        file: format!("{}/{}.yml", crate::sharing::DIR, s.id),
+        problem: s.problem.clone(),
+    })
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct TicketRow {
@@ -360,6 +385,9 @@ struct TicketRow {
     model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     effort: Option<String>,
+    /// Shared with the team (ESC-190): left out when it is not.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    shared: Option<SharedView>,
 }
 
 /// The name of the account `id` a ticket is set to, as the tools say it (by its id when gone).
@@ -410,6 +438,7 @@ pub(super) fn tickets<R: Runtime>(
             account: (!t.account.is_empty()).then(|| account_name(core, &t.account)),
             model: (!t.model.is_empty()).then(|| t.model.clone()),
             effort: (!t.effort.is_empty()).then(|| t.effort.clone()),
+            shared: shared_view(t),
         })
         .collect();
     json(&rows)
@@ -460,6 +489,9 @@ fn or_auto(v: &str) -> String {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TicketView {
+    /// Shared with the team (ESC-190): left out when it is not.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    shared: Option<SharedView>,
     id: String,
     key: String,
     title: String,
@@ -576,6 +608,7 @@ pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView 
         }
     });
     TicketView {
+        shared: shared_view(t),
         id: t.id.clone(),
         key: t.key.clone(),
         title: t.title.clone(),
