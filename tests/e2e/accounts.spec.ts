@@ -104,7 +104,8 @@ test.describe('a private project, two accounts, the first out of quota', () => {
     await page.getByRole('textbox', { name: 'Titre du ticket' }).fill('Premier [ok]');
     await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const doing = page.getByRole('region', { name: 'En cours' });
-    await expect(doing.getByRole('button', { name: /DEM-1/ }).getByText(/^Reprise à /)).toBeVisible({ timeout: 60_000 });
+    // « Reprise à 14:20 », or « Reprise le mardi 27 octobre à 00:30 » when the reset falls the next day (a run near midnight).
+    await expect(doing.getByRole('button', { name: /DEM-1/ }).getByText(/^Reprise (à |le .* à )/)).toBeVisible({ timeout: 60_000 });
     // The autopilot waits for Principal alone, the project's own: Pro, under its threshold, would not hold it back.
     await expect(page.getByRole('status').filter({ hasText: /Pilote auto en pause.*Le compte Principal a passé le seuil/ })).toBeVisible();
     expect(processes(app.launches())).toEqual([principalDir(app.root)]);
