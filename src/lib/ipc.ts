@@ -360,8 +360,17 @@ export const api = {
     invoke<PullRequest>('agent_pr_open', { id, form }),
   /** Reads the agent's pull requests again: at most every 20 s, unless `now`. */
   agentPrsRefresh: (id: string, now = false) => invoke<void>('agent_prs_refresh', { id, now }),
+  /**
+   * Switches the agent's worktree to `name` (a remote branch "origin/x": the local one that tracks it, made if need be);
+   * the branch it is on. Rejected with `IN_WORKTREE:<agent id>:<agent name>`, or in words.
+   */
+  agentBranchSwitch: (id: string, name: string) => invoke<string>('agent_branch_switch', { id, name }),
+  /** Fetch, pull (fast-forward only) or push of the agent's own folder; a summary. */
+  agentGitSync: (id: string, op: 'pull' | 'push' | 'fetch') => invoke<string>('agent_git_sync', { id, op }),
   /** « L'agent corrige » / « L'agent corrige les retours » on pull request `number`. */
-  agentPrFix: (id: string, number: number, fix: PrFix) => invoke<void>('agent_pr_fix', { id, number, fix }),
+  /** `hostRepo`: the repository it was read in, when not the target's (`PullRequest.hostRepo`). */
+  agentPrFix: (id: string, number: number, fix: PrFix, hostRepo?: string) =>
+    invoke<void>('agent_pr_fix', { id, number, fix, ...(hostRepo ? { hostRepo } : {}) }),
   getCommands: (id: string) => invoke<SlashCommand[]>('get_commands', { id }),
   fileSuggestions: (id: string, query: string) => invoke<string[]>('file_suggestions', { id, query }),
   gitFiles: (projectId: string, agentId: string | null) => invoke<FileChange[]>('git_files', { projectId, agentId }),

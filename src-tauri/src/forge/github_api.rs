@@ -478,7 +478,7 @@ fn run_state(run: &Value) -> CheckState {
 /// What a pull request's GraphQL fragment asks: its state, its reviews' last say, its open threads
 /// and the checks of its last commit, all in one.
 const PR_FIELDS: &str = "number url title state isDraft headRefName baseRefName mergeable \
-    isCrossRepository \
+    isCrossRepository headRepository { nameWithOwner } \
     autoMergeRequest { enabledAt } \
     latestOpinionatedReviews(first: 50) { nodes { state } } \
     reviewThreads(first: 100) { nodes { isResolved } } \
@@ -520,12 +520,17 @@ fn pr_of_graphql(p: &Value) -> Option<PullRequest> {
             .count() as u32,
         auto_merge: !p["autoMergeRequest"].is_null(),
         fork: p["isCrossRepository"].as_bool().unwrap_or(false),
+        head_repo: p["headRepository"]["nameWithOwner"]
+            .as_str()
+            .unwrap_or("")
+            .to_string(),
         checks: match p["commits"]["nodes"][0]["commit"]["statusCheckRollup"]["state"].as_str() {
             Some("SUCCESS") => Some(CheckState::Success),
             Some("FAILURE" | "ERROR") => Some(CheckState::Failure),
             Some(_) => Some(CheckState::Pending),
             None => None,
         },
+        host_repo: String::new(),
     })
 }
 
@@ -551,6 +556,10 @@ fn pr_of_rest(p: &Value) -> Result<PullRequest> {
         head: p["head"]["ref"].as_str().unwrap_or("").to_string(),
         base: p["base"]["ref"].as_str().unwrap_or("").to_string(),
         mergeable: p["mergeable"].as_bool(),
+        head_repo: p["head"]["repo"]["full_name"]
+            .as_str()
+            .unwrap_or("")
+            .to_string(),
         ..Default::default()
     })
 }
@@ -688,6 +697,29 @@ impl Forge for Github {
                 .flatten()
                 .filter_map(pr_of_graphql)
                 .collect())
+        })
+    }
+
+    fn parent<'a>(&'a self, repo: &'a RepoRef) -> BoxFuture<'a, Result<Option<RepoRef>>> {
+        Box::pin(async move {
+            let data = self
+                .graphql(
+                    "RepoParent",
+                    "query RepoParent($owner: String!, $name: String!) { \
+                     repository(owner: $owner, name: $name) { parent { name owner { login } } } }",
+                    json!({ "owner": repo.namespace, "name": repo.name }),
+                )
+                .await?;
+            let parent = &data["repository"]["parent"];
+            Ok(
+                match (parent["owner"]["login"].as_str(), parent["name"].as_str()) {
+                    (Some(owner), Some(name)) => Some(RepoRef {
+                        namespace: owner.to_string(),
+                        name: name.to_string(),
+                    }),
+                    _ => None,
+                },
+            )
         })
     }
 

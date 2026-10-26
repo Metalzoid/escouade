@@ -75,11 +75,18 @@ struct Route {
 
 impl Route {
     fn matches(&self, req: &Request) -> bool {
-        // `/graphql#<operation>`: a GraphQL operation, by the `operationName` of its body.
+        // `/graphql#<operation>`: a GraphQL operation, by the `operationName` of its body;
+        // `/graphql#<operation>@<owner>`: of that owner's repository only (`variables.owner`).
         if let Some((path, op)) = self.target.split_once('#') {
+            let (op, owner) = match op.split_once('@') {
+                Some((op, owner)) => (op, Some(owner)),
+                None => (op, None),
+            };
+            let body = req.json();
             return self.method == req.method
                 && path == req.path()
-                && req.json()["operationName"].as_str() == Some(op);
+                && body["operationName"].as_str() == Some(op)
+                && owner.is_none_or(|o| body["variables"]["owner"].as_str() == Some(o));
         }
         self.method == req.method
             && if self.target.contains('?') {

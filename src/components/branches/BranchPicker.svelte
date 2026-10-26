@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { deletable, deleteBranch, startAgentOn, switchBranch, worktreeReason } from '../../lib/branch-actions';
+  import { agentGitOf, switchRefusal } from '../../lib/agent-branch';
+  import { deletable, deleteBranch, startAgentOn, switchBranch, tellRefusal, worktreeReason } from '../../lib/branch-actions';
   import { rankFiles } from '../../lib/editor/quick-open';
   import { trapFocus } from '../../lib/focus';
-  import { gitSync, repoSyncInfo, type SyncOp } from '../../lib/git-sync.svelte';
+  import { gitSync, repoSyncInfo, syncInfo, type SyncOp } from '../../lib/git-sync.svelte';
   import { pointerMoves } from '../../lib/hover';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
@@ -22,7 +23,8 @@
   // With `oncreate` (« Nouvel agent sur une branche… », ESC-155), a name typed that no branch has is offered last, to be
   // created where a new agent starts: the name is checked as git does, and where it starts is said; with `oncreatefrom`
   // too, a second row offers to choose the branch it starts from first (ESC-160). In `base` mode it chooses where an
-  // agent's worktree starts, or the project's new worktrees (ESC-160): any branch, local or remote.
+  // agent's worktree starts, or the project's new worktrees (ESC-160): any branch, local or remote. In `switch` mode with
+  // `agentId`, the agent open in a worktree of its own: that worktree goes to the branch chosen, never the project's folder.
   let {
     projectId,
     anchor,
@@ -35,7 +37,13 @@
     chosen,
     forBranch,
     repo = null,
+    agentId,
+    onfolder,
   }: {
+    /** In `switch` mode, the agent open whose own folder (its worktree) the picker switches and syncs. */
+    agentId?: string;
+    /** With `agentId`: « Dossier du projet… » shows the project's folder's branches in its place. */
+    onfolder?: () => void;
     /** One of the repositories of a project of several (ESC-169). */
     repo?: string | null;
     projectId: string;
@@ -55,6 +63,14 @@
     forBranch?: string;
   } = $props();
   const picking = $derived(mode !== 'switch');
+  /** The agent whose worktree is switched, in `switch` mode. */
+  const forAgent = $derived(mode === 'switch' && agentId ? (app.agents[agentId] ?? null) : null);
+  /** Its folder's checkout, as git tells it. */
+  const own = $derived(forAgent ? agentGitOf(forAgent, app.git[projectId]) : null);
+  /** The branch its folder is on. */
+  const agentBranch = $derived(own?.branch ?? forAgent?.worktree?.branch ?? forAgent?.foundWorktree?.branch ?? '');
+  /** Why it can't go to another branch from here: a ticket's agent, several repositories, a worktree not Escouade's. */
+  const refusal = $derived(forAgent ? switchRefusal(forAgent) : null);
   const targeting = $derived(mode === 'target');
   /** Choosing where a worktree starts: any branch, none refused. */
   const basing = $derived(mode === 'base');
@@ -67,7 +83,9 @@
           : t('branches.agent.baseTitle')
         : picking
           ? t('branches.agent.pickTitle')
-          : t('branches.picker.title'),
+          : forAgent
+            ? t('branches.agentSwitch.title', { agent: forAgent.name })
+            : t('branches.picker.title'),
   );
 
   /** Branches shown per group: a repository can have thousands of remote ones, which the search finds. */
@@ -85,7 +103,9 @@
   let list = $state<HTMLDivElement>();
   let place = $state<{ left: number; bottom?: number; top?: number; maxHeight: number }>({ left: 16, bottom: 38, maxHeight: 560 });
 
-  const sync = $derived(repoSyncInfo(app.git[projectId], repo));
+  const sync = $derived(
+    forAgent ? (own && app.git[projectId] ? syncInfo({ ...app.git[projectId], ...own }) : null) : repoSyncInfo(app.git[projectId], repo),
+  );
 
   onMount(() => {
     if (!anchor) return;
@@ -115,7 +135,7 @@
   // Read when it opens, and again when the checkout moves under it (a switch, a pull, an agent's commit).
   $effect(() => {
     const g = app.git[projectId];
-    void [g?.branch, g?.upstream, g?.ahead, g?.behind];
+    void [g?.branch, g?.upstream, g?.ahead, g?.behind, own?.branch, own?.ahead, own?.behind];
     void load();
   });
 
@@ -138,6 +158,9 @@
   /** The branch the project's folder is on, or the remote branch of the local one that is. */
   const isFolder = (b: BranchInfo) => b.current || (b.remote && !!b.trackedBy && !!localByName.get(b.trackedBy)?.current);
 
+  /** The branch the checkout switched is on: the agent's folder's, else the project's folder's; or the remote branch it tracks. */
+  const isHere = (b: BranchInfo) => (forAgent ? (b.remote ? b.trackedBy === agentBranch : b.name === agentBranch) : isFolder(b));
+
   /** The board's target branch, which the tickets are merged into: the local branch, or the remote one that tracks it. */
   const target = $derived(project?.board.target.trim() ?? '');
   const isTarget = (b: BranchInfo) =>
@@ -146,6 +169,16 @@
   /** Why `b` can't be picked: an agent's worktree (or another one) has its branch, or, to pick one for an agent, the folder does, or the board's target. */
   function reasonOf(b: BranchInfo): string | null {
     if (targeting || basing) return null;
+    // The agent's worktree: neither the project's folder's branch nor another worktree's, which git checks out once.
+    if (forAgent) {
+      if (isHere(b)) return null;
+      if (refusal) return refusal;
+      // The board merges into its target: no worktree may hold it.
+      if (isTarget(b)) return t('branches.agent.isTargetBranch');
+      if (isFolder(b)) return t('branches.agentSwitch.folderBranch');
+      const h = held(b);
+      return h && h.agent !== forAgent.id ? worktreeReason(h) : null;
+    }
     // The target first: when the folder is on it, that is the reason.
     if (picking && isTarget(b)) return t('branches.agent.isTargetBranch');
     if (picking && isFolder(b)) return t('branches.agent.isFolderBranch');
@@ -156,7 +189,9 @@
   /** The short word after a branch's name. */
   function tagOf(b: BranchInfo): string | null {
     if (targeting || basing) return b.current ? t('branches.picker.folder') : null;
+    if (forAgent && isFolder(b)) return t('branches.picker.folder');
     const h = held(b);
+    if (forAgent && h?.agent === forAgent.id) return null;
     if (h) return h.agent ? t('branches.picker.usedBy', { agent: app.agents[h.agent]?.name ?? '?' }) : t('branches.picker.otherWorktree');
     if (b.remote) return b.trackedBy ? t('branches.picker.trackedBy', { branch: b.trackedBy }) : null;
     return b.upstreamGone ? t('branches.picker.gone') : null;
@@ -320,11 +355,25 @@
       return;
     }
     // Already on it (a remote branch: on the local one that tracks it).
-    if (isFolder(b)) {
+    if (isHere(b)) {
       onclose();
       return;
     }
     switching = true;
+    if (forAgent) {
+      const agent = forAgent;
+      try {
+        const on = await api.agentBranchSwitch(agent.id, b.name);
+        app.toast(t('branches.agentSwitch.done', { agent: agent.name, branch: on }), 'ok');
+        switching = false;
+        onclose();
+      } catch (e) {
+        switching = false;
+        tellRefusal(e, b.name);
+        await load();
+      }
+      return;
+    }
     // The picker is out of the way before a question opens: the focus then goes back to the button it came from.
     const result = await switchBranch(projectId, b.name, false, release, repo);
     switching = false;
@@ -337,7 +386,7 @@
    * the folder is on, nor for a worktree's (an agent there, or its branch to delete).
    */
   function itemsOf(b: BranchInfo): MenuItem[] {
-    if (picking) return [];
+    if (picking || forAgent) return [];
     const items: MenuItem[] = [];
     if (!isFolder(b) && !held(b)) {
       items.push({
@@ -410,7 +459,8 @@
 
   function runSync(op: SyncOp) {
     onclose();
-    void gitSync.run(op, projectId, repo);
+    if (forAgent) void gitSync.runAgent(op, forAgent.id, projectId);
+    else void gitSync.run(op, projectId, repo);
   }
 </script>
 
@@ -469,7 +519,13 @@
           <div class="grp" id="branch-group-{g.id}">{g.label}</div>
           {#each g.rows as r (r.b.name)}
             {@const b = r.b}
-            {@const checked = targeting ? b.name === (chosen ?? target) : basing ? b.name === chosen : b.current}
+            {@const checked = targeting
+              ? b.name === (chosen ?? target)
+              : basing
+                ? b.name === chosen
+                : forAgent
+                  ? !b.remote && isHere(b)
+                  : b.current}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <div
               class="row"
@@ -491,7 +547,13 @@
                 >{#if checked}<Icon name="check" size={14} />{/if}</span
               >
               <span class="name">{b.name}</span>
-              {#if checked}<span class="sr">{targeting || basing ? t('branches.picker.chosen') : t('branches.picker.current')}</span>{/if}
+              {#if checked}<span class="sr"
+                  >{targeting || basing
+                    ? t('branches.picker.chosen')
+                    : forAgent
+                      ? t('branches.agentSwitch.title', { agent: forAgent.name })
+                      : t('branches.picker.current')}</span
+                >{/if}
               {#if r.tag}<span class="tag">{r.tag}</span>{/if}
               {#if b.ahead || b.behind}
                 <span class="ab">
@@ -569,10 +631,17 @@
   </div>
   {#if !picking}
     <div class="foot">
-      <div class="acts">
-        <button class="act" onclick={newBranch}>{t('branches.picker.newBranch')}</button>
-        <button class="act" onclick={mergedBranches}>{t('branches.picker.mergedBranches')}</button>
-      </div>
+      {#if !forAgent}
+        <div class="acts">
+          <button class="act" onclick={newBranch}>{t('branches.picker.newBranch')}</button>
+          <button class="act" onclick={mergedBranches}>{t('branches.picker.mergedBranches')}</button>
+        </div>
+      {:else if onfolder}
+        <!-- The project's folder's branches, its new branch and its clean-up: the same picker, for the folder. -->
+        <div class="acts">
+          <button class="act" onclick={onfolder}>{t('branches.agentSwitch.folder')}</button>
+        </div>
+      {/if}
       {#if sync}
         <div class="acts">
           <button class="act" disabled={!sync.tracked || sync.behind === 0} onclick={() => runSync('pull')}

@@ -150,6 +150,10 @@ export default {
       '{harness} n’a pas de quota : son compte a coûté {cost} aujourd’hui, sur un budget de {budget} par jour (atteint, le pilote auto attend minuit).',
     /** After it, the day's cost at midnight at the pace since midnight; `{amount}`: « 3,40 $ ». */
     dayProjectedTip: 'Projection à minuit : {amount}.',
+    /** The first line of the branch button's tooltip while an agent open works in a folder of its own. */
+    agentBranch: 'Branche de l’agent {agent}, dans son worktree',
+    /** After the pull request of the branch shown: how many more it has. */
+    morePrs: { one: '+{count} autre', other: '+{count} autres' },
     /** The branch against its remote. */
     sync: {
       tracked: 'Suit {upstream} : {behind} à tirer, {ahead} à pousser',

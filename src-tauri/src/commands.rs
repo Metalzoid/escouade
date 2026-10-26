@@ -1385,6 +1385,26 @@ pub async fn agent_prs_refresh(core: CoreState<'_>, id: String, now: bool) -> Re
     core.agent_prs_refresh(&id, now).await.map_err(err)
 }
 
+/// Switches the agent's worktree to a branch (the status bar's picker); the branch it is on.
+#[tauri::command]
+pub async fn agent_branch_switch(core: CoreState<'_>, id: String, name: String) -> Res<String> {
+    core.agent_branch_switch(&id, &name)
+        .await
+        .map_err(branch_err)
+}
+
+/// Fetch, pull or push (`op`) of the agent's own folder; a summary for the user.
+#[tauri::command]
+pub async fn agent_git_sync(core: CoreState<'_>, id: String, op: String) -> Res<String> {
+    let (sync, op) = match op.as_str() {
+        "pull" => (SyncOp::Pull, "pull"),
+        "push" => (SyncOp::Push, "push"),
+        _ => (SyncOp::Fetch, "fetch"),
+    };
+    let r = core.agent_git_sync(&id, sync).await.map_err(err);
+    counted(&core, Event::GitSync { op }, r)
+}
+
 /// « L'agent corrige » / « L'agent corrige les retours » on pull request `number`.
 #[tauri::command]
 pub async fn agent_pr_fix(
@@ -1392,8 +1412,12 @@ pub async fn agent_pr_fix(
     id: String,
     number: u64,
     fix: crate::agentprs::PrFix,
+    // The repository it was read in, when not the target's (`PullRequest::host_repo`).
+    host_repo: Option<String>,
 ) -> Res<()> {
-    core.agent_pr_fix(&id, number, fix).await.map_err(err)
+    core.agent_pr_fix(&id, number, host_repo.as_deref().unwrap_or(""), fix)
+        .await
+        .map_err(err)
 }
 
 /// The statistics of a period, of every account or (`account`) of one.

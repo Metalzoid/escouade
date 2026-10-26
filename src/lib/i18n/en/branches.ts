@@ -143,6 +143,21 @@ export default defineZone('branches', {
     baseTitleFor: 'Starting branch of “{branch}”',
     baseHint: 'The agent’s worktree starts from this branch, and its PR will open to it.',
   },
+  /** The picker of the status bar while an agent is open in a worktree of its own: it switches that worktree. */
+  agentSwitch: {
+    /** `{agent}`: the agent open. */
+    title: 'Branch of {agent}',
+    /** Why no branch can be chosen: a ticket's agent, one of several repositories, one in a worktree it went into by itself. */
+    ticket: 'A ticket agent’s branch follows its ticket: it doesn’t change.',
+    multi: 'An agent of several repositories can’t switch branches from here yet.',
+    found: 'This worktree isn’t one of Escouade’s: the agent switches branches in it itself.',
+    /** Why the branch of the project's folder can't be chosen: git checks a branch out in one folder only. */
+    folderBranch: 'It’s the branch of the project’s folder: a worktree can’t take it.',
+    /** The button of the agent's picker that shows the project's folder's branches in its place. */
+    folder: 'Project’s folder…',
+    /** The toast once switched. */
+    done: '{agent} is now on {branch}.',
+  },
   /** “Integrate <base>”: the base branch goes into the agent’s branch. */
   integrate: {
     /** `{base}`: the agent’s base branch. */

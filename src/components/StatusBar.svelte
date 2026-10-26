@@ -20,6 +20,8 @@
   import { t } from '../lib/i18n';
   import Rich from '../lib/i18n/Rich.svelte';
   import { gitSync, syncInfo, type SyncOp } from '../lib/git-sync.svelte';
+  import { agentGitOf, branchPrs } from '../lib/agent-branch';
+  import { openPr, prIcon, prTip, prTone, prWord, stateWord } from '../lib/prs';
   import { api } from '../lib/ipc';
   import { estimatedBy, estimateHint, fSpentUsd } from '../lib/spend';
   import { app } from '../lib/state.svelte';
@@ -165,13 +167,34 @@
       ? { projectId: p.id, git: g, detached: g.branch === '(detached)', multi: isMulti(p) }
       : null;
   });
+  /**
+   * The agent whose conversation is on screen: the button tells its own folder's branch when it has one
+   * (`GitInfo.agentGit`). The board, the editor, a run or a terminal over it: the project's folder's.
+   */
+  const agentOpen = $derived(repo ? app.agentShown : null);
+  const own = $derived(repo ? agentGitOf(agentOpen, repo.git) : null);
+  /** What the button tells: the agent's own checkout, else the project's folder's. */
+  const checkout = $derived(repo ? (own ? { ...repo.git, ...own } : repo.git) : null);
+  const detached = $derived(checkout?.branch === '(detached)');
+  /** Of several repositories, the project's or the agent's own. */
+  const multi = $derived(own ? !!own.repos?.length : !!repo?.multi);
   /** Of several repositories: « main · 4 dépôts », or « 3 branches · 4 dépôts ». */
-  const summary = $derived(repo?.multi ? branchSummary(repo.git) : null);
+  const summary = $derived(checkout && multi ? branchSummary(checkout) : null);
+  /** The pull request of the branch shown, of the agent open (ESC-64): the one to look at first, and how many more. */
+  const shownPr = $derived.by(() => {
+    if (!agentOpen || !checkout || detached || (!checkout.branch && !multi)) return null;
+    const prs = branchPrs(agentOpen, checkout.branch);
+    return prs.length ? { pr: prs[0], more: prs.length - 1, word: prWord(agentOpen) } : null;
+  });
   /** The repository whose branch picker is open, of several. */
   let pickerRepo = $state<string | null>(null);
   /** Of several repositories: their menu first, each opening its own branch picker. */
   function openBranches() {
-    if (!repo?.multi) {
+    if (own?.repos?.length) {
+      openAgentRepos();
+      return;
+    }
+    if (!repo?.multi || own) {
       pickerRepo = null;
       pickerOpen = !pickerOpen;
       return;
@@ -214,12 +237,34 @@
       },
     ]);
   }
+  /** An agent of several repositories (ESC-169): each one's branch and state, its switch not offered from here yet. */
+  function openAgentRepos() {
+    if (!branchButton || !own?.repos) return;
+    menu.showAt(branchButton, [
+      { label: t('repos.status.menuTitle', { count: own.repos.length }), heading: true },
+      ...own.repos.map((r) => ({
+        label: repoLabel(r.repo),
+        icon: 'branch' as const,
+        detail:
+          r.ahead || r.behind
+            ? t('repos.status.sync', { branch: r.branch, behind: r.behind, ahead: r.ahead })
+            : `${r.branch} · ${t('repos.status.upToDate')}`,
+        reason: t('branches.agentSwitch.multi'),
+        disabled: true,
+      })),
+    ]);
+  }
   /** What it can sync with, when it has a remote. */
-  const sync = $derived(repo ? syncInfo(repo.git) : null);
+  const sync = $derived(checkout ? syncInfo(checkout) : null);
   const busy = $derived(repo ? gitSync.running[repo.projectId] : undefined);
 
   /** The branch picker, open over the button. */
   let pickerOpen = $state(false);
+  /** Asked from the agent's picker: the project's folder's instead, until it closes. */
+  let folderPicker = $state(false);
+  $effect(() => {
+    if (!pickerOpen) folderPicker = false;
+  });
   let branchButton = $state<HTMLButtonElement>();
   let quotaButton = $state<HTMLButtonElement>();
   // The button is disabled while a sync runs, and a browser takes the focus off a control that becomes disabled: the
@@ -242,9 +287,11 @@
   });
 
   const branchTitle = $derived.by(() => {
-    if (!sync) return t('branches.picker.switchTitle');
+    const whose = own && agentOpen ? [t('shell.status.agentBranch', { agent: agentOpen.name })] : [];
+    if (!sync) return [...whose, t('branches.picker.switchTitle')].join('\n');
     const fetched = sync.lastFetch ? fAgo(sync.lastFetch / 1000, app.now) : t('shell.status.sync.never');
     return [
+      ...whose,
       sync.tracked
         ? t('shell.status.sync.tracked', { upstream: sync.upstream ?? '', behind: sync.behind, ahead: sync.ahead })
         : sync.upstream
@@ -351,17 +398,17 @@
             {#if summary.branch}<b class="name mono">{summary.branch}</b>{/if}<span class="d repos"
               >{summary.branch ? '· ' : ''}{summary.text}</span
             >
-            {#if repo.git.ahead || repo.git.behind}<span class="ahead some"
-                ><Icon name="up" size={12} /><span aria-hidden="true">{repo.git.ahead}</span><span class="sr"
-                  >{t('shell.status.sync.aheadShort', { count: repo.git.ahead })}</span
+            {#if checkout?.ahead || checkout?.behind}<span class="ahead some"
+                ><Icon name="up" size={12} /><span aria-hidden="true">{checkout.ahead}</span><span class="sr"
+                  >{t('shell.status.sync.aheadShort', { count: checkout.ahead })}</span
                 ></span
               ><span class="ahead some"
-                ><Icon name="pull" size={12} /><span aria-hidden="true">{repo.git.behind}</span><span class="sr"
-                  >{t('shell.status.sync.behindShort', { count: repo.git.behind })}</span
+                ><Icon name="pull" size={12} /><span aria-hidden="true">{checkout.behind}</span><span class="sr"
+                  >{t('shell.status.sync.behindShort', { count: checkout.behind })}</span
                 ></span
               >{/if}
           {:else}
-            <b class="name mono">{repo.detached ? t('branches.picker.detached') : repo.git.branch}</b>
+            <b class="name mono">{detached ? t('branches.picker.detached') : checkout?.branch}</b>
           {/if}
           {#if summary}<!-- each repository's state is in its menu -->{:else if busy}
             <span>{runningLabel(busy)}</span>
@@ -381,6 +428,22 @@
             <span class="d">{sync.upstream ? t('shell.status.sync.goneShort') : t('shell.status.sync.unpublishedShort')}</span>
           {/if}
         </button>
+        {#if shownPr}
+          <!-- Its pull request (ESC-64), apart from the branch button: a click opens it in the browser. -->
+          {@const p = shownPr.pr}
+          <button
+            class="it link pr {prTone(p)}"
+            aria-label={t('prs.chipLabel', { word: shownPr.word, number: p.number, state: stateWord(p) })}
+            use:tip={{
+              text: [prTip(shownPr.word, p), ...(shownPr.more ? [t('shell.status.morePrs', { count: shownPr.more })] : [])].join('\n'),
+              aria: false,
+            }}
+            onclick={() => openPr(p)}
+            ><Icon name={prIcon(p)} size={13} /><span class="mono">#{p.number}</span>{#if shownPr.more}<span class="d"
+                >{t('shell.status.morePrs', { count: shownPr.more })}</span
+              >{/if}</button
+          >
+        {/if}
       {/if}
       <button
         class="icon"
@@ -398,8 +461,17 @@
 {/if}
 
 {#if pickerOpen && repo}
-  {#key repo.projectId + '|' + (pickerRepo ?? '')}
-    <BranchPicker projectId={repo.projectId} repo={pickerRepo} anchor={branchButton} onclose={() => (pickerOpen = false)} />
+  <!-- The agent open in a folder of its own: the picker switches that folder, not the project's. -->
+  {@const agentId = own && !folderPicker ? agentOpen?.id : undefined}
+  {#key repo.projectId + '|' + (pickerRepo ?? '') + '|' + (agentId ?? '')}
+    <BranchPicker
+      projectId={repo.projectId}
+      repo={pickerRepo}
+      {agentId}
+      onfolder={() => (folderPicker = true)}
+      anchor={branchButton}
+      onclose={() => (pickerOpen = false)}
+    />
   {/key}
 {/if}
 
@@ -573,6 +645,26 @@
     overflow: hidden;
     text-overflow: ellipsis;
     font-size: 11.5px;
+  }
+  /* Its pull request: its icon in the colour of what to look at (as on the agent's card). */
+  .pr {
+    gap: 4px;
+    font-size: 11.5px;
+  }
+  .pr.ok :global(.icon) {
+    color: var(--run);
+  }
+  .pr.fail :global(.icon) {
+    color: var(--del);
+  }
+  .pr.wait :global(.icon) {
+    color: var(--wait);
+  }
+  .pr.merged :global(.icon) {
+    color: var(--syn-k);
+  }
+  .pr.dim {
+    color: var(--dim);
   }
   .ahead {
     display: inline-flex;

@@ -136,6 +136,10 @@ export default defineZone('shell', {
     dayBudgetTip:
       '{harness} has no quota: its account cost {cost} today, out of a daily budget of {budget} (once reached, the autopilot waits for midnight).',
     dayProjectedTip: 'Projected at midnight: {amount}.',
+    /** The first line of the branch button's tooltip while an agent open works in a folder of its own. */
+    agentBranch: 'Branch of agent {agent}, in its worktree',
+    /** After the pull request of the branch shown: how many more it has. */
+    morePrs: { one: '+{count} more', other: '+{count} more' },
     /** The branch against its remote. */
     sync: {
       tracked: 'Tracking {upstream}: {behind} to pull, {ahead} to push',

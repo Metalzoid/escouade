@@ -150,6 +150,21 @@ export default {
     /** Under the list in that picker: what choosing a branch does. */
     baseHint: 'Le worktree de l’agent part de cette branche, et sa PR s’ouvrira vers elle.',
   },
+  /** The picker of the status bar while an agent is open in a worktree of its own: it switches that worktree. */
+  agentSwitch: {
+    /** `{agent}`: the agent open. */
+    title: 'Branche de {agent}',
+    /** Why no branch can be chosen: a ticket's agent, one of several repositories, one in a worktree it went into by itself. */
+    ticket: 'La branche d’un agent de ticket suit son ticket : elle ne change pas.',
+    multi: 'Un agent de plusieurs dépôts ne change pas encore de branche d’ici.',
+    found: 'Ce worktree n’est pas un worktree d’Escouade : l’agent y change de branche lui-même.',
+    /** Why the branch of the project's folder can't be chosen: git checks a branch out in one folder only. */
+    folderBranch: 'C’est la branche du dossier du projet : un worktree ne peut pas la prendre.',
+    /** The button of the agent's picker that shows the project's folder's branches in its place. */
+    folder: 'Dossier du projet…',
+    /** The toast once switched. */
+    done: '{agent} passe sur {branch}.',
+  },
   /** « Intégrer <base> » : the base branch goes into the agent’s branch. */
   integrate: {
     /** `{base}`: the agent’s base branch. */

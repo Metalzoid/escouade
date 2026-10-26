@@ -3,6 +3,9 @@
 mod i18n;
 mod accounts;
 mod agent;
+mod agentbranch;
+#[cfg(test)]
+mod agentbranch_tests;
 mod agentprs;
 #[cfg(test)]
 mod agentprs_tests;
@@ -549,6 +552,8 @@ pub fn run() {
             commands::agent_pr_propose,
             commands::agent_pr_open,
             commands::agent_prs_refresh,
+            commands::agent_branch_switch,
+            commands::agent_git_sync,
             commands::agent_pr_fix,
             commands::set_remote_control,
             commands::stats,

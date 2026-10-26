@@ -32,7 +32,20 @@
   import { canSwitchView, copyRemoteLink, inHarnessView, integrateBase, openRemote, switchView, toggleRemote } from '../lib/agent-actions';
   import { can, canFork, engineName, speakerOf } from '../lib/engines';
   import { startAgentOn } from '../lib/branch-actions';
-  import { canFixChecks, canFixReviews, cardPrs, fixPr, openPr, prIcon, prMenuItem, prTip, prTone, prWord, stateWord } from '../lib/prs';
+  import {
+    canFixChecks,
+    canFixReviews,
+    cardPrs,
+    fixPr,
+    openPr,
+    prIcon,
+    prKey,
+    prMenuItem,
+    prTip,
+    prTone,
+    prWord,
+    stateWord,
+  } from '../lib/prs';
   import { runIn } from '../lib/launch-actions';
   import { shortBranch } from '../lib/branches';
   import { buffers, lossNotice } from '../lib/editor/buffers.svelte';
@@ -953,7 +966,7 @@
              opens it, the corrections go to the agent on a click only. -->
         {@const word = prWord(a)}
         <div class="prs" role="group" aria-label={t('prs.group', { name: a.name })} data-prs={a.id}>
-          {#each prs as p (p.number)}
+          {#each prs as p (prKey(p))}
             <div class="pr" data-pr={p.number}>
               <button
                 class="prnum {prTone(p)}"
