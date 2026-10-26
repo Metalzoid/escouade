@@ -324,6 +324,21 @@ Et ailleurs : **ESC-165** fait dans le cœur pour la 2.0.3 (GitLab Issues sur le
 
 **Les tickets INT, créés le 2026-10-26 pour jeudi** : INT-0 ESC-206, INT-1 ESC-207, INT-2 ESC-208, INT-3 ESC-209, INT-4 ESC-210, INT-5 ESC-211, INT-6 ESC-212, INT-7.1 ESC-213, INT-7.2 ESC-214, INT-7.3 ESC-215, INT-7.4 ESC-216, INT-8.1 ESC-217, INT-8.2 ESC-218, INT-8.3 ESC-219, INT-8.4 ESC-220, INT-9 ESC-221, INT-10.1 ESC-222, INT-10.2 ESC-223, INT-10.3 ESC-224, INT-10.4 ESC-225, INT-10.5 ESC-226, INT-11 ESC-227. Les modifications des tickets PLG (« Les tickets à modifier » ci-dessus) sont reportées dans leur description ; ESC-36, doublon d'ESC-178, est fermé.
 
+## Idées pour une 2.x (notées le 2026-10-26)
+
+Notées par l'utilisateur pour plus tard, sans ticket ni étude pour l'instant :
+- [ ] **Gestion documentaire.**
+  - Centraliser de façon standardisée la documentation du projet dans le dépôt : la spec, le design, l'architecture, les ADR…
+  - Pouvoir interagir simplement avec cette spec, voir les ADR, et tout interroger facilement, aussi par le serveur MCP.
+- [ ] **Overseer.**
+  - Un agent qu'on lance en dehors de tout projet, à la voix ou non.
+  - Il a accès à tous les projets publics, pour les piloter.
+  - Les projets privés (ESC-140) restent hors de sa vue.
+- [ ] **Performance Loop.**
+  - Une loop intégrée à Escouade, façon BMAD.
+  - Elle rédige la spec dans l'outil de gestion documentaire ci-dessus.
+  - À penser avec les workflows d'un projet (ESC-191 et suivants) et les plugins.
+
 ## Restes du redesign
 
 Notés par la revue finale (ESC-84, `design/app-redesign/final/REVUE.md`) :
