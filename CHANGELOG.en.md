@@ -14,7 +14,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - ClickUp joins Jira, Trello, GitHub Issues and Linear: an API key, a list linked to each project, and its tasks come in with their checklist as criteria, then change status and get a comment as their ticket moves on.
 - The sidebar of the agents and the Kanban widens or narrows by dragging its right edge, and the side panel closes by its × button even when it sits beside the conversation.
 - The status bar shows the branch of the agent open, its worktree’s as git sees it, and the state of its pull request beside it, which a click opens in the browser. Its picker moves the agent’s worktree to a branch that already exists: the agent learns it with your next message.
-- An agent’s pull requests are found on the branch it really is on, whoever opened them: a branch taken up, a pull request opened from a fork into the original repository, the project folder’s branch, or a ticket agent’s.
+- An agent’s pull requests are found on the branch it really is on, whoever opened them: a branch taken up, a pull request opened from a fork into the original repository, the project folder’s branch, or a ticket agent’s. Thanks to @Metalzoid (#17).
 
 ### Fixes
 
