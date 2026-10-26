@@ -338,6 +338,10 @@ Notées par l'utilisateur pour plus tard, sans ticket ni étude pour l'instant :
   - Une loop intégrée à Escouade, façon BMAD.
   - Elle rédige la spec dans l'outil de gestion documentaire ci-dessus.
   - À penser avec les workflows d'un projet (ESC-191 et suivants) et les plugins.
+- [ ] **Planification d'agents.**
+  - Planifier des tâches qu'Escouade lance seule : à une heure, à intervalle (tous les matins, chaque lundi…), ou à un événement.
+  - Exemples : une revue de dépendances, un ticket à reprendre, un rapport.
+  - À penser avec le pilote auto du Kanban, les comptes et leurs quotas, et le mode serveur (`docs/REMOTE.md`), pour que ça tourne même quand la fenêtre est fermée.
 
 ## Restes du redesign
 
