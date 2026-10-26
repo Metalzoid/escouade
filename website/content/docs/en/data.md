@@ -10,7 +10,7 @@ Escouade keeps its data in `~/.escouade/` (`C:\Users\<you>\.escouade` on Windows
 |---|---|
 | `settings.json` | The settings. |
 | `state.json` | The projects, the agents (with the ID of their Claude Code session), the Kanban tickets, the autopilot’s pause, and the interface state. |
-| `integrations.json` | The Jira, Trello, GitHub, and Linear accounts, without their tokens (see [Tokens](#tokens)). |
+| `integrations.json` | The Jira, Trello, GitHub, Linear, and ClickUp accounts, without their tokens (see [Tokens](#tokens)). |
 | `sync-queue.json` | The syncs with those services that are waiting to be retried. |
 | `tickets/<ticket>/` | The images pasted or dropped in a ticket’s window, or attached through the MCP server, one per file: `state.json` only has their names. The ticket’s other attached files are copies under `files/<random>/<name>`, in the same folder (`state.json` only keeps their name, location, and size). The folder only exists when the ticket has images or files; deleted with the ticket, or when the history of its closed project is erased. |
 | `attachments/<agent>/` | The files you attach to an agent’s messages, or paste or drop into its terminal (Claude Code view), when they are copied: each in a subfolder with a random name (8 characters), under its original name, cleaned up. `attachments/_drafts/` holds the copies of a ticket not saved yet, emptied after 24 h (at startup, then every hour). Deleted with the agent, with its project when you delete it for good, or by the purge if you set it (see [Settings › Harness](settings-claude-code#attachments)). A file attached at its original location is never in here. |
@@ -54,7 +54,7 @@ It is meant for demos and trials. With a separate folder:
 
 Tokens aren’t in the settings:
 
-- **Jira, Trello, GitHub, Linear.** Each service’s token is in the system keychain: Windows Credential Manager, macOS Keychain Access. There is one entry per service (`jira`, `trello`, `github`, `linear`) under the `dev.gagnaire.escouade` service. `integrations.json` keeps the rest of the account. When the keychain refuses the entry, Settings › Integrations says so (“System keychain unavailable: the token stays in ~/.escouade/integrations.json.”) and the token stays in that file, readable only by you on macOS and Linux.
+- **Jira, Trello, GitHub, Linear, ClickUp.** Each service’s token is in the system keychain: Windows Credential Manager, macOS Keychain Access. There is one entry per service (`jira`, `trello`, `github`, `linear`, `clickup`) under the `dev.gagnaire.escouade` service. `integrations.json` keeps the rest of the account. When the keychain refuses the entry, Settings › Integrations says so (“System keychain unavailable: the token stays in ~/.escouade/integrations.json.”) and the token stays in that file, readable only by you on macOS and Linux.
 - **Linux.** There is no supported keychain: the integration tokens stay in `integrations.json`.
 - **MCP server.** The token for Claude outside Escouade is in the keychain (an `mcp` entry), otherwise in `mcp-token.json`. Each agent’s is in its `mcp/<agent>.json`, which goes away with its process.
 - **Online dictation.** Each service’s key is in the keychain, one entry per service (`dictation-openai`, `dictation-groq`, `dictation-mistral`, `dictation-elevenlabs`, `dictation-deepgram`), never in a file: on Linux, it cannot be saved. “Delete the key”, in Settings › Voice, removes its entry. See [dictation](chat).

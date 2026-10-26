@@ -16,7 +16,7 @@ Clicking a ticket notification (“ready to review” or “blocked”) also ope
 |---|---|
 | “Kanban” and the line below | The project’s name, the number of tickets, and how many are “In progress” (“demo-api · 5 tickets · 2 looping”). |
 | The slots | “1 free slot” or “All slots are taken”, or why nothing starts: “Quota reached — resumes at 2:30 PM”, “Claude Code not found — no tickets will start”, a target branch with no commit or not found. |
-| “Import” | Opens the window that imports tickets from Jira, Trello, GitHub Issues, or Linear (see [Jira, Trello, GitHub, and Linear](integrations)). |
+| “Import” | Opens the window that imports tickets from Jira, Trello, GitHub Issues, Linear, or ClickUp (see [Jira, Trello, GitHub, Linear, and ClickUp](integrations)). |
 | “After approval: …” | Sums up what “Approve” does (“merge squash → main”, “PR → main”, “push ticket/*”, “leave as is”). A click opens Settings › Kanban (see [Kanban settings](settings-board)). |
 | “Autopilot” | The switch of this project’s [autopilot](autopilot). |
 
@@ -87,13 +87,13 @@ Right-click a card › “Delete”.
 
 With “Delete the worktree of a done or deleted ticket” ([“Kanban”](settings-board) tab, on by default), the worktrees of the ticket’s agents are deleted too, except those holding uncommitted changes or commits neither merged nor pushed: their archived agent’s card says so. A “Done” ticket left as is then has its agent archived.
 
-Deleting a ticket from the Kanban does not delete it in Jira, Trello, GitHub, or Linear.
+Deleting a ticket from the Kanban does not delete it in Jira, Trello, GitHub, Linear, or ClickUp.
 
 Archiving or deleting the agent of an “In progress” or “To review” ticket sends that ticket back to “To do”, from scratch (Escouade asks before archiving: “Its ticket DEM-5 goes back to “To do”.”).
 
 ## What a card shows
 
-Every card has its key, its title and, for an imported ticket, the badge of its service with its key there (a click opens it in the service). A ⚠ flags a sync that failed (see [Jira, Trello, GitHub, and Linear](integrations#failed-syncs)). A ticket set on an account shows its name next to its key (“Pro”). A ticket that has a model or an effort of its own, chosen in its window or given by the [MCP server](mcp), shows them in a tag next to its key (“Opus · Max”): they come before the Kanban’s for its agent. With Haiku (the ticket’s, else the Kanban’s, else the app’s), which takes no effort, the tag shows none. A paperclip followed by a number says how many images and files the ticket has (“2 images attached” on hover, or “1 image attached, 2 files attached” if it has files too).
+Every card has its key, its title and, for an imported ticket, the badge of its service with its key there (a click opens it in the service). A ⚠ flags a sync that failed (see [Jira, Trello, GitHub, Linear, and ClickUp](integrations#failed-syncs)). A ticket set on an account shows its name next to its key (“Pro”). A ticket that has a model or an effort of its own, chosen in its window or given by the [MCP server](mcp), shows them in a tag next to its key (“Opus · Max”): they come before the Kanban’s for its agent. With Haiku (the ticket’s, else the Kanban’s, else the app’s), which takes no effort, the tag shows none. A paperclip followed by a number says how many images and files the ticket has (“2 images attached” on hover, or “1 image attached, 2 files attached” if it has files too).
 
 | Column | The card shows |
 |---|---|
@@ -129,6 +129,6 @@ If an answer comes without a report, the agent is prompted once. Without a repor
 
 - [The autopilot](autopilot): how tickets are picked up, looped on, and paused.
 - [Reviewing and approving a ticket](testing): “▶ Test”, “Approve”, “Send back”.
-- [Jira, Trello, GitHub, and Linear](integrations): import tickets and keep their status up to date.
+- [Jira, Trello, GitHub, Linear, and ClickUp](integrations): import tickets and keep their status up to date.
 - [The MCP server](mcp): create and start tickets from Claude.
 - [Kanban settings](settings-board): every setting of the board.

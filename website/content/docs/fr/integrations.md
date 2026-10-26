@@ -1,6 +1,6 @@
-# Jira, Trello, GitHub et Linear
+# Jira, Trello, GitHub, Linear et ClickUp
 
-Escouade importe les tickets de Jira, Trello, GitHub Issues et Linear dans le Kanban, avec leurs critères d’acceptation, puis tient leur statut à jour et y laisse des commentaires au fil du travail. Cette page couvre la connexion, l’import et la synchronisation.
+Escouade importe les tickets de Jira, Trello, GitHub Issues, Linear et ClickUp dans le Kanban, avec leurs critères d’acceptation, puis tient leur statut à jour et y laisse des commentaires au fil du travail. Cette page couvre la connexion, l’import et la synchronisation.
 
 ![La fenêtre « Importer des tickets » : des tickets Jira filtrés par « Assignés à moi », avec leurs critères détectés](/images/integrations.jpg)
 
@@ -14,6 +14,7 @@ Les comptes se connectent dans Réglages › Intégrations, groupe « Comptes c
 | Trello | « Clé d’API » et « Jeton » | « Obtenir une clé d’API », puis « Obtenir un jeton pour cette clé » (disponible une fois la clé saisie : un jeton en lecture et écriture, sans expiration) |
 | GitHub | « Jeton », facultatif | « Créer un jeton GitHub ». Laissé vide, Escouade utilise celui de la CLI `gh` (`gh auth login`) ; le compte s’affiche alors avec « · via gh » |
 | Linear | « Clé d’API » | « Créer une clé d’API Linear » |
+| ClickUp | « Clé d’API » (`pk_…`) | « Créer une clé d’API ClickUp » (Réglages › Apps de ClickUp). La ligne dit alors « Connecté · » suivi de ton nom chez ClickUp |
 
 « Déconnecter » oublie le compte et ses secrets. Les projets gardent leurs liens, inutilisés jusqu’à une nouvelle connexion.
 
@@ -25,7 +26,7 @@ Quand le trousseau refuse un jeton sous Windows ou macOS, il reste dans ce fichi
 
 ## Lier un projet à une source
 
-Un projet se lie à un endroit par service : un projet Jira, un tableau Trello, un dépôt GitHub ou une équipe Linear. Dans Réglages › Intégrations, le groupe « Sources liées à `<projet>` » propose, pour chaque service connecté, une liste : « Projet Jira », « Tableau Trello », « Dépôt GitHub Issues », « Équipe Linear ». « Aucun » délie le service. Pour GitHub, le dépôt du projet, quand son remote est sur GitHub, vient en premier (« (dépôt du projet) »).
+Un projet se lie à un endroit par service : un projet Jira, un tableau Trello, un dépôt GitHub, une équipe Linear ou une liste ClickUp. Dans Réglages › Intégrations, le groupe « Sources liées à `<projet>` » propose, pour chaque service connecté, une liste : « Projet Jira », « Tableau Trello », « Dépôt GitHub Issues », « Équipe Linear », « Liste ClickUp ». « Aucun » délie le service. Pour GitHub, le dépôt du projet, quand son remote est sur GitHub, vient en premier (« (dépôt du projet) »). Pour ClickUp, les listes de tous tes espaces de travail sont rangées par espace et par dossier (« Produit › Sprints »), comme dans la barre latérale de ClickUp : les listes hors dossier d’abord, les archivées en moins ; taper les premières lettres d’un nom, menu ouvert, y va.
 
 Choisir une source charge ses statuts et pré-remplit la correspondance des statuts (voir plus bas). Enregistre ensuite les réglages.
 
@@ -45,10 +46,11 @@ Dans le [Kanban](board), « Importer » (⤓) ouvre la fenêtre « Importer d
 | Trello | « Rechercher une carte… » | « Mes cartes », puis une puce par liste du tableau |
 | GitHub | « Rechercher une issue… » (un numéro, `42` ou `#42`, trouve l’issue) | « Assignées à moi », puis les étiquettes du dépôt (douze au plus) |
 | Linear | « Rechercher par identifiant (ENG-42) ou par titre… » | « Mes issues », puis une puce par état du workflow qui n’est ni terminé ni annulé |
+| ClickUp | « Rechercher par id (#86abx3, ABC-12) ou par titre… » (l’id d’une tâche, avec ou sans `#`, ou son id personnalisé quand l’espace en a, trouve la tâche si elle est dans la liste) | « Mes tâches », puis une puce par statut de la liste qui n’est ni fini ni fermé |
 
-Seuls les tickets ouverts sont proposés : pas ceux de la catégorie « Done » de Jira, ni les issues fermées de GitHub (les pull requests sont laissées de côté), ni les issues terminées ou annulées de Linear.
+Seuls les tickets ouverts sont proposés : pas ceux de la catégorie « Done » de Jira, ni les issues fermées de GitHub (les pull requests sont laissées de côté), ni les issues terminées ou annulées de Linear, ni les tâches de ClickUp dont le statut est de type fini ou fermé. ClickUp n’ayant pas de recherche par titre, Escouade lit la liste 100 tâches à la fois et garde celles dont le nom contient le texte, jusqu’à 5 pages avant de montrer ce qu’elle a trouvé ; « Afficher plus » continue.
 
-Chaque ligne montre la clé, le titre, le type (Bug, Story, Tâche, Carte, Issue), la priorité, la personne assignée et l’état, et « ✓ 2 critères détectés » (au survol : lesquels). Un ticket déjà dans le Kanban est grisé (« Déjà dans le Kanban ») et ne se choisit pas. Les tickets arrivent par pages ; « Afficher plus » charge la suivante, et la ligne au-dessus de la liste dit « 50 affichés sur 312 » quand le service compte plus de tickets qu’il n’en a envoyé.
+Chaque ligne montre la clé (pour ClickUp, l’id personnalisé, sinon `#` et l’id de la tâche), le titre, le type (Bug, Story, Tâche, Carte, Issue), la priorité, la personne assignée et l’état, et « ✓ 2 critères détectés » (au survol : lesquels). Un ticket déjà dans le Kanban est grisé (« Déjà dans le Kanban ») et ne se choisit pas. Les tickets arrivent par pages ; « Afficher plus » charge la suivante, et la ligne au-dessus de la liste dit « 50 affichés sur 312 » quand le service compte plus de tickets qu’il n’en a envoyé.
 
 Pour importer :
 
@@ -64,7 +66,8 @@ Avec « Extraire les critères d’acceptation » activé (par défaut), Escou
 
 - Jira et GitHub : les éléments de liste sous un titre ou une ligne qui les nomme (« Critères d’acceptation », « Acceptance criteria », « Definition of done », « AC », « DoD »), sinon les cases à cocher (`- [ ]`) de la description ;
 - Trello : les éléments de la checklist qui porte ce nom, sinon ceux de toutes les checklists, sinon ceux que la description liste ;
-- Linear : comme pour Jira et GitHub, dans la description.
+- Linear : comme pour Jira et GitHub, dans la description ;
+- ClickUp : comme pour Trello, les éléments de la checklist qui porte ce nom, sinon ceux de toutes les checklists de la tâche, sinon ceux que sa description (en Markdown) liste.
 
 Il garde vingt critères au plus, de 300 caractères au plus. Sans critère trouvé, ou avec le réglage éteint, le ticket reçoit les deux critères par défaut. La description Jira est convertie en Markdown avant d’être cherchée.
 
@@ -75,7 +78,7 @@ Réglages › Intégrations › « Import automatique » laisse Escouade impor
 | Réglage | Rôle | Par défaut |
 |---|---|---|
 | « Importer les tickets étiquetés » | Les tickets ouverts des sources liées qui portent l’étiquette arrivent dans « À faire » | Éteint |
-| « Étiquette » | Le label Jira, l’étiquette Trello, GitHub ou Linear | `claude-ready` |
+| « Étiquette » | Le label Jira, l’étiquette Trello, GitHub, Linear ou ClickUp (un tag de tâche) | `claude-ready` |
 | « Vérifier toutes les » | L’intervalle entre deux passes : 5, 15 ou 60 min | 15 min |
 
 Une passe regarde, dans chaque projet, les sources liées dont le compte est connecté. Les tickets arrivent avec 5 boucles maximum, et un message l’annonce (« 3 tickets importés depuis Jira dans demo »). Un ticket que le projet a déjà importé n’est jamais ramené, même si tu l’as supprimé du Kanban depuis. La première passe a lieu peu après l’activation.
@@ -92,7 +95,9 @@ Le groupe « Correspondance des statuts » (une fois une source liée) a une l
 - « Terminé » : le statut qui ressemble à « à tester » (`To test`, `Testing`, `QA`, `In Review`, `Review`, `Recette`, `À valider`, `Validation`, `Test`…) ;
 - « À faire » : inchangé.
 
-Ce que « statut » veut dire dépend du service : une transition de workflow pour Jira, la liste où la carte se range pour Trello, un état du workflow pour Linear. Pour GitHub, ce sont « Ouverte », « Fermée » ou une étiquette du dépôt (marquée ◆) : « Fermée » ferme l’issue, une étiquette la rouvre si besoin et retire les autres étiquettes de la correspondance.
+Pour ClickUp, chaque liste a ses propres statuts : la correspondance se règle donc par projet, sur ceux de la liste liée. Quand leurs noms ne disent rien de ce qui précède, leur type décide : le premier statut personnalisé (entre l’ouvert et les fermés) pour « En cours » et « À tester », le suivant pour « Terminé », sinon le statut de type fini. Une liste qui n’a qu’un statut ouvert et un fermé ne déplace rien par défaut. Si la liste n’a plus le statut choisi (renommé, retiré), la carte le dit (« La liste « Sprint 12 » de ClickUp n’a pas le statut « review » : ABC-12 reste où il est ; choisis un autre statut dans Réglages › Intégrations ») au lieu d’échouer sans un mot.
+
+Ce que « statut » veut dire dépend du service : une transition de workflow pour Jira, la liste où la carte se range pour Trello, un état du workflow pour Linear, un statut de la liste pour ClickUp. Pour GitHub, ce sont « Ouverte », « Fermée » ou une étiquette du dépôt (marquée ◆) : « Fermée » ferme l’issue, une étiquette la rouvre si besoin et retire les autres étiquettes de la correspondance.
 
 La dernière colonne, « Commenter », choisit les colonnes dont l’arrivée écrit un commentaire (par défaut « À tester » et « Terminé »). Le commentaire dit où en est le ticket :
 
@@ -119,10 +124,11 @@ Les commentaires sont publiés pour ton équipe : ils sont écrits dans la « L
 
 Chaque changement à répercuter est gardé dans une file, `~/.escouade/sync-queue.json`, jusqu’à ce que le service l’ait pris. Les changements d’un ticket partent dans l’ordre, l’un après l’autre : un changement qui échoue retient les suivants du même ticket, pas ceux des autres tickets. Une transition de statut remplace celle qui n’est pas encore partie pour le même ticket, et un ticket qui revient dans une colonne précédente annule la transition qui n’était pas partie.
 
-Une carte dont la synchronisation a échoué affiche un ⚠. Un clic dessus montre la raison (« Jira refuse ces identifiants (401) », « Jira : aucune transition de « En cours » vers « Done » pour ATL-1294 »…) et le bouton « Resynchroniser ».
+Une carte dont la synchronisation a échoué affiche un ⚠. Un clic dessus montre la raison (« Jira refuse ces identifiants (401) », « Jira : aucune transition de « En cours » vers « Done » pour ATL-1294 », « La liste ClickUp 901 n’existe plus ou n’est plus accessible : choisis-en une autre dans Réglages › Intégrations »…) et le bouton « Resynchroniser ».
 
 - Quand le service est injoignable, en panne ou trop sollicité, ou qu’il refuse les identifiants (ce qui se répare), l’échec peut passer plus tard : Escouade réessaie seule, après 1, 5, 15 puis 60 minutes, la dernière attente étant répétée, pendant 24 heures à partir du premier échec.
 - Un refus qu’un nouvel essai ne changerait pas (requête refusée telle quelle, ticket disparu, aucune transition vers le statut) est mis de côté tout de suite, comme tout ce qui échoue encore au bout d’un jour. Il ne retient plus les changements suivants du ticket.
+- Quand ClickUp limite les requêtes (429), Escouade attend la fin de la limite qu’il annonce (`X-RateLimit-Reset`, une minute au plus) et redemande une fois avant de compter l’échec.
 - Au démarrage d’Escouade, tout ce qui attendait repart (sauf ce qui a été mis de côté).
 - « Resynchroniser » renvoie tout de suite, mis de côté compris. Quand il ne reste rien à envoyer, il redonne au ticket externe le statut de sa colonne (sans réécrire de commentaire). Le ⚠ disparaît dès que tout est passé.
 

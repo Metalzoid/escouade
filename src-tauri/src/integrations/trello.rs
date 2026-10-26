@@ -83,6 +83,7 @@ impl Trello {
             .map(|b| Container {
                 id: b["id"].as_str().unwrap_or_default().to_string(),
                 name: b["name"].as_str().unwrap_or_default().to_string(),
+                group: None,
             })
             .collect())
     }
@@ -350,7 +351,8 @@ mod tests {
             t.containers().await.unwrap(),
             [Container {
                 id: "b1".into(),
-                name: "Atlas".into()
+                name: "Atlas".into(),
+                group: None,
             }]
         );
         let lists: Vec<String> = t

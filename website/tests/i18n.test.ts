@@ -60,7 +60,6 @@ describe('catalogs', () => {
         'docs.pages.remote-control',
         'docs.pages.worktrees',
         'docs.pages.branches',
-        'docs.pages.integrations',
         'docs.pages.settings-application',
         'docs.pages.settings-claude-code',
         'docs.pages.settings-notifications',

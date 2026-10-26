@@ -21,7 +21,7 @@ L’app le dit sous le titre du groupe : « Le proxy est transmis aux processus
 ### Ce qui passe par le proxy
 
 - **Les processus Claude Code** : les agents, et les autres appels à Claude Code que fait Escouade (nom d’un agent, messages de commit, connexion à un compte). Ils reçoivent `HTTPS_PROXY`, `HTTP_PROXY`, leurs variantes en minuscules, et `NO_PROXY` (avec `no_proxy`) si « Exclusions » n’est pas vide. Un agent ne les voit qu’au prochain (re)démarrage de son processus : un agent déjà en cours garde ses réglages jusque-là.
-- **La lecture des quotas et les intégrations** (Jira, Trello, GitHub Issues, Linear) : les requêtes de l’app passent par le proxy et respectent « Exclusions ».
+- **La lecture des quotas et les intégrations** (Jira, Trello, GitHub Issues, Linear, ClickUp) : les requêtes de l’app passent par le proxy et respectent « Exclusions ».
 - **Les mises à jour** : la recherche et le téléchargement passent par le proxy. Une adresse de proxy invalide fait échouer la recherche, avec le message « adresse du proxy invalide ». Quand le proxy lui-même ne répond pas (arrêté, ou poste hors du réseau de l’entreprise), Escouade essaie une fois sans proxy et le message d’échec dit les deux essais ; quand le proxy refuse la requête, elle n’est pas refaite sans lui. Voir [« Derrière un proxy d’entreprise »](updates#derriere-un-proxy-d-entreprise).
 - **Les terminaux intégrés** : seulement si « Appliquer aussi le proxy aux terminaux intégrés » est activé. Les mêmes variables sont alors ajoutées aux terminaux, aux commandes de lancement et aux commandes de worktree. Voir [les terminaux](terminals).
 

@@ -1,13 +1,14 @@
 import { defineZone } from '../types';
 
-// Jira, Trello and GitHub: the integrations tab and the import of tickets.
+// Jira, Trello, GitHub, Linear and ClickUp: the integrations tab and the import of tickets.
 export default defineZone('integrations', {
-  container: { jira: 'Project', trello: 'Board', github: 'Repository', linear: 'Team' },
+  container: { jira: 'Project', trello: 'Board', github: 'Repository', linear: 'Team', clickup: 'List' },
   searchHint: {
     jira: 'Search by key or text…',
     trello: 'Search for a card…',
     github: 'Search for an issue…',
     linear: 'Search by identifier (ENG-42) or title…',
+    clickup: 'Search by id (#86abx3, ABC-12) or title…',
   },
   imported: { one: '{count} ticket imported from {from}', other: '{count} tickets imported from {from}' },
 
@@ -35,6 +36,8 @@ export default defineZone('integrations', {
     githubTokenHint: '(empty: the one from gh)',
     createGithubToken: 'Create a GitHub token',
     createLinearKey: 'Create a Linear API key',
+    clickupKeyHint: 'pk_…',
+    createClickupKey: 'Create a ClickUp API key',
   },
 
   forges: {
@@ -72,7 +75,13 @@ export default defineZone('integrations', {
     title: 'Sources linked to {project}',
     connectFirst: 'Connect an account above to link a source to this project.',
     none: 'None',
-    pick: { jira: 'Jira project', trello: 'Trello board', github: 'GitHub Issues repository', linear: 'Linear team' },
+    pick: {
+      jira: 'Jira project',
+      trello: 'Trello board',
+      github: 'GitHub Issues repository',
+      linear: 'Linear team',
+      clickup: 'ClickUp list',
+    },
   },
 
   mapping: {
@@ -91,7 +100,7 @@ export default defineZone('integrations', {
     loopSummary: 'Post a summary on every loop',
     loopSummaryDesc: 'Criteria met and the agent’s notes, on the external ticket',
     extractCriteria: 'Extract the acceptance criteria',
-    extractCriteriaDesc: 'From the description (Jira, GitHub) or the checklist (Trello) of the imported ticket',
+    extractCriteriaDesc: 'From the description (Jira, GitHub, Linear) or the checklist (Trello, ClickUp) of the imported ticket',
   },
 
   autoImport: {
@@ -100,7 +109,7 @@ export default defineZone('integrations', {
     enableDesc: 'Open tickets from linked sources that carry the label arrive in “To do”',
     label: 'Label',
     labelState: 'Label “{name}”',
-    labelHint: 'Jira, Trello, GitHub or Linear label',
+    labelHint: 'Jira, Trello, GitHub, Linear or ClickUp label',
     every: 'Check every',
     minutes: '{n} min',
   },
@@ -110,7 +119,7 @@ export default defineZone('integrations', {
     sub: 'Into “To do” on the Kanban of {project}',
     noSource: 'No source linked to this project',
     noSourceBody:
-      'Connect Jira, Trello, GitHub Issues, or Linear, then choose the project, board, repository, or team to link to {project}.',
+      'Connect Jira, Trello, GitHub Issues, Linear, or ClickUp, then choose the project, board, repository, team, or list to link to {project}.',
     thisProject: 'this project',
     linkSource: 'Link a source',
     sources: 'Sources',

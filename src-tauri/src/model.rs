@@ -847,14 +847,16 @@ pub enum Service {
     Trello,
     Github,
     Linear,
+    Clickup,
 }
 
 impl Service {
-    pub const ALL: [Service; 4] = [
+    pub const ALL: [Service; 5] = [
         Service::Jira,
         Service::Trello,
         Service::Github,
         Service::Linear,
+        Service::Clickup,
     ];
 
     /// Its name, as the window and the comments say it.
@@ -864,6 +866,7 @@ impl Service {
             Service::Trello => "Trello",
             Service::Github => "GitHub",
             Service::Linear => "Linear",
+            Service::Clickup => "ClickUp",
         }
     }
 }
@@ -1117,7 +1120,7 @@ pub struct SharedMedia {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SharedExternal {
-    /// `jira`, `trello`, `github` or `linear`.
+    /// `jira`, `trello`, `github`, `linear` or `clickup` (`Service`).
     pub source: String,
     pub key: String,
     pub url: String,

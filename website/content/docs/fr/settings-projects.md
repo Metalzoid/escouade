@@ -194,7 +194,7 @@ Le projet revient tel qu’il était :
 - ses réglages, son Kanban et ses commandes ;
 - ses agents, avec leurs conversations. Aucun process ne tourne encore : ils repartent à ton prochain message, comme après un redémarrage d’Escouade. Un agent dont le worktree a disparu entre-temps est traité de la même façon ;
 - ses tickets. Un ticket qui était « En cours » à la fermeture revient bloqué, avec la raison « Projet fermé pendant le ticket » : « Reprendre » le relance ;
-- ce qui attendait dans la file de synchronisation avec Jira, Trello, GitHub Issues ou Linear : la file de ses tickets est gardée pendant la fermeture et repart à la réouverture (elle est oubliée si l’historique est effacé) ;
+- ce qui attendait dans la file de synchronisation avec Jira, Trello, GitHub Issues, Linear ou ClickUp : la file de ses tickets est gardée pendant la fermeture et repart à la réouverture (elle est oubliée si l’historique est effacé) ;
 - ses [statistiques](stats), qui retrouvent son nom.
 
 Les comptes qui lui étaient réservés (« Réservé aux projets ») n’ont pas bougé pendant la fermeture : voir [les comptes Claude](accounts#reserve-aux-projets). Le « Compte préféré » du projet repasse sur « Automatique » si son compte n’existe plus.
@@ -210,4 +210,4 @@ L’interrupteur « Partir d’un projet vierge » (« L’historique reste d
 
 ## Les autres réglages d’un projet
 
-Les liens d’un projet vers Jira, Trello, GitHub Issues et Linear se règlent dans l’onglet [« Intégrations »](settings-integrations). Son Kanban (pilote auto, agents, validation) se règle dans l’onglet [« Kanban »](settings-board).
+Les liens d’un projet vers Jira, Trello, GitHub Issues, Linear et ClickUp se règlent dans l’onglet [« Intégrations »](settings-integrations). Son Kanban (pilote auto, agents, validation) se règle dans l’onglet [« Kanban »](settings-board).

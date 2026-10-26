@@ -5,7 +5,7 @@
 //! fails.
 
 use super::secrets;
-use super::text::{column_comment, default_states, loop_comment};
+use super::text::{column_comment, loop_comment};
 use super::*;
 use crate::core::Core;
 use crate::i18n::{self, Lang};
@@ -408,7 +408,9 @@ fn missing_field(lang: Lang, service: Service, account: &Account) -> Option<Stri
         Service::Jira if account.email.is_empty() => {
             tr_in!(lang, "Indique l'e-mail.", "Give the email.")
         }
-        Service::Jira | Service::Trello | Service::Linear if account.token.is_empty() => {
+        Service::Jira | Service::Trello | Service::Linear | Service::Clickup
+            if account.token.is_empty() =>
+        {
             tr_in!(lang, "Indique le jeton.", "Give the token.")
         }
         Service::Trello if account.key.is_empty() => {
@@ -603,6 +605,7 @@ impl<R: Runtime> Core<R> {
                             "{repo} (the project’s repository)"
                         ),
                         id: repo,
+                        group: None,
                     },
                 );
             }
@@ -624,11 +627,7 @@ impl<R: Runtime> Core<R> {
         service: Service,
         container: &str,
     ) -> Result<StatesView> {
-        let states = self.client(service).await?.states(container).await?;
-        Ok(StatesView {
-            defaults: default_states(&states),
-            states,
-        })
+        self.client(service).await?.states_view(container).await
     }
 
     /// The tickets of the project's source for `service`, those already imported marked.

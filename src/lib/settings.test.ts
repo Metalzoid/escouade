@@ -519,7 +519,7 @@ describe('settingsForm', () => {
       'Notifications / Visual and sound alerts',
       'Projects / Settings specific to each project',
       'Kanban / Autopilot and approved tickets',
-      'Integrations / Code hosts, Jira, Trello, GitHub Issues, and Linear',
+      'Integrations / Code hosts, Jira, Trello, GitHub Issues, Linear, and ClickUp',
       'MCP server / What Claude and the agents can do in Escouade, and what they did',
       'Terminals / Shells available in the built-in terminals',
       'Network / HTTP(S) proxy and TLS certificates for Claude Code, integrations, and updates',

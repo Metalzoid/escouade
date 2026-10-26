@@ -145,6 +145,18 @@
     return chosen && !known.some((x) => x.id === chosen.id) ? [...known, chosen] : known;
   }
 
+  /** The containers by their place in their service (a ClickUp list's « Space › Folder »), in their order. */
+  function groups(list: Container[]): { name: string; items: Container[] }[] {
+    const out: { name: string; items: Container[] }[] = [];
+    for (const c of list) {
+      const name = c.group ?? '';
+      const last = out.at(-1);
+      if (last && last.name === name) last.items.push(c);
+      else out.push({ name, items: [c] });
+    }
+    return out;
+  }
+
   const stateLabel = (st: ExternalState) =>
     st.id.startsWith('label:') ? t('integrations.autoImport.labelState', { name: st.name }) : st.name;
 
@@ -254,6 +266,19 @@
           <button type="button" class="link" onclick={() => open('https://linear.app/settings/account/security')}
             >{t('integrations.accounts.createLinearKey')}</button
           >
+        {:else if id === 'clickup'}
+          <label
+            ><span>{t('integrations.accounts.apiKey')}</span><input
+              class="field mono"
+              type="password"
+              bind:value={form.token}
+              placeholder={t('integrations.accounts.clickupKeyHint')}
+              autocomplete="off"
+            /></label
+          >
+          <button type="button" class="link" onclick={() => open('https://app.clickup.com/settings/apps')}
+            >{t('integrations.accounts.createClickupKey')}</button
+          >
         {:else}
           <label
             ><span
@@ -299,7 +324,15 @@
         >
           <option value="">{t('integrations.sources.none')}</option>
           {#if current && !list.some((c) => c.id === current.container)}<option value={current.container}>{current.name}</option>{/if}
-          {#each list as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+          {#each groups(list) as g, i (i)}
+            {#if g.name}
+              <optgroup label={g.name}>
+                {#each g.items as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+              </optgroup>
+            {:else}
+              {#each g.items as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+            {/if}
+          {/each}
         </select>
         {#if why}<p class="error">{why}</p>{/if}
       </div>

@@ -33,6 +33,7 @@ impl Harness {
             trello: server.url.clone(),
             github: server.url.clone(),
             linear: server.url.clone(),
+            clickup: server.url.clone(),
         };
     }
 
@@ -1971,4 +1972,163 @@ async fn a_linear_issue_is_imported_then_moved_and_commented_as_its_ticket_goes(
         .unwrap()
         .contains("est prêt à tester"));
     assert_eq!(h.sync_error(&t.id), None);
+}
+
+#[tokio::test]
+async fn a_clickup_task_is_imported_with_its_checklist_then_moved_and_commented_as_its_ticket_goes()
+{
+    let h = harness("ig-clickup");
+    let server = FakeServer::start().await;
+    h.serve(&server);
+    server.on(
+        "GET",
+        "/user",
+        200,
+        json!({ "user": { "id": 183, "username": "Ada Lovelace", "email": "ada@atlas.dev" } }),
+    );
+    server.on(
+        "GET",
+        "/list/l1",
+        200,
+        json!({ "id": "l1", "name": "Sprint 12", "statuses": [
+            { "status": "to do", "orderindex": 0, "type": "open" },
+            { "status": "in progress", "orderindex": 1, "type": "custom" },
+            { "status": "review", "orderindex": 2, "type": "custom" },
+            { "status": "complete", "orderindex": 3, "type": "closed" }
+        ] }),
+    );
+    server.on(
+        "GET",
+        "/list/l1/task",
+        200,
+        json!({ "tasks": [{
+            "id": "86abx3", "custom_id": "ABC-12", "name": "Exporter le journal",
+            "markdown_description": "Les administrateurs exportent le journal.",
+            "status": { "status": "to do", "type": "open" },
+            "assignees": [], "tags": [],
+            "checklists": [{ "name": "Critères d'acceptation", "items": [
+                { "name": "Un bouton Exporter", "orderindex": 0 },
+                { "name": "Un fichier CSV", "orderindex": 1 }
+            ] }],
+            "url": "https://app.clickup.com/t/86abx3", "list": { "id": "l1" }
+        }], "last_page": true }),
+    );
+    server.on("PUT", "/task/86abx3", 200, json!({ "id": "86abx3" }));
+    server.on(
+        "POST",
+        "/task/86abx3/comment",
+        200,
+        json!({ "id": 458, "hist_id": "26508", "date": 1568036964079_i64 }),
+    );
+    // A key is needed: ClickUp has no CLI to take one from.
+    let refused = h
+        .core
+        .integration_connect(Service::Clickup, Account::default())
+        .await
+        .unwrap_err();
+    assert!(refused.to_string().contains("jeton"), "{refused}");
+    let view = h
+        .core
+        .integration_connect(
+            Service::Clickup,
+            Account {
+                token: "pk_42_k".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        (view.connected, view.label.as_str()),
+        (true, "Ada Lovelace")
+    );
+    // The window never sees the key.
+    assert!(!serde_json::to_string(&h.core.integration_accounts())
+        .unwrap()
+        .contains("pk_42_k"));
+    let (p, _) = h.project(false).await;
+    h.set_autopilot(&p.id, false);
+    let states = h
+        .core
+        .integration_states(Service::Clickup, "l1")
+        .await
+        .unwrap();
+    assert_eq!(states.defaults[&Column::Doing].id, "in progress");
+    assert_eq!(states.defaults[&Column::Done].id, "review");
+    h.link(
+        &p.id,
+        SourceLink {
+            service: Service::Clickup,
+            container: "l1".into(),
+            name: "Sprint 12".into(),
+            states: states.defaults.clone(),
+        },
+        &[Column::Review],
+    );
+    let page = h
+        .core
+        .integration_issues(&p.id, Service::Clickup, Query::default())
+        .await
+        .unwrap();
+    let t = h
+        .core
+        .integration_import(&p.id, page.issues, 5)
+        .await
+        .unwrap()
+        .remove(0);
+    let criteria: Vec<&str> = t.criteria.iter().map(|c| c.text.as_str()).collect();
+    assert_eq!(criteria, ["Un bouton Exporter", "Un fichier CSV"]);
+    assert!(t
+        .description
+        .contains("Ticket ClickUp ABC-12 : https://app.clickup.com/t/86abx3"));
+    let ext = t.external.clone().unwrap();
+    assert_eq!(
+        (
+            ext.service,
+            ext.id.as_str(),
+            ext.key.as_str(),
+            ext.container.as_str()
+        ),
+        (Service::Clickup, "86abx3", "ABC-12", "l1")
+    );
+    h.move_to(&t.id, Column::Doing);
+    h.move_to(&t.id, Column::Review);
+    h.wait_synced().await;
+    let writes: Vec<(String, Value)> = server
+        .writes()
+        .iter()
+        .map(|w| (format!("{} {}", w.method, w.path()), w.json()))
+        .collect();
+    assert_eq!(writes.len(), 3, "{writes:?}");
+    assert_eq!(
+        writes[0],
+        (
+            "PUT /task/86abx3".to_string(),
+            json!({ "status": "in progress" })
+        )
+    );
+    assert_eq!(writes[1].0, "PUT /task/86abx3");
+    assert_eq!(writes[2].0, "POST /task/86abx3/comment");
+    assert!(writes[2].1["comment_text"]
+        .as_str()
+        .unwrap()
+        .contains("est prêt à tester"));
+    assert_eq!(h.sync_error(&t.id), None);
+
+    // The list lost the status « review »: the move says so on the ticket rather than fail
+    // without a word.
+    server.on(
+        "GET",
+        "/list/l1",
+        200,
+        json!({ "id": "l1", "name": "Sprint 12", "statuses": [
+            { "status": "to do", "orderindex": 0, "type": "open" },
+            { "status": "complete", "orderindex": 1, "type": "closed" }
+        ] }),
+    );
+    h.move_to(&t.id, Column::Done);
+    h.wait_synced().await;
+    let error = h.sync_error(&t.id).unwrap();
+    assert!(error.contains("n'a pas le statut « review »"), "{error}");
+    assert_eq!(server.writes().len(), 3);
 }

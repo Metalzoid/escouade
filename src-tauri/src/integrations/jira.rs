@@ -198,6 +198,7 @@ impl Jira {
                 out.push(Container {
                     id: key.to_string(),
                     name: format!("{key} — {name}"),
+                    group: None,
                 });
             }
             if v["isLast"].as_bool() != Some(false) {
@@ -514,11 +515,13 @@ mod tests {
             [
                 Container {
                     id: "ATL".into(),
-                    name: "ATL — Atlas".into()
+                    name: "ATL — Atlas".into(),
+                    group: None,
                 },
                 Container {
                     id: "MOB".into(),
-                    name: "MOB — Mobile".into()
+                    name: "MOB — Mobile".into(),
+                    group: None,
                 }
             ]
         );

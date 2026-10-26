@@ -744,7 +744,7 @@ fn schema_of(f: &Field) -> Value {
                 {
                     "type": "object",
                     "properties": {
-                        "source": { "type": "string", "enum": ["jira", "trello", "github", "linear"] },
+                        "source": { "type": "string", "enum": crate::model::Service::ALL },
                         "key": { "type": "string" },
                         "url": { "type": "string" },
                     },

@@ -128,6 +128,7 @@ impl Linear {
                     t["name"].as_str().unwrap_or_default(),
                     t["key"].as_str().unwrap_or_default()
                 ),
+                group: None,
             })
             .collect())
     }
@@ -440,7 +441,8 @@ mod tests {
             l.containers().await.unwrap(),
             [Container {
                 id: "t1".into(),
-                name: "Engineering (ENG)".into()
+                name: "Engineering (ENG)".into(),
+                group: None,
             }]
         );
         workflow(&server);

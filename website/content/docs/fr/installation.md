@@ -85,7 +85,7 @@ C’est elle que la mise à jour intégrée remplace. Sur Debian ou Ubuntu, tu p
 sudo apt install ./Escouade_*_amd64.deb
 ```
 
-Sous Linux, les jetons des intégrations (Jira, Trello, GitHub, Linear) sont gardés dans `~/.escouade/integrations.json`, faute de trousseau du système pris en charge.
+Sous Linux, les jetons des intégrations (Jira, Trello, GitHub, Linear, ClickUp) sont gardés dans `~/.escouade/integrations.json`, faute de trousseau du système pris en charge.
 
 ## Claude Code dans WSL
 

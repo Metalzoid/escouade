@@ -1,6 +1,6 @@
 # Réglages : Intégrations
 
-L’onglet « Intégrations » des réglages connecte Jira, Trello, GitHub Issues et Linear, lie chaque projet à une source de tickets, et règle ce qu’Escouade écrit sur les tickets externes et ce qu’elle importe toute seule.
+L’onglet « Intégrations » des réglages connecte Jira, Trello, GitHub Issues, Linear et ClickUp, lie chaque projet à une source de tickets, et règle ce qu’Escouade écrit sur les tickets externes et ce qu’elle importe toute seule.
 
 ## Ouvrir l’onglet
 
@@ -16,9 +16,9 @@ Sans projet ouvert, l’onglet affiche « Aucun projet ouvert. ».
 
 ## Comptes connectés
 
-Un compte par service : Jira, Trello, GitHub Issues et Linear. Chaque service affiche « Non connecté » avec un bouton « Connecter… », ou « Connecté · » suivi du compte avec un bouton « Déconnecter ». Sous le titre, l’app rappelle : « Les jetons restent sur cette machine, à part des réglages, et ne servent qu’aux appels de ces services. »
+Un compte par service : Jira, Trello, GitHub Issues, Linear et ClickUp. Chaque service affiche « Non connecté » avec un bouton « Connecter… », ou « Connecté · » suivi du compte avec un bouton « Déconnecter ». Sous le titre, l’app rappelle : « Les jetons restent sur cette machine, à part des réglages, et ne servent qu’aux appels de ces services. »
 
-« Connecter… » ouvre le formulaire du service, dont les champs sont décrits ci-dessous. Les jetons et la clé d’API de Linear sont masqués à la saisie ; la clé d’API de Trello ne l’est pas.
+« Connecter… » ouvre le formulaire du service, dont les champs sont décrits ci-dessous. Les jetons et les clés d’API de Linear et de ClickUp sont masqués à la saisie ; la clé d’API de Trello ne l’est pas.
 
 ### Jira
 
@@ -55,6 +55,14 @@ Le lien « Créer un jeton GitHub » ouvre `https://github.com/settings/tokens
 
 Le lien « Créer une clé d’API Linear » ouvre `https://linear.app/settings/account/security`. L’endroit des tickets est une « Équipe ».
 
+### ClickUp
+
+| Champ | À renseigner |
+|---|---|
+| « Clé d’API » | Une clé d’API personnelle de ClickUp (elle commence par `pk_`). |
+
+Le lien « Créer une clé d’API ClickUp » ouvre `https://app.clickup.com/settings/apps`. Une fois connecté, le compte s’affiche avec ton nom chez ClickUp, par exemple « Connecté · Ada Lovelace ». L’endroit des tickets est une « Liste ». La connexion d’une application ClickUp par OAuth n’est pas proposée : une clé personnelle suffit et reste sur ta machine.
+
 ### Connecter et déconnecter
 
 Clique sur « Connecter » une fois les champs remplis ; le bouton dit « Vérification… » pendant l’appel, et « Annuler » ferme le formulaire. Escouade vérifie les identifiants auprès du service et ne les garde que s’il les accepte. S’il les refuse, ou s’il est injoignable, sa réponse s’affiche en rouge sous les champs, par exemple « Jira refuse ces identifiants (401) ». Un champ manquant est signalé avant tout appel, par exemple « Indique le jeton. ».
@@ -71,12 +79,13 @@ Si le trousseau ne rend pas un jeton au démarrage, le compte affiche « Trouss
 
 Le groupe s’appelle « Sources liées à » suivi du nom du projet. Tant qu’aucun compte n’est connecté, il dit : « Connecte un compte ci-dessus pour lier une source à ce projet. »
 
-Pour chaque service connecté, un menu choisit la source du projet : « Projet Jira », « Tableau Trello », « Dépôt GitHub Issues » ou « Équipe Linear ». « Aucun » (par défaut) délie. Un projet a au plus une source par service.
+Pour chaque service connecté, un menu choisit la source du projet : « Projet Jira », « Tableau Trello », « Dépôt GitHub Issues », « Équipe Linear » ou « Liste ClickUp ». « Aucun » (par défaut) délie. Un projet a au plus une source par service.
 
 - **Jira** : les projets du site, présentés sous la forme « CLÉ — nom ».
 - **Trello** : tes tableaux ouverts.
 - **GitHub Issues** : les dépôts auxquels tu as accès (propriétaire, collaborateur ou membre d’une organisation), les derniers poussés d’abord. Le dépôt du projet, lu dans son remote git, est en tête avec « (dépôt du projet) ».
 - **Linear** : tes équipes, sous la forme « Nom (CLÉ) ».
+- **ClickUp** : les listes de tes espaces de travail, rangées sous leur espace et leur dossier (« Produit › Sprints » ; l’espace de travail devant quand tu en as plusieurs), les listes hors dossier d’abord, les archivées en moins.
 
 Choisir une source charge ses statuts et préremplit la correspondance ci-dessous. Si les statuts ne se chargent pas, la source est liée quand même, et l’infobulle des menus de la correspondance dit pourquoi.
 
@@ -96,8 +105,9 @@ Chaque menu propose « — inchangé » (le ticket externe n’est pas touché
 | Trello | Les listes ouvertes du tableau | La carte passe dans la liste. |
 | GitHub Issues | « Ouverte », « Fermée », et les étiquettes du dépôt (précédées de ◆) | « Fermée » ferme l’issue comme terminée ; « Ouverte » la rouvre. Une étiquette est posée sur l’issue (rouverte si besoin), et les autres étiquettes de la correspondance sont retirées. |
 | Linear | Les états du workflow de l’équipe | Le ticket prend cet état. |
+| ClickUp | Les statuts de la liste liée (chaque liste a les siens) | La tâche prend ce statut. Si la liste ne l’a plus, la carte le dit et rien n’est envoyé. |
 
-Quand tu lies une source, Escouade préremplit les menus d’après le nom des statuts : celui qui ressemble à « en cours » (« In Progress », « En cours », « Doing »…) pour « En cours » et « À tester », et celui qui ressemble à « à tester » (« To test », « QA », « In Review », « À tester »…) pour « Terminé ». « À faire » reste « — inchangé ». Corrige les menus si ton workflow est autre.
+Quand tu lies une source, Escouade préremplit les menus d’après le nom des statuts : celui qui ressemble à « en cours » (« In Progress », « En cours », « Doing »…) pour « En cours » et « À tester », et celui qui ressemble à « à tester » (« To test », « QA », « In Review », « À tester »…) pour « Terminé ». « À faire » reste « — inchangé ». Pour ClickUp, quand les noms ne disent rien, le type des statuts décide : le premier statut personnalisé pour « En cours » et « À tester », le suivant (ou celui de type fini) pour « Terminé ». Corrige les menus si ton workflow est autre.
 
 ### Commenter
 
@@ -120,9 +130,9 @@ Ces trois réglages valent pour tous les projets.
 |---|---|---|
 | « Mettre à jour le statut externe » | Quand un ticket importé change de colonne dans le Kanban, le ticket externe prend le statut que la correspondance donne à la colonne. Désactivé, les statuts ne sont plus touchés ; les commentaires de la correspondance restent publiés. | Activé |
 | « Publier un résumé à chaque boucle » | Quand un ticket entame une nouvelle boucle (à partir de la deuxième), un commentaire donne les critères atteints et les notes de l’agent sur le ticket externe. | Désactivé |
-| « Extraire les critères d’acceptation » | À l’import, lit les critères dans la description (Jira, GitHub) ou la checklist (Trello) du ticket importé. Désactivé, le ticket reçoit les critères par défaut. | Activé |
+| « Extraire les critères d’acceptation » | À l’import, lit les critères dans la description (Jira, GitHub, Linear) ou la checklist (Trello, ClickUp) du ticket importé. Désactivé, le ticket reçoit les critères par défaut. | Activé |
 
-Si un service refuse ou n’est pas joignable, l’opération n’est pas perdue : elle est retentée après 1, 5, 15 puis 60 minutes, pendant 24 h au plus. La carte du ticket affiche alors l’erreur et « Resynchroniser » pour réessayer tout de suite. Un refus que réessayer ne changerait pas (ticket supprimé, workflow qui ne mène pas au statut) est mis de côté sans attendre.
+Si un service refuse ou n’est pas joignable, l’opération n’est pas perdue : elle est retentée après 1, 5, 15 puis 60 minutes, pendant 24 h au plus. La carte du ticket affiche alors l’erreur et « Resynchroniser » pour réessayer tout de suite. Un refus que réessayer ne changerait pas (ticket supprimé, workflow qui ne mène pas au statut, liste ClickUp disparue ou statut qu’elle n’a plus) est mis de côté sans attendre. Une limite de requêtes de ClickUp (429) est attendue jusqu’à sa fin annoncée, une minute au plus, puis la requête repart une fois.
 
 ## Import automatique
 
@@ -131,7 +141,7 @@ Ces trois réglages valent aussi pour tous les projets. L’import à la main es
 | Réglage | Effet | Par défaut |
 |---|---|---|
 | « Importer les tickets étiquetés » | Les tickets ouverts des sources liées qui portent l’étiquette arrivent dans « À faire », avec 5 boucles maximum. | Désactivé |
-| « Étiquette » | Le nom de l’étiquette : un label Jira, une étiquette Trello, GitHub ou Linear. Vide, rien n’est importé. | `claude-ready` |
+| « Étiquette » | Le nom de l’étiquette : un label Jira, une étiquette Trello, GitHub ou Linear, un tag ClickUp. Vide, rien n’est importé. | `claude-ready` |
 | « Vérifier toutes les » | L’intervalle entre deux vérifications : 5 min, 15 min ou 60 min. | 15 min |
 
 L’import automatique n’importe un ticket qu’une fois par projet : un ticket déjà importé, même supprimé du Kanban depuis, n’est pas ramené tout seul (l’import à la main peut le reprendre, tant qu’il n’est plus dans le Kanban). Chaque import affiche un message du genre « 3 tickets importés depuis Jira dans demo ». La première vérification a lieu environ 30 secondes après le démarrage de l’app, ou au plus 30 secondes après l’enregistrement si tu actives l’import ensuite ; les suivantes, à l’intervalle choisi.

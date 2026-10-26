@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-// Test double of Jira Cloud, Trello and GitHub Issues on one local HTTP server, for the end-to-end
+// Test double of Jira Cloud, Trello, GitHub Issues and ClickUp on one local HTTP server, for the end-to-end
 // tests and to try the integrations without real accounts:
 //   node tests/fixtures/fake-trackers.mjs --port 4101
 // then, in Escouade: Jira's site = http://127.0.0.1:4101 (any e-mail, any token but "bad"), and the
 // app started with ESCOUADE_TRELLO_API=http://127.0.0.1:4101/1 and
-// ESCOUADE_GITHUB_API=http://127.0.0.1:4101/github (any key or token but "bad").
+// ESCOUADE_GITHUB_API=http://127.0.0.1:4101/github, ESCOUADE_CLICKUP_API=http://127.0.0.1:4101/clickup/api/v2
+// (any key or token but "bad").
 // What the app changed is kept in memory: GET /__writes lists the writes received.
 
 import http from 'node:http';
@@ -106,6 +107,48 @@ function seed() {
       // /__github/pulls/<n> sets what a test wants of them ({ checks: 'FAILURE', changesRequested: true, … }).
       pulls: [],
     },
+    // ClickUp: the workspace Atlas, its space Produit, the list « Sprint 12 » in the folder Sprints
+    // (its own statuses) and the list « Backlog » outside any folder.
+    clickup: {
+      statuses: [
+        { id: 'sc_open', status: 'to do', type: 'open', orderindex: 0 },
+        { id: 'sc_doing', status: 'in progress', type: 'custom', orderindex: 1 },
+        { id: 'sc_review', status: 'review', type: 'custom', orderindex: 2 },
+        { id: 'sc_closed', status: 'complete', type: 'closed', orderindex: 3 },
+      ],
+      tasks: [
+        {
+          id: '86abx3',
+          custom_id: 'ABC-12',
+          name: "Exporter le journal d'audit en CSV",
+          markdown_description: 'Les administrateurs exportent le journal.',
+          status: 'to do',
+          tags: ['claude-ready'],
+          assignees: [183],
+          checklists: [{ name: "Critères d'acceptation", items: ['Filtre par date', 'Colonnes horodatage, IP, résultat'] }],
+        },
+        {
+          id: '86abx4',
+          custom_id: 'ABC-13',
+          name: 'Page de connexion plus rapide',
+          markdown_description: '## Critères\n- Moins de 1 s sur 4G',
+          status: 'in progress',
+          tags: [],
+          assignees: [],
+          checklists: [],
+        },
+        {
+          id: '86abx5',
+          custom_id: 'ABC-9',
+          name: 'Ancienne tâche finie',
+          markdown_description: '',
+          status: 'complete',
+          tags: [],
+          assignees: [183],
+          checklists: [],
+        },
+      ],
+    },
     writes: [],
   };
 }
@@ -153,7 +196,13 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
   const bad = (headers, url) => {
     const auth = headers.authorization ?? '';
     const basic = auth.startsWith('Basic ') ? Buffer.from(auth.slice(6), 'base64').toString().split(':').pop() : null;
-    return basic === 'bad' || auth === 'Bearer bad' || headers['private-token'] === 'bad' || url.searchParams.get('token') === 'bad';
+    return (
+      basic === 'bad' ||
+      auth === 'Bearer bad' ||
+      auth === 'bad' ||
+      headers['private-token'] === 'bad' ||
+      url.searchParams.get('token') === 'bad'
+    );
   };
 
   function route(method, url, json, send, headers) {
@@ -163,7 +212,15 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       db = seed();
       return send(200, {});
     }
-    if (bad(headers, url)) return send(401, p.startsWith('/1/') ? 'invalid token' : { message: 'Bad credentials', errorMessages: [] });
+    if (bad(headers, url))
+      return send(
+        401,
+        p.startsWith('/1/')
+          ? 'invalid token'
+          : p.startsWith('/clickup/')
+            ? { err: 'Token invalid', ECODE: 'OAUTH_025' }
+            : { message: 'Bad credentials', errorMessages: [] },
+      );
 
     // ---------- GitLab (a self-hosted instance: its API at the root) ----------
     if (p === '/api/v4/version') return send(headers['private-token'] ? 200 : 401, { message: '401 Unauthorized' });
@@ -251,6 +308,63 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       const list = url.searchParams.get('idList');
       if (list) card.idList = list;
       return send(200, { id: card.id, idList: card.idList });
+    }
+
+    // ---------- ClickUp (API v2) ----------
+    const cu = db.clickup;
+    const cuStatus = (name) => cu.statuses.find((s) => s.status === name);
+    const cuTask = (t) => ({
+      id: t.id,
+      custom_id: t.custom_id,
+      name: t.name,
+      markdown_description: t.markdown_description,
+      status: { status: t.status, type: cuStatus(t.status)?.type ?? 'open' },
+      priority: null,
+      assignees: t.assignees.map((id) => ({ id, username: 'Ada Lovelace' })),
+      tags: t.tags.map((name) => ({ name })),
+      checklists: t.checklists.map((c, i) => ({
+        id: `${t.id}-${i}`,
+        name: c.name,
+        items: c.items.map((name, orderindex) => ({ id: `${t.id}-${i}-${orderindex}`, name, orderindex, resolved: false })),
+      })),
+      url: `https://app.clickup.com/t/${t.id}`,
+      list: { id: 'l1' },
+    });
+    if (p.startsWith('/clickup/api/v2/')) {
+      const r = p.slice('/clickup/api/v2'.length);
+      if (r === '/user') return send(200, { user: { id: 183, username: 'Ada Lovelace', email: 'ada@atlas.dev' } });
+      if (r === '/team') return send(200, { teams: [{ id: '9001', name: 'Atlas' }] });
+      if (r === '/team/9001/space') return send(200, { spaces: [{ id: '790', name: 'Produit' }] });
+      if (r === '/space/790/folder')
+        return send(200, { folders: [{ id: '457', name: 'Sprints', lists: [{ id: 'l1', name: 'Sprint 12' }] }] });
+      if (r === '/space/790/list') return send(200, { lists: [{ id: 'l0', name: 'Backlog' }] });
+      if (r === '/list/l1') return send(200, { id: 'l1', name: 'Sprint 12', statuses: cu.statuses });
+      if (r === '/list/l1/task') {
+        const all = (k) => url.searchParams.getAll(k);
+        const tasks = cu.tasks
+          .filter((t) => !['closed', 'done'].includes(cuStatus(t.status)?.type))
+          .filter((t) => !all('assignees[]').length || t.assignees.some((a) => all('assignees[]').includes(String(a))))
+          .filter((t) => !all('statuses[]').length || all('statuses[]').includes(t.status))
+          .filter((t) => !all('tags[]').length || t.tags.some((g) => all('tags[]').includes(g)))
+          .map(cuTask);
+        return send(200, { tasks, last_page: true });
+      }
+      m = r.match(/^\/list\/([^/]+)/);
+      if (m) return send(404, { err: 'List not found', ECODE: 'ITEM_013' });
+      m = r.match(/^\/task\/([^/]+)(\/comment)?$/);
+      if (m) {
+        const id = decodeURIComponent(m[1]);
+        const task = cu.tasks.find((t) => (url.searchParams.get('custom_task_ids') === 'true' ? t.custom_id === id : t.id === id));
+        if (!task) return send(404, { err: 'Task not found', ECODE: 'ITEM_013' });
+        if (m[2]) return send(200, { id: db.writes.length, hist_id: String(db.writes.length), date: Date.now() });
+        if (method === 'PUT') {
+          const to = json()?.status;
+          if (!cuStatus(to)) return send(400, { err: 'Status does not exist', ECODE: 'ITEM_062' });
+          task.status = to;
+        }
+        return send(200, cuTask(task));
+      }
+      return send(404, { err: `Route not found: ${method} ${r}`, ECODE: 'APP_001' });
     }
 
     // ---------- GitHub ----------
@@ -423,7 +537,9 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const i = process.argv.indexOf('--port');
   const port = Number(i > 0 ? process.argv[i + 1] : process.env.PORT || 4101);
   startFakeTrackers(port).then(({ url }) => {
-    console.log(`fake Jira, Trello and GitHub on ${url}`);
-    console.log(`  Jira : site ${url} · Trello : ESCOUADE_TRELLO_API=${url}/1 · GitHub : ESCOUADE_GITHUB_API=${url}/github`);
+    console.log(`fake Jira, Trello, GitHub and ClickUp on ${url}`);
+    console.log(
+      `  Jira : site ${url} · Trello : ESCOUADE_TRELLO_API=${url}/1 · GitHub : ESCOUADE_GITHUB_API=${url}/github · ClickUp : ESCOUADE_CLICKUP_API=${url}/clickup/api/v2`,
+    );
   });
 }

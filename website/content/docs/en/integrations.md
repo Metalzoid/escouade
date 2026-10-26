@@ -1,6 +1,6 @@
-# Jira, Trello, GitHub, and Linear
+# Jira, Trello, GitHub, Linear, and ClickUp
 
-Escouade imports tickets from Jira, Trello, GitHub Issues, and Linear into the Kanban, with their acceptance criteria, then keeps their status up to date and leaves comments on them as the work goes. This page covers connecting, importing, and syncing.
+Escouade imports tickets from Jira, Trello, GitHub Issues, Linear, and ClickUp into the Kanban, with their acceptance criteria, then keeps their status up to date and leaves comments on them as the work goes. This page covers connecting, importing, and syncing.
 
 ![The “Import tickets” window: Jira tickets filtered by “Assigned to me”, with their detected criteria](/images/en/integrations.jpg)
 
@@ -14,6 +14,7 @@ Accounts are connected in Settings › Integrations, “Connected accounts” gr
 | Trello | “API key” and “Token” | “Get an API key”, then “Get a token for this key” (available once the key is typed: a read and write token that never expires) |
 | GitHub | “Token”, optional | “Create a GitHub token”. Left empty, Escouade uses the one from the `gh` CLI (`gh auth login`); the account then shows with “· via gh” |
 | Linear | “API key” | “Create a Linear API key” |
+| ClickUp | “API key” (`pk_…`) | “Create a ClickUp API key” (ClickUp’s Settings › Apps). The row then says “Connected · ” followed by your name in ClickUp |
 
 “Disconnect” forgets the account and its secrets. Projects keep their links, unused until you connect again.
 
@@ -25,7 +26,7 @@ When the keychain refuses a token on Windows or macOS, it stays in that file and
 
 ## Linking a project to a source
 
-A project links to one place per service: a Jira project, a Trello board, a GitHub repository, or a Linear team. In Settings › Integrations, the “Sources linked to `<project>`” group offers, for each connected service, a list: “Jira project”, “Trello board”, “GitHub Issues repository”, “Linear team”. “None” unlinks the service. For GitHub, the project’s own repository, when its remote is on GitHub, comes first (“(the project’s repository)”).
+A project links to one place per service: a Jira project, a Trello board, a GitHub repository, a Linear team, or a ClickUp list. In Settings › Integrations, the “Sources linked to `<project>`” group offers, for each connected service, a list: “Jira project”, “Trello board”, “GitHub Issues repository”, “Linear team”, “ClickUp list”. “None” unlinks the service. For GitHub, the project’s own repository, when its remote is on GitHub, comes first (“(the project’s repository)”). For ClickUp, the lists of all your workspaces are grouped by space and folder (“Product › Sprints”), as in ClickUp’s sidebar: the lists outside a folder first, archived ones left out; typing the first letters of a name, with the menu open, goes to it.
 
 Choosing a source loads its statuses and pre-fills the status mapping (see below). Then save the settings.
 
@@ -45,10 +46,11 @@ In the [Kanban](board), “Import” (⤓) opens the “Import tickets” window
 | Trello | “Search for a card…” | “My cards”, then one chip per list of the board |
 | GitHub | “Search for an issue…” (a number, `42` or `#42`, finds the issue) | “Assigned to me”, then the repository’s labels (twelve at most) |
 | Linear | “Search by identifier (ENG-42) or title…” | “My issues”, then one chip per workflow state that is neither completed nor canceled |
+| ClickUp | “Search by id (#86abx3, ABC-12) or title…” (a task’s id, with or without `#`, or its custom id when the space has them, finds the task if it is in the list) | “My tasks”, then one chip per status of the list that is neither done nor closed |
 
-Only open tickets are offered: not those in Jira’s “Done” category, nor closed GitHub issues (pull requests are left out), nor completed or canceled Linear issues.
+Only open tickets are offered: not those in Jira’s “Done” category, nor closed GitHub issues (pull requests are left out), nor completed or canceled Linear issues, nor ClickUp tasks whose status is of the done or closed type. As ClickUp has no search by title, Escouade reads the list 100 tasks at a time and keeps those whose name holds the text, up to 5 pages before it shows what it found; “Show more” goes on.
 
-Each row shows the key, the title, the type (Bug, Story, Task, Card, Issue), the priority, the assignee, and the state, plus “✓ 2 criteria detected” (on hover: which ones). A ticket already in the Kanban is grayed out (“Already in the Kanban”) and cannot be picked. Tickets arrive in pages; “Show more” loads the next one, and the line above the list says “50 shown of 312” when the service counts more tickets than it has sent.
+Each row shows the key (for ClickUp, the custom id, otherwise `#` and the task’s id), the title, the type (Bug, Story, Task, Card, Issue), the priority, the assignee, and the state, plus “✓ 2 criteria detected” (on hover: which ones). A ticket already in the Kanban is grayed out (“Already in the Kanban”) and cannot be picked. Tickets arrive in pages; “Show more” loads the next one, and the line above the list says “50 shown of 312” when the service counts more tickets than it has sent.
 
 To import:
 
@@ -64,7 +66,8 @@ With “Extract the acceptance criteria” on (the default), Escouade looks for 
 
 - Jira and GitHub: the list items under a heading or a line that names them (“Acceptance criteria”, “Definition of done”, “AC”, “DoD”, or the French “Critères d’acceptation”), otherwise the checkboxes (`- [ ]`) of the description;
 - Trello: the items of the checklist that goes by this name, otherwise those of all the checklists, otherwise those the description lists;
-- Linear: as for Jira and GitHub, in the description.
+- Linear: as for Jira and GitHub, in the description;
+- ClickUp: as for Trello, the items of the checklist that goes by this name, otherwise those of all the task’s checklists, otherwise those its description (in Markdown) lists.
 
 It keeps twenty criteria at most, of 300 characters at most. With no criterion found, or with the setting off, the ticket gets the two default criteria. A Jira description is converted to Markdown before it is searched.
 
@@ -75,7 +78,7 @@ Settings › Integrations › “Automatic import” lets Escouade import on its
 | Setting | What it does | Default |
 |---|---|---|
 | “Import labeled tickets” | The open tickets of the linked sources that carry the label arrive in “To do” | Off |
-| “Label” | The Jira, Trello, GitHub, or Linear label | `claude-ready` |
+| “Label” | The Jira, Trello, GitHub, Linear, or ClickUp label (a task’s tag) | `claude-ready` |
 | “Check every” | The interval between two passes: 5, 15, or 60 min | 15 min |
 
 A pass looks, in each project, at the linked sources whose account is connected. Tickets arrive with 5 loops at most, and a message announces them (“3 tickets imported from Jira into demo”). A ticket the project has already imported is never brought back, even if you have deleted it from the Kanban since. The first pass happens shortly after you turn it on.
@@ -92,7 +95,9 @@ The “Status mapping” group (once a source is linked) has one row per Kanban 
 - “Done”: the status that looks like “to review” (`To test`, `Testing`, `QA`, `In Review`, `Review`, `Recette`, `À valider`, `Validation`, `Test`…);
 - “To do”: unchanged.
 
-What “status” means depends on the service: a workflow transition for Jira, the list the card sits in for Trello, a workflow state for Linear. For GitHub, they are “Open”, “Closed”, or a label of the repository (marked ◆): “Closed” closes the issue, a label reopens it if needed and removes the other labels of the mapping.
+For ClickUp, each list has statuses of its own: the mapping is therefore set per project, on those of the linked list. When their names say nothing of the above, their type decides: the first custom status (between the open one and the closed ones) for “In progress” and “To test”, the next one for “Done”, otherwise the status of the done type. A list with only an open and a closed status moves nothing by default. If the list no longer has the chosen status (renamed, removed), the card says so (“The ClickUp list “Sprint 12” has no “review” status: ABC-12 stays where it is; choose another status in Settings › Integrations”) rather than fail without a word.
+
+What “status” means depends on the service: a workflow transition for Jira, the list the card sits in for Trello, a workflow state for Linear, a status of the list for ClickUp. For GitHub, they are “Open”, “Closed”, or a label of the repository (marked ◆): “Closed” closes the issue, a label reopens it if needed and removes the other labels of the mapping.
 
 The last column, “Comment”, chooses the columns whose arrival writes a comment (by default “To review” and “Done”). The comment says where the ticket stands:
 
@@ -119,10 +124,11 @@ Comments are published for your team: they are written in the “Language of tex
 
 Every change to pass on is kept in a queue, `~/.escouade/sync-queue.json`, until the service has taken it. A ticket’s changes go in order, one after the other: a change that fails holds back the next ones of the same ticket, not those of other tickets. A status transition replaces the ticket’s one that has not gone out yet, and a ticket that goes back to an earlier column cancels the transition that had not gone out.
 
-A card whose sync failed shows a ⚠. A click on it shows the reason (“Jira refuses these credentials (401)”, “Jira: no transition from “In progress” to “Done” for ATL-1294”…) and the “Resync” button.
+A card whose sync failed shows a ⚠. A click on it shows the reason (“Jira refuses these credentials (401)”, “Jira: no transition from “In progress” to “Done” for ATL-1294”, “The ClickUp list 901 no longer exists or can’t be reached any more: choose another one in Settings › Integrations”…) and the “Resync” button.
 
 - When the service can’t be reached, is down or overloaded, or refuses the credentials (which you can fix), the failure may pass later: Escouade tries again on its own, after 1, 5, 15, then 60 minutes, the last wait being repeated, for 24 hours from the first failure.
 - A refusal that trying again would not change (a request refused as it is, a ticket gone, no transition to the status) is set aside at once, like anything that still fails after a day. It no longer holds back the ticket’s next changes.
+- When ClickUp limits the requests (429), Escouade waits for the end of the limit it announces (`X-RateLimit-Reset`, one minute at most) and asks once more before it counts the failure.
 - When Escouade starts, everything that was waiting goes again (except what was set aside).
 - “Resync” sends again right away, set-aside changes included. When nothing is left to send, it gives the external ticket the status of its column again (without writing a comment twice). The ⚠ goes as soon as everything has gone through.
 

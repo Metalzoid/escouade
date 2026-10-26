@@ -185,7 +185,7 @@ export const en: Catalog = {
         alt: 'The “Test DEM-4” window: preparation done, two servers ready and the address opened in the browser',
       },
       integrations: {
-        title: 'Your Jira, Trello, GitHub and Linear tickets, in the Kanban',
+        title: 'Your Jira, Trello, GitHub, Linear and ClickUp tickets, in the Kanban',
         text: 'Link a source to your project, “Import”, tick: the tickets arrive with their acceptance criteria. Escouade keeps their status up to date and comments on the original ticket when it is ready for review, then done.',
         alt: 'The “Import tickets” window: three Jira tickets ticked, with their acceptance criteria detected',
       },
@@ -286,10 +286,10 @@ export const en: Catalog = {
       },
       {
         q: 'Where does my data go?',
-        a: 'Nowhere: projects, conversations and statistics stay on your machine, in ~/.escouade/. The network is only used by the harnesses themselves, to read your quotas, for updates and, if you connect them, for Jira, Trello, GitHub or Linear, where an imported ticket gets its status and comments.',
+        a: 'Nowhere: projects, conversations and statistics stay on your machine, in ~/.escouade/. The network is only used by the harnesses themselves, to read your quotas, for updates and, if you connect them, for Jira, Trello, GitHub, Linear or ClickUp, where an imported ticket gets its status and comments.',
       },
       {
-        q: 'What about my Jira, Trello, GitHub or Linear tokens?',
+        q: 'What about my Jira, Trello, GitHub, Linear or ClickUp tokens?',
         a: 'They stay on your machine: in the system keychain (Windows Credential Manager, macOS Keychain), or on Linux in the integrations file of ~/.escouade/, and are only used for calls to those services. For GitHub, Escouade can also reuse the token from gh.',
       },
       {
@@ -411,7 +411,7 @@ export const en: Catalog = {
       board: 'The Kanban',
       autopilot: 'Autopilot',
       testing: 'Review and approve',
-      integrations: 'Jira, Trello, GitHub, Linear',
+      integrations: 'External tickets',
       'shared-board': 'Sharing the Kanban',
       mcp: 'The MCP server',
       accounts: 'Several accounts',

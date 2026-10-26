@@ -1,4 +1,4 @@
-// The external ticket systems on the real app, against the fake Jira, Trello and GitHub of
+// The external ticket systems on the real app, against the fake Jira, Trello, GitHub and ClickUp of
 // tests/fixtures/fake-trackers.mjs: an account connected, a source linked, tickets imported, and
 // their external ones moved and commented while the fake `claude` works them.
 
@@ -22,6 +22,7 @@ test.beforeAll(async () => {
   // Read by the app the fixture starts next.
   process.env.ESCOUADE_TRELLO_API = `${trackers.url}/1`;
   process.env.ESCOUADE_GITHUB_API = `${trackers.url}/github`;
+  process.env.ESCOUADE_CLICKUP_API = `${trackers.url}/clickup/api/v2`;
 });
 
 test.beforeEach(async () => {
@@ -100,6 +101,71 @@ test('a Jira issue and a Trello card are imported, and their states follow their
   expect(jiraComments[1]).toContain('✓ Refresh avant expiration');
   const trelloComments = all.filter((w) => w.path === '/1/cards/c151/actions/comments').map((w) => w.body.text);
   expect(trelloComments[1]).toContain('✓ Colonnes horodatage, IP, résultat');
+});
+
+test('a ClickUp task is imported with its checklist, and its status follows its ticket (1024 × 728)', async ({ app }) => {
+  const { page } = app;
+  // The runner's screen is 1024 × 768.
+  await page.setViewportSize({ width: 1024, height: 728 });
+  await addProject(page, app.repo, { firstAgent: false });
+
+  // The account: a key refused, then the right one; the user's name said.
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+  const settings = page.getByRole('dialog', { name: 'Réglages' });
+  await settings.getByRole('tab', { name: 'Intégrations' }).click();
+  await settings.getByRole('button', { name: 'Connecter…' }).nth(4).click();
+  const form = settings.getByRole('form', { name: 'Connexion à ClickUp' });
+  await form.getByLabel("Clé d'API").fill('bad');
+  await form.getByRole('button', { name: 'Connecter' }).click();
+  await expect(form.getByRole('alert')).toHaveText('ClickUp refuse ces identifiants (401) — Token invalid');
+  await form.getByLabel("Clé d'API").fill('pk_183_jeton');
+  await form.getByRole('button', { name: 'Connecter' }).click();
+  await expect(settings.getByText('Connecté · Ada Lovelace')).toBeVisible();
+
+  // The list, by space and folder; the defaults guessed from the list's own statuses.
+  const source = settings.getByRole('combobox', { name: 'Liste ClickUp' });
+  await expect(source.locator('optgroup[label="Produit › Sprints"] option')).toHaveText(['Sprint 12']);
+  await source.selectOption('l1');
+  await expect(settings.getByRole('combobox', { name: 'ClickUp — En cours' })).toHaveValue('in progress');
+  await expect(settings.getByRole('combobox', { name: 'ClickUp — Terminé' })).toHaveValue('review');
+  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(settings).toHaveCount(0);
+
+  // The import: the open tasks, the finished one left out; « Mes tâches » and a custom id.
+  await page.getByRole('button', { name: /^Kanban/ }).click();
+  await page.getByRole('button', { name: 'Importer' }).click();
+  const imp = page.getByRole('dialog', { name: 'Importer des tickets' });
+  await expect(imp.getByRole('checkbox', { name: /ABC-12/ })).toContainText('✓ 2 critères détectés');
+  await expect(imp.getByRole('checkbox', { name: /ABC-13/ })).toBeVisible();
+  await expect(imp.getByRole('checkbox', { name: /ABC-9/ })).toHaveCount(0);
+  await imp.getByRole('button', { name: 'Mes tâches' }).click();
+  await expect(imp.getByRole('checkbox', { name: /ABC-13/ })).toHaveCount(0);
+  await imp.getByRole('button', { name: 'Mes tâches' }).click();
+  await imp.getByRole('textbox', { name: 'Rechercher' }).fill('ABC-12');
+  await expect(imp.getByRole('checkbox', { name: /ABC-13/ })).toHaveCount(0);
+  await imp.getByRole('checkbox', { name: /ABC-12/ }).click();
+  await imp.getByRole('button', { name: '3', exact: true }).click();
+  await imp.getByRole('button', { name: 'Importer 1 ticket' }).click();
+  await expect(imp).toHaveCount(0);
+  await expect(page.getByText('1 ticket importé depuis ClickUp')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ouvrir ABC-12 dans ClickUp' })).toBeVisible();
+
+  // The fake claude meets criterion n at loop n: « À tester » after its second loop.
+  const review = page.getByRole('region', { name: 'À tester' });
+  await expect(review.getByRole('button', { name: /Ouvrir ABC-12/ })).toBeVisible({ timeout: 60_000 });
+  await expect.poll(async () => (await writes()).filter((w) => w.path.endsWith('/comment')).length).toBe(1);
+  const all = await writes();
+  // « in progress » when it starts and when it goes to test (its default for « À tester »).
+  expect(all.filter((w) => w.method === 'PUT' && w.path === '/clickup/api/v2/task/86abx3').map((w) => w.body.status)).toEqual([
+    'in progress',
+    'in progress',
+  ]);
+  const comment = all.find((w) => w.path === '/clickup/api/v2/task/86abx3/comment')!.body;
+  expect(comment.comment_text).toContain('est prêt à tester.');
+  expect(comment.comment_text).toContain('✓ Filtre par date');
+  // The task's status has changed in ClickUp.
+  const task = await (await fetch(`${trackers.url}/clickup/api/v2/task/86abx3`)).json();
+  expect(task.status.status).toBe('in progress');
 });
 
 test('the automatic import brings the GitHub issues that carry its label', async ({ app }) => {

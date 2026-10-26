@@ -59,7 +59,7 @@ describe('IntegrationsTab', () => {
     app.accounts = [off('jira'), off('trello'), off('github')];
     render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
     expect(screen.getByRole('tab', { name: 'Intégrations' })).toHaveAttribute('aria-selected', 'true');
-    expect(within(panel()).getAllByText('Non connecté')).toHaveLength(4);
+    expect(within(panel()).getAllByText('Non connecté')).toHaveLength(5);
     expect(within(panel()).getByText('Connecte un compte ci-dessus pour lier une source à ce projet.')).toBeInTheDocument();
     expect(within(panel()).queryByText('Correspondance des statuts')).not.toBeInTheDocument();
   });
@@ -118,7 +118,7 @@ describe('IntegrationsTab', () => {
     render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
     await userEvent.click(within(panel()).getByRole('button', { name: 'Déconnecter' }));
     expect(b.called('integration_disconnect')[0].args).toEqual({ service: 'jira' });
-    await waitFor(() => expect(within(panel()).getAllByText('Non connecté')).toHaveLength(4));
+    await waitFor(() => expect(within(panel()).getAllByText('Non connecté')).toHaveLength(5));
   });
 
   it('links a source with its default states, sets them by column, and saves them with the project', async () => {
@@ -191,6 +191,59 @@ describe('IntegrationsTab', () => {
     expect(b.called('update_project')[0].args.project.integrations.links).toEqual([]);
   });
 
+  it('lists the ClickUp lists by space and folder, and links one with the statuses of its own', async () => {
+    app.accounts = [
+      off('jira'),
+      off('trello'),
+      off('github'),
+      off('linear'),
+      { service: 'clickup', connected: true, label: 'Ada Lovelace' },
+    ];
+    const b = backend({
+      integration_containers: () => [
+        { id: 'l0', name: 'Backlog', group: 'Produit' },
+        { id: 'l1', name: 'Sprint 12', group: 'Produit › Sprints' },
+        { id: 'l2', name: 'Sprint 13', group: 'Produit › Sprints' },
+      ],
+      integration_states: () => ({
+        states: [
+          { id: 'to do', name: 'to do' },
+          { id: 'in progress', name: 'in progress' },
+          { id: 'review', name: 'review' },
+          { id: 'complete', name: 'complete' },
+        ],
+        defaults: {
+          doing: { id: 'in progress', name: 'in progress' },
+          review: { id: 'in progress', name: 'in progress' },
+          done: { id: 'review', name: 'review' },
+        },
+      }),
+    });
+    render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
+    const p = within(panel());
+    expect(p.getByText('Connecté · Ada Lovelace')).toBeInTheDocument();
+    const source = p.getByRole('combobox', { name: 'Liste ClickUp' });
+    await waitFor(() => expect(within(source).getByRole('option', { name: 'Sprint 12' })).toBeInTheDocument());
+    const groups = [...source.querySelectorAll('optgroup')].map((g) => [
+      g.label,
+      [...g.querySelectorAll('option')].map((o) => o.textContent),
+    ]);
+    expect(groups).toEqual([
+      ['Produit', ['Backlog']],
+      ['Produit › Sprints', ['Sprint 12', 'Sprint 13']],
+    ]);
+    await userEvent.selectOptions(source, 'l1');
+    expect(b.called('integration_states')[0].args).toEqual({ service: 'clickup', container: 'l1' });
+    expect(await p.findByRole('combobox', { name: 'ClickUp — Terminé' })).toHaveValue('review');
+    expect(p.getByRole('combobox', { name: 'ClickUp — En cours' })).toHaveValue('in progress');
+    await save();
+    expect(b.called('update_project')[0].args.project.integrations.links[0]).toMatchObject({
+      service: 'clickup',
+      container: 'l1',
+      name: 'Sprint 12',
+    });
+  });
+
   it('sets the sync and the automatic import for every project', async () => {
     const b = backend();
     render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
@@ -236,12 +289,12 @@ describe('IntegrationsTab in English', () => {
     const p = within(document.body);
     expect(p.getByRole('heading', { name: 'Connected accounts' })).toBeInTheDocument();
     expect(p.getByText('Connected · ada@atlas.dev · atlas.atlassian.net')).toBeInTheDocument();
-    expect(p.getAllByText('Not connected')).toHaveLength(2);
+    expect(p.getAllByText('Not connected')).toHaveLength(3);
     expect(p.getByText('System keychain unavailable: the token stays in ~/.escouade/integrations.json.')).toBeInTheDocument();
     expect(p.getByText('System keychain unreadable: restart Escouade or reconnect the account.')).toBeInTheDocument();
     expect(p.getAllByRole('button', { name: 'Disconnect' })).toHaveLength(2);
-    // Trello's first, then Linear's.
-    const [trello, linear] = p.getAllByRole('button', { name: 'Connect…' });
+    // Trello's first, then Linear's and ClickUp's.
+    const [trello, linear, clickup] = p.getAllByRole('button', { name: 'Connect…' });
     await userEvent.click(trello);
     const form = p.getByRole('form', { name: 'Connect to Trello' });
     expect(within(form).getByLabelText('API key')).toBeInTheDocument();
@@ -254,6 +307,13 @@ describe('IntegrationsTab in English', () => {
     expect(within(lin).getByLabelText('API key')).toHaveAttribute('type', 'password');
     expect(within(lin).queryByLabelText('Token')).toBeNull();
     expect(within(lin).getByRole('button', { name: 'Create a Linear API key' })).toBeInTheDocument();
+    // ClickUp: a personal API key alone too.
+    await userEvent.click(clickup);
+    const cu = p.getByRole('form', { name: 'Connect to ClickUp' });
+    expect(within(cu).getByLabelText('API key')).toHaveAttribute('type', 'password');
+    expect(within(cu).getByLabelText('API key')).toHaveAttribute('placeholder', 'pk_…');
+    await userEvent.click(within(cu).getByRole('button', { name: 'Create a ClickUp API key' }));
+    expect(opened.at(-1)).toBe('https://app.clickup.com/settings/apps');
   });
 
   it('writes the token of GitHub with its hint inside the sentence', async () => {

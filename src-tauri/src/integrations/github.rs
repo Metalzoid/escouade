@@ -66,6 +66,7 @@ impl Github {
             .map(|n| Container {
                 id: n.to_string(),
                 name: n.to_string(),
+                group: None,
             })
             .collect())
     }

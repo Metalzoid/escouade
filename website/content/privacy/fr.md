@@ -36,8 +36,8 @@ Chaque événement porte son nom, son heure (UTC, à la milliseconde), un identi
 | `file_saved` | Un fichier est enregistré dans l’éditeur | — |
 | `code_searched` | Une recherche dans le code | — |
 | `mcp_enabled` | « Les agents peuvent piloter Escouade » est activé | — |
-| `integration_connected` | Un service est connecté | `service` : `jira`, `trello`, `github` ou `linear` |
-| `tickets_imported` | Des tickets sont importés | `service` : `jira`, `trello`, `github` ou `linear` |
+| `integration_connected` | Un service est connecté | `service` : `jira`, `trello`, `github`, `linear` ou `clickup` |
+| `tickets_imported` | Des tickets sont importés | `service` : `jira`, `trello`, `github`, `linear` ou `clickup` |
 | `account_created` | Un compte Claude est ajouté | — |
 | `remote_control_enabled` | Le remote control est activé, à la main ou par un réglage | `from` : `agent` (clic droit sur un agent), `project` (réglage d’un projet) ou `global` (réglage de tous les agents) |
 | `dictation_used` | Une dictée a donné du texte | `target` : `composer` (le champ de message), `terminal` (la vue Claude Code) ou `ticket` (la description d’un ticket) ; `model` : le modèle Whisper (`tiny`, `base`, `small`…), ou le service de la dictée en ligne (`openai`, `groq`, `mistral`, `elevenlabs`, `deepgram`) ; `online_model` : en ligne, le modèle du service (`gpt-4o-mini-transcribe`…) |
@@ -145,7 +145,7 @@ Escouade n’a pas de compte ni de serveur à elle pour tes projets, tes convers
 
 - **Claude Code**, qu’elle lance sur ta machine, envoie ses requêtes à Anthropic comme il le ferait dans un terminal. Escouade interroge aussi le service d’usage d’Anthropic pour afficher tes quotas ([les quotas](usage)).
 - **Les mises à jour** : Escouade lit le fichier `latest.json` de la dernière release sur GitHub, puis télécharge la nouvelle version ([les mises à jour](updates)).
-- **Les intégrations** que tu connectes (Jira, Trello, GitHub, Linear) : Escouade s’adresse à ces services avec ton jeton ([les intégrations](integrations)).
+- **Les intégrations** que tu connectes (Jira, Trello, GitHub, Linear, ClickUp) : Escouade s’adresse à ces services avec ton jeton ([les intégrations](integrations)).
 - **La dictée en ligne**, si tu l’allumes : voir juste en dessous.
 
 ## La dictée en ligne, si tu l’allumes

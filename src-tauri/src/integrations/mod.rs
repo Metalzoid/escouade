@@ -1,6 +1,7 @@
-//! External ticket systems (Jira, Trello, GitHub Issues, Linear): their accounts, the tickets a project
+//! External ticket systems (Jira, Trello, GitHub Issues, Linear, ClickUp): their accounts, the tickets a project
 //! imports from them, and the sync of their states with the Kanban's columns.
 
+pub mod clickup;
 #[cfg(test)]
 pub(crate) mod fake;
 pub mod github;
@@ -27,6 +28,7 @@ pub struct Accounts {
     pub trello: Option<Account>,
     pub github: Option<Account>,
     pub linear: Option<Account>,
+    pub clickup: Option<Account>,
     /// The code hosts' accounts but github.com's (`github`): one per instance
     /// (`crate::forge::accounts`).
     pub forges: Vec<crate::forge::accounts::ForgeAccount>,
@@ -51,6 +53,7 @@ impl Accounts {
             Service::Trello => self.trello.as_ref(),
             Service::Github => self.github.as_ref(),
             Service::Linear => self.linear.as_ref(),
+            Service::Clickup => self.clickup.as_ref(),
         }
     }
 
@@ -60,6 +63,7 @@ impl Accounts {
             Service::Trello => self.trello.as_mut(),
             Service::Github => self.github.as_mut(),
             Service::Linear => self.linear.as_mut(),
+            Service::Clickup => self.clickup.as_mut(),
         }
     }
 
@@ -69,6 +73,7 @@ impl Accounts {
             Service::Trello => self.trello = a,
             Service::Github => self.github = a,
             Service::Linear => self.linear = a,
+            Service::Clickup => self.clickup = a,
         }
     }
 
@@ -110,7 +115,7 @@ pub struct Account {
     pub email: String,
     /// Trello: the API key. A secret, as the token is.
     pub key: String,
-    /// The API token (Linear's personal API key); for GitHub, empty: the GitHub CLI's
+    /// The API token (the personal API key of Linear, of ClickUp); for GitHub, empty: the GitHub CLI's
     /// (`gh auth token`).
     pub token: String,
     /// As the window shows it: "ada@atlas.dev · atlas.atlassian.net", "@ada".
@@ -147,12 +152,16 @@ pub struct AccountView {
 }
 
 /// Where an account's tickets live: a Jira project, a Trello board, a GitHub repository, a Linear
-/// team.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// team, a ClickUp list.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Container {
     pub id: String,
     pub name: String,
+    /// Where it is in its service's hierarchy, as the window groups it: a ClickUp list's
+    /// « Space › Folder ». None for the others.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
 }
 
 /// The states of a container, and those each column gives by default.
@@ -225,14 +234,15 @@ pub struct IssuePage {
     pub total: Option<u64>,
 }
 
-/// Where the Trello, GitHub and Linear APIs are (Jira's is the account's site);
-/// `ESCOUADE_TRELLO_API`, `ESCOUADE_GITHUB_API` and `ESCOUADE_LINEAR_API` put a fake one in their
-/// place (tests, demos).
+/// Where the Trello, GitHub, Linear and ClickUp APIs are (Jira's is the account's site);
+/// `ESCOUADE_TRELLO_API`, `ESCOUADE_GITHUB_API`, `ESCOUADE_LINEAR_API` and `ESCOUADE_CLICKUP_API`
+/// put a fake one in their place (tests, demos).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Bases {
     pub trello: String,
     pub github: String,
     pub linear: String,
+    pub clickup: String,
 }
 
 impl Bases {
@@ -249,6 +259,7 @@ impl Bases {
             trello: var("ESCOUADE_TRELLO_API", "https://api.trello.com/1"),
             github: var("ESCOUADE_GITHUB_API", "https://api.github.com"),
             linear: var("ESCOUADE_LINEAR_API", "https://api.linear.app"),
+            clickup: var("ESCOUADE_CLICKUP_API", "https://api.clickup.com/api/v2"),
         }
     }
 }
@@ -259,6 +270,7 @@ pub enum Client {
     Trello(trello::Trello),
     Github(github::Github),
     Linear(linear::Linear),
+    Clickup(clickup::Clickup),
 }
 
 impl Client {
@@ -269,6 +281,9 @@ impl Client {
             Service::Trello => Client::Trello(trello::Trello::new(http, account, &bases.trello)),
             Service::Github => Client::Github(github::Github::new(http, account, &bases.github)),
             Service::Linear => Client::Linear(linear::Linear::new(http, account, &bases.linear)),
+            Service::Clickup => {
+                Client::Clickup(clickup::Clickup::new(http, account, &bases.clickup))
+            }
         }
     }
 
@@ -279,6 +294,7 @@ impl Client {
             Client::Trello(c) => c.me().await,
             Client::Github(c) => c.me().await,
             Client::Linear(c) => c.me().await,
+            Client::Clickup(c) => c.me().await,
         }
     }
 
@@ -288,6 +304,7 @@ impl Client {
             Client::Trello(c) => c.containers().await,
             Client::Github(c) => c.containers().await,
             Client::Linear(c) => c.containers().await,
+            Client::Clickup(c) => c.containers().await,
         }
     }
 
@@ -297,7 +314,21 @@ impl Client {
             Client::Trello(c) => c.states(container).await,
             Client::Github(c) => c.states(container).await,
             Client::Linear(c) => c.states(container).await,
+            Client::Clickup(c) => c.states(container).await,
         }
+    }
+
+    /// The states of a container, and those each column gives by default: guessed by their
+    /// names, and for ClickUp by their types too.
+    pub async fn states_view(&self, container: &str) -> Result<StatesView> {
+        if let Client::Clickup(c) = self {
+            return c.states_view(container).await;
+        }
+        let states = self.states(container).await?;
+        Ok(StatesView {
+            defaults: text::default_states(&states),
+            states,
+        })
     }
 
     pub async fn issues(&self, container: &str, q: &Query) -> Result<IssuePage> {
@@ -306,6 +337,7 @@ impl Client {
             Client::Trello(c) => c.issues(container, q).await,
             Client::Github(c) => c.issues(container, q).await,
             Client::Linear(c) => c.issues(container, q).await,
+            Client::Clickup(c) => c.issues(container, q).await,
         }
     }
 
@@ -322,6 +354,7 @@ impl Client {
             Client::Trello(c) => c.set_state(r, state).await,
             Client::Github(c) => c.set_state(r, state, mapped).await,
             Client::Linear(c) => c.set_state(r, state).await,
+            Client::Clickup(c) => c.set_state(r, state).await,
         }
     }
 
@@ -331,6 +364,7 @@ impl Client {
             Client::Trello(c) => c.comment(r, text).await,
             Client::Github(c) => c.comment(r, text).await,
             Client::Linear(c) => c.comment(r, text).await,
+            Client::Clickup(c) => c.comment(r, text).await,
         }
     }
 }
@@ -475,7 +509,7 @@ pub(crate) fn http_error_in(
 }
 
 /// The message of an error's body: Jira's `errorMessages` or `errors`, the first of GraphQL's
-/// `errors` (Linear), GitHub's `message`, or Trello's text.
+/// `errors` (Linear), GitHub's `message`, ClickUp's `err`, or Trello's text.
 fn said(body: &str) -> Option<String> {
     let body = body.trim();
     let msg = match serde_json::from_str::<Value>(body) {
@@ -490,7 +524,8 @@ fn said(body: &str) -> Option<String> {
             })
             .or_else(|| v["errors"][0]["message"].as_str().map(str::to_string))
             .or_else(|| v["message"].as_str().map(str::to_string))
-            .or_else(|| v["error"].as_str().map(str::to_string))?,
+            .or_else(|| v["error"].as_str().map(str::to_string))
+            .or_else(|| v["err"].as_str().map(str::to_string))?,
         Err(_) if body.starts_with('<') => return None,
         Err(_) => body.lines().next()?.to_string(),
     };
@@ -667,7 +702,7 @@ mod tests {
         let v = serde_json::to_string(&a.views()).unwrap();
         assert!(!v.contains("secret"));
         let views = a.views();
-        assert_eq!(views.len(), 4);
+        assert_eq!(views.len(), 5);
         assert!(!views[0].connected);
         assert_eq!(
             (views[1].connected, views[1].label.as_str()),

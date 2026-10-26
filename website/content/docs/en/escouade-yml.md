@@ -277,7 +277,7 @@ The file is committed and read by the whole team, and a public repository shows 
 - “In parallel” and autopilot: they spend your quota; someone who only reviews doesn’t want tickets to start by themselves on their machine;
 - the `bypassPermissions` mode of ticket agents: a repository doesn’t lift the permissions of whoever opens it;
 - the tickets’ key: each machine has its own Kanban and numbers its own tickets, and the key is fixed by the first ticket;
-- the integrations (Jira, Trello, GitHub, Linear): they belong to your connected accounts;
+- the integrations (Jira, Trello, GitHub, Linear, ClickUp): they belong to your connected accounts;
 - full paths: they only hold on one machine (hence a full `dir` or `cwd` is refused);
 - tokens and passwords: no key takes one, and “Export to .escouade.yml” never writes one.
 

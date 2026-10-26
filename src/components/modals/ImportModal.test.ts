@@ -269,6 +269,60 @@ describe('ImportModal', () => {
     render(ImportModal, { projectId: 'p1' });
     expect(await within(dialog()).findByRole('alert')).toHaveTextContent('Jira refuse ces identifiants (401)');
   });
+
+  it('lists a ClickUp list’s tasks, searched by id, filtered by its statuses, and says when the list is gone', async () => {
+    resetApp({
+      projects: [
+        project({ integrations: { links: [{ service: 'clickup', container: 'l1', name: 'Sprint 12', states: {} }], comments: [] } }),
+      ],
+    });
+    app.accounts = [{ service: 'clickup', connected: true, label: 'Ada Lovelace' }];
+    let gone = false;
+    const backend = fakeBackend({
+      integration_issues: () => {
+        if (gone) throw "La liste ClickUp l1 n'existe plus ou n'est plus accessible";
+        return {
+          issues: [
+            issue({
+              service: 'clickup',
+              id: '86abx3',
+              key: 'ABC-12',
+              title: 'Exporter le journal',
+              kind: 'Tâche',
+              kindCode: 'task',
+              meta: ['to do', 'high'],
+              criteria: ['Un bouton Exporter', 'Un fichier CSV'],
+              container: 'l1',
+            }),
+          ],
+          filters: [
+            { id: 'mine', label: 'Mes tâches' },
+            { id: 'status:to do', label: 'to do' },
+            { id: 'status:in progress', label: 'in progress' },
+          ],
+          next: '1',
+          total: null,
+        };
+      },
+    });
+    render(ImportModal, { projectId: 'p1' });
+    const d = within(dialog());
+    expect(d.getByRole('tab')).toHaveTextContent('ClickUpSprint 12');
+    const task = await waitFor(() => row(/ABC-12/));
+    expect(task).toHaveTextContent('Tâche to do · high');
+    expect(within(task).getByText('✓ 2 critères détectés')).toBeInTheDocument();
+    const search = d.getByRole('textbox', { name: 'Rechercher' });
+    expect(search).toHaveAttribute('placeholder', 'Rechercher par id (#86abx3, ABC-12) ou par titre…');
+    await userEvent.type(search, 'ABC-12');
+    await waitFor(() => expect(backend.called('integration_issues').at(-1)!.args.text).toBe('ABC-12'));
+    await userEvent.click(d.getByRole('button', { name: 'in progress' }));
+    await waitFor(() => expect(backend.called('integration_issues').at(-1)!.args.filters).toEqual(['status:in progress']));
+    await userEvent.click(d.getByRole('button', { name: 'Afficher plus' }));
+    await waitFor(() => expect(backend.called('integration_issues').at(-1)!.args.page).toBe('1'));
+    gone = true;
+    await userEvent.click(d.getByRole('button', { name: 'Mes tâches' }));
+    expect(await d.findByRole('alert')).toHaveTextContent("La liste ClickUp l1 n'existe plus ou n'est plus accessible");
+  });
 });
 
 describe('ImportModal in English', () => {
@@ -291,7 +345,7 @@ describe('ImportModal in English', () => {
     expect(d.getByText('No source linked to this project')).toBeInTheDocument();
     expect(
       d.getByText(
-        'Connect Jira, Trello, GitHub Issues, or Linear, then choose the project, board, repository, or team to link to demo-api.',
+        'Connect Jira, Trello, GitHub Issues, Linear, or ClickUp, then choose the project, board, repository, team, or list to link to demo-api.',
       ),
     ).toBeInTheDocument();
     await userEvent.click(d.getByRole('button', { name: 'Link a source' }));

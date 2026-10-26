@@ -504,6 +504,7 @@ pub fn service(s: crate::model::Service) -> &'static str {
         Service::Trello => "trello",
         Service::Github => "github",
         Service::Linear => "linear",
+        Service::Clickup => "clickup",
     }
 }
 

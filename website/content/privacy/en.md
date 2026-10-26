@@ -36,8 +36,8 @@ Every event carries its name, its time (UTC, to the millisecond), a session id, 
 | `file_saved` | A file is saved in the editor | — |
 | `code_searched` | A search in the code | — |
 | `mcp_enabled` | “Agents can drive Escouade” is turned on | — |
-| `integration_connected` | A service is connected | `service`: `jira`, `trello`, `github` or `linear` |
-| `tickets_imported` | Tickets are imported | `service`: `jira`, `trello`, `github` or `linear` |
+| `integration_connected` | A service is connected | `service`: `jira`, `trello`, `github`, `linear` or `clickup` |
+| `tickets_imported` | Tickets are imported | `service`: `jira`, `trello`, `github`, `linear` or `clickup` |
 | `account_created` | A Claude account is added | — |
 | `remote_control_enabled` | Remote control is turned on, by hand or by a setting | `from`: `agent` (right-click on an agent), `project` (a project’s setting) or `global` (the setting for all agents) |
 | `dictation_used` | A dictation gave text | `target`: `composer` (the message field), `terminal` (the Claude Code view) or `ticket` (a ticket’s description); `model`: the Whisper model (`tiny`, `base`, `small`…), or the service of online dictation (`openai`, `groq`, `mistral`, `elevenlabs`, `deepgram`); `online_model`: online, the service’s model (`gpt-4o-mini-transcribe`…) |
@@ -145,7 +145,7 @@ Escouade has no account or server of its own for your projects, conversations or
 
 - **Claude Code**, which it runs on your machine, sends its requests to Anthropic as it would in a terminal. Escouade also queries Anthropic’s usage service to show your quotas ([quotas](usage)).
 - **Updates**: Escouade reads the `latest.json` file of the latest release on GitHub, then downloads the new version ([updates](updates)).
-- **The integrations** you connect (Jira, Trello, GitHub, Linear): Escouade talks to those services with your token ([integrations](integrations)).
+- **The integrations** you connect (Jira, Trello, GitHub, Linear, ClickUp): Escouade talks to those services with your token ([integrations](integrations)).
 - **Online dictation**, if you turn it on: see just below.
 
 ## Online dictation, if you turn it on

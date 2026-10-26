@@ -85,7 +85,7 @@ It is the one the built-in update replaces. On Debian or Ubuntu you can also ins
 sudo apt install ./Escouade_*_amd64.deb
 ```
 
-On Linux, the tokens of the integrations (Jira, Trello, GitHub, Linear) are kept in `~/.escouade/integrations.json`, because no system keychain is supported.
+On Linux, the tokens of the integrations (Jira, Trello, GitHub, Linear, ClickUp) are kept in `~/.escouade/integrations.json`, because no system keychain is supported.
 
 ## Claude Code in WSL
 

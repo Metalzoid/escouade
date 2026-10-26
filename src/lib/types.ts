@@ -395,7 +395,7 @@ export interface IntegrationSettings {
 }
 
 /** An external ticket system. */
-export type Service = 'jira' | 'trello' | 'github' | 'linear';
+export type Service = 'jira' | 'trello' | 'github' | 'linear' | 'clickup';
 
 /** A Jira status, a Trello list, or for GitHub "open", "closed" or "label:<name>". */
 export interface ExternalState {
@@ -528,6 +528,8 @@ export interface AccountForm {
 export interface Container {
   id: string;
   name: string;
+  /** Where it is in its service's hierarchy (a ClickUp list's « Space › Folder »): the group of its menu. */
+  group?: string;
 }
 
 export interface StatesView {

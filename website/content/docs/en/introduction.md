@@ -6,7 +6,7 @@ Escouade is an agentic development environment (ADE): a desktop app, for Windows
 
 An ADE brings the whole development cycle into one place, carried out by agents working in parallel, each in its own conversation and, if you want, in its own git worktree:
 
-- **plan**: a Kanban board of tickets with their acceptance criteria, their screenshots and their files, imported if need be from Jira, Trello, GitHub Issues or Linear, that agents pick up on their own (that is autopilot) and loop on until the criteria are met;
+- **plan**: a Kanban board of tickets with their acceptance criteria, their screenshots and their files, imported if need be from Jira, Trello, GitHub Issues, Linear or ClickUp, that agents pick up on their own (that is autopilot) and loop on until the criteria are met;
 - **code**: one tab per project, as many agents as you want, each with a readable conversation (markdown, tool calls you can unfold, questions and permission requests as cards) or Claude Code’s own interface; its subagents and background tasks in the sidebar, the progress of its plan, a file editor and real terminals;
 - **review and test**: the changed files, their diffs, the repository’s git graph and its branches, “▶ Test” on each ticket and the commands that run the project;
 - **ship**: the commit, the merge, squash or rebase into the target branch, the push or the pull request;
@@ -26,7 +26,7 @@ Anyone who builds software with agents and wants to carry the whole cycle throug
 
 - you work on several tasks or several projects at the same time, and you want to see at a glance which agent is working, which one is waiting for your answer and which one has finished;
 - you want to review and commit what each agent changed, without the agents stepping on each other;
-- you write your tasks as tickets, in Escouade or in Jira, Trello, GitHub Issues or Linear, and you want to hand them to agents that keep going until the acceptance criteria are met;
+- you write your tasks as tickets, in Escouade or in Jira, Trello, GitHub Issues, Linear or ClickUp, and you want to hand them to agents that keep going until the acceptance criteria are met;
 - you have several Claude accounts (a personal one, a work one) and you want to keep an eye on their quotas.
 
 ## The basic concepts
@@ -85,7 +85,7 @@ The “Overview” is a page that lists the agents of all projects, the ones wai
 
 The full requirements are in [installation](installation).
 
-The interface comes in French and English. By default it follows the system language: French if the system is in French, English otherwise. Settings › Application lets you pick either one without restarting, and pick separately the language of the texts Claude writes (commit messages, pull request descriptions, comments posted to Jira, Trello, GitHub and Linear, instructions given to agents), because many teams commit in English with an interface in French. See the [application settings](settings-application).
+The interface comes in French and English. By default it follows the system language: French if the system is in French, English otherwise. Settings › Application lets you pick either one without restarting, and pick separately the language of the texts Claude writes (commit messages, pull request descriptions, comments posted to Jira, Trello, GitHub, Linear and ClickUp, instructions given to agents), because many teams commit in English with an interface in French. See the [application settings](settings-application).
 
 ## Map of the documentation
 

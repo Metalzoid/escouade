@@ -13,7 +13,7 @@ Ce qui change d'une version à l'autre est dans le [journal des versions](CHANGE
 ### Planifier
 
 - **Kanban** : des tickets avec leurs critères d'acceptation, que des agents prennent seuls (pilote auto, de 1 à 6 en parallèle), chacun dans son worktree, en bouclant jusqu'à les atteindre ; un ticket peut en attendre d'autres, reprendre une branche existante, s'écrire dans une grande fenêtre (`Ctrl+Entrée` pour l'ajouter), et le pilote auto se met en pause près de la limite de tes quotas. « ▶ Tester » lance la fonctionnalité sur des ports à part, après t'avoir montré la recette écrite par l'agent ; la validation commite, merge, ouvre une pull request ou pousse.
-- **Intégrations** : importe tes tickets Jira, Trello, GitHub Issues ou Linear dans le Kanban, avec leurs critères ; leur statut et des commentaires suivent, et une synchro ratée est retentée. Les jetons restent dans le trousseau du système.
+- **Intégrations** : importe tes tickets Jira, Trello, GitHub Issues, Linear ou ClickUp dans le Kanban, avec leurs critères ; leur statut et des commentaires suivent, et une synchro ratée est retentée. Les jetons restent dans le trousseau du système.
 - **Images et fichiers des tickets** : une capture ou une maquette se colle (`Ctrl+V`) ou se glisse dans la fenêtre d'un ticket, et « Joindre un fichier » y ajoute n'importe quel fichier (20 au plus) ; l'agent du ticket les reçoit avec son premier message, et la carte du Kanban montre un trombone et leur nombre.
 
 ### Coder
@@ -56,7 +56,7 @@ Ce qui change d'une version à l'autre est dans le [journal des versions](CHANGE
 
 ### Et aussi
 
-- **Français et anglais** : l'interface existe dans les deux langues, celle du système par défaut, au choix dans Réglages › Application, sans redémarrer ; nombres, montants, dates et pluriels suivent la langue. Une langue à part pour les textes que Claude rédige (messages de commit, descriptions de pull request, commentaires publiés dans Jira, Trello, GitHub et Linear, consignes aux agents), car beaucoup d'équipes commitent en anglais avec une interface en français. Le site existe aussi en deux langues.
+- **Français et anglais** : l'interface existe dans les deux langues, celle du système par défaut, au choix dans Réglages › Application, sans redémarrer ; nombres, montants, dates et pluriels suivent la langue. Une langue à part pour les textes que Claude rédige (messages de commit, descriptions de pull request, commentaires publiés dans Jira, Trello, GitHub, Linear et ClickUp, consignes aux agents), car beaucoup d'équipes commitent en anglais avec une interface en français. Le site existe aussi en deux langues.
 - **Affichage** : « Zoom de l'interface » de 80 à 200 % (`Ctrl+=`, `Ctrl+-`, `Ctrl+0`), sans redémarrer, et la taille du texte des terminaux et de l'éditeur à part.
 - **Fermer un projet garde son historique** : l'ajouter de nouveau dans le même dossier retrouve ses agents, leurs conversations, ses tickets et ses réglages ; Réglages › Projets › « Projets fermés » les liste, pour les rouvrir ou les effacer.
 - **Fermer la fenêtre ne coupe pas les agents** : l'app reste dans la zone de notification. Au redémarrage, chaque agent reprend sa session. Les processus inactifs sont arrêtés après un délai réglable et reprennent automatiquement à la prochaine action.
@@ -93,7 +93,7 @@ Une version plus ancienne que celle testée est refusée, avec la commande qui l
 
 **macOS** : télécharge le `.dmg` (universel, Apple Silicon et Intel) de la [dernière release](https://github.com/guillaume-gagnaire/escouade/releases/latest), ouvre-le et glisse Escouade dans Applications. Depuis la 1.5.4, l'app est signée avec un certificat Apple Developer ID et notarisée par Apple : macOS l'ouvre sans demander d'autorisation.
 
-**Linux** : télécharge l'`AppImage` de la [dernière release](https://github.com/guillaume-gagnaire/escouade/releases/latest), rends-la exécutable (`chmod +x Escouade_*.AppImage`) et lance-la ; c'est elle que la mise à jour intégrée remplace. Le `.deb` (Debian, Ubuntu) s'installe avec `sudo apt install ./Escouade_*_amd64.deb`. Sous Linux, les jetons des intégrations (Jira, Trello, GitHub, Linear) restent dans `~/.escouade/integrations.json` plutôt que dans un trousseau.
+**Linux** : télécharge l'`AppImage` de la [dernière release](https://github.com/guillaume-gagnaire/escouade/releases/latest), rends-la exécutable (`chmod +x Escouade_*.AppImage`) et lance-la ; c'est elle que la mise à jour intégrée remplace. Le `.deb` (Debian, Ubuntu) s'installe avec `sudo apt install ./Escouade_*_amd64.deb`. Sous Linux, les jetons des intégrations (Jira, Trello, GitHub, Linear, ClickUp) restent dans `~/.escouade/integrations.json` plutôt que dans un trousseau.
 
 Les versions suivantes s'installent depuis l'application. Jusqu'à la 1.5.4, la barre de statut propose « Mise à jour disponible » ; à partir de la 1.6, la mise à jour se télécharge seule, la barre de statut affiche « Mise à jour X prête · Redémarrer », et l'app redémarre d'elle-même quand elle est au repos (réglage « Installer les mises à jour automatiquement », dans « À propos »).
 
@@ -105,8 +105,8 @@ Tout est stocké dans `~/.escouade/` (anciennement `~/.claude-code-manager/`, d�
 |---|---|
 | `settings.json` | réglages |
 | `state.json` | projets, agents, état de l'interface |
-| `integrations.json` | comptes Jira, Trello, GitHub et Linear, sans leurs jetons (dans le trousseau du système) |
-| `sync-queue.json` | synchros avec Jira, Trello, GitHub ou Linear qui attendent d'être retentées |
+| `integrations.json` | comptes Jira, Trello, GitHub, Linear et ClickUp, sans leurs jetons (dans le trousseau du système) |
+| `sync-queue.json` | synchros avec Jira, Trello, GitHub, Linear ou ClickUp qui attendent d'être retentées |
 | `conversations/<agent>.jsonl` | journal de chaque conversation |
 | `tickets/<ticket>/` | images collées dans la fenêtre d'un ticket ou jointes par le serveur MCP, effacées avec lui |
 | `claude/<compte>/` | dossier de configuration de Claude Code de chaque compte ajouté (sa connexion, ses conversations) |

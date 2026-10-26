@@ -47,7 +47,7 @@
               "type": "string"
             },
             "source": {
-              "enum": ["jira", "trello", "github", "linear"],
+              "enum": ["jira", "trello", "github", "linear", "clickup"],
               "type": "string"
             },
             "url": {

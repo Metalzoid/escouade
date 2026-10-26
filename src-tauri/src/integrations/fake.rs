@@ -23,12 +23,12 @@ impl Request {
         self.target.split('?').next().unwrap_or("")
     }
 
-    /// A query parameter, decoded.
+    /// A query parameter, decoded (its name too: `assignees[]` is sent `assignees%5B%5D`).
     pub fn query(&self, name: &str) -> Option<String> {
         let q = self.target.split_once('?')?.1;
         q.split('&').find_map(|kv| {
             let (k, v) = kv.split_once('=').unwrap_or((kv, ""));
-            (k == name).then(|| decode(v))
+            (decode(k) == name).then(|| decode(v))
         })
     }
 
