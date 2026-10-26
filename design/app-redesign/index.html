@@ -7395,6 +7395,910 @@
         align-items: center;
         gap: 8px;
       }
+      /*
+       * ---------- The loops of a project (ESC-191): the workflow tab beside Git ----------
+       * A vertical rail of steps, fit for a column of 330 px: each step its entry command, its subagents, the agents on
+       * it; the back edges drawn in the gutter. Then the agents in the workflow, then one agent's history.
+       */
+      .wf {
+        overflow: auto;
+        scrollbar-width: thin;
+      }
+      .wf > * {
+        flex: none;
+      }
+      .wf-top {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 14px 4px;
+      }
+      .wf-top .select {
+        min-width: 0;
+      }
+      .wf-top .select b {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .wf-top .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .wf-cap {
+        padding: 0 14px 10px;
+      }
+      .wf-gates {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 5px;
+        padding: 0 14px 12px;
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .wf-gates .lbl {
+        margin-right: 2px;
+      }
+      .gate {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        max-width: 100%;
+        height: 20px;
+        padding: 0 6px;
+        overflow: hidden;
+        border-radius: 5px;
+        background: rgba(var(--fg-rgb), 0.05);
+        box-shadow: inset 0 0 0 1px var(--line);
+        color: var(--soft);
+        font: 500 11px var(--mono);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .gate.more {
+        font-family: var(--font);
+        color: var(--muted);
+      }
+      .wf-graph {
+        position: relative;
+        display: grid;
+        margin: 0 8px;
+        padding: 2px 0 6px;
+      }
+      .wf-edges {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+        pointer-events: none;
+      }
+      .wf-edges path {
+        fill: none;
+        stroke: var(--line-3);
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .wf-edges path.outer {
+        stroke-dasharray: 3 4;
+      }
+      .wf-step {
+        position: relative;
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr) auto;
+        align-items: start;
+        padding: 8px 8px 9px 0;
+        border-radius: 9px;
+      }
+      /* The line between two steps, under the nodes: down from each node to the next one. */
+      .wf-step + .wf-step::before,
+      .wf-step:has(+ .wf-step)::after {
+        content: '';
+        position: absolute;
+        left: 29.25px;
+        border-left: 1.5px solid var(--line-2);
+      }
+      .wf-step + .wf-step::before {
+        top: 0;
+        height: 11px;
+      }
+      .wf-step:has(+ .wf-step)::after {
+        top: 23px;
+        bottom: 0;
+      }
+      .wf-step.here {
+        background: rgba(var(--fg-rgb), 0.045);
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .wf-node {
+        position: relative;
+        z-index: 1;
+        width: 12px;
+        height: 12px;
+        margin: 3px 0 0 24px;
+        border-radius: 50%;
+        background: var(--panel);
+        box-shadow: inset 0 0 0 1.5px var(--line-3);
+      }
+      .wf-step.busy .wf-node {
+        box-shadow: inset 0 0 0 1.5px var(--run);
+      }
+      .wf-step.here .wf-node {
+        background: var(--run);
+        box-shadow:
+          0 0 0 3px oklch(from var(--run) l c h / 0.18),
+          inset 0 0 0 1.5px var(--run);
+      }
+      .wf-step.guess .wf-node {
+        background: var(--panel);
+        box-shadow: none;
+        outline: 1.5px dashed var(--line-3);
+        outline-offset: -1.5px;
+      }
+      .wf-step.guess .wf-name {
+        color: var(--muted);
+      }
+      .wf-main {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+      }
+      .wf-line {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .wf-name {
+        color: var(--text);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .wf-line .gate {
+        min-width: 0;
+      }
+      .wf-detail {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 3px 6px;
+        color: var(--muted);
+        font-size: 11.5px;
+        line-height: 1.4;
+      }
+      .wf-detail .sa {
+        color: var(--soft);
+        font: 500 11px var(--mono);
+      }
+      .wf-detail svg {
+        width: 12px;
+        height: 12px;
+        color: var(--dim);
+      }
+      .wf-detail .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--soft);
+      }
+      .wf-detail .fl {
+        color: var(--soft);
+        font: 500 11px var(--mono);
+      }
+      .wf-who {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 4px;
+        padding-left: 8px;
+      }
+      .who {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        max-width: 140px;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 11px;
+        background: rgba(var(--fg-rgb), 0.05);
+        box-shadow: inset 0 0 0 1px var(--line);
+        color: var(--soft);
+        font-size: 11.5px;
+        font-weight: 550;
+      }
+      .who i {
+        flex: none;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--run);
+      }
+      .who span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .who[aria-current='true'] {
+        background: oklch(from var(--run) l c h / 0.1);
+        box-shadow: inset 0 0 0 1px oklch(from var(--run) l c h / 0.4);
+        color: var(--text);
+      }
+      .who.off i {
+        background: var(--idle);
+      }
+      .who.wait i {
+        background: transparent;
+        box-shadow: inset 0 0 0 1.5px var(--wait);
+      }
+      .wf-end {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr);
+        align-items: center;
+        padding: 6px 8px 2px 0;
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .wf-end svg {
+        width: 12px;
+        height: 12px;
+        margin-left: 24px;
+        color: var(--dim);
+      }
+      .wf-end .mono {
+        color: var(--soft);
+        font-size: 11px;
+      }
+      /* Folded: one line a step, its agents beside it. */
+      .wf-graph.folded .wf-detail,
+      .wf-graph.folded .wf-line .gate {
+        display: none;
+      }
+      .wf-graph.folded .wf-step {
+        align-items: center;
+        padding-block: 4px;
+      }
+      .wf-graph.folded .wf-node {
+        margin-top: 0;
+      }
+      .wf-graph.folded .wf-who {
+        flex-direction: row;
+      }
+      .wf-graph.folded .who {
+        max-width: 116px;
+      }
+      .wf-graph.folded .wf-step + .wf-step::before {
+        height: calc(50% - 6px);
+      }
+      .wf-graph.folded .wf-step:has(+ .wf-step)::after {
+        top: calc(50% + 6px);
+      }
+      .wf-h {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-top: 8px;
+        padding: 14px 14px 6px;
+        border-top: 1px solid var(--line);
+        color: var(--soft);
+        font-size: 12px;
+        font-weight: 550;
+      }
+      .wf-h {
+        flex-wrap: wrap;
+        row-gap: 2px;
+      }
+      .wf-h .n {
+        overflow: hidden;
+        color: var(--muted);
+        font-weight: 500;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .wf-h .grow {
+        flex: 1;
+      }
+      .wf-h .link {
+        color: var(--p-ink);
+        font-size: 12px;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      .wf-list {
+        display: grid;
+        gap: 1px;
+        padding: 0 8px;
+      }
+      .wf-ag {
+        display: grid;
+        grid-template-columns: 8px minmax(0, 1fr) auto;
+        align-items: center;
+        column-gap: 10px;
+        row-gap: 2px;
+        width: 100%;
+        padding: 7px 8px;
+        border-radius: 8px;
+        text-align: left;
+      }
+      .wf-ag:hover {
+        background: var(--hover);
+      }
+      .wf-ag[aria-current='true'] {
+        background: rgba(var(--fg-rgb), 0.06);
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .wf-ag > i {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--run);
+      }
+      .wf-ag.off > i {
+        background: var(--idle);
+      }
+      .wf-ag.wait > i {
+        background: transparent;
+        box-shadow: inset 0 0 0 1.5px var(--wait);
+      }
+      .wf-ag .nm {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        color: var(--text);
+        font-size: 12.5px;
+        font-weight: 550;
+      }
+      .wf-ag .nm > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .wf-ag .nm .ticket-chip,
+      .wf-ag .nm .emark,
+      .wf-ag .nm .smark {
+        flex: none;
+      }
+      .wf-ag .nums {
+        color: var(--muted);
+        font-size: 11.5px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .wf-ag .where {
+        display: flex;
+        grid-column: 2 / -1;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .wf-ag .where .t {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .wf-ag .where b {
+        color: var(--soft);
+        font-weight: 550;
+      }
+      .wf-ag .where .mono {
+        font-size: 11px;
+      }
+      .wf-ag.off .nm {
+        color: var(--muted);
+      }
+      .wf-ag .wf-partial {
+        grid-column: 2 / -1;
+      }
+      .pips {
+        display: inline-flex;
+        flex: none;
+        gap: 2px;
+      }
+      .pips i {
+        width: 10px;
+        height: 3px;
+        border-radius: 2px;
+        background: rgba(var(--fg-rgb), 0.12);
+      }
+      .pips i.done {
+        background: rgba(var(--fg-rgb), 0.42);
+      }
+      .pips i.on {
+        background: var(--run);
+      }
+      /* One agent's history: a strip in time, then the steps. */
+      .wf-strip {
+        display: flex;
+        gap: 2px;
+        height: 8px;
+        margin: 2px 16px 10px;
+      }
+      .wf-strip i {
+        min-width: 3px;
+        border-radius: 2px;
+        background: rgba(var(--fg-rgb), var(--a, 0.2));
+      }
+      .wf-strip i.s1 {
+        --a: 0.14;
+      }
+      .wf-strip i.s2 {
+        --a: 0.24;
+      }
+      .wf-strip i.s3 {
+        --a: 0.36;
+      }
+      .wf-strip i.s4 {
+        --a: 0.5;
+      }
+      .wf-strip i.bad {
+        background: oklch(from var(--del) l c h / 0.75);
+      }
+      .wf-strip i.on {
+        background: var(--run);
+      }
+      .wf-hist {
+        display: grid;
+        padding: 0 8px 14px;
+      }
+      .ev {
+        position: relative;
+        display: grid;
+        grid-template-columns: 40px 14px minmax(0, 1fr) auto;
+        align-items: start;
+        column-gap: 8px;
+        padding: 6px 8px;
+        border-radius: 7px;
+        font-size: 12px;
+      }
+      .ev + .ev::before {
+        content: '';
+        position: absolute;
+        top: -7px;
+        left: 62.25px;
+        height: 14px;
+        border-left: 1.5px solid var(--line);
+      }
+      .ev .at {
+        color: var(--dim);
+        font-size: 11.5px;
+        font-variant-numeric: tabular-nums;
+      }
+      .ev .dot {
+        width: 8px;
+        height: 8px;
+        margin: 4px 0 0 3px;
+        border-radius: 50%;
+        background: rgba(var(--fg-rgb), 0.42);
+      }
+      .ev.on .dot {
+        background: var(--run);
+        box-shadow: 0 0 0 3px oklch(from var(--run) l c h / 0.18);
+      }
+      .ev.bad .dot {
+        background: var(--del);
+      }
+      .ev > svg {
+        margin-top: 1px;
+        color: var(--muted);
+      }
+      .ev .what {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+      }
+      .ev .what b {
+        color: var(--text);
+        font-weight: 550;
+      }
+      .ev .what span {
+        color: var(--muted);
+        font-size: 11.5px;
+        line-height: 1.4;
+      }
+      .ev .what .mono {
+        font-size: 11px;
+      }
+      .ev .num {
+        color: var(--muted);
+        font-size: 11.5px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .ev.on {
+        background: oklch(from var(--run) l c h / 0.06);
+      }
+      .ev.on .num {
+        color: var(--run);
+      }
+      .ev.bad .what b {
+        color: var(--del);
+      }
+      .ev.back {
+        background: rgba(var(--fg-rgb), 0.03);
+      }
+      .ev.back .what b {
+        color: var(--soft);
+      }
+      .wf-band {
+        display: grid;
+        grid-template-columns: 14px minmax(0, 1fr);
+        align-items: start;
+        gap: 8px;
+        margin: 2px 14px 10px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: var(--wait-bg);
+        box-shadow: inset 0 0 0 1px var(--wait-line);
+        color: var(--soft);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .wf-band > svg {
+        margin-top: 1px;
+        color: var(--wait);
+      }
+      .wf-band .link {
+        color: var(--p-ink);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .wf-band.info {
+        background: rgba(var(--fg-rgb), 0.035);
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .wf-band.info > svg {
+        color: var(--muted);
+      }
+      .wf-band .mono {
+        font-size: 11px;
+      }
+      .wf-partial {
+        display: grid;
+        grid-template-columns: 12px minmax(0, 1fr);
+        gap: 6px;
+        margin-top: 4px;
+        padding: 6px 8px;
+        border-radius: 7px;
+        background: rgba(var(--fg-rgb), 0.035);
+        color: var(--muted);
+        font-size: 11.5px;
+        line-height: 1.4;
+      }
+      .wf-partial svg {
+        width: 12px;
+        height: 12px;
+        margin-top: 2px;
+      }
+      /* A loop of one prompt (Ralph): its turns, and the checklist it ticks. */
+      .wf-ring {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: 14px;
+        margin: 4px 14px 10px;
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: rgba(var(--fg-rgb), 0.035);
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .wf-ring svg.ring {
+        width: 58px;
+        height: 58px;
+      }
+      .wf-ring .ring circle {
+        fill: none;
+        stroke-width: 4;
+      }
+      .wf-ring .ring .bg {
+        stroke: rgba(var(--fg-rgb), 0.08);
+      }
+      .wf-ring .ring .fg {
+        stroke: var(--p-ink);
+        stroke-linecap: round;
+      }
+      .wf-ring .ring text {
+        fill: var(--text);
+        font: 600 13px var(--font);
+        font-variant-numeric: tabular-nums;
+      }
+      .wf-ring .ring .sub {
+        fill: var(--muted);
+        font-size: 9.5px;
+        font-weight: 500;
+      }
+      .wf-ring .txt {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .wf-ring .txt b {
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .wf-ring .txt .mono {
+        color: var(--soft);
+        font-size: 11px;
+      }
+      .wf-turns {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(26px, 1fr));
+        gap: 3px;
+        margin: 0 14px 4px;
+      }
+      .wf-turns i {
+        height: 18px;
+        border-radius: 4px;
+        background: rgba(var(--fg-rgb), 0.1);
+        color: var(--muted);
+        font: 500 10.5px/18px var(--font);
+        font-style: normal;
+        font-variant-numeric: tabular-nums;
+        text-align: center;
+      }
+      .wf-turns i.ok {
+        background: rgba(var(--fg-rgb), 0.16);
+        color: var(--soft);
+      }
+      .wf-turns i.bad {
+        background: oklch(from var(--del) l c h / 0.16);
+        color: var(--del);
+      }
+      .wf-turns i.on {
+        background: oklch(from var(--run) l c h / 0.16);
+        box-shadow: inset 0 0 0 1px var(--run);
+        color: var(--text);
+      }
+      .wf-turns i.todo {
+        background: transparent;
+        box-shadow: inset 0 0 0 1px var(--line);
+        color: var(--dim);
+      }
+      .wf-empty {
+        display: grid;
+        justify-items: start;
+        gap: 10px;
+        max-width: 440px;
+        margin: 22px 18px;
+      }
+      .wf-empty .ic {
+        display: grid;
+        place-items: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: rgba(var(--fg-rgb), 0.05);
+        box-shadow: inset 0 0 0 1px var(--line);
+        color: var(--muted);
+      }
+      .wf-empty h3 {
+        margin: 4px 0 0;
+        color: var(--text);
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .wf-empty p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12.5px;
+        line-height: 1.5;
+      }
+      .wf-empty p .mono {
+        color: var(--soft);
+        font-size: 11px;
+      }
+      .wf-empty .btns {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 4px;
+      }
+      .wf-looked {
+        display: grid;
+        gap: 2px;
+        width: 100%;
+        margin-top: 6px;
+        padding: 8px 12px;
+        border-radius: 9px;
+        box-shadow: inset 0 0 0 1px var(--line);
+        font-size: 12px;
+      }
+      .wf-looked div {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        padding: 3px 0;
+        color: var(--muted);
+      }
+      .wf-looked div .mono {
+        overflow: hidden;
+        color: var(--soft);
+        font-size: 11px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .wf-looked div span:last-child {
+        font-variant-numeric: tabular-nums;
+      }
+      /* Where the card and the conversation meet the workflow. */
+      .wf-mini {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
+        overflow: hidden;
+        color: var(--soft);
+        white-space: nowrap;
+      }
+      .wf-mini svg {
+        flex: none;
+        width: 12px;
+        height: 12px;
+        color: var(--muted);
+      }
+      .wf-div {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 18px;
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .wf-div::before,
+      .wf-div::after {
+        content: '';
+        flex: 1;
+        border-top: 1px solid var(--line);
+      }
+      .wf-div button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--soft);
+        font-weight: 550;
+      }
+      .wf-div button:hover {
+        color: var(--text);
+      }
+      .wf-div svg {
+        width: 12px;
+        height: 12px;
+        color: var(--muted);
+      }
+      .wf-div .mono {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 500;
+      }
+      /* Réglages › Projets › Workflow. */
+      .wf-src {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 6px;
+      }
+      .wf-src .gate .n {
+        color: var(--muted);
+        font-family: var(--font);
+      }
+      .wf-edit {
+        display: grid;
+        gap: 4px;
+        margin: 4px 0 10px;
+      }
+      .wf-er {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 170px) minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        padding: 5px 6px 5px 10px;
+        border-radius: 9px;
+        box-shadow: inset 0 0 0 1px var(--line);
+        font-size: 12px;
+      }
+      .wf-er .no {
+        color: var(--dim);
+        font-size: 11.5px;
+        font-variant-numeric: tabular-nums;
+      }
+      .wf-er .inp {
+        height: 26px;
+        min-width: 0;
+      }
+      .wf-er .by {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        min-width: 0;
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .wf-er .acts {
+        display: inline-flex;
+        gap: 2px;
+      }
+      .wf-er.guess {
+        background-image: repeating-linear-gradient(135deg, rgba(var(--fg-rgb), 0.03) 0 6px, transparent 6px 12px);
+        box-shadow: inset 0 0 0 1px var(--line-2);
+      }
+      .wf-er.loop {
+        grid-template-columns: 22px minmax(0, 1fr) auto;
+        background: rgba(var(--fg-rgb), 0.03);
+        color: var(--soft);
+      }
+      .wf-er.loop > svg {
+        color: var(--muted);
+      }
+      .rrow .rb.plain,
+      .rrow .rn.plain {
+        font-family: var(--font);
+      }
+      .wf-mini span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .wf-div > * {
+        flex: none;
+        white-space: nowrap;
+      }
+      @container side (max-width: 420px) {
+        .who {
+          max-width: 150px;
+        }
+        /* Narrow: the agents of a step go under it, the tabs draw closer. */
+        .wf-step {
+          grid-template-columns: 44px minmax(0, 1fr);
+        }
+        .wf-who {
+          grid-column: 2;
+          flex-flow: row wrap;
+          justify-content: flex-start;
+          padding: 6px 0 0;
+        }
+        .wf-graph.folded .wf-step {
+          grid-template-columns: 44px auto minmax(0, 1fr);
+        }
+        .wf-graph.folded .wf-who {
+          grid-column: 3;
+          justify-content: flex-end;
+          padding: 0;
+          flex-wrap: nowrap;
+          min-width: 0;
+        }
+        .utabs {
+          gap: 12px;
+          padding: 0 14px;
+        }
+        #tab-loop .n {
+          display: none;
+        }
+        .ev {
+          grid-template-columns: 34px 14px minmax(0, 1fr) auto;
+        }
+        .ev + .ev::before {
+          left: 56.25px;
+        }
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .wf-step.here .wf-node {
+          animation: wf-breathe 2.4s var(--ease) infinite;
+        }
+      }
+      @keyframes wf-breathe {
+        50% {
+          box-shadow:
+            0 0 0 6px oklch(from var(--run) l c h / 0.06),
+            inset 0 0 0 1.5px var(--run);
+        }
+      }
     </style>
   </head>
   <body>
@@ -7452,6 +8356,7 @@
         <symbol id="i-remote" viewBox="0 0 16 16"><circle cx="8" cy="9" r="1.25" /><path d="M5.6 6.6a3.4 3.4 0 0 1 4.8 0M3.7 4.7a6 6 0 0 1 8.6 0M8 10.25v3" /></symbol>
         <symbol id="i-swap" viewBox="0 0 16 16"><path d="M3 5.25h9.5M10 2.75l2.5 2.5L10 7.75M13 10.75H3.5M6 8.25l-2.5 2.5L6 13.25" /></symbol>
         <symbol id="i-sub" viewBox="0 0 16 16"><path d="M4 2.75v5.5c0 1.1.9 2 2 2h6.25M9.75 7.75l2.5 2.5-2.5 2.5" /></symbol>
+        <symbol id="i-flow" viewBox="0 0 16 16"><circle cx="4.5" cy="3.5" r="1.75" /><circle cx="4.5" cy="12.5" r="1.75" /><path d="M4.5 5.25v5.5M6.25 12.5h3.5a2.5 2.5 0 0 0 2.5-2.5V6a2.5 2.5 0 0 0-2.5-2.5h-1.5M9.5 1.75 7.75 3.5l1.75 1.75" /></symbol>
         <symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.75" /><path d="M8 5v3.25l2.25 1.5" /></symbol>
         <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 2.75v7.5M5 7.5l3 3 3-3M3 12.75h10" /></symbol>
         <symbol id="i-pause" viewBox="0 0 16 16"><path d="M5.75 4v8M10.25 4v8" /></symbol>
@@ -11792,6 +12697,249 @@ Chaque PR cite l’autre : à merger ensemble.</div>
         $('#view-welcome .wbox > p').textContent = 'Ajoute un compte : celui déjà connecté sur cette machine, ou un nouveau. Seuls les comptes ajoutés lancent des agents.';
       }
       if (route === 'overage') (($('#sb-over').hidden = false), ($('#q-bill').hidden = false), ($('#q-more').hidden = true));
+
+      // ---------- The loops of a project (ESC-191) ----------
+      // #loops (the workflow tab: GSD, three agents, pagination-users's history), #loops-history (folded, the whole
+      // history), #loops-settings (Réglages › Projets › Workflow), #loops-simple (a loop of one prompt, studio-web),
+      // #loops-empty (infra: nothing found), #loops-edge (a workflow changed, a guessed step, an agent outside, partial follow).
+      const FLOW = '<svg class="i s14"><use href="#i-flow" /></svg>';
+      const gate = (g) => `<span class="gate">${g}</span>`;
+      const who = (name, cls = '', cur = false) => `<span class="who ${cls}"${cur ? ' aria-current="true"' : ''}><i></i><span>${name}</span></span>`;
+      /** A step of the rail: its name, its entry, what it runs, who is on it. */
+      const step = ({ name, g = '', detail = '', whos = '', cls = '' }) =>
+        `<div class="wf-step ${cls}"><i class="wf-node"></i><div class="wf-main"><div class="wf-line"><span class="wf-name">${name}</span>${g ? gate(g) : ''}</div>${detail ? `<div class="wf-detail">${detail}</div>` : ''}</div><div class="wf-who">${whos}</div></div>`;
+      const sa = (n) => `<span class="sa">${n}</span>`;
+      const ARROW = '<svg class="i"><use href="#i-right" /></svg>';
+      const BACK = '<svg class="i"><use href="#i-restart" /></svg>';
+      const pips = (states) => `<span class="pips">${states.map((s) => `<i class="${s}"></i>`).join('')}</span>`;
+      /** An agent in the workflow: where it is, how far, what it has cost. */
+      const wfAgent = ({ name, cls = '', cur = false, chips = '', where, p, nums, extra = '' }) =>
+        `<button class="wf-ag ${cls}"${cur ? ' aria-current="true"' : ''}><i></i><span class="nm"><span>${name}</span>${chips}</span><span class="nums">${nums}</span><span class="where">${p ? pips(p) : ''}<span class="t">${where}</span></span>${extra}</button>`;
+      const ev = ({ at, cls = '', what, sub = '', num = '', icon = '' }) =>
+        `<div class="ev ${cls}"><span class="at">${at}</span>${icon || '<i class="dot"></i>'}<span class="what"><b>${what}</b>${sub ? `<span>${sub}</span>` : ''}</span><span class="num">${num}</span></div>`;
+
+      const GSD_TOP = (fold = false) => `
+        <div class="wf-top">
+          <button class="select" aria-haspopup="menu" aria-label="Workflow">${FLOW}<b>GSD</b><svg class="i s14"><use href="#i-down" /></svg></button>
+          <span class="grow"></span>
+          <button class="icon-btn" aria-label="${fold ? 'Déplier les étapes' : 'Replier les étapes'}" aria-pressed="${fold}"><svg class="i s14" style="transform: rotate(${fold ? 0 : 180}deg)"><use href="#i-down" /></svg></button>
+          <button class="icon-btn" aria-label="Réglages du workflow"><svg class="i s14"><use href="#i-sliders" /></svg></button>
+        </div>
+        <div class="caption wf-cap">4 étapes · phase 3 sur 6 d’après <span class="mono">.planning/STATE.md</span> · lu à 10:12</div>`;
+      const GSD_GATES = `<div class="wf-gates"><span class="lbl">Portes d’entrée</span>${gate('/gsd:autonomous')}${gate('/gsd:next')}${gate('/gsd:quick')}<span class="gate more">+38</span></div>`;
+      /** The rail of GSD; `on` is the selected agent's step, `extra` a guessed step after the last. */
+      function gsdGraph({ fold = false, edge = false } = {}) {
+        const pag = who('pagination-users', '', true);
+        return `<div class="wf-graph${fold ? ' folded' : ''}" data-back="3,1" data-outer="1">
+          <svg class="wf-edges" aria-hidden="true"><path class="inner" /><path class="outer" /></svg>
+          ${step({ name: 'Discuter', g: '/gsd:discuss-phase', detail: `écrit ${'<span class="fl">CONTEXT.md</span>'} de la phase` })}
+          ${step({ name: 'Planifier', g: '/gsd:plan-phase', cls: 'busy', detail: `${sa('gsd-phase-researcher')}${ARROW}${sa('gsd-planner')}<svg class="i"><use href="#i-swap" /></svg>${sa('gsd-plan-checker')}<span>jusqu’à 3 tours</span>`, whos: who('dem-5-export-csv-des-factures') })}
+          ${step({ name: 'Exécuter', g: '/gsd:execute-phase', cls: 'busy', detail: `${sa('gsd-executor')}<span>par vagues, en parallèle · un commit par tâche</span>`, whos: who('refacto-auth') + (edge ? who('tests-e2e', 'off') : '') })}
+          ${step({ name: 'Vérifier', g: '/gsd:verify-work', cls: 'busy here', detail: `${sa('gsd-verifier')}<span class="back">${BACK}écarts : retour à Planifier</span>`, whos: pag + (edge ? who('dem-6-limiter-les-tentatives') : '') })}
+          ${edge ? step({ name: 'Livrer ?', g: '/gsd:ship', cls: 'guess', detail: '<span>deviné : nommé par <span class="fl">verify-work.md</span>, jamais vu en cours</span>' }) : ''}
+          <div class="wf-end"><svg class="i"><use href="#i-restart" /></svg><span>Phase finie : <span class="mono">STATE.md</span> passe à la suivante, retour à Discuter</span></div>
+        </div>`;
+      }
+      const GSD_AGENTS = (edge = false) => `
+        <div class="wf-h">Agents dans GSD <span class="n">${edge ? '4 en cours · 1 sorti' : '3 en cours'}</span></div>
+        <div class="wf-list">
+          ${wfAgent({ name: 'pagination-users', cur: true, p: ['done', 'done', 'done', 'on'], where: '<b>Vérifier</b> · <span class="mono">gsd-verifier</span> · 2ᵉ passage', nums: '48m · 3,91 $' })}
+          ${wfAgent({ name: 'refacto-auth', p: ['done', 'done', 'on', ''], where: '<b>Exécuter</b> · 2 <span class="mono">gsd-executor</span> · vague 2 sur 3', nums: '28m · 2,41 $' })}
+          ${wfAgent({ name: 'dem-5-export-csv-des-factures', chips: '<span class="ticket-chip">DEM-5</span>', p: ['done', 'on', '', ''], where: '<b>Planifier</b> · <span class="mono">gsd-plan-checker</span> · tour 2 sur 3 · boucle 1/5 du ticket', nums: '9m · 0,41 $' })}
+          ${
+            edge
+              ? wfAgent({ name: 'dem-6-limiter-les-tentatives', chips: '<span class="emark">Codex</span><span class="smark">Suivi partiel</span>', p: ['done', 'done', 'done', 'on'], where: '<b>Vérifier</b> · d’après <span class="mono">/prompts:verify-work</span>', nums: '31m · ≈ 0,52 $', extra: '<span class="wf-partial"><svg class="i"><use href="#i-info" /></svg><span>Codex : l’étape vient de ses prompts et de <span class="mono">STATE.md</span>. Il n’a pas de sous-agents à suivre, ni de coût par étape.</span></span>' }) +
+                wfAgent({ name: 'tests-e2e', cls: 'off', where: '<b>Hors du workflow</b> depuis 8 min · a quitté Exécuter pour lancer la suite e2e à ta demande', nums: '14m · 0,62 $' })
+              : ''
+          }
+        </div>`;
+      const PAG_HIST = (all = false) => `
+        <div class="wf-h">Historique de pagination-users <span class="n">phase 3 · 48 min · 3,91 $</span><span class="grow"></span>${all ? '' : '<button class="link">Tout voir</button>'}</div>
+        <div class="wf-strip" role="img" aria-label="Le temps passé dans chaque étape">
+          <i class="s1" style="flex: 4"></i><i class="s2" style="flex: 9"></i><i class="s3" style="flex: 21"></i><i class="bad" style="flex: 3"></i><i class="s2" style="flex: 4"></i><i class="s3" style="flex: 6"></i><i class="on" style="flex: 1.4"></i>
+        </div>
+        <div class="wf-hist">
+          ${
+            all
+              ? ev({ at: '10:00', what: 'Discuter', sub: '<span class="mono">/gsd:discuss-phase 3</span> · CONTEXT.md écrit, 4 décisions', num: '4 min · 0,18 $' }) +
+                ev({ at: '10:04', what: 'Planifier', sub: '<span class="mono">gsd-planner</span> ⇄ <span class="mono">gsd-plan-checker</span> en 2 tours · 3 plans en 2 vagues', num: '9 min · 0,74 $' }) +
+                ev({ at: '10:13', what: 'Exécuter', sub: '3 <span class="mono">gsd-executor</span> en 2 vagues · 7 commits', num: '21 min · 1,92 $' })
+              : ''
+          }
+          ${ev({ at: '10:34', cls: 'bad', what: 'Vérifier : 2 écarts', sub: 'le curseur n’est pas validé · aucun test de la dernière page', num: '3 min · 0,22 $' })}
+          ${ev({ at: '10:37', cls: 'back', icon: '<svg class="i s14"><use href="#i-restart" /></svg>', what: 'Retour à Planifier', sub: '<span class="mono">/gsd:plan-phase 3 --gaps</span> · prévu par <span class="mono">verify-work.md</span>' })}
+          ${ev({ at: '10:37', what: 'Planifier', sub: '1 plan de correction', num: '4 min · 0,31 $' })}
+          ${ev({ at: '10:41', what: 'Exécuter', sub: '1 <span class="mono">gsd-executor</span> · 2 commits', num: '6 min · 0,48 $' })}
+          ${ev({ at: '10:47', cls: 'on', what: 'Vérifier', sub: '<span class="mono">gsd-verifier</span> lit <span class="mono">src/routes/users.ts</span>', num: '1m 20s · 0,06 $' })}
+        </div>`;
+
+      /** The workflow tab beside Git, opened on its pane. */
+      function loopPane(html, n = '3') {
+        split(true);
+        $('#side .utabs [data-side="history"]').insertAdjacentHTML('afterend', `<button role="tab" aria-selected="false" data-side="loop" id="tab-loop">Workflow${n ? ` <span class="n">${n}</span>` : ''}</button>`);
+        $('#side').insertAdjacentHTML('beforeend', `<div class="side-pane wf" id="side-loop">${html}</div>`);
+        $$('.utabs [data-side]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.side === 'loop')));
+        $$('#side .side-pane').forEach((p) => (p.hidden = p.id !== 'side-loop'));
+        wfEdges();
+      }
+      /** The back edges, drawn in the gutter from the nodes' real places: inner (a step back), outer (dashed, the next round). */
+      function wfEdges() {
+        for (const g of $$('.wf-graph')) {
+          const gr = g.getBoundingClientRect();
+          const mid = (el) => {
+            const r = el.getBoundingClientRect();
+            return r.top + r.height / 2 - gr.top;
+          };
+          const nodes = [...g.querySelectorAll('.wf-step .wf-node')];
+          const arc = (y1, y2, x) => `M23 ${y1} H${x + 6} Q${x} ${y1} ${x} ${y1 - 6} V${y2 + 6} Q${x} ${y2} ${x + 6} ${y2} H22 M19 ${y2 - 3} L22 ${y2} L19 ${y2 + 3}`;
+          if (g.dataset.back) {
+            const [from, to] = g.dataset.back.split(',').map(Number);
+            g.querySelector('path.inner').setAttribute('d', arc(mid(nodes[from]), mid(nodes[to]), 13));
+          }
+          const end = g.querySelector('.wf-end svg');
+          if (g.dataset.outer && end) g.querySelector('path.outer').setAttribute('d', arc(mid(end), mid(nodes[0]), 5));
+        }
+      }
+      /** The agents' cards and the conversation, where they meet the workflow. */
+      function loopsCards() {
+        const pag = $('#ag-pag');
+        pag.querySelector('.a-meta').insertAdjacentHTML('beforeend', `<span class="sep">·</span><span class="wf-mini">${FLOW}<span>GSD · Vérifier</span></span>`);
+        pag.querySelector('.a-meta .num').textContent = '48m';
+        pag.querySelector('.a-act').innerHTML = '<b>Read</b><span class="tgt mono">src/routes/users.ts</span><span class="spend">212 k · 3,91 $</span>';
+        const ref = $('#ag-refacto .plan-mini');
+        ref.outerHTML = `<span class="wf-mini">${FLOW}<span>GSD · Exécuter</span></span>`;
+        $('#plan').hidden = true;
+        $('#th-main').insertAdjacentHTML('afterbegin', `<div class="wf-div"><button>${FLOW}GSD · Vérifier</button><span class="mono">/gsd:verify-work 3</span><span>10:47</span></div>`);
+        $('#th-main .msg-user').innerHTML = '<span class="mono">/gsd:verify-work 3</span>';
+      }
+      if (route === 'loops') (loopsCards(), loopPane(GSD_TOP() + GSD_GATES + gsdGraph() + GSD_AGENTS() + PAG_HIST()));
+      if (route === 'loops-history') (loopsCards(), loopPane(GSD_TOP(true) + gsdGraph({ fold: true }) + PAG_HIST(true)));
+      if (route === 'loops-edge') {
+        loopsCards();
+        loopPane(
+          GSD_TOP() +
+            '<div class="wf-band info"><svg class="i s14"><use href="#i-info" /></svg><span>Le workflow a changé à 11:02 (<span class="mono">plan-phase.md</span>). refacto-auth garde la version de 10:12 jusqu’à la fin de son étape ; les autres prennent la nouvelle. <button class="link">Revoir les étapes</button></span></div>' +
+            gsdGraph({ edge: true }) +
+            GSD_AGENTS(true),
+          '4',
+        );
+      }
+
+      // A loop of one prompt (Ralph), in studio-web: the turns, the checklist it ticks, the steps of one turn.
+      if (route === 'loops-simple') {
+        $('.tile[data-hue="300"]').click();
+        $$('.agents .agent').forEach((a) => a.removeAttribute('aria-current'));
+        $('#ag-pag .a-name').textContent = 'ralph-studio';
+        $('#h-name').textContent = 'ralph-studio';
+        $('#c-text').placeholder = 'Envoyer un message à ralph-studio…';
+        $('#ag-pag').setAttribute('aria-current', 'true');
+        $('#ag-pag .a-meta').innerHTML = `<span class="emark">Claude</span><span>Sonnet 5.5</span><span class="sep">·</span><span class="num">1h 52m</span><span class="sep">·</span><span class="wf-mini">${FLOW}<span>Tour 7 · Tester</span></span>`;
+        $('#ag-pag .a-act').innerHTML = '<b>Bash</b><span class="tgt mono">npm test</span><span class="spend">402 k · 4,10 $</span>';
+        $('#plan').hidden = true;
+        $('#th-main').insertAdjacentHTML('afterbegin', `<div class="wf-div"><button>${FLOW}Tour 7</button><span class="mono">PROMPT.md</span><span>12:20</span></div>`);
+        $('#th-main .msg-user').innerHTML = 'Relis <span class="mono">PROMPT.md</span> et fais la prochaine tâche de <span class="mono">fix_plan.md</span>.';
+        const turns = ['ok', 'ok', 'bad', 'ok', 'bad', 'ok', 'on'].map((c, i) => `<i class="${c}">${i + 1}</i>`).join('') + Array.from({ length: 11 }, (_, i) => `<i class="todo">${i + 8}</i>`).join('');
+        loopPane(
+          `<div class="wf-top">
+            <button class="select" aria-haspopup="menu" aria-label="Workflow">${FLOW}<b>Boucle PROMPT.md</b><svg class="i s14"><use href="#i-down" /></svg></button>
+            <span class="grow"></span>
+            <button class="icon-btn" aria-label="Réglages du workflow"><svg class="i s14"><use href="#i-sliders" /></svg></button>
+          </div>
+          <div class="caption wf-cap">Un prompt relancé à chaque tour · lu à 09:30</div>
+          <div class="wf-gates"><span class="lbl">Portes d’entrée</span>${gate('PROMPT.md')}${gate('/loop')}</div>
+          <div class="wf-ring">
+            <svg class="ring" viewBox="0 0 58 58" role="img" aria-label="12 cases cochées sur 20"><circle class="bg" cx="29" cy="29" r="25" /><circle class="fg" cx="29" cy="29" r="25" stroke-dasharray="94.2 157" transform="rotate(-90 29 29)" /><text x="29" y="30" text-anchor="middle">12/20</text><text class="sub" x="29" y="42" text-anchor="middle">cochées</text></svg>
+            <div class="txt"><b>Tour 7 · en cours</b><span>Chaque tour relit <span class="mono">PROMPT.md</span>, prend la première case vide de <span class="mono">fix_plan.md</span>, la fait, lance les tests, la coche et commite.</span><span>Sortie : plus de case vide, ou 18 tours.</span></div>
+          </div>
+          <div class="wf-turns" role="img" aria-label="Tours 1 à 7 faits ou en cours, 8 à 18 à venir">${turns}</div>
+          <div class="caption wf-cap" style="padding-top: 6px">Un tour, d’après les étapes de <span class="mono">PROMPT.md</span></div>
+          <div class="wf-graph" data-back="2,1">
+            <svg class="wf-edges" aria-hidden="true"><path class="inner" /><path class="outer" /></svg>
+            ${step({ name: 'Choisir', detail: `lit ${'<span class="fl">fix_plan.md</span>'}, prend la première case vide` })}
+            ${step({ name: 'Faire', detail: '<span>« Export PNG du tableau de bord »</span>' })}
+            ${step({ name: 'Tester', g: 'npm test', cls: 'busy here', detail: `<span class="back">${BACK}rouge : retour à Faire</span>`, whos: who('ralph-studio', '', true) })}
+            ${step({ name: 'Cocher et commiter', detail: `coche ${'<span class="fl">fix_plan.md</span>'}, un commit` })}
+          </div>
+          <div class="wf-h">Historique de ralph-studio <span class="n">7 tours · 1h 52m · 4,10 $</span></div>
+          <div class="wf-hist">
+            ${ev({ at: '12:20', cls: 'on', what: 'Tour 7 · Tester', sub: '« Export PNG du tableau de bord » · <span class="mono">npm test</span> tourne', num: '6 min · 0,21 $' })}
+            ${ev({ at: '12:03', what: 'Tour 6 · coché', sub: '« Mode sombre du header » · tests verts · 1 commit', num: '17 min · 0,58 $' })}
+            ${ev({ at: '11:41', cls: 'bad', what: 'Tour 5 · non coché', sub: 'tests rouges 3 fois de suite · la case reste pour le tour suivant', num: '22 min · 0,93 $' })}
+            ${ev({ at: '11:25', what: 'Tour 4 · coché', sub: '« Pagination des projets » · 1 commit', num: '16 min · 0,61 $' })}
+          </div>`,
+          '1',
+        );
+      }
+
+      // Nothing found (infra): what was looked for, and the two ways out.
+      if (route === 'loops-empty') {
+        $('.tile[data-hue="150"]').click();
+        loopPane(
+          `<div class="wf-empty">
+            <span class="ic">${FLOW}</span>
+            <h3>Pas de workflow dans infra</h3>
+            <p>Rien ne s’y enchaîne : ni commande qui appelle des sous-agents, ni boucle de prompt, ni fichier d’état. Les agents d’infra travaillent en conversation libre, et c’est très bien.</p>
+            <div class="wf-looked">
+              <div><span class="mono">.claude/commands, skills, agents</span><span>aucun</span></div>
+              <div><span class="mono">.codex/prompts, .cursor/commands, .opencode</span><span>aucun</span></div>
+              <div><span class="mono">PROMPT.md, .planning/, STATE.md</span><span>absents</span></div>
+              <div><span class="mono">CLAUDE.md, AGENTS.md</span><span>des consignes, pas d’étapes</span></div>
+              <div><span class="mono">~/.claude/commands/gsd</span><span>jamais lancé ici</span></div>
+            </div>
+            <div class="btns"><button class="btn">Décrire un workflow…</button><button class="btn"><svg class="i s14"><use href="#i-sparkle" /></svg>Analyser avec un agent…</button></div>
+            <p>La boucle des tickets du Kanban s’affiche ici dès qu’un ticket d’infra tourne.</p>
+          </div>`,
+          '',
+        );
+      }
+
+      // Réglages › Projets › Workflow: what was read, refined by an agent, corrected by hand, shared or not.
+      if (route.startsWith('loops-settings')) {
+        openSettings('projects');
+        const er = (no, name, by, extra = '', cls = '') =>
+          `<div class="wf-er ${cls}"><span class="no">${no}</span><input class="inp" value="${name}" aria-label="Nom de l’étape ${no}" /><span class="by">${by}</span><span class="acts">${extra || `<button class="icon-btn" aria-label="Fusionner l’étape ${no} avec la suivante"><svg class="i s14"><use href="#i-merge" /></svg></button><button class="icon-btn" aria-label="Retirer l’étape ${no}"><svg class="i s14"><use href="#i-trash" /></svg></button>`}</span></div>`;
+        $('#sg-worktrees').insertAdjacentHTML(
+          'beforebegin',
+          `<section class="sg" id="sg-workflow">
+            <h2>Workflow</h2>
+            <div class="sr">
+              <div class="lab"><b>Lu par les règles à 10:12</b><span>Les commandes, skills, sous-agents et prompts des harness, <span class="mono">PROMPT.md</span>, les fichiers d’état et les consignes, avec les fichiers qu’ils incluent par <span class="mono">@</span>. Sur ta machine, sans coût.</span>
+                <span class="wf-src"><span class="gate">.claude/commands/gsd <span class="n">43</span></span><span class="gate">~/.claude/agents/gsd-* <span class="n">16</span></span><span class="gate">~/.claude/get-shit-done/workflows <span class="n">31 par @</span></span><span class="gate">.planning/STATE.md</span><span class="gate">CLAUDE.md</span></span>
+              </div>
+              <div class="ctl"><button class="btn"><svg class="i s14"><use href="#i-restart" /></svg>Relire</button></div>
+            </div>
+            <div class="sr">
+              <div class="lab"><b>Affiner avec un agent</b><span>Un agent court relit ce que les règles ont trouvé et rend les étapes, leurs transitions et les retours en arrière. Une fois, puis quand tu le demandes.</span><span class="smark"><svg class="i"><use href="#i-user" /></svg>Haiku 5.5 · compte Perso · ≈ 0,04 $ · 30 s</span></div>
+              <div class="ctl"><button class="btn"><svg class="i s14"><use href="#i-sparkle" /></svg>Affiner…</button></div>
+            </div>
+            <div class="sr">
+              <div class="lab"><b>Relire quand les fichiers changent</b><span>Quand la fenêtre revient au premier plan. Un agent qui suit le workflow garde sa version jusqu’à la fin de son étape.</span></div>
+              <div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Relire quand les fichiers changent"></button></div>
+            </div>
+            <div class="sub-h" id="sh-wf-found"><b>Trouvés</b><span>Un projet peut en avoir plusieurs ; l’onglet Workflow les propose dans son menu</span></div>
+            <div class="rlist" style="margin: 4px 0 12px">
+              <div class="rrow ok"><svg class="i s14"><use href="#i-flow" /></svg><span class="rn plain">GSD</span><span class="rb plain">4 étapes · 41 portes · 16 sous-agents</span><span class="st">affiné par Haiku</span></div>
+              <div class="rrow"><svg class="i s14"><use href="#i-kanban" /></svg><span class="rn plain">Tickets</span><span class="rb plain">À faire · En cours (boucle n/5) · À tester · Terminé</span><span class="st">Escouade</span></div>
+              <div class="rrow idle"><svg class="i s14"><use href="#i-circle" /></svg><span class="rn">/commit</span><span class="rb plain">une commande seule, sans suite</span><span class="st">pas un workflow</span></div>
+            </div>
+            <div class="sub-h"><b>Étapes</b><span>Celles de GSD : renomme, fusionne, ajoute ce que la lecture a manqué : tes corrections passent devant une nouvelle lecture</span></div>
+            <div class="wf-edit">
+              ${er(1, 'Discuter', gate('/gsd:discuss-phase'))}
+              ${er(2, 'Planifier', gate('/gsd:plan-phase') + gate('gsd-planner') + gate('gsd-plan-checker'))}
+              ${er(3, 'Exécuter', gate('/gsd:execute-phase') + gate('gsd-executor'))}
+              ${er(4, 'Vérifier', gate('/gsd:verify-work') + gate('gsd-verifier'))}
+              ${er(5, 'Livrer', '<span>deviné · ' + gate('/gsd:ship') + '</span>', '<button class="btn" style="height: 26px">Garder</button><button class="btn" style="height: 26px">Retirer</button>', 'guess')}
+              <div class="wf-er loop"><svg class="i s14"><use href="#i-restart" /></svg><span>Vérifier revient à Planifier si le vérificateur trouve des écarts · Planifier ⇄ vérification du plan, jusqu’à 3 tours · la phase finie revient à Discuter</span><button class="link" style="color: var(--p-ink); font-size: 12px">Modifier</button></div>
+            </div>
+            <button class="add-line"><svg class="i s14"><use href="#i-plus" /></svg>Ajouter une étape</button>
+            <div class="sr">
+              <div class="lab"><b>Où garder les corrections</b><span>Dans <span class="mono">.escouade.yml</span>, l’équipe voit les mêmes étapes ; ce qu’Escouade lit elle-même n’y est jamais écrit.</span></div>
+              <div class="ctl"><div class="seg inline" role="radiogroup" aria-label="Où garder les corrections"><button role="radio" aria-selected="true">Sur cette machine</button><button role="radio" aria-selected="false">Dans .escouade.yml</button></div></div>
+            </div>
+          </section>`,
+        );
+        settingsAt('projects', route === 'loops-settings' ? 'sg-workflow' : 'sh-wf-found');
+      }
 
       // The English labels, to check what is tight (the agents' own words stay as they came).
       if (new URLSearchParams(location.search).get('lang') === 'en') english();

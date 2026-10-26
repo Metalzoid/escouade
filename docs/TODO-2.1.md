@@ -184,6 +184,32 @@ L'utilisateur a retenu chaque recommandation :
 | PLG-11. La documentation du site | ESC-183 | PLG-1 à PLG-10 |
 | PLG-12. Les docs internes et l'essai réel | ESC-184 | le reste de la 2.1.0 |
 
+## Les loops d'un projet (demandé le 2026-10-26, avancé en 2.0.x)
+
+« Pour la 2.1, réfléchis à une façon d'afficher les loops dans la colonne de droite : analyser la loop du projet dans les paramètres du projet, pour en extraire les portes d'entrées, les différents agents, etc, montrer dans l'UI le workflow et montrer en temps réel, pour chaque agent, l'avancée, où on est, et l'historique dans cette loop. »
+
+- [x] **La conception** (ESC-191, 2026-10-26) : l'étude dans `docs/LOOPS.md`, l'aperçu (`#loops*` de `design/app-redesign/index.html`, captures `loops*.png`), les choix 131 à 159 d'`UX-NOTES.md`.
+- [x] La validation des choix par l'utilisateur, sur les captures (2026-10-26) : « Ça me va parfaitement, implémente le directement en fait pour la v2.0 ». Construit en 2.0.x, sauf LOOP-8 (les plugins, 2.1).
+- [x] Les tickets, créés le 2026-10-26 : LOOP-1 ESC-192, LOOP-2 ESC-193, LOOP-3 ESC-194, LOOP-4 ESC-195, LOOP-5 ESC-196, LOOP-6 ESC-197, LOOP-7 ESC-198, LOOP-9 ESC-199 ; LOOP-8 ESC-200 pour la 2.1 (après ESC-177).
+
+### Les tickets proposés
+
+Les tickets s'appellent ici LOOP-1, LOOP-2… ; le chef d'escouade leur donne leurs clés. Chacun a ses fixtures (copies figées de GSD, Superpowers, Ralph, d'un projet sans workflow et d'un projet à plusieurs dépôts dans `tests/fixtures/workflows/`) et un faux agent qui joue les faits.
+
+| Plan | Ce qu'il fait | Choix | Modèle conseillé | Dépend de |
+| --- | --- | --- | --- | --- |
+| LOOP-1. La lecture par règles | Le modèle d'un workflow (portes, étapes, sous-agents, transitions, retours, fichiers d'état, sortie), la lecture des dossiers de chaque harness et des `@`, ce qui est un workflow, `~/.claude` compté par trace, plusieurs dépôts, la relecture au premier plan ; gardé dans `~/.escouade/` | 133, 135, 136, 138, 155 | Sonnet medium (back) | — |
+| LOOP-2. Le suivi en temps réel | Les faits de chaque harness mis en regard des étapes, l'historique par agent (heure, durée, coût, issue, retours et leur raison), hors du workflow, version gardée par étape, suivi partiel par harness, la boucle d'un prompt (tours, liste cochée) | 146–151, 153, 154 | Sonnet medium (back) | LOOP-1 |
+| LOOP-3. L'onglet Workflow | Le rail, les arcs, les pastilles, replié, la liste des agents, l'historique, la boucle d'un prompt, l'état vide, les cas limites, 1028 px, les deux thèmes, le français et l'anglais ; e2e | 132, 140–148, 150–154 | Opus medium (interface) | LOOP-2 |
+| LOOP-4. Réglages › Projets › Workflow | La lecture et ses sources, « Relire », la relecture automatique, les workflows trouvés, les étapes corrigées (renommer, fusionner, ajouter, deviné), la clé `workflows` de `.escouade.yml` (schéma, `KEYS`) | 133, 137–139, 152 | Opus medium (interface) | LOOP-1 |
+| LOOP-5. Affiner avec un agent | L'agent court, son schéma JSON validé par les règles, modèle, compte et coût dits avant, la clôture d'un projet privé | 134, 156 | Sonnet medium | LOOP-1, LOOP-4 |
+| LOOP-6. La carte, la conversation et les tickets | L'étape sur la carte, le séparateur dans la conversation, le workflow « Tickets » d'Escouade, un agent de ticket dans deux workflows | 145, 159 | Opus medium (interface) | LOOP-2, LOOP-3 |
+| LOOP-7. MCP et documentation | `get_workflow`, `workflow` dans `list_agents` et `get_agent_summary`, la vue `Sight` des projets privés ; `docs/PROTOCOL.md`, `docs/SPEC.md`, une page du site en deux langues | 156, 157 | Sonnet medium | LOOP-2 |
+| LOOP-8. Les faits et le lecteur de workflow des plugins | Les faits `workflow.*` sur le bus, le point d'extension « lecteur de workflow » | 158 | Sonnet medium | LOOP-2, ESC-177 (PLG-5) |
+| LOOP-9. Essais réels | GSD et Ralph sur Claude Code (chat et vue), un prompt de Codex, OpenCode, Copilot CLI, Cursor CLI (chat et vue) ; les tableaux de `docs/LOOPS.md` corrigés d'après ce qui est vu | 150 | Sonnet medium | LOOP-1 à LOOP-7 |
+
+LOOP-3 et LOOP-4 peuvent avancer en même temps une fois LOOP-1 fait (LOOP-3 sur des faits joués par le faux agent en attendant LOOP-2). LOOP-8 attend le bus de faits des plugins ; s'il n'est pas dans la 2.1.0, il passe à la 2.1.x sans rien retarder.
+
 ## Restes du redesign
 
 Notés par la revue finale (ESC-84, `design/app-redesign/final/REVUE.md`) :
