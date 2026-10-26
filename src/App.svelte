@@ -46,6 +46,7 @@
   import Overview from './components/Overview.svelte';
   import ProjectRail from './components/ProjectRail.svelte';
   import { railWidth } from './lib/rail-width.svelte';
+  import { sideWidth } from './lib/side-width.svelte';
   import RunView from './components/RunView.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import Stats from './components/Stats.svelte';
@@ -139,7 +140,7 @@
 
 <!-- The window (ESC-158): the title bar across it, the projects' rail on the left, the status bar at the bottom; the
      sidebar on the frame and the work on its panel. -->
-<div class="root" style:--rail="{railWidth.shown}px">
+<div class="root" style:--rail="{railWidth.shown}px" style:--side="{sideWidth.shown}px">
   <TitleBar />
   <ProjectRail />
   <div class="body">

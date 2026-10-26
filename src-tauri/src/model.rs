@@ -153,6 +153,9 @@ pub struct Settings {
     /// `RAIL_WIDTH_RANGE`, the same for all projects; 0 is its usual width (52 px, 72 with a
     /// label under a tile), until the edge is dragged.
     pub rail_width: u32,
+    /// The width of the sidebar of the agents and the Kanban, in CSS pixels (ESC-204), its right
+    /// edge dragged: `SIDE_WIDTH_RANGE`, the same for all projects; 0 is its usual width (276 px).
+    pub side_width: u32,
     /// « Projection des quotas »: where each quota would end at the pace used so far (« → 64 % »),
     /// and the day's cost where it would end the day, in the status bar past 80 % or always, or
     /// nowhere (`QuotaProjection`).
@@ -171,6 +174,9 @@ pub struct Settings {
 
 /// The widths the projects' rail is dragged to (ESC-168): its tiles alone, up to a list of names.
 pub const RAIL_WIDTH_RANGE: (u32, u32) = (52, 300);
+
+/// The widths the sidebar of the agents and the Kanban is dragged to (ESC-204).
+pub const SIDE_WIDTH_RANGE: (u32, u32) = (220, 480);
 
 /// « Projection des quotas »: where the status bar writes the projection of each quota (the
 /// panel of the accounts and the tooltips always do, unless `Off`). Read from the switch of
@@ -485,13 +491,18 @@ impl Settings {
 
     /// What the display settings say that they may not (written by hand, or by a later version):
     /// a zoom off the steps is the nearest one, a font size out of range its nearest bound (not a
-    /// number: the default), to the half pixel; the rail's width in its range, 0 (its usual one)
-    /// left as it is.
+    /// number: the default), to the half pixel; the rail's and the sidebar's widths in their
+    /// ranges, 0 (their usual ones) left as it is.
     pub fn normalize_display(&mut self) {
         if self.rail_width != 0 {
             self.rail_width = self
                 .rail_width
                 .clamp(RAIL_WIDTH_RANGE.0, RAIL_WIDTH_RANGE.1);
+        }
+        if self.side_width != 0 {
+            self.side_width = self
+                .side_width
+                .clamp(SIDE_WIDTH_RANGE.0, SIDE_WIDTH_RANGE.1);
         }
         let z = self.ui_zoom;
         self.ui_zoom = *ZOOM_LEVELS
@@ -601,6 +612,7 @@ impl Default for Settings {
             terminal_font_size: DEFAULT_FONT_SIZE,
             editor_font_size: DEFAULT_FONT_SIZE,
             rail_width: 0,
+            side_width: 0,
             quota_projection: QuotaProjection::Alert,
             voice: VoiceSettings::default(),
             user_name: String::new(),
@@ -2848,15 +2860,23 @@ mod tests {
             s.normalize_display();
             assert_eq!(s.rail_width, read);
         }
+        // The sidebar’s (ESC-204): the same.
+        assert_eq!(s.side_width, 0);
+        for (kept, read) in [(0, 0), (10, 220), (320, 320), (900, 480)] {
+            s.side_width = kept;
+            s.normalize_display();
+            assert_eq!(s.side_width, read);
+        }
         s.rail_width = 180;
         let v = serde_json::to_value(&s).unwrap();
         assert_eq!(
             (
                 v["uiZoom"].clone(),
                 v["editorFontSize"].clone(),
-                v["railWidth"].clone()
+                v["railWidth"].clone(),
+                v["sideWidth"].clone()
             ),
-            (json!(80), json!(24.0), json!(180))
+            (json!(80), json!(24.0), json!(180), json!(480))
         );
     }
 

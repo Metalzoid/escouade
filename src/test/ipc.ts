@@ -110,6 +110,7 @@ export const SETTINGS: Settings = {
   terminalFontSize: 12.5,
   editorFontSize: 12.5,
   railWidth: 0,
+  sideWidth: 0,
   voice: {
     device: '',
     model: 'base',

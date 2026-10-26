@@ -824,7 +824,7 @@
         bottom: 0;
         left: 1px;
         width: 3px;
-        background: var(--accent);
+        background: var(--p-ink);
         opacity: 0;
         transition: opacity 0.12s;
       }
@@ -835,6 +835,38 @@
       }
       .r-grip:focus-visible {
         outline: none;
+      }
+      /* ESC-204: the sidebar's right edge, dragged as the rail's (220 to 480 px, held to the room the work keeps); its
+         grip inside the sidebar, its line on the panel's edge. */
+      .sidebar {
+        position: relative;
+        container: sidebar / inline-size;
+      }
+      /* Narrow, « Nouvel agent » stays whole: its shortcut goes, still in its tooltip; on a card, the bars of a plan and
+         of a ticket's loops go, their words stay. */
+      @container sidebar (max-width: 250px) {
+        .new-agent kbd,
+        .sidebar .plan-mini .bar,
+        .sidebar .loops {
+          display: none;
+        }
+      }
+      .s-grip {
+        right: 0;
+      }
+      .s-grip::after {
+        left: auto;
+        right: -1px;
+      }
+      /* The side panel's ×, at the end of its tabs: it closes the panel, as it was opened. */
+      .utabs .side-x {
+        align-self: center;
+        margin-left: auto;
+      }
+      .utabs .side-x:hover,
+      .utabs .side-x.on {
+        background: var(--hover);
+        color: var(--text);
       }
       .tile-set .label-text {
         width: 150px;
@@ -2352,6 +2384,7 @@
       .mini-btn {
         height: 24px;
         padding: 0 8px;
+        white-space: nowrap;
         border-radius: 6px;
         color: var(--muted);
         font-size: 12px;
@@ -7594,7 +7627,7 @@
         gap: 4px;
         padding-left: 8px;
       }
-      .who {
+      .wf .who {
         display: inline-flex;
         align-items: center;
         gap: 6px;
@@ -7608,27 +7641,27 @@
         font-size: 11.5px;
         font-weight: 550;
       }
-      .who i {
+      .wf .who i {
         flex: none;
         width: 6px;
         height: 6px;
         border-radius: 50%;
         background: var(--run);
       }
-      .who span {
+      .wf .who span {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .who[aria-current='true'] {
+      .wf .who[aria-current='true'] {
         background: oklch(from var(--run) l c h / 0.1);
         box-shadow: inset 0 0 0 1px oklch(from var(--run) l c h / 0.4);
         color: var(--text);
       }
-      .who.off i {
+      .wf .who.off i {
         background: var(--idle);
       }
-      .who.wait i {
+      .wf .who.wait i {
         background: transparent;
         box-shadow: inset 0 0 0 1.5px var(--wait);
       }
@@ -8250,7 +8283,7 @@
         white-space: nowrap;
       }
       @container side (max-width: 420px) {
-        .who {
+        .wf .who {
           max-width: 150px;
         }
         /* Narrow: the agents of a step go under it, the tabs draw closer. */
@@ -8273,7 +8306,7 @@
           flex-wrap: nowrap;
           min-width: 0;
         }
-        .utabs {
+        #side:has(#tab-loop) .utabs {
           gap: 12px;
           padding: 0 14px;
         }
@@ -9383,6 +9416,7 @@
               <span class="changes"><span class="mod">~5</span><span class="add">+2</span><span class="del">−0</span></span>
             </div>
           </div>
+          <div class="r-grip s-grip" id="s-grip" role="separator" aria-orientation="vertical" aria-label="Largeur de la barre des agents" aria-valuemin="220" aria-valuemax="480" aria-valuenow="276" tabindex="0"></div>
         </aside>
 
         <!-- Panel -->
@@ -9761,6 +9795,7 @@
                 <button role="tab" aria-selected="true" data-side="files">Non commités <span class="n">3</span></button>
                 <button role="tab" aria-selected="false" data-side="history">Historique</button>
                 <button role="tab" aria-selected="false" data-side="hosts">PR et CI <span class="soon">dans la 2.1</span></button>
+                <button class="icon-btn side-x" id="side-close" aria-label="Fermer le panneau"><svg class="i s14"><use href="#i-close" /></svg></button>
               </div>
 
               <div class="side-pane" id="side-files">
@@ -11869,6 +11904,7 @@ Chaque PR cite l’autre : à merger ensemble.</div>
         ['Libellé sous la tuile', 'Label under the tile'], ['Texte du libellé', 'Label text'],
         ['Le nom du projet, ou un texte plus court (12 caractères au plus). Élargie, la barre le montre à droite de la tuile, allumé ou non.', 'The project’s name, or a shorter text (12 characters at most). Widened, the rail shows it on the tile’s right, on or not.'],
         ['Largeur de la barre des projets', 'Width of the projects’ rail'],
+        ['Largeur de la barre des agents', 'Width of the agents’ sidebar'], ['Fermer le panneau', 'Close the panel'],
         ['Fermer le projet…', 'Close the project…'], ['Son historique est gardé : « + » le rouvre', 'Its history is kept: “+” reopens it'],
         ['Ajouter un projet…', 'Add a project…'], ['Un dossier, un dépôt à cloner ou un projet vide, par l’assistant', 'A folder, a repository to clone or an empty project, through the assistant'],
         ['Projets fermés · leur historique est gardé', 'Closed projects · their history is kept'], ['Fermé le 18 oct. · 23 agents', 'Closed on Oct 18 · 23 agents'],
@@ -12988,6 +13024,77 @@ Chaque PR cite l’autre : à merger ensemble.</div>
         railWidth();
         $('#label-on').setAttribute('aria-checked', 'true');
         settingsAt('projects', 'sr-label');
+      }
+
+      // The sidebar's width and the side panel's × (ESC-204). #side-wide: the sidebar dragged to 400 px (drawn narrower in
+      // a narrow window), its edge lit, the panel side by side, its × hovered with its bubble; #side-narrow: the sidebar
+      // at its narrowest, 220 px. Wherever, the sidebar's edge drags (220 to 480 px, held to the window's width minus the
+      // rail and 672 px), a double click goes back to 276 px; the × closes the panel, the layout's button opens it again.
+      const SIDE = { min: 220, max: 480, usual: 276, work: 672 };
+      const sideRoom = () => Math.max(SIDE.min, Math.min(SIDE.max, innerWidth - railWidth() - SIDE.work));
+      let sideChosen = null;
+      function sideWidth() {
+        const w = Math.max(SIDE.min, Math.min(sideRoom(), sideChosen ?? SIDE.usual));
+        app.style.setProperty('--side', `${w}px`);
+        $('#s-grip').setAttribute('aria-valuenow', String(w));
+        $('#s-grip').setAttribute('aria-valuemax', String(sideRoom()));
+        return w;
+      }
+      sideWidth();
+      addEventListener('resize', sideWidth);
+      {
+        const grip = $('#s-grip');
+        let from = null;
+        const set = (w) => ((sideChosen = Math.max(SIDE.min, Math.min(sideRoom(), w))), sideWidth());
+        grip.addEventListener('pointerdown', (e) => {
+          grip.setPointerCapture(e.pointerId);
+          from = { x: e.clientX, w: sideWidth() };
+          grip.classList.add('on');
+        });
+        grip.addEventListener('pointermove', (e) => from && set(Math.round(from.w + e.clientX - from.x)));
+        const end = () => ((from = null), grip.classList.remove('on'));
+        grip.addEventListener('pointerup', end);
+        grip.addEventListener('pointercancel', end);
+        grip.addEventListener('dblclick', () => ((sideChosen = null), sideWidth()));
+        grip.addEventListener('keydown', (e) => {
+          const w = sideWidth();
+          const to = { ArrowLeft: w - 16, ArrowRight: w + 16, Home: SIDE.min, End: sideRoom() }[e.key];
+          if (to === undefined) return;
+          e.preventDefault();
+          set(to);
+        });
+        // The rail widened takes from the sidebar first: the work keeps its room.
+        $('#r-grip').addEventListener('pointermove', sideWidth);
+        $('#r-grip').addEventListener('keydown', () => requestAnimationFrame(sideWidth));
+      }
+      /** The bubble of the panel's ×: under it, its right edge on the button's. */
+      function sideCloseTip(on) {
+        const tip = $('#r-tip');
+        const x = $('#side-close');
+        x.classList.toggle('on', on);
+        if (!on) return (tip.hidden = true);
+        tip.innerHTML =
+          `<b>${L(['Fermer le panneau', 'Close the panel'])}<kbd>${L(['Ctrl Maj L', 'Ctrl Shift L'])}</kbd></b>` +
+          `<span>${L(['Pour le rouvrir : la disposition côte à côte, en haut à droite de la conversation', 'To open it again: the side-by-side layout, at the top right of the conversation'])}</span>`;
+        tip.hidden = false;
+        const r = x.getBoundingClientRect();
+        tip.style.left = `${r.right - tip.offsetWidth}px`;
+        tip.style.top = `${r.bottom + 8 + tip.offsetHeight / 2}px`;
+      }
+      $('#side-close').addEventListener('mouseenter', () => sideCloseTip(true));
+      $('#side-close').addEventListener('mouseleave', () => sideCloseTip(false));
+      $('#side-close').addEventListener('click', () => (sideCloseTip(false), split(false)));
+      if (route === 'side-wide') {
+        split(true);
+        sideChosen = 400;
+        sideWidth();
+        $('#s-grip').classList.add('on');
+        requestAnimationFrame(() => sideCloseTip(true));
+      }
+      if (route === 'side-narrow') {
+        split(true);
+        sideChosen = SIDE.min;
+        sideWidth();
       }
 
       /** A conversation of the panel: whose, on which harness, which thread. */

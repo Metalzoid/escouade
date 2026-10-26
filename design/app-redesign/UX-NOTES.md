@@ -568,3 +568,31 @@ Demandé par l'utilisateur le 2026-10-26 : une place de marché des plugins sur 
 - L'app : les cinq écrans à 1440 et 1028 px, dans les deux thèmes (20 captures `store*.png`, `node design/app-redesign/render.mjs`) ; à 1028 px la fenêtre des réglages garde sa largeur, la page d'un plugin tient en deux colonnes.
 - `node design/app-redesign/contrast.mjs` : 0 paire sous le seuil, dans les deux thèmes (les jetons de l'app ; le sceau et les étiquettes en tirent leurs couleurs).
 - Le français seul : l'anglais suivra les libellés du site et de l'app à la construction (STORE-4, STORE-9).
+
+# La largeur de la barre des agents, le panneau de droite qui se ferme (ESC-204, 2026-10-26)
+
+Demandé par l'utilisateur le 2026-10-26 : « pouvoir redimensionner la sidebar de gauche, et pouvoir fermer la sidebar de droite quand elle est ouverte ». Fait dans l'app (`side-width.svelte.ts`, `Sidebar.svelte`, `SidePanel.svelte`, `RunsSection.svelte`, `settings.sideWidth`) et dans l'aperçu ; les choix 182 à 188 sont **à valider**.
+
+## Adresses
+
+- `#side-wide` : la barre des agents tirée à 400 px, son bord allumé, le panneau côte à côte, son × survolé avec son infobulle. À 1028 px, la barre est retenue à 304 px (choix 184).
+- `#side-narrow` : la barre à sa largeur la plus étroite, 220 px.
+- Partout, le bord droit de la barre des agents se tire (de 220 à 480 px), un double clic la ramène à 276 px ; le × ferme le panneau, la disposition « côte à côte » le rouvre.
+- Captures : `side-wide`, `side-narrow` et leurs jumelles `-light` à 1440×900 ; `side-wide-small`, `side-narrow-small` et leurs `-light` à 1028×779.
+- Au passage, le trait d'accent du bord de la barre des projets ne se voyait pas dans l'aperçu (`--accent` n'y existe pas) : il prend l'encre du projet, comme dans l'app.
+- Au passage aussi, deux règles de l'aperçu des workflows (ESC-191) débordaient sur le panneau Git : la pastille `.who` des agents d'une étape habillait l'auteur des commits de l'Historique, et les onglets resserrés à moins de 420 px valaient sans l'onglet Workflow. Elles sont bornées au workflow (`.wf .who`, `#side:has(#tab-loop) .utabs`) ; `git-look.spec.ts`, qui échouait déjà sur main, repasse. Les captures du panneau refaites ici (`git`, `history`, `loops*`) montrent aussi le × ; les autres le montreront à leur prochain rendu.
+
+## Choix
+
+182. **La barre des agents se redimensionne par son bord droit, de 220 à 480 px**, comme la barre des projets (`Splitter`) : un trait d'accent au survol, `←`/`→` de 16 px, `Début`/`Fin` aux bouts, un double clic pour la largeur par défaut (276 px). Gardée dans les réglages de l'app (`sideWidth`, comme `railWidth`), la même pour tous les projets et pour Agents comme pour Kanban, après un redémarrage aussi. Raison : 220 px gardent « Nouvel agent », le nom d'une carte, son harness et son temps sur leur ligne ; au-delà de 480 px, la conversation perdrait plus que les cartes ne gagnent.
+183. **Étroite (sous 250 px), la barre retire ce qui ne tient plus et garde les mots** : « Ctrl N » quitte « Nouvel agent » (il reste dans son infobulle), les petites barres de « Plan 3/7 » et de « boucle 1/5 » quittent les cartes, leurs mots restent. Le reste se coupe en « … » comme aujourd'hui. « Tout arrêter » ne passe plus sur deux lignes. Raison : un bouton coupé en « Nouvel ag… » se lit moins bien qu'un bouton sans son raccourci.
+184. **Une fenêtre étroite dessine la barre des agents moins large que choisi** : au plus la largeur de la fenêtre, moins la barre des projets, moins 672 px (ce qu'une fenêtre de 1000 px laisse aujourd'hui au travail, à côté de 52 + 276 px), soit 300 px dans la fenêtre du runner (1024 px) et 304 px à 1028 px ; la largeur choisie revient avec la place. La barre des projets passe d'abord : élargie, elle prend sur la barre des agents, jamais sur le travail. Raison : comme la barre des projets (choix 71), la conversation et le panneau gardent la place qu'ils ont dans la plus petite fenêtre.
+185. **Le panneau de droite a un × au bout de ses onglets, côte à côte aussi** : « Fermer le panneau », avec son raccourci (`Ctrl+Maj+B` à côté de la disposition classique, `Ctrl+Maj+L` côte à côte) et la façon de le rouvrir dans son infobulle. Raison : il n'avait de × qu'à côté de la disposition classique ; côte à côte, seul le bouton de disposition le fermait, loin de lui.
+186. **Côte à côte, le × revient à la disposition classique** : fermer le panneau, c'est quitter « côte à côte », et c'est retenu comme la disposition (pour toute l'app, après un redémarrage). Le rouvrir, c'est la disposition « côte à côte » de l'en-tête de la conversation ou `Ctrl+Maj+L`, comme avant. Raison : côte à côte veut dire le panneau ouvert ; un troisième état (côte à côte sans panneau) serait la disposition classique.
+187. **À côté de la disposition classique, le × ferme le panneau comme avant**, et « Fichiers » de l'en-tête ou `Ctrl+Maj+B` le rouvrent ; il n'est pas retenu après un redémarrage, comme aujourd'hui.
+188. **Le panneau de droite garde sa largeur** (340 px à côté de la disposition classique, 44 % côte à côte) : il ne se redimensionne pas aujourd'hui, ce ticket n'y touche pas.
+
+## Vérifié
+
+- `tests/e2e/side-width.spec.ts` : le bord tiré jusqu'à sa borne, gardé après un redémarrage, les flèches, `Début` à 220 px sans rien de cassé ni de coupé dans la barre, le double clic, la barre des projets élargie qui prend sur celle des agents, le panneau fermé puis rouvert dans les deux dispositions, la disposition retenue après un redémarrage ; à 1024 × 728 et 1440 × 900.
+- `tests/e2e/narrow-columns.spec.ts`, `shell.spec.ts`, `rail-labels.spec.ts`, `conversation-look.spec.ts`, `git-look.spec.ts`, `board-look.spec.ts`, `sidebar.spec.ts` : verts après la fusion de main (les échecs d'un premier passage, la création du projet trop lente sous la charge, repassent seuls).

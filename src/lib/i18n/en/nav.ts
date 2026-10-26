@@ -3,6 +3,8 @@ import { defineZone } from '../types';
 // The sidebar, the title bar, the side panel and the menus.
 export default defineZone('nav', {
   sidebar: {
+    width: 'Width of the agents’ sidebar',
+    widthTip: 'Drag to widen · double click: usual width',
     status: { running: 'Running', waiting: 'Question', idle: 'Ready', done: 'Done', error: 'Error' },
     viewLabel: 'Project view',
     toReview: '{count} to review',
@@ -182,6 +184,9 @@ export default defineZone('nav', {
     laterCi: 'the CI checks, their log, run again;',
     laterDeploy: 'the preview deployments and their address.',
     laterCard: 'On the ticket’s card, today’s “PR #41 → main” line, with the state of the CI.',
+    close: 'Close the panel',
+    reopen: 'To open it again: “Files” in the header of the conversation',
+    reopenSplit: 'To open it again: the side-by-side layout, at the top right of the conversation',
   },
 
   menu: { swatch: '{label} {n}' },

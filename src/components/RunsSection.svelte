@@ -217,6 +217,7 @@
   .mini-btn {
     height: 24px;
     padding: 0 8px;
+    white-space: nowrap;
     border-radius: 6px;
     color: var(--muted);
     font-size: 12px;

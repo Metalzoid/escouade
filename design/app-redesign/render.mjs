@@ -157,6 +157,12 @@ const shots = [
   { name: 'labels-small', ...SMALL, hash: 'labels' },
   { name: 'labels-wide-small-en', ...SMALL, ...EN, hash: 'labels-wide' },
   { name: 'labels-settings-small-en', ...SMALL, ...EN, hash: 'labels-settings' },
+  // The sidebar's width and the side panel's × (ESC-204): dragged to 400 px, its edge lit, the × hovered; at its narrowest;
+  // each at 1440×900 and 1028×779 (held to the window there), dark and light.
+  ...['side-wide', 'side-narrow'].flatMap((h) => [
+    { name: h, ...BIG, hash: h },
+    { name: h + '-small', ...SMALL, hash: h },
+  ]),
   // A project of several git repositories (ESC-169): the folder holds front, api, infra and docs.
   ...['repos', 'repos-history', 'repos-branch', 'repos-commit', 'repos-merge', 'repos-pr', 'repos-board', 'repos-wizard', 'repos-settings', 'repos-new-agent', 'repos-editor', 'repos-run', 'repos-overview'].map((h) => ({ name: h, ...BIG, hash: h })),
   ...['repos', 'repos-two', 'repos-board', 'repos-merge', 'repos-branch'].map((h) => ({ name: h + '-small', ...SMALL, hash: h })),
@@ -180,7 +186,7 @@ const shots = [
   // The theme selector, on Système (its default): the window follows the emulated system theme.
   { name: 'settings-app', ...BIG, hash: 'settings-app', system: true },
 ];
-const LIGHT_SMALL = ['kanban-small', 'pr-small-en', 'models-small-en', 'waiting-small-en', 'private-small-en', 'agents-small', 'git-small', 'overview-small', 'settings-small', 'agents-small-en', 'quota-small-en', 'terminal-view-small-en', 'settings-harness-small-en', 'rail-small', 'rail-small-en', 'tile-small', 'tile-settings-small-en', 'labels-small', 'labels-wide-small-en', 'labels-settings-small-en', 'repos-small', 'repos-two-small', 'repos-board-small', 'repos-merge-small', 'repos-branch-small', ...['loops', 'loops-history', 'loops-settings', 'loops-simple', 'loops-empty', 'loops-edge'].map((h) => h + '-small'), ...SHARE.map((h) => h + '-small'), ...['store', 'store-plugin', 'store-install', 'store-unverified', 'store-installed'].map((h) => h + '-small')];
+const LIGHT_SMALL = ['kanban-small', 'pr-small-en', 'models-small-en', 'waiting-small-en', 'private-small-en', 'agents-small', 'git-small', 'overview-small', 'settings-small', 'agents-small-en', 'quota-small-en', 'terminal-view-small-en', 'settings-harness-small-en', 'rail-small', 'rail-small-en', 'tile-small', 'tile-settings-small-en', 'labels-small', 'labels-wide-small-en', 'labels-settings-small-en', 'repos-small', 'repos-two-small', 'repos-board-small', 'repos-merge-small', 'repos-branch-small', ...['loops', 'loops-history', 'loops-settings', 'loops-simple', 'loops-empty', 'loops-edge'].map((h) => h + '-small'), ...SHARE.map((h) => h + '-small'), ...['store', 'store-plugin', 'store-install', 'store-unverified', 'store-installed'].map((h) => h + '-small'), 'side-wide-small', 'side-narrow-small'];
 shots.push(
   ...shots
     .filter((s) => (s.width === BIG.width && !s.lang) || LIGHT_SMALL.includes(s.name))

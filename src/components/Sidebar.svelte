@@ -6,6 +6,8 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte';
   import { keyLabel } from '../lib/platform';
+  import { SIDE_MIN, sideWidth } from '../lib/side-width.svelte';
+  import Splitter from './Splitter.svelte';
   import { t } from '../lib/i18n';
   import { branchSummary, deltaDetail, repoLabel } from '../lib/repos';
   import { api } from '../lib/ipc';
@@ -1240,6 +1242,19 @@
       {/if}
     </div>
   </div>
+  <!-- Its right edge sets its width (ESC-204), as the rail's does. -->
+  <div class="edge">
+    <Splitter
+      value={sideWidth.shown}
+      min={SIDE_MIN}
+      max={sideWidth.max}
+      onreset={() => sideWidth.reset()}
+      label={t('nav.sidebar.width')}
+      title={t('nav.sidebar.widthTip')}
+      onresize={(w) => sideWidth.set(w)}
+      oncommit={(w) => sideWidth.commit(w)}
+    />
+  </div>
 </aside>
 
 {#if pickingBranch}
@@ -1286,8 +1301,11 @@
 
   /* On the frame, beside the panel of the work (design/app-redesign/index.html, .sidebar). */
   .side {
+    /* Its width chosen by its edge (ESC-204): App sets --side. */
+    position: relative;
     width: var(--side);
     flex: none;
+    container: sidebar / inline-size;
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -1298,6 +1316,22 @@
     .side {
       padding-left: 6px;
     }
+  }
+
+  /* The right edge, which sets the width: the rail's, on the line between the sidebar and the work, seen once hovered. */
+  .edge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+  }
+  .edge :global(.splitter) {
+    background: transparent;
+  }
+  /* Its grip inside the sidebar: over the work, it would cover the panel's edge. */
+  .edge :global(.splitter::before) {
+    inset: 0 0 0 -6px;
   }
 
   /* Agents | Kanban. */
@@ -1372,6 +1406,15 @@
     text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  /* Narrow (ESC-204), « Nouvel agent » stays whole: its shortcut goes, still in its tooltip; on a card, the bars of a
+     plan and of a ticket's loops go, their words stay. */
+  @container sidebar (max-width: 250px) {
+    .new-agent kbd,
+    .plan-bar,
+    .loops {
+      display: none;
+    }
   }
   .new-more {
     display: grid;

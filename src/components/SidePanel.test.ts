@@ -1,11 +1,10 @@
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import SidePanel from './SidePanel.svelte';
-import { getByTip, queryByTip } from '../test/tip';
 
 const change = (path: string) => ({ path, status: 'M', add: 1, del: 0, agentId: 'a1' });
 const LOG = {
@@ -50,11 +49,16 @@ describe('SidePanel', () => {
     expect(await screen.findByRole('tab', { name: /Non commités\s*620/ })).toBeInTheDocument();
   });
 
-  it('can be closed in the classic layout, where it is optional', async () => {
+  it('can be closed in the classic layout, where it is optional, and says how it comes back', async () => {
     fakeBackend({ git_files: () => [] });
     app.filesOpen = true;
     render(SidePanel, { project: project(), agent: app.agents.a1 });
-    await userEvent.click(getByTip(document.body, 'Fermer'));
+    const close = screen.getByRole('button', { name: 'Fermer le panneau' });
+    expect(close).toHaveAttribute(
+      'data-tip',
+      'Fermer le panneau (Ctrl+Maj+B)\nPour le rouvrir : « Fichiers » dans l’en-tête de la conversation',
+    );
+    await userEvent.click(close);
     expect(app.filesOpen).toBe(false);
   });
 
@@ -73,15 +77,26 @@ describe('SidePanel', () => {
     fakeBackend({ git_files: () => [] });
     app.filesOpen = true;
     render(SidePanel, { project: project(), agent: app.agents.a1 });
-    const close = getByTip(document.body, 'Fermer');
+    const close = screen.getByRole('button', { name: 'Fermer le panneau' });
     expect(close.querySelector('svg[data-icon="close"]')).not.toBeNull();
     expect(close.textContent?.trim()).toBe('');
   });
 
-  it('cannot be closed in the split layout', () => {
-    fakeBackend({ git_files: () => [] });
+  it('is closed in the split layout by going back to the classic one (ESC-204), kept as the layout is', async () => {
+    const backend = fakeBackend({ git_files: () => [] });
+    app.ui.layout = 'split';
+    // « Fichiers » opened before the layout went side by side: the classic layout comes back without the panel.
+    app.filesOpen = true;
     render(SidePanel, { project: project(), agent: app.agents.a1, docked: true });
-    expect(queryByTip(document.body, 'Fermer')).not.toBeInTheDocument();
+    const close = screen.getByRole('button', { name: 'Fermer le panneau' });
+    expect(close).toHaveAttribute(
+      'data-tip',
+      'Fermer le panneau (Ctrl+Maj+L)\nPour le rouvrir : la disposition côte à côte, en haut à droite de la conversation',
+    );
+    await userEvent.click(close);
+    expect(app.split).toBe(false);
+    expect(app.filesOpen).toBe(false);
+    await waitFor(() => expect(backend.called('set_ui').at(-1)?.args.ui.layout).toBe(''));
   });
 });
 
@@ -96,6 +111,9 @@ describe('SidePanel in English', () => {
     render(SidePanel, { project: project(), agent: app.agents.a1 });
     expect(await screen.findByRole('tab', { name: /Uncommitted\s*2/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'History' })).toBeInTheDocument();
-    expect(getByTip(document.body, 'Close')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close the panel' })).toHaveAttribute(
+      'data-tip',
+      'Close the panel (Ctrl+Shift+B)\nTo open it again: “Files” in the header of the conversation',
+    );
   });
 });

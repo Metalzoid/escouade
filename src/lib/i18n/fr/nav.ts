@@ -7,6 +7,9 @@ export default {
     /** What an agent is doing (glossary: « En cours » is « Running » for an agent). */
     status: { running: 'En cours', waiting: 'Question', idle: 'Prêt', done: 'Terminé', error: 'Erreur' },
     viewLabel: 'Vue du projet',
+    /** Its right edge (ESC-204), dragged as the rail's. */
+    width: 'Largeur de la barre des agents',
+    widthTip: 'Tirer pour élargir · double clic : largeur par défaut',
     toReview: '{count} à tester',
     newAgent: 'Nouvel agent',
     newAgentTitle: 'Nouvel agent ({shortcut})',
@@ -220,6 +223,10 @@ export default {
     laterCi: 'les vérifications de la CI, leur log, relancer ;',
     laterDeploy: 'les déploiements de prévisualisation et leur adresse.',
     laterCard: 'Sur la carte du ticket, la ligne « PR #41 → main » d’aujourd’hui, avec l’état de la CI.',
+    /** Its × (ESC-204), and how it comes back: by the header of the conversation, as it was opened. */
+    close: 'Fermer le panneau',
+    reopen: 'Pour le rouvrir : « Fichiers » dans l’en-tête de la conversation',
+    reopenSplit: 'Pour le rouvrir : la disposition côte à côte, en haut à droite de la conversation',
   },
 
   // The context menu's row of colors: « Couleur 3 ».

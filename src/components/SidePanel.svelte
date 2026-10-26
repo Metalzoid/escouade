@@ -1,5 +1,6 @@
 <script lang="ts">
   import { t } from '../lib/i18n';
+  import { keyLabel } from '../lib/platform';
   import { app } from '../lib/state.svelte';
   import type { Agent, Project } from '../lib/types';
   import FilesPanel from './FilesPanel.svelte';
@@ -27,11 +28,22 @@
     <button role="tab" id="side-tab-hosts" aria-selected={tab === 'hosts'} onclick={() => (app.panelTab = 'hosts')}>
       {t('nav.sidePanel.hosts')} <span class="soon">{t('nav.sidePanel.soon')}</span>
     </button>
-    {#if !docked}
-      <button class="icon-btn close" use:tip={t('common.close')} aria-label={t('common.close')} onclick={() => (app.filesOpen = false)}
-        ><Icon name="close" size={14} /></button
-      >
-    {/if}
+    <!-- Closed as it was opened (ESC-204): « Fichiers » of the header (Ctrl+Shift+B), or the layout side by side (Ctrl+Shift+L). -->
+    <button
+      class="icon-btn close"
+      aria-label={t('nav.sidePanel.close')}
+      use:tip={{
+        title: t('nav.sidePanel.close'),
+        kbd: keyLabel(docked ? 'Ctrl+Shift+L' : 'Ctrl+Shift+B'),
+        rows: [t(docked ? 'nav.sidePanel.reopenSplit' : 'nav.sidePanel.reopen')],
+        aria: false,
+      }}
+      onclick={() => {
+        // Side by side, the classic layout again, without the panel « Fichiers » may have left open there.
+        if (docked) app.toggleLayout();
+        app.filesOpen = false;
+      }}><Icon name="close" size={14} /></button
+    >
   </div>
   <div class="pane" role="tabpanel" aria-labelledby="side-tab-{tab}">
     {#if tab === 'files'}

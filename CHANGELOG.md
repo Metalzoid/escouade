@@ -12,6 +12,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Un ticket du Kanban se partage avec l’équipe : Escouade en écrit un fichier dans le dépôt, tient son statut à jour, et tu le commites avec ton travail. Chez tes coéquipiers, il arrive dans « À faire » avec ton nom ; leur pilote auto ne le lance jamais, mais ils peuvent le lancer à la main. Escouade te demande ton nom au premier lancement.
 - La projection des quotas se règle en trois choix dans Réglages › Comptes : « Au-delà de 80 % » (par défaut), « Toujours » et « Jamais ». L’infobulle de chaque jauge la donne toujours, même quand la barre d’état, étroite, ne la montre plus. Merci à @epommereuil (#16).
 - ClickUp rejoint Jira, Trello, GitHub Issues et Linear : une clé d’API, une liste liée à chaque projet, et ses tâches s’importent avec leur checklist en critères puis changent de statut et reçoivent un commentaire à mesure que leur ticket avance.
+- La barre des agents et du Kanban s’élargit ou se rétrécit en tirant son bord droit, et le panneau de droite se ferme par son bouton × aussi quand il est côte à côte avec la conversation.
 
 ## [2.0.2] — 2026-10-26
 

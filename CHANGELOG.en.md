@@ -12,6 +12,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - A ticket of the Kanban can be shared with the team: Escouade writes a file of it in the repository, keeps its status up to date, and you commit it with your work. For your teammates, it lands in “To do” with your name; their autopilot never starts it, but they can start it by hand. Escouade asks for your name at the first launch.
 - The quota projection now has three settings in Settings › Accounts: “Above 80%” (the default), “Always” and “Never”. Each meter’s tooltip always gives it, even when the narrow status bar no longer shows it. Thanks to @epommereuil (#16).
 - ClickUp joins Jira, Trello, GitHub Issues and Linear: an API key, a list linked to each project, and its tasks come in with their checklist as criteria, then change status and get a comment as their ticket moves on.
+- The sidebar of the agents and the Kanban widens or narrows by dragging its right edge, and the side panel closes by its × button even when it sits beside the conversation.
 
 ## [2.0.2] — 2026-10-26
 
