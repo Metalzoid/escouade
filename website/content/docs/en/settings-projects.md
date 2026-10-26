@@ -58,6 +58,20 @@ For a private project, the agents of the other projects neither read nor write i
 
 A guard is a rule of the harness, which a command can get around; a barrier holds for all its commands. A barrier for every harness would take a system account per project: Escouade doesn’t offer it, as the harnesses and their accounts wouldn’t follow. When you change “Private project”, an agent already running takes its new rules before its next turn: its process starts again, its conversation stays. An agent open in a terminal view takes them at its next launch.
 
+## Workflow
+
+Escouade reads the project’s workflow in your harnesses’ files: their commands, skills, subagents and prompts, `PROMPT.md`, the state files and the instructions, with what they include by `@`. On your machine, at no cost.
+
+- **Read by the rules at 10:12**: when it was read, and the files read, folder by folder. **Read again** reads them again.
+- **Refine with an agent**: a short agent will read again what the rules found. The button comes in a next version.
+- **Read again when files change**: when the window comes back to the front, if a file read changed. Off, only “Read again” reads again.
+- **Found**: the project’s workflows (their number of steps, entries and subagents), the board’s loop of tickets, and the commands alone, which are no workflows. A click chooses the one whose steps you correct.
+- **Steps**: rename a step, merge it with the next, remove it, move it (drag its number, or Alt+↑ and Alt+↓ in its name), add the one the reading missed with what tells it (a command, a subagent, a file written). A guessed step, dotted, waits for “Keep” or “Remove”. “This is not a workflow” sets it apart, “Restore” brings it back. Your corrections go before a new reading; one that matches nothing any more is said.
+- **Where to keep the workflows’ configuration**: “In the repository” (by default) or “On this machine”, for the workflows of the repository’s configuration. Each workflow says where it is kept: “in the repository” or “on this machine (outside the repository)”; those of your own folders (`~/.claude`, GSD…) always stay on this machine. See [where it is kept](workflows#where-it-is-kept).
+- **Updated by the reading**: a reading found the workflow changed and updated its file (the tooltip says what changed); your corrections stay.
+- **From the repository**: a workflow this machine does not read itself, from a teammate’s file; it is shown and followed all the same. “Remove from the repository” deletes its file.
+- A file that can’t be read is said under the reading, with its path and the reason.
+
 ## Git
 
 | Setting | Effect | Default |

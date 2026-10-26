@@ -803,3 +803,236 @@ async fn the_fake_claude_plays_the_facts_of_a_workflow_through_the_whole_path() 
         .starts_with("lance autre chose"));
     assert!(t.subagents.is_empty());
 }
+
+// ---------- the workflows as the user corrected them (ESC-195) ----------
+
+use crate::workflowfix::{corrected, Fix, FixStep, Signal};
+
+fn fix_step(name: &str, from: &[&str]) -> FixStep {
+    FixStep {
+        name: name.into(),
+        from: from.iter().map(|s| s.to_string()).collect(),
+        signals: Vec::new(),
+    }
+}
+
+/// GSD as read, with the corrections `f` makes of it.
+fn gsd_fixed(f: impl FnOnce(&Workflow) -> Fix) -> Scan {
+    let scan = gsd();
+    let fix = f(&scan.workflows[0]);
+    corrected(&scan, &[fix])
+}
+
+/// The four steps of GSD, as read, named as they are.
+fn as_read(w: &Workflow) -> Vec<FixStep> {
+    w.steps
+        .iter()
+        .map(|s| fix_step(&s.name, &[&s.name]))
+        .collect()
+}
+
+#[test]
+fn a_step_renamed_is_followed_under_its_new_name_by_its_command_and_its_subagents() {
+    let mut a = Fake::new(gsd_fixed(|w| {
+        let mut steps = as_read(w);
+        steps[1].name = "Planifier".into();
+        Fix {
+            workflow: w.id.clone(),
+            steps,
+            ..Default::default()
+        }
+    }));
+    assert!(a.says("/gsd:plan-phase 2"));
+    assert_eq!(a.step(), Some("Planifier"));
+    assert_eq!(a.last().door.as_deref(), Some("/gsd:plan-phase"));
+    // From a step elsewhere, its subagent brings the agent back into it.
+    assert!(a.says("/gsd:execute-phase 2"));
+    assert!(a.launches("gsd-planner"));
+    assert_eq!(a.step(), Some("Planifier"));
+}
+
+#[test]
+fn two_steps_merged_are_one_step_that_both_commands_enter() {
+    let mut a = Fake::new(gsd_fixed(|w| {
+        let mut steps = as_read(w);
+        let plan = steps.remove(1);
+        steps[0] = fix_step("Préparer", &["gsd:discuss-phase", &plan.name]);
+        Fix {
+            workflow: w.id.clone(),
+            steps,
+            ..Default::default()
+        }
+    }));
+    assert_eq!(a.scan.workflows[0].steps.len(), 3);
+    assert!(a.says("/gsd:discuss-phase 2"));
+    assert_eq!(a.step(), Some("Préparer"));
+    assert!(a.says("/gsd:execute-phase 2"));
+    assert!(a.says("/gsd:plan-phase 2"));
+    assert_eq!(a.step(), Some("Préparer"));
+    // Its subagents are those of both.
+    assert!(a.says("/gsd:execute-phase 2"));
+    assert!(a.launches("gsd-plan-checker"));
+    assert_eq!(a.step(), Some("Préparer"));
+    assert!(a
+        .track
+        .passages
+        .iter()
+        .all(|p| p.step.as_deref() != Some("gsd:plan-phase")));
+}
+
+#[test]
+fn a_step_removed_is_never_entered() {
+    let mut a = Fake::new(gsd_fixed(|w| Fix {
+        workflow: w.id.clone(),
+        removed: vec!["gsd:verify-work".into()],
+        ..Default::default()
+    }));
+    assert!(a.says("/gsd:execute-phase 2"));
+    a.says("/gsd:verify-work 2");
+    a.launches("gsd-verifier");
+    assert_ne!(a.step(), Some("gsd:verify-work"));
+    assert!(a
+        .track
+        .passages
+        .iter()
+        .all(|p| p.step.as_deref() != Some("gsd:verify-work")));
+}
+
+#[test]
+fn a_workflow_set_apart_is_no_longer_followed() {
+    let mut a = Fake::new(gsd_fixed(|w| Fix {
+        workflow: w.id.clone(),
+        dismissed: true,
+        ..Default::default()
+    }));
+    assert!(a.scan.workflows.is_empty());
+    a.says("/gsd:discuss-phase 2");
+    assert!(a.track.workflow.is_none());
+    assert!(a.track.passages.is_empty());
+}
+
+#[test]
+fn a_step_added_by_hand_is_entered_by_its_command_its_subagent_or_its_file() {
+    let scan = gsd_fixed(|w| {
+        let mut steps = as_read(w);
+        let mut ship = fix_step("Livrer", &[]);
+        ship.signals = vec![
+            Signal::Command("/gsd:ship".into()),
+            Signal::Agent("gsd-shipper".into()),
+            Signal::File(".planning/SHIPPED.md".into()),
+        ];
+        steps.push(ship);
+        Fix {
+            workflow: w.id.clone(),
+            steps,
+            ..Default::default()
+        }
+    });
+    // A command typed.
+    let mut a = Fake::new(scan.clone());
+    assert!(a.says("/gsd:ship v1"));
+    assert_eq!(a.step(), Some("Livrer"));
+    assert_eq!(a.last().door.as_deref(), Some("/gsd:ship"));
+    // A subagent launched, from another step.
+    let mut b = Fake::new(scan.clone());
+    assert!(b.says("/gsd:verify-work 2"));
+    assert!(b.launches("gsd-shipper"));
+    assert_eq!(b.step(), Some("Livrer"));
+    // A file written.
+    let mut c = Fake::new(scan);
+    assert!(c.says("/gsd:verify-work 2"));
+    assert!(c.writes("C:/repo/.planning/SHIPPED.md"));
+    assert_eq!(c.step(), Some("Livrer"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn corrections_changed_empty_the_tracking_s_reading_and_keep_the_history_as_it_was() {
+    let h = crate::core_tests::harness("workflow-track-fixes");
+    let (p, dir) = h.project(false).await;
+    let cmds = dir.join(".claude/commands");
+    std::fs::create_dir_all(&cmds).unwrap();
+    std::fs::write(
+        cmds.join("one.md"),
+        "Do one with subagent_type=\"worker\", then /two.\n",
+    )
+    .unwrap();
+    std::fs::write(cmds.join("two.md"), "Do two. Back to /one when red.\n").unwrap();
+    let scan = h.core.refresh_workflows(&p.id, true).await.unwrap();
+    let w = scan.workflows[0].clone();
+    let agent = crate::core_tests::agent_on(&h, &p, "principal").await;
+    let id = agent.id.clone();
+    h.core
+        .track_workflow(&id, &p.id, &ops_user("/one"), 0.0, None);
+    assert_eq!(
+        h.core.workflow_tracks(&p.id)[0].track.step.as_deref(),
+        Some("one")
+    );
+
+    // « one » renamed in the settings: the tracking takes it at once, no new reading needed.
+    let before = events(&h).len();
+    h.core
+        .update_project(crate::model::Project {
+            workflow_fixes: vec![Fix {
+                workflow: w.id.clone(),
+                steps: vec![fix_step("Premier", &["one"]), fix_step("two", &["two"])],
+                ..Default::default()
+            }],
+            ..h.core.project(&p.id).unwrap()
+        })
+        .unwrap();
+    assert!(events(&h).len() > before, "the agent is told");
+    h.core
+        .track_workflow(&id, &p.id, &ops_user("/two"), 0.0, None);
+    h.core
+        .track_workflow(&id, &p.id, &ops_user("/one"), 0.0, None);
+    let t = h.core.workflow_tracks(&p.id)[0].track.clone();
+    assert_eq!(t.step.as_deref(), Some("Premier"));
+    // The passage kept keeps the name its step had.
+    assert_eq!(t.passages[0].step.as_deref(), Some("one"));
+    assert_eq!(t.passages[2].step.as_deref(), Some("Premier"));
+
+    // « Relire »: still corrected.
+    h.core.refresh_workflows(&p.id, true).await.unwrap();
+    h.core
+        .track_workflow(&id, &p.id, &ops_user("/two"), 0.0, None);
+    h.core
+        .track_workflow(&id, &p.id, &ops_user("/one"), 0.0, None);
+    assert_eq!(
+        h.core.workflow_tracks(&p.id)[0].track.step.as_deref(),
+        Some("Premier")
+    );
+
+    // Set apart: no longer followed.
+    h.core
+        .update_project(crate::model::Project {
+            workflow_fixes: vec![Fix {
+                workflow: w.id.clone(),
+                dismissed: true,
+                ..Default::default()
+            }],
+            ..h.core.project(&p.id).unwrap()
+        })
+        .unwrap();
+    let n = h.core.workflow_tracks(&p.id)[0].track.passages.len();
+    h.core
+        .track_workflow(&id, &p.id, &ops_user("/two"), 0.0, None);
+    assert_eq!(h.core.workflow_tracks(&p.id)[0].track.passages.len(), n);
+
+    // From the file of the workflow, changed by a pull: read again, the tracking follows it.
+    let file = dir.join(".escouade/workflows/claude-one.yml");
+    let mut doc = crate::workflowfiles::read(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    doc.fixes = Fix {
+        workflow: w.id.clone(),
+        steps: vec![fix_step("Deux", &["two"])],
+        ..Default::default()
+    };
+    std::fs::write(&file, crate::workflowfiles::write(&doc)).unwrap();
+    h.core.sync_workflow_files(&p.id);
+    assert_eq!(h.core.project(&p.id).unwrap().workflow_fixes.len(), 1);
+    h.core
+        .track_workflow(&id, &p.id, &ops_user("/two"), 0.0, None);
+    assert_eq!(
+        h.core.workflow_tracks(&p.id)[0].track.step.as_deref(),
+        Some("Deux")
+    );
+}

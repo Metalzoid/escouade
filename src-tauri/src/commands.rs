@@ -672,6 +672,27 @@ pub async fn refresh_workflows(core: CoreState<'_>, id: String) -> Res<crate::wo
     core.refresh_workflows(&id, true).await.map_err(err)
 }
 
+/// The project's workflows as the user corrected them (ESC-195): what follows the agents reads.
+#[tauri::command]
+pub async fn effective_workflows(
+    core: CoreState<'_>,
+    id: String,
+) -> Res<Vec<crate::workflow::Workflow>> {
+    let scan = core.refresh_workflows(&id, false).await.map_err(err)?;
+    let fixes = core.project(&id).map_err(err)?.workflow_fixes;
+    Ok(crate::workflowfix::effective(&scan.workflows, &fixes))
+}
+
+/// « Retirer du dépôt » (ESC-195): the file of a workflow this machine does not read goes.
+#[tauri::command]
+pub async fn remove_workflow_file(
+    core: CoreState<'_>,
+    id: String,
+    workflow: String,
+) -> Res<crate::workflow::Scan> {
+    core.remove_workflow_file(&id, &workflow).await.map_err(err)
+}
+
 /// « Oublier » a repository gone from the project's folder (ESC-169).
 #[tauri::command(async)]
 pub fn forget_repo(core: CoreState, id: String, repo: String) -> Res<Project> {

@@ -745,6 +745,99 @@ export interface Project {
    * when its own reach the usage limit (`accounts::confined`).
    */
   sharedOnLimit: boolean;
+  /** The corrections of its workflows (ESC-195), ahead of the reading. Absent from a project of the window’s tests made before it. */
+  workflowFixes?: WorkflowFix[];
+  /** « Relire quand les fichiers changent » (ESC-195): on unless switched off. Absent from a project of the window’s tests made before it. */
+  workflowsAutoRead?: boolean;
+  /** « Où garder la configuration des workflows » (ESC-195): in the repository (`.escouade/workflows/`, by default) or on this machine. Absent from a project of the window’s tests made before it. */
+  workflowsInRepo?: boolean;
+}
+
+/** What tells a step added by hand (ESC-195): a command typed, a subagent launched, a file written. */
+export type WorkflowSignal = { command: string } | { agent: string } | { file: string };
+
+/** A step as corrected: the steps of the reading it stands for (several once merged; none, added by hand). */
+export interface WorkflowFixStep {
+  name: string;
+  from?: string[];
+  signals?: WorkflowSignal[];
+}
+
+/** The corrections of one workflow (`workflowfix::Fix`), by its id. */
+export interface WorkflowFix {
+  workflow: string;
+  /** « Ce n'est pas un workflow ». */
+  dismissed?: boolean;
+  /** Its steps in their order; absent: the reading's. */
+  steps?: WorkflowFixStep[];
+  /** Steps of the reading taken out. */
+  removed?: string[];
+}
+
+/** A step of a workflow as the reading found it (`workflow::Step`). */
+export interface WorkflowStep {
+  name: string;
+  command: string;
+  order: number;
+  description: string;
+  path: string;
+  agents: { name: string; path: string | null; description: string }[];
+  reads: string[];
+  writes: string[];
+  /** « deviné »: dotted until « Garder » or « Retirer ». */
+  guessed?: boolean;
+}
+
+export interface WorkflowTransition {
+  from: string;
+  to: string;
+  back: boolean;
+  condition: string | null;
+  max: number | null;
+}
+
+/** A workflow of the project, as read (`workflow::Workflow`, ESC-192). */
+export interface Workflow {
+  id: string;
+  name: string;
+  kind: 'cycle' | 'prompt';
+  harness: EngineId | null;
+  /** The repository of a project of several; empty for the root. */
+  repo: string;
+  doors: {
+    name: string;
+    command: string;
+    kind: 'command' | 'skill' | 'agent';
+    scope: 'project' | 'user';
+    path: string;
+    role: 'entry' | 'step' | 'other';
+  }[];
+  steps: WorkflowStep[];
+  transitions: WorkflowTransition[];
+  stateFiles: { path: string; exists: boolean }[];
+  exit: string | null;
+  promptLoop: unknown;
+}
+
+/** What the reading of a project's workflows found (`workflow::Scan`). */
+export interface WorkflowScan {
+  /** When, in milliseconds. */
+  readAt: number;
+  workflows: Workflow[];
+  /** What is no workflow (a command alone). */
+  alone: { name: string; command: string; harness: EngineId; repo: string; path: string; description: string }[];
+  untraced: { name: string; harness: EngineId; steps: number }[];
+  /** Every file looked at: `command`, `skill`, `agent`, `include`, `state`, `prompt`, `instruction`. */
+  sources: { path: string; kind: string; modified: number; len: number }[];
+  searched: string[];
+  /** Where the sources' paths start: the project's folder, Claude Code's folder, the home folder (absent before ESC-195). */
+  root?: string;
+  claude?: string;
+  home?: string;
+  /** The files of the workflows (ESC-195): one per workflow; `local` when this machine reads it too; `updated`, what the last reading changed of it. */
+  files?: { id: string; path: string; local: boolean; inRepo: boolean; updated: string | null }[];
+  /** The files that could not be read, with why. */
+  unreadable?: { path: string; why: string }[];
 }
 
 /** Something of a `.escouade.yml` that was left out, with its line. */

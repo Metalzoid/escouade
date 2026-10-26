@@ -47,7 +47,11 @@ pub const FOLDERS: &[(EngineId, &str, DocKind)] = &[
     (EngineId::Claude, ".claude/commands", DocKind::Command),
     (EngineId::Claude, ".claude/skills", DocKind::Skill),
     (EngineId::Claude, ".claude/agents", DocKind::Agent),
+    // `.agents/`, read whole whatever the harness (ESC-195): skills, agents, commands, prompts.
     (EngineId::Codex, ".agents/skills", DocKind::Skill),
+    (EngineId::Codex, ".agents/agents", DocKind::Agent),
+    (EngineId::Codex, ".agents/commands", DocKind::Command),
+    (EngineId::Codex, ".agents/prompts", DocKind::Command),
     (EngineId::Opencode, ".opencode/command", DocKind::Command),
     (EngineId::Opencode, ".opencode/commands", DocKind::Command),
     (EngineId::Opencode, ".opencode/skill", DocKind::Skill),
@@ -195,6 +199,14 @@ pub struct Step {
     pub agents: Vec<StepAgent>,
     pub reads: Vec<String>,
     pub writes: Vec<String>,
+    /// A step the reading is not sure of (« deviné ») : dotted until « Garder » or « Retirer »
+    /// (ESC-195). The rules make none; the agent that refines may.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub guessed: bool,
+    /// The other commands and names that signal it (ESC-195): those of the steps merged into it,
+    /// its name as read once renamed, the commands added by hand after the first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub also: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -231,6 +243,8 @@ pub struct Says {
 pub struct StateFile {
     /// From the project's folder.
     pub path: String,
+    /// On this machine, now: never in the shared files (`workflowfiles`).
+    #[serde(default)]
     pub exists: bool,
     pub written_by: Vec<String>,
     pub read_by: Vec<String>,
@@ -310,6 +324,15 @@ pub struct Scan {
     pub sources: Vec<Source>,
     /// Every folder looked in, from the repository or the harness' own folder.
     pub searched: Vec<String>,
+    /// Where the sources' paths start (ESC-195): the project's folder, Claude Code's folder and the
+    /// home folder, for the window to say them as `.planning/STATE.md`, `~/.claude/…`, `~/…`.
+    pub root: String,
+    pub claude: String,
+    pub home: String,
+    /// The files of the workflows (ESC-195, `workflowfiles`): one per workflow, and those that could
+    /// not be read, with why.
+    pub files: Vec<crate::workflowfiles::FileInfo>,
+    pub unreadable: Vec<crate::workflowfiles::Unreadable>,
 }
 
 /// Where the user's own folders are, given: the tests give a throwaway one, never the real one.
@@ -594,10 +617,19 @@ impl Ctx<'_> {
                 .strip_prefix(&self.repo_dir)
                 .map(|p| repos::prefixed(&self.repo, &norm(p)))
                 .unwrap_or_else(|_| norm(path)),
-            Scope::User => path
-                .strip_prefix(&self.roots.home)
-                .map(|r| format!("~/{}", norm(r)))
-                .unwrap_or_else(|_| norm(path)),
+            // Claude Code's folder is `~/.claude` to the user, wherever `CLAUDE_CONFIG_DIR` puts it.
+            Scope::User => self
+                .roots
+                .claude
+                .as_ref()
+                .and_then(|c| path.strip_prefix(c).ok())
+                .map(|r| format!("~/.claude/{}", norm(r)))
+                .or_else(|| {
+                    path.strip_prefix(&self.roots.home)
+                        .ok()
+                        .map(|r| format!("~/{}", norm(r)))
+                })
+                .unwrap_or_else(|| norm(path)),
         }
     }
 
@@ -637,7 +669,13 @@ impl Ctx<'_> {
     /// repository or from the file's own folder.
     fn resolve(&self, token: &str, from: &Path) -> Option<PathBuf> {
         let token = token.replace('\\', "/");
-        let candidates: Vec<PathBuf> = if let Some(rest) = token.strip_prefix("~/") {
+        // `~/.claude/…` is Claude Code's folder (`CLAUDE_CONFIG_DIR` when set): where GSD installs.
+        let claude = token
+            .strip_prefix("~/.claude/")
+            .zip(self.roots.claude.as_ref());
+        let candidates: Vec<PathBuf> = if let Some((rest, dir)) = claude {
+            vec![dir.join(rest)]
+        } else if let Some(rest) = token.strip_prefix("~/") {
             vec![self.roots.home.join(rest)]
         } else if Path::new(&token).is_absolute() {
             vec![PathBuf::from(&token)]
@@ -730,6 +768,21 @@ fn mention_lines<'a>(text: &'a str, name: &str, limit: usize) -> Vec<&'a str> {
             }
             // `gsd:plan` in `gsd:plan-phase` is cut by the `-` above; in `gsd:plan:x`, by this.
             if after == Some(':') && line[end + 1..].chars().next().is_some_and(is_name_char) {
+                continue;
+            }
+            // A file's name is no mention (`docs/plan.md`, `plan.md`): a path's `/` or an
+            // extension after the name (ESC-195).
+            let in_path = before == Some('/')
+                && line[..start - 1]
+                    .chars()
+                    .last()
+                    .is_some_and(|c| is_name_char(c) || c == '/' || c == '.');
+            let extension = after == Some('.')
+                && line[end + 1..]
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_alphanumeric());
+            if in_path || extension {
                 continue;
             }
             let distinctive = name.contains(['-', ':'])
@@ -1549,6 +1602,8 @@ fn read_harness(ctx: &mut Ctx, repo: &str, harness: EngineId, launched: &[String
                         .filter(|r| r.1 && is_kept(&r.0))
                         .map(|r| repos::prefixed(repo, &r.0))
                         .collect(),
+                    guessed: false,
+                    also: Vec::new(),
                 }
             })
             .collect();
@@ -1823,6 +1878,8 @@ fn prompt_loop_of(
             agents: Vec::new(),
             reads: Vec::new(),
             writes: Vec::new(),
+            guessed: false,
+            also: Vec::new(),
         })
         .collect();
     Some(Workflow {
@@ -1928,6 +1985,9 @@ pub fn read(root: &Path, repos: &[String], roots: &Roots, launched: &[String]) -
     let mut out = Scan {
         read_at: millis(std::time::SystemTime::now()),
         searched: searched(),
+        root: norm(root),
+        claude: roots.claude.as_deref().map(norm).unwrap_or_default(),
+        home: norm(&roots.home),
         ..Default::default()
     };
     let list: Vec<String> = if repos.is_empty() {
@@ -1983,6 +2043,12 @@ pub fn is_stale(scan: &Scan, root: &Path, repos: &[String], roots: &Roots) -> bo
 const ALL_EVERY: std::time::Duration = std::time::Duration::from_secs(30);
 static LAST_ALL: parking_lot::Mutex<Option<std::time::Instant>> = parking_lot::Mutex::new(None);
 static ALL_RUNNING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+/// By project: the fingerprint of its workflows' files as last read or written, and what the
+/// readings of this run changed of each workflow (« Mis à jour par la relecture »).
+#[allow(clippy::type_complexity)]
+static FILES: std::sync::LazyLock<
+    parking_lot::Mutex<std::collections::HashMap<String, (String, BTreeMap<String, String>)>>,
+> = std::sync::LazyLock::new(Default::default);
 
 impl<R: tauri::Runtime> crate::core::Core<R> {
     /// The workflows of the project: the last reading kept in the data folder, read again when a
@@ -1995,21 +2061,160 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             .ok()
             .and_then(|b| serde_json::from_slice(&b).ok());
         let (root, repos) = (PathBuf::from(&project.path), project.repos.clone());
+        // « Relire quand les fichiers changent » off (ESC-195): only « Relire » reads again.
+        let auto = project.workflows_auto_read;
         let (scan, changed) = tauri::async_runtime::spawn_blocking(move || {
             let roots = Roots::of_user();
             match stored {
-                Some(s) if !force && !is_stale(&s, &root, &repos, &roots) => (s, false),
+                Some(s) if !force && (!auto || !is_stale(&s, &root, &repos, &roots)) => (s, false),
                 _ => (read(&root, &repos, &roots, &[]), true),
             }
         })
         .await?;
-        self.workflow_read(project_id, &scan, changed);
         if changed {
             if let Some(dir) = file.parent() {
                 std::fs::create_dir_all(dir)?;
             }
             crate::paths::write_atomic(&file, &serde_json::to_vec_pretty(&scan)?)?;
         }
+        // The files of the workflows (ESC-195): what this reading found added or updated there,
+        // never removed; then the workflows of the files are those the project shows and follows.
+        let places = crate::workflowfiles::places(&project, &self.data);
+        let mut folder = crate::workflowfiles::load_all(&places);
+        let written = crate::workflowfiles::merge_reading_all(
+            &places,
+            &folder,
+            &scan.workflows,
+            Path::new(&project.path).is_dir(),
+        );
+        if !written.is_empty() {
+            let mut files = FILES.lock();
+            let seen = files.entry(project_id.to_string()).or_default();
+            for (id, what) in &written {
+                seen.1.insert(id.clone(), what.clone());
+            }
+            drop(files);
+            folder = crate::workflowfiles::load_all(&places);
+        }
+        let shared = self.scan_from_files(&project, &folder, &scan);
+        self.workflow_read(project_id, &shared, changed || !written.is_empty());
+        Ok(shared)
+    }
+
+    /// The reading of this machine kept in the data folder (`workflows.json`), as read.
+    pub(crate) fn cached_reading(&self, project_id: &str) -> Scan {
+        std::fs::read(self.data.workflows_file(project_id))
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default()
+    }
+
+    /// The workflows of the project's files (ESC-195) beside what `local` read of the rest; the
+    /// corrections they hold taken by the project when they changed.
+    fn scan_from_files(
+        &self,
+        project: &crate::model::Project,
+        folder: &crate::workflowfiles::Folder,
+        local: &Scan,
+    ) -> Scan {
+        let fingerprint = folder.fingerprint();
+        let updated = {
+            let mut files = FILES.lock();
+            let seen = files.entry(project.id.clone()).or_default();
+            seen.0 = fingerprint;
+            seen.1.clone()
+        };
+        self.take_workflow_fixes(&project.id, folder.fixes());
+        let root = PathBuf::from(&project.path);
+        let shown = |p: &Path| match p.strip_prefix(&root) {
+            Ok(rel) => norm(rel),
+            Err(_) => norm(p),
+        };
+        crate::workflowfiles::scan_of(project, folder, local, shown, &updated)
+    }
+
+    /// The workflows of the project as its files and this machine's last reading say them, read
+    /// from neither the harnesses' folders nor anything else: what the tracking starts from.
+    pub(crate) fn workflows_of(&self, project_id: &str) -> Scan {
+        let local = self.cached_reading(project_id);
+        let Ok(project) = self.project(project_id) else {
+            return local;
+        };
+        let folder =
+            crate::workflowfiles::load_all(&crate::workflowfiles::places(&project, &self.data));
+        self.scan_from_files(&project, &folder, &local)
+    }
+
+    /// The corrections the files hold, taken by the project when they are not its own: the window
+    /// told.
+    fn take_workflow_fixes(&self, project_id: &str, fixes: crate::workflowfix::Fixes) {
+        let updated = {
+            let mut projects = self.projects.write();
+            let Some(p) = projects.iter_mut().find(|p| p.id == project_id) else {
+                return;
+            };
+            if p.workflow_fixes == fixes {
+                return;
+            }
+            p.workflow_fixes = fixes;
+            p.clone()
+        };
+        self.request_save();
+        self.hub
+            .emit(crate::model::UiEvent::Project { project: updated });
+    }
+
+    /// The project's corrections written into the files of its workflows (Réglages › Projets ›
+    /// Workflow saved).
+    pub(crate) fn write_workflow_fixes(&self, project: &crate::model::Project) {
+        let places = crate::workflowfiles::places(project, &self.data);
+        let folder = crate::workflowfiles::load_all(&places);
+        if let Err(e) = crate::workflowfiles::set_fixes(&folder, &project.workflow_fixes) {
+            log::warn!("workflow fixes of {}: {e:#}", project.id);
+        }
+        let folder = crate::workflowfiles::load_all(&places);
+        FILES.lock().entry(project.id.clone()).or_default().0 = folder.fingerprint();
+        self.take_workflow_fixes(&project.id, folder.fixes());
+    }
+
+    /// The project's folder changed (a pull, another branch): its workflows' files read again when
+    /// they changed, the corrections they hold taken, its agents followed in them at once.
+    pub(crate) fn sync_workflow_files(&self, project_id: &str) {
+        let Ok(project) = self.project(project_id) else {
+            return;
+        };
+        let folder =
+            crate::workflowfiles::load_all(&crate::workflowfiles::places(&project, &self.data));
+        let fingerprint = folder.fingerprint();
+        let known = FILES.lock().get(project_id).map(|s| s.0.clone());
+        if known.as_deref() == Some(fingerprint.as_str())
+            || (known.is_none() && folder.texts.is_empty())
+        {
+            return;
+        }
+        let local = self.cached_reading(project_id);
+        self.scan_from_files(&project, &folder, &local);
+        self.workflow_fixes_changed(project_id);
+    }
+
+    /// « Retirer du dépôt »: the file of a workflow goes (one this machine reads would come back
+    /// at its next reading: « Ce n'est pas un workflow » is for those).
+    pub async fn remove_workflow_file(
+        &self,
+        project_id: &str,
+        workflow: &str,
+    ) -> anyhow::Result<Scan> {
+        let project = self.project(project_id)?;
+        let folder =
+            crate::workflowfiles::load_all(&crate::workflowfiles::places(&project, &self.data));
+        if let Some((path, _)) = folder.doc(workflow) {
+            std::fs::remove_file(path)?;
+        }
+        if let Some(s) = FILES.lock().get_mut(project_id) {
+            s.1.remove(workflow);
+        }
+        let scan = self.workflows_of(project_id);
+        self.workflow_fixes_changed(project_id);
         Ok(scan)
     }
 
@@ -2023,7 +2228,13 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             }
             *last = Some(std::time::Instant::now());
         }
-        let ids: Vec<String> = self.projects.read().iter().map(|p| p.id.clone()).collect();
+        let ids: Vec<String> = self
+            .projects
+            .read()
+            .iter()
+            .filter(|p| p.workflows_auto_read)
+            .map(|p| p.id.clone())
+            .collect();
         let core = self.clone();
         tauri::async_runtime::spawn(async move {
             let _one = ALL_RUNNING.lock().await;

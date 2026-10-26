@@ -346,12 +346,16 @@ fn step_matches(step: &Step, sig: &Sig) -> bool {
     match sig {
         Sig::Door(w) | Sig::Skill(w) => {
             let w = word(w);
-            let (name, command) = (step.name.to_lowercase(), word(&step.command));
+            let names = |n: &str| {
+                let n = word(n);
+                n == w || n.ends_with(&format!(":{w}")) || w.ends_with(&format!(":{n}"))
+            };
+            // A step corrected by the user (ESC-195) is also signalled by `also`: the commands
+            // and names of the steps merged into it, its name as read, the commands added.
             !w.is_empty()
-                && (command == w
-                    || name == w
-                    || name.ends_with(&format!(":{w}"))
-                    || w.ends_with(&format!(":{name}")))
+                && (word(&step.command) == w
+                    || names(&step.name)
+                    || step.also.iter().any(|a| names(a)))
         }
         Sig::Agent(a) => step.agents.iter().any(|x| x.name.eq_ignore_ascii_case(a)),
         Sig::File(p) => {
@@ -871,16 +875,13 @@ fn repo_of(root: &str, repos: &[String], cwd: &str) -> String {
 
 impl<R: tauri::Runtime> crate::core::Core<R> {
     /// The last reading of a project's workflows (the file `refresh_workflows` keeps, or the last
-    /// one it made): none read yet is no workflow.
+    /// one it made), as the user corrected it (ESC-195): none read yet is no workflow.
     pub(crate) fn tracking_scan(&self, project_id: &str) -> std::sync::Arc<Scan> {
         if let Some(s) = self.wf_tracks.lock().scans.get(project_id) {
             return s.clone();
         }
-        let scan: Scan = std::fs::read(self.data.workflows_file(project_id))
-            .ok()
-            .and_then(|b| serde_json::from_slice(&b).ok())
-            .unwrap_or_default();
-        let scan = std::sync::Arc::new(scan);
+        let scan =
+            std::sync::Arc::new(self.corrected_scan(project_id, &self.stored_scan(project_id)));
         self.wf_tracks
             .lock()
             .scans
@@ -1056,10 +1057,11 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     /// The reading of a project's workflows was made: kept for the tracking, and when it changed,
     /// every agent that follows one is told whether its step is now behind it (choice 154).
     pub(crate) fn workflow_read(&self, project_id: &str, scan: &Scan, changed: bool) {
+        let scan = self.corrected_scan(project_id, scan);
         self.wf_tracks
             .lock()
             .scans
-            .insert(project_id.to_string(), std::sync::Arc::new(scan.clone()));
+            .insert(project_id.to_string(), std::sync::Arc::new(scan));
         if changed {
             for v in self.workflow_tracks(project_id) {
                 if v.track.workflow.is_some() {
@@ -1068,6 +1070,30 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
                 }
             }
         }
+    }
+
+    /// The reading kept in the data folder, as read.
+    fn stored_scan(&self, project_id: &str) -> Scan {
+        // The workflows of the project's files (ESC-195), beside this machine's last reading.
+        self.workflows_of(project_id)
+    }
+
+    /// `scan` with the project's corrections (`workflowfix`).
+    fn corrected_scan(&self, project_id: &str, scan: &Scan) -> Scan {
+        let fixes = self
+            .project(project_id)
+            .map(|p| p.workflow_fixes)
+            .unwrap_or_default();
+        crate::workflowfix::corrected(scan, &fixes)
+    }
+
+    /// The corrections of a project's workflows changed (Réglages › Projets › Workflow, its
+    /// `.escouade.yml`): the tracking takes them at once, its agents told as for a new reading.
+    /// The history kept is not rewritten: its passages keep the names of their steps.
+    pub(crate) fn workflow_fixes_changed(&self, project_id: &str) {
+        self.wf_tracks.lock().scans.remove(project_id);
+        let scan = self.stored_scan(project_id);
+        self.workflow_read(project_id, &scan, true);
     }
 
     /// An agent is deleted: its history goes with it.

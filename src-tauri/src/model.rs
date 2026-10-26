@@ -734,6 +734,18 @@ pub struct Project {
     /// agents have of them stay until the cleaning.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub repos_gone: Vec<String>,
+    /// The user's corrections of its workflows (ESC-195): ahead of what the reading finds. Kept in
+    /// the files of its workflows (`workflowfiles`), read from them; here, the window's copy.
+    #[serde(default)]
+    pub workflow_fixes: crate::workflowfix::Fixes,
+    /// « Où garder la configuration des workflows » (ESC-195): in the repository,
+    /// `.escouade/workflows/`, for the team (by default), or on this machine alone.
+    #[serde(default = "crate::model::yes")]
+    pub workflows_in_repo: bool,
+    /// « Relire quand les fichiers changent » (ESC-195): its workflows read again when the window
+    /// comes back to the front and a file read changed. Off: by « Relire » alone.
+    #[serde(default = "crate::model::yes")]
+    pub workflows_auto_read: bool,
 }
 
 impl Project {

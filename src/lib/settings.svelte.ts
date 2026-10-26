@@ -15,6 +15,7 @@ import type {
   ProjectIntegrations,
   RunCommand,
   Settings,
+  WorkflowFix,
   WorktreeBase,
   WorktreeStep,
   WorktreeSuggestion,
@@ -136,6 +137,9 @@ type ProjectFields = Pick<
   | 'engine'
   | 'private'
   | 'sharedOnLimit'
+  | 'workflowFixes'
+  | 'workflowsAutoRead'
+  | 'workflowsInRepo'
   | 'userName'
   | 'shareNew'
 >;
@@ -182,6 +186,12 @@ export interface ProjectDraft {
   private: boolean;
   /** « Comptes partagés à la limite ». */
   sharedOnLimit: boolean;
+  /** The corrections of its workflows (ESC-195). */
+  workflowFixes: WorkflowFix[];
+  /** « Relire quand les fichiers changent ». */
+  workflowsAutoRead: boolean;
+  /** « Où garder la configuration des workflows »: in the repository (`.escouade/workflows/`), or on this machine. */
+  workflowsInRepo: boolean;
   /** « Ton nom dans ce projet » (ESC-190): empty is the app's. */
   userName: string;
   /** « Partager chaque nouveau ticket » (ESC-190). */
@@ -215,6 +225,9 @@ function draftOf(p: Project): ProjectDraft {
     engine,
     private: isPrivate,
     sharedOnLimit,
+    workflowFixes,
+    workflowsAutoRead,
+    workflowsInRepo,
     userName,
     shareNew,
     board,
@@ -250,6 +263,10 @@ function draftOf(p: Project): ProjectDraft {
     private: !!isPrivate,
     // Absent from a project of the window's tests made before ESC-141.
     sharedOnLimit: !!sharedOnLimit,
+    // Absent from a project of the window's tests made before ESC-195.
+    workflowFixes: workflowFixes ?? [],
+    workflowsAutoRead: workflowsAutoRead ?? true,
+    workflowsInRepo: workflowsInRepo ?? true,
     // Absent from a project of the window's tests made before ESC-190.
     userName: userName ?? '',
     shareNew: !!shareNew,
@@ -310,6 +327,9 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     engine: d.engine,
     private: d.private,
     sharedOnLimit: d.sharedOnLimit,
+    workflowFixes: d.workflowFixes,
+    workflowsAutoRead: d.workflowsAutoRead,
+    workflowsInRepo: d.workflowsInRepo,
     userName: d.userName.trim(),
     shareNew: d.shareNew,
   };

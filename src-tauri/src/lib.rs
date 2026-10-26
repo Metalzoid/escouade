@@ -139,6 +139,12 @@ mod workflow_tests;
 mod workflow_track;
 #[cfg(test)]
 mod workflow_track_tests;
+mod workflowfiles;
+#[cfg(test)]
+mod workflowfiles_tests;
+mod workflowfix;
+#[cfg(test)]
+mod workflowfix_tests;
 mod worktrees;
 mod wsl;
 
@@ -480,6 +486,8 @@ pub fn run() {
             commands::get_workflows,
             commands::get_workflow_tracks,
             commands::refresh_workflows,
+            commands::effective_workflows,
+            commands::remove_workflow_file,
             commands::agent_merge_check,
             commands::merge_agent_repos,
             commands::forget_repo,

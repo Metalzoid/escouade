@@ -93,4 +93,16 @@ export const ALLOWED: Allowed[] = [
   // M — mcp
 
   // G — branches
+
+  // ESC-195 — Réglages › Projets › Workflow
+  {
+    file: 'src/components/settings/WorkflowSection.svelte',
+    text: 'PROMPT.md',
+    why: 'le nom d’un fichier, le même dans toutes les langues',
+  },
+  {
+    file: 'src/components/settings/WorkflowSection.svelte',
+    text: '.escouade/workflows/',
+    why: 'le nom d’un fichier, le même dans toutes les langues',
+  },
 ];

@@ -1442,6 +1442,7 @@ describe('SettingsModal in English', () => {
       'Identity',
       'Remote control',
       'Privacy',
+      'Workflow',
       'Git',
       'Worktrees',
       'Launch',

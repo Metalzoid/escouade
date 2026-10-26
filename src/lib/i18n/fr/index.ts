@@ -27,6 +27,7 @@ import stats from './stats';
 import subagents from './subagents';
 import wizard from './wizard';
 import voice from './voice';
+import workflowSettings from './workflowSettings';
 
 export const fr = {
   common,
@@ -55,6 +56,7 @@ export const fr = {
   bgtasks,
   wizard,
   voice,
+  workflowSettings,
   share,
 } as const;
 

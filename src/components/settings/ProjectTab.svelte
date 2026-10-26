@@ -23,6 +23,7 @@
   import SharedSection from './SharedSection.svelte';
   import StepList from './StepList.svelte';
   import Switch from './Switch.svelte';
+  import WorkflowSection from './WorkflowSection.svelte';
   import WorktreeBaseField from './WorktreeBaseField.svelte';
   import { tip } from '../../lib/tip';
   import { repoLabel } from '../../lib/repos';
@@ -432,6 +433,9 @@
     {#if !liveRepos.includes('')}<p class="repo-note">{t('repos.settings.yml')}</p>{/if}
   </Group>
 {/if}
+
+<!-- Its workflows (ESC-195, #loops-settings): what was read, and the steps as corrected. -->
+<WorkflowSection {project} />
 
 <Group title="Git">
   <Row label={t('settings.project.worktreePerAgent')} desc={t('settings.project.worktreePerAgentDesc')} shared="worktrees.per_agent">

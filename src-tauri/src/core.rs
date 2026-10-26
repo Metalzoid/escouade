@@ -1529,6 +1529,9 @@ pub(crate) fn blank_project(path: &str) -> Project {
         private: false,
         shared: Default::default(),
         shared_on_limit: false,
+        workflow_fixes: Vec::new(),
+        workflows_auto_read: true,
+        workflows_in_repo: true,
     }
 }
 
@@ -7766,6 +7769,12 @@ impl<R: Runtime> Core<R> {
         // harnesses at each start of an agent, before its next turn (`fence`).
         cur.private = p.private;
         cur.shared_on_limit = p.shared_on_limit;
+        // Its workflows' corrections and when they are read again (ESC-195).
+        cur.workflow_fixes = crate::workflowfix::cleaned(p.workflow_fixes);
+        cur.workflows_auto_read = p.workflows_auto_read;
+        let moved_from = (cur.workflows_in_repo != p.workflows_in_repo)
+            .then(|| crate::workflowfiles::places(cur, &self.data).repo);
+        cur.workflows_in_repo = p.workflows_in_repo;
         let dir_changed = cur.worktree_dir != worktree_dir;
         cur.worktree_dir = worktree_dir;
         cur.agent_branch_prefix = agent_prefix;
@@ -7785,6 +7794,20 @@ impl<R: Runtime> Core<R> {
         // Its next worktrees go elsewhere, maybe out of its folder: watched there too.
         if dir_changed {
             self.watch_project(&updated);
+        }
+        // Its workflows kept elsewhere, or corrected otherwise: their files follow, and its agents
+        // are followed in them at once (ESC-195).
+        if let Some(from) = moved_from {
+            let to = crate::workflowfiles::places(&updated, &self.data).repo;
+            if let Err(e) = crate::workflowfiles::move_all(&from, &to) {
+                log::warn!("workflows of {} moved: {e:#}", updated.id);
+            }
+        }
+        if before.workflow_fixes != updated.workflow_fixes
+            || before.workflows_in_repo != updated.workflows_in_repo
+        {
+            self.write_workflow_fixes(&updated);
+            self.workflow_fixes_changed(&updated.id);
         }
         // The account its tickets go to may have changed, and so what holds them back.
         if account_changed {
@@ -8084,6 +8107,8 @@ impl<R: Runtime> Core<R> {
         self.read_shared(project_id, false);
         // Its shared tickets' files too (ESC-190): read again, a teammate's change followed.
         self.sync_shared(project_id);
+        // And its workflows' (ESC-195).
+        self.sync_workflow_files(project_id);
         let Ok(project) = self.project(project_id) else {
             return;
         };

@@ -90,6 +90,12 @@ fn a_door_is_named_as_a_command_a_code_or_qualified_never_inside_a_longer_name()
     assert!(!mentions("/gsd:plan-phase-extra", "gsd:plan-phase"));
     assert!(!mentions("/gsd:plan", "gsd:plan-phase"));
     assert!(!mentions("gsd:plan-phase", "plan"));
+    // A file named like a step is no mention of it (ESC-195).
+    assert!(!mentions("Read docs/plan.md first", "plan"));
+    assert!(!mentions("Write plan.md", "plan"));
+    assert!(!mentions("see ./review/notes", "review"));
+    assert!(mentions("then run /plan, then /review.", "plan"));
+    assert!(mentions("(/review)", "review"));
 }
 
 #[test]
@@ -689,6 +695,35 @@ async fn the_reading_is_kept_in_the_data_folder_and_read_again_when_a_file_chang
     assert!(h.core.refresh_workflows("nope", false).await.is_err());
 }
 
+#[test]
+fn with_claude_code_s_folder_elsewhere_its_includes_are_read_there_and_said_as_its() {
+    // CLAUDE_CONFIG_DIR away from the home folder (ESC-195): `@~/.claude/…` is that folder, never the
+    // home's own `.claude`.
+    let dir = test_dir("workflow-config-dir");
+    let claude = dir.join("config");
+    copy_dir(&fixture("gsd").join("home").join(".claude"), &claude);
+    let roots = Roots {
+        home: dir.join("home"),
+        claude: Some(claude),
+        codex: None,
+    };
+    let scan = read(&fixture("gsd/project"), &[], &roots, &[]);
+    assert_eq!(scan.workflows.len(), 1, "{scan:#?}");
+    assert!(scan.workflows[0].steps[1]
+        .description
+        .contains("verification loop"));
+    assert!(scan
+        .sources
+        .iter()
+        .any(|s| s.kind == "include" && s.path.contains("/config/get-shit-done/")));
+    assert_eq!(
+        scan.workflows[0].steps[1].path,
+        "~/.claude/commands/gsd/plan-phase.md"
+    );
+    assert!(scan.claude.ends_with("/config"), "{}", scan.claude);
+    assert!(scan.root.ends_with("gsd/project"), "{}", scan.root);
+}
+
 // ---------- what the reading may open ----------
 
 /// A project whose two commands name, one after the other, every file the reading must not open.
@@ -818,4 +853,54 @@ fn a_link_that_leaves_the_repository_is_not_followed() {
         .searched
         .iter()
         .any(|s| s.starts_with(IGNORED) && s.ends_with("linked.md")));
+}
+
+#[test]
+fn a_skill_of_the_repository_that_runs_the_plan_the_implementation_and_the_review_is_their_entry() {
+    // As at HelloAsso: `/dev` analyses the need, then runs the plan, the implementation and the
+    // review, each a skill of the repository with its sub-agent of `.claude/agents`.
+    let scan = read(&fixture("dev/project"), &[], &roots("none"), &[]);
+    assert_eq!(scan.workflows.len(), 1, "{scan:#?}");
+    let w = &scan.workflows[0];
+    assert_eq!(names(w), ["plan", "implement", "review"]);
+    let agents: Vec<&str> = w.steps.iter().map(|s| s.agents[0].name.as_str()).collect();
+    assert_eq!(agents, ["planner", "implementer", "reviewer"]);
+    assert_eq!(
+        w.steps[0].agents[0].path.as_deref(),
+        Some(".claude/agents/planner.md")
+    );
+    let dev = w.doors.iter().find(|d| d.name == "dev").unwrap();
+    assert_eq!(dev.role, Role::Entry);
+    assert_eq!(dev.scope, Scope::Project);
+    let mut enters = dev.enters.clone();
+    enters.sort();
+    assert_eq!(enters, ["implement", "plan", "review"]);
+    assert!(w
+        .transitions
+        .iter()
+        .any(|t| t.from == "review" && t.to == "implement" && t.back && t.max == Some(3)));
+    assert!(crate::workflowfiles::in_repo(w));
+}
+
+#[test]
+fn the_agents_folder_is_read_whole_its_skills_agents_commands_and_prompts() {
+    let scan = read(&fixture("agents/project"), &[], &roots("none"), &[]);
+    assert_eq!(scan.workflows.len(), 1, "{scan:#?}");
+    let w = &scan.workflows[0];
+    assert_eq!(names(w), ["triage", "fix", "ship"]);
+    assert_eq!(w.steps[0].path, ".agents/skills/triage/SKILL.md");
+    assert_eq!(w.steps[1].path, ".agents/commands/fix.md");
+    assert_eq!(w.steps[2].path, ".agents/prompts/ship.md");
+    assert_eq!(
+        w.steps[1].agents[0].path.as_deref(),
+        Some(".agents/agents/fixer.md")
+    );
+    for f in [
+        ".agents/skills",
+        ".agents/agents",
+        ".agents/commands",
+        ".agents/prompts",
+    ] {
+        assert!(scan.searched.iter().any(|s| s == f), "{f}");
+    }
 }

@@ -154,7 +154,8 @@ describe('ProjectTab', () => {
       const names = headings();
       expect(names.indexOf('Remote control')).toBe(names.indexOf('Identité') + 1);
       expect(names.indexOf('Confidentialité')).toBe(names.indexOf('Remote control') + 1);
-      expect(names.indexOf('Git')).toBe(names.indexOf('Confidentialité') + 1);
+      expect(names.indexOf('Workflow')).toBe(names.indexOf('Confidentialité') + 1);
+      expect(names.indexOf('Git')).toBe(names.indexOf('Workflow') + 1);
       const remote = screen.getByRole('switch', { name: LABEL });
       expect(remote).toHaveAttribute('aria-checked', 'false');
       expect(remote).toBeEnabled();

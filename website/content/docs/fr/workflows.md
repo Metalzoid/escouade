@@ -7,7 +7,7 @@ Un workflow est la suite d’étapes que tes agents suivent dans un projet (GSD,
 
 ## Ce qu’Escouade lit
 
-Escouade ne demande rien à l’agent. Elle lit les commandes (`.claude/commands`), les skills, les sous-agents et les prompts de chaque harness, sous le dossier du projet et dans les dossiers propres des harness, puis les fichiers d’état que les étapes écrivent (`.planning/STATE.md`, `fix_plan.md`…). Un workflow, ce sont au moins deux étapes reliées, ou un prompt rejoué ; une commande seule (`/commit`) n’en est pas un.
+Escouade ne demande rien à l’agent. Elle lit les commandes (`.claude/commands`), les skills, les sous-agents et les prompts de chaque harness (`.claude/`, `.agents/` en entier, `.github/`, `.opencode/`, `.cursor/`), sous le dossier du projet et dans les dossiers propres des harness, puis les fichiers d’état que les étapes écrivent (`.planning/STATE.md`, `fix_plan.md`…). Un workflow, ce sont au moins deux étapes reliées, ou un prompt rejoué ; une commande seule (`/commit`) n’en est pas un.
 
 Pour chaque workflow, elle garde :
 
@@ -18,6 +18,17 @@ Pour chaque workflow, elle garde :
 - sa **condition de sortie**.
 
 Un projet à plusieurs dépôts a le workflow de chaque dépôt. La lecture se refait quand un fichier lu change, et à la demande.
+
+## Où c’est gardé
+
+Ce qu’Escouade comprend d’un workflow tiré de la config du dépôt (ses portes, ses étapes, leurs sous-agents, ses retours, ses fichiers d’état) et tes corrections sont gardés dans le dépôt, un fichier par workflow dans `.escouade/workflows/`, à côté des [tickets partagés](shared-board). Escouade écrit ces fichiers et les tient à jour, mais ne les commite jamais : commite-les avec ton travail, et toute l’équipe qui utilise Escouade voit les mêmes workflows et les mêmes corrections. Un workflow est du dépôt quand sa porte d’entrée l’est, même si une étape appelle une skill de tes propres dossiers (elle est nommée telle quelle).
+
+- Les fichiers ne gardent rien d’une machine : ni date, ni chemin absolu, ni l’état du travail (« phase 3 sur 6 » est relu sur place). Une relecture sans changement ne les touche pas.
+- Le dossier fait foi : un coéquipier dont la machine ne lit pas un workflow le voit et le suit quand même. Une relecture ajoute un workflow nouveau et met à jour celui qui a changé, sans jamais supprimer un fichier ; on écarte un workflow par « Ce n’est pas un workflow » (son fichier le garde marqué) ou on supprime son fichier par « Retirer du dépôt ».
+- Les fichiers sont relus quand ils changent (un `git pull`, une autre branche) ; un fichier illisible est signalé avec son chemin et sa raison.
+- Les workflows de tes propres dossiers (`~/.claude`, `~/.codex`, GSD ou Superpowers installés là) sont lus, montrés et suivis de la même façon, mais leur fichier reste sur ta machine, dans `~/.escouade/projects/<id>/workflows/`, jamais dans le dépôt. « Sur cette machine », dans Réglages › Projets › Workflow, y garde aussi ceux du dépôt.
+- L’historique des agents dans les workflows reste sur ta machine, dans le dossier de données d’Escouade.
+- Le format est décrit par un schéma JSON : `https://escouade.dev/schemas/escouade-workflow.schema.json`.
 
 ## Où en est chaque agent
 

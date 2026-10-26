@@ -226,3 +226,45 @@ async fn a_private_project_tells_nothing_of_its_workflows_to_the_agents_of_the_o
     assert_eq!(rows[0]["workflow"]["step"], "two");
     c.cancel().await.unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn get_workflow_gives_the_workflows_as_the_user_corrected_them() {
+    let h = harness("mcp-workflow-fixed");
+    let p = project(&h).await;
+    write_workflow(Path::new(&p.path));
+    let scan = h.core.refresh_workflows(&p.id, true).await.unwrap();
+    let w = &scan.workflows[0];
+    // « one » renamed in Settings › Projects › Workflow.
+    h.core
+        .update_project(Project {
+            workflow_fixes: vec![crate::workflowfix::Fix {
+                workflow: w.id.clone(),
+                steps: w
+                    .steps
+                    .iter()
+                    .map(|s| crate::workflowfix::FixStep {
+                        name: if s.name == "one" {
+                            "Premier".into()
+                        } else {
+                            s.name.clone()
+                        },
+                        from: vec![s.name.clone()],
+                        signals: Vec::new(),
+                    })
+                    .collect(),
+                ..Default::default()
+            }],
+            ..h.core.project(&p.id).unwrap()
+        })
+        .unwrap();
+    let c = external(&h).await;
+    let got = read(&c, "get_workflow", json!({ "project": p.name })).await;
+    let steps: Vec<&str> = got["workflows"][0]["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(steps, ["Premier", "two"], "{got}");
+    c.cancel().await.unwrap();
+}

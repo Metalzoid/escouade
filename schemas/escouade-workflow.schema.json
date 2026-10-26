@@ -1,0 +1,219 @@
+{
+  "$id": "https://escouade.dev/schemas/escouade-workflow.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "A workflow Escouade read in the project, shared with its team in .escouade/workflows/: its definition as read, and the user's corrections apart. Escouade writes it; commit it with your work, Escouade never does.",
+  "properties": {
+    "fixes": {
+      "additionalProperties": false,
+      "description": "The user's corrections (Settings › Projects › Workflow): they go before the reading.",
+      "properties": {
+        "dismissed": {
+          "description": "Not a workflow: kept so that no reading makes it again.",
+          "type": "boolean"
+        },
+        "removed": {
+          "description": "The steps read taken out.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "steps": {
+          "description": "The steps in their order; absent: those read.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "from": {
+                "description": "The steps read it stands for (several once merged); none for a step added by hand.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "name": {
+                "type": "string"
+              },
+              "signals": {
+                "description": "What tells a step added by hand.",
+                "items": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "command": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["command"],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "agent": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["agent"],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "file": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["file"],
+                      "type": "object"
+                    }
+                  ]
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "version": {
+      "description": "The version of this file's format (1 today).",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "workflow": {
+      "description": "The workflow as the reading found it: Escouade writes it again when a reading finds it changed.",
+      "properties": {
+        "doors": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "exit": {
+          "type": ["string", "null"]
+        },
+        "harness": {
+          "type": ["string", "null"]
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": ["cycle", "prompt"]
+        },
+        "name": {
+          "type": "string"
+        },
+        "promptLoop": {
+          "type": ["object", "null"]
+        },
+        "repo": {
+          "type": "string"
+        },
+        "stateFiles": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "steps": {
+          "items": {
+            "description": "A step: the command that enters it, the sub-agents it launches, the files it reads and writes.",
+            "properties": {
+              "agents": {
+                "items": {
+                  "properties": {
+                    "description": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": ["string", "null"]
+                    }
+                  },
+                  "required": ["name"],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "also": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "command": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "guessed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "order": {
+                "type": "integer"
+              },
+              "path": {
+                "type": "string"
+              },
+              "reads": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "writes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": ["name", "command", "order", "description", "path", "agents", "reads", "writes"],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "transitions": {
+          "items": {
+            "properties": {
+              "back": {
+                "type": "boolean"
+              },
+              "condition": {
+                "type": ["string", "null"]
+              },
+              "from": {
+                "type": "string"
+              },
+              "max": {
+                "type": ["integer", "null"]
+              },
+              "to": {
+                "type": "string"
+              }
+            },
+            "required": ["from", "to", "back"],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": ["id", "name", "kind", "repo", "doors", "steps", "transitions", "stateFiles"],
+      "type": "object"
+    }
+  },
+  "required": ["version", "workflow"],
+  "title": "A workflow of an Escouade project",
+  "type": "object"
+}

@@ -77,6 +77,10 @@ Il manque : la lecture des commandes et de leurs `@`, le modèle d'un workflow, 
 
 Le lecteur n'ouvre que ce qui est sous le dossier du projet ou sous les dossiers propres des harness (liens suivis), en texte (`.md`, `.mdc`, `.txt`, `.yml`, `.yaml`, `.json`, `.toml`), jamais un secret (`.credentials.json`, `auth.json`, `.env*`) ni une conversation (`projects/`, `sessions/`) ; ce qui est refusé paraît dans `searched` en `ignored:<raison>:<chemin nommé>`, sans son contenu.
 
+## Où c'est gardé (ESC-195)
+
+Décidé par l'utilisateur le 2026-10-26 : ce qu'Escouade comprend d'un workflow tiré de la config du dépôt (ses enchaînements, ses étapes, ses sous-agents) et les corrections de l'utilisateur sont gardés dans `.escouade/workflows/` du dépôt, un fichier par workflow, à côté des tickets partagés ; Escouade ne les commite jamais, l'utilisateur les commite pour que l'équipe voie les mêmes. Les workflows des dossiers de l'utilisateur (`~/.claude`, GSD, Superpowers) sont lus et suivis, mais leurs fichiers restent dans le dossier de données d'Escouade, comme l'historique des agents. Le détail est dans `SPEC.md`, « Workflows partagés ».
+
 ## Les risques
 
 - **Une lecture fausse vaut moins que rien** : d'où l'étape devinée en pointillé, les corrections qui passent devant, et l'agent qui affine, plutôt qu'un graphe affirmé.

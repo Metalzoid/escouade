@@ -28,6 +28,7 @@ import stats from './stats';
 import subagents from './subagents';
 import wizard from './wizard';
 import voice from './voice';
+import workflowSettings from './workflowSettings';
 
 export const en = defineCatalog({
   common,
@@ -56,5 +57,6 @@ export const en = defineCatalog({
   bgtasks,
   wizard,
   voice,
+  workflowSettings,
   share,
 });

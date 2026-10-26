@@ -124,10 +124,12 @@ pub(super) async fn get<R: Runtime>(
     project: &str,
 ) -> Result<String, ToolError> {
     let p = resolve::project(core, caller, project)?;
-    let scan = core
+    let read = core
         .refresh_workflows(&p.id, false)
         .await
         .map_err(|e| ToolError::Failed(e.to_string()))?;
+    // As the user corrected them (ESC-195), the way the agents are followed in them.
+    let scan = crate::workflowfix::corrected(&read, &p.workflow_fixes);
     let tracked = Tracked::of(core, &p.id);
     // The agents not archived, by id.
     let names: HashMap<String, String> = core

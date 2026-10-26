@@ -1,5 +1,6 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
+  WorkflowScan,
   SentView,
   LeftoverReport,
   Account,
@@ -350,6 +351,12 @@ export const api = {
     invoke<string>('merge_agent_repos', { id, squash, switchToBase, repos }),
   /** « Rechercher à nouveau » (ESC-169): the project's repositories looked for again. */
   refreshRepos: (id: string) => invoke<Project>('refresh_repos', { id }),
+  /** The project's workflows as last read, read again if a file changed (ESC-192). */
+  getWorkflows: (id: string) => invoke<WorkflowScan>('get_workflows', { id }),
+  /** « Relire » its workflows. */
+  refreshWorkflows: (id: string) => invoke<WorkflowScan>('refresh_workflows', { id }),
+  /** « Retirer du dépôt »: the file of a workflow this machine does not read (ESC-195). */
+  removeWorkflowFile: (id: string, workflow: string) => invoke<WorkflowScan>('remove_workflow_file', { id, workflow }),
   /** « Oublier » a repository gone from the project's folder. */
   forgetRepo: (id: string, repo: string) => invoke<Project>('forget_repo', { id, repo }),
   integrateBase: (id: string) => invoke<Integration>('integrate_base', { id }),

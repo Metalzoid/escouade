@@ -58,6 +58,20 @@ Pour un projet privé, les agents des autres projets ne lisent ni n’écrivent 
 
 Un garde-fou est une règle du harness, qu’une commande peut contourner ; une barrière tient pour toutes ses commandes. Une vraie barrière pour tous les harness demanderait un compte système par projet : Escouade ne le propose pas, les harness et leurs comptes n’y suivraient pas. Quand tu changes « Projet privé », un agent déjà lancé prend ses nouvelles règles avant son prochain tour : son process repart, sa conversation reste. Un agent ouvert en vue terminal les prend à son prochain lancement.
 
+## Workflow
+
+Escouade lit le workflow du projet dans les fichiers de tes harness : leurs commandes, skills, sous-agents et prompts, `PROMPT.md`, les fichiers d’état et les consignes, avec ce qu’ils incluent par `@`. Sur ta machine, sans coût.
+
+- **Lu par les règles à 10:12** : l’heure de la lecture, et les fichiers lus, dossier par dossier. **Relire** refait la lecture.
+- **Affiner avec un agent** : un agent court relira ce que les règles ont trouvé. Le bouton arrive dans une prochaine version.
+- **Relire quand les fichiers changent** : quand la fenêtre revient au premier plan, si un fichier lu a changé. Éteint, seul « Relire » relit.
+- **Trouvés** : les workflows du projet (le nombre d’étapes, de portes et de sous-agents), la boucle des tickets du Kanban, et les commandes seules, qui ne sont pas des workflows. Un clic choisit celui dont tu corriges les étapes.
+- **Étapes** : renomme une étape, fusionne-la avec la suivante, retire-la, déplace-la (glisse son numéro, ou Alt+↑ et Alt+↓ dans son nom), ajoute celle que la lecture a manquée avec ce qui la signale (une commande, un sous-agent, un fichier écrit). Une étape devinée, en pointillé, attend « Garder » ou « Retirer ». « Ce n’est pas un workflow » l’écarte, « Rétablir » le reprend. Tes corrections passent devant une nouvelle lecture ; celle qui ne correspond plus à rien est signalée.
+- **Où garder la configuration des workflows** : « Dans le dépôt » (par défaut) ou « Sur cette machine », pour les workflows tirés de la config du dépôt. Chaque workflow dit où il est gardé : « dans le dépôt » ou « sur cette machine (hors du dépôt) » ; ceux de tes propres dossiers (`~/.claude`, GSD…) restent toujours sur cette machine. Voir [où c’est gardé](workflows#ou-c-est-garde).
+- **Mis à jour par la relecture** : une relecture a trouvé le workflow changé et a mis son fichier à jour (l’infobulle dit ce qui a changé) ; tes corrections restent.
+- **Du dépôt** : un workflow que cette machine ne lit pas elle-même, venu du fichier d’un coéquipier ; il est montré et suivi quand même. « Retirer du dépôt » supprime son fichier.
+- Un fichier illisible est dit sous la lecture, avec son chemin et la raison.
+
 ## Git
 
 | Réglage | Effet | Par défaut |

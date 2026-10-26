@@ -86,6 +86,8 @@ export const ICONS = {
   plug: '<path d="M6 2.75v3M10 2.75v3M4.25 5.75h7.5v2a3.75 3.75 0 0 1-7.5 0zM8 11.5v2" />',
   star: '<path d="M8 2.6l1.6 3.4 3.7.4-2.8 2.5.8 3.7L8 10.7l-3.3 1.9.8-3.7-2.8-2.5 3.7-.4z" />',
   gift: '<path d="M8 3.5v10M3 6.75h10v2.5H3zM4 9.25v4h8v-4M8 6.75C6.75 4.5 4.5 4 4.5 5.4 4.5 6.4 6.25 6.75 8 6.75 9.75 6.75 11.5 6.4 11.5 5.4 11.5 4 9.25 4.5 8 6.75z" />',
+  // A workflow (ESC-191): its steps in a cycle.
+  flow: '<circle cx="4.5" cy="3.5" r="1.75" /><circle cx="4.5" cy="12.5" r="1.75" /><path d="M4.5 5.25v5.5M6.25 12.5h3.5a2.5 2.5 0 0 0 2.5-2.5V6a2.5 2.5 0 0 0-2.5-2.5h-1.5M9.5 1.75 7.75 3.5l1.75 1.75" />',
 } as const;
 
 export type IconName = keyof typeof ICONS;

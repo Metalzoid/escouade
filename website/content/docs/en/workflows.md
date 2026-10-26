@@ -7,7 +7,7 @@ A workflow is the series of steps your agents follow in a project (GSD, Superpow
 
 ## What Escouade reads
 
-Escouade asks nothing of the agent. It reads each harness’s commands (`.claude/commands`), skills, sub-agents and prompts, under the project’s folder and in the harnesses’ own folders, then the state files the steps write (`.planning/STATE.md`, `fix_plan.md`…). A workflow is at least two steps that point at each other, or a prompt played again; a command alone (`/commit`) is not one.
+Escouade asks nothing of the agent. It reads each harness’s commands (`.claude/commands`), skills, sub-agents and prompts (`.claude/`, all of `.agents/`, `.github/`, `.opencode/`, `.cursor/`), under the project’s folder and in the harnesses’ own folders, then the state files the steps write (`.planning/STATE.md`, `fix_plan.md`…). A workflow is at least two steps that point at each other, or a prompt played again; a command alone (`/commit`) is not one.
 
 For each workflow it keeps:
 
@@ -18,6 +18,17 @@ For each workflow it keeps:
 - its **exit condition**.
 
 A project of several repositories has the workflow of each repository. The reading is made again when a file it read changes, and on demand.
+
+## Where it is kept
+
+What Escouade understands of a workflow of the repository’s configuration (its entries, its steps, their sub-agents, its ways back, its state files) and your corrections are kept in the repository, a file per workflow in `.escouade/workflows/`, beside the [shared tickets](shared-board). Escouade writes these files and keeps them up to date, but never commits them: commit them with your work, and the whole team that uses Escouade sees the same workflows and the same corrections. A workflow is the repository’s when its entry is, even when a step calls a skill of your own folders (it is named as it is).
+
+- The files keep nothing of one machine: no date, no absolute path, no state of the work (“phase 3 of 6” is read again on the spot). A reading that changes nothing does not touch them.
+- The folder is what counts: a teammate whose machine does not read a workflow still sees and follows it. A reading adds a new workflow and updates one that changed, never deleting a file; a workflow is set apart by “This is not a workflow” (its file keeps it marked), or its file deleted by “Remove from the repository”.
+- The files are read again when they change (a `git pull`, another branch); a file that can’t be read is said with its path and why.
+- The workflows of your own folders (`~/.claude`, `~/.codex`, GSD or Superpowers installed there) are read, shown and followed the same way, but their file stays on your machine, in `~/.escouade/projects/<id>/workflows/`, never in the repository. “On this machine”, in Settings › Projects › Workflow, keeps the repository’s there too.
+- The agents’ history in the workflows stays on your machine, in Escouade’s data folder.
+- The format is described by a JSON schema: `https://escouade.dev/schemas/escouade-workflow.schema.json`.
 
 ## Where each agent is
 
