@@ -485,15 +485,19 @@ async function turn(s, text, cancelled) {
   } else if (words.includes('lent')) {
     say(s, 'Je commence un long travail…');
     const id = callId(9);
+    // « lent 600s » lasts that long, running the tests (the website's screenshots); a plain « lent », `sleep 4`.
+    const long = /lent (\d+)s/.exec(words)?.[1];
+    const command = long ? 'npm test -- auth' : 'sleep 4';
     update(s, {
       sessionUpdate: 'tool_call',
       toolCallId: id,
-      title: '`sleep 4`',
+      title: `\`${command}\``,
       kind: 'execute',
       status: 'pending',
-      rawInput: { command: 'sleep 4' },
+      rawInput: { command },
     });
-    for (let i = 0; i < 40 && !cancelled(); i++) await sleep(100);
+    const tenths = Number(long ?? 4) * 10;
+    for (let i = 0; i < tenths && !cancelled(); i++) await sleep(100);
     if (cancelled()) return;
     update(s, {
       sessionUpdate: 'tool_call_update',

@@ -2138,8 +2138,99 @@ function startSession() {
     process.chdir(dir);
   }
 
+  // ---------- The website's screenshots: turns written in $FAKE_CLAUDE_DEMO ----------
+
+  // A user message that is a key of the JSON file $FAKE_CLAUDE_DEMO (tests/site-shots) plays its steps, a few tens of
+  // milliseconds apart: { thinking }, { text } (streamed markdown), { tool: 'Edit', file, old, new } (made in the file of the
+  // agent's folder, its patch computed from it), { tool: 'Write', file, content }, { tool: 'Bash', command, description,
+  // output }, { tool: 'Read', file, lines }, { tool: 'TodoWrite', todos }, { send: [files], caption } (SendUserFile, files of
+  // the agent's folder), { question: [questions] } (waits for the answer, then goes on), { hold: true } (the turn stays at
+  // work: its last tool call on the card), { usage } (the session's totals so far). The turn ends with a result unless it
+  // holds.
+  let demoTurns = null;
+  function demoTurn(text) {
+    const file = process.env.FAKE_CLAUDE_DEMO;
+    if (!file) return null;
+    demoTurns ??= JSON.parse(fs.readFileSync(file, 'utf8'));
+    return demoTurns[text.trim()] ?? null;
+  }
+
+  function playDemo(steps) {
+    const step = steps[0];
+    if (!step) return result();
+    const next = () => setTimeout(() => playDemo(steps.slice(1)), 60);
+    const call = (name, input) => {
+      const id = `toolu_demo${++msg}`;
+      assistant({ type: 'tool_use', id, name, input });
+      return id;
+    };
+    const abs = (f) => path.join(process.cwd(), f);
+    if (step.usage) {
+      usage.inputTokens = step.usage.input;
+      usage.outputTokens = step.usage.output;
+      usage.cacheReadInputTokens = step.usage.cache;
+      usage.costUSD = step.usage.cost - 0.05;
+      return next();
+    }
+    if (step.thinking) assistant({ type: 'thinking', thinking: step.thinking, signature: 'sig-demo' });
+    else if (step.text) streamText(step.text);
+    else if (step.tool === 'Edit') {
+      const before = fs.readFileSync(abs(step.file), 'utf8');
+      const at = before.indexOf(step.old);
+      const after = before.slice(0, at) + step.new + before.slice(at + step.old.length);
+      fs.writeFileSync(abs(step.file), after);
+      const line = before.slice(0, at).split('\n').length;
+      const lines = [...step.old.split('\n').map((l) => `-${l}`), ...step.new.split('\n').map((l) => `+${l}`)];
+      const oldLines = step.old.split('\n').length;
+      const newLines = step.new.split('\n').length;
+      const id = call('Edit', { file_path: abs(step.file), old_string: step.old, new_string: step.new });
+      toolResult(id, `The file ${abs(step.file)} has been updated.`, {
+        tool_use_result: { filePath: abs(step.file), structuredPatch: [{ oldStart: line, oldLines, newStart: line, newLines, lines }] },
+      });
+    } else if (step.tool === 'Write') {
+      fs.mkdirSync(path.dirname(abs(step.file)), { recursive: true });
+      fs.writeFileSync(abs(step.file), step.content);
+      const id = call('Write', { file_path: abs(step.file), content: step.content });
+      toolResult(id, `File created successfully at: ${abs(step.file)}`);
+    } else if (step.tool === 'Bash') {
+      const id = call('Bash', { command: step.command, description: step.description ?? '' });
+      if (!step.hold) toolResult(id, step.output ?? '', { tool_use_result: { stdout: step.output ?? '', stderr: '', interrupted: false } });
+    } else if (step.tool === 'Read') {
+      const id = call('Read', { file_path: abs(step.file) });
+      toolResult(id, `${step.lines} lines`, {
+        tool_use_result: { type: 'text', file: { filePath: abs(step.file), numLines: step.lines } },
+      });
+    } else if (step.tool === 'TodoWrite') {
+      const id = call('TodoWrite', { todos: step.todos });
+      toolResult(id, 'Todos have been modified successfully.');
+    } else if (step.send) {
+      const files = step.send.map((f) => abs(f).replace(/\\/g, '/'));
+      const id = call('SendUserFile', { files, caption: step.caption ?? '', status: 'normal', display: 'render' });
+      toolResult(id, `${files.length} files delivered to user.`);
+    } else if (step.question) {
+      const tuid = call('AskUserQuestion', {});
+      pendingAnswer = { id: 'req_question', tuid, kind: 'question', then: () => playDemo(steps.slice(1)) };
+      out({
+        type: 'control_request',
+        request_id: 'req_question',
+        request: {
+          subtype: 'can_use_tool',
+          tool_name: 'AskUserQuestion',
+          input: { questions: step.question },
+          tool_use_id: tuid,
+          requires_user_interaction: true,
+        },
+      });
+      return;
+    }
+    if (step.hold) return;
+    next();
+  }
+
   function onUser(text) {
     out({ type: 'system', subtype: 'init', session_id: sessionId, model, cwd: process.cwd(), permissionMode: 'default' });
+    const demo = demoTurn(text);
+    if (demo) return playDemo(demo);
     const attached = [...text.matchAll(/^(?:Fichier joint : |Attached file: )(.+), (.+)$/gm)].map((m) => ({
       name: m[1],
       file: m[2].trim(),

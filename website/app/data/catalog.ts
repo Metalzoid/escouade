@@ -126,7 +126,10 @@ export interface Catalog {
     loop: string;
     /** Take `{count}` (the criteria met) and `{total}`. */
     criteria: Plural;
-    tokens: string;
+    /** The other tab of the sidebar, beside the agents. */
+    kanban: string;
+    /** The project's tiles on the left: what a screen reader hears of them. */
+    projects: string;
     /** Take `{count}`. */
     running: string;
     waiting: string;

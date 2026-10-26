@@ -160,9 +160,9 @@ test('git beside the conversation looks as the preview draws it, in both themes,
         expect.soft(await lookBut(tabs.locator('.n'), 'width'), `the count, ${where}`).toEqual(await lookBut(ptabs.locator('.n'), 'width'));
         const soon = tabs.locator('.soon');
         const psoon = ptabs.locator('.soon');
-        expect.soft(await soon.isVisible(), `« après la 2.0 » shown, ${where}`).toBe(await psoon.isVisible());
+        expect.soft(await soon.isVisible(), `« dans la 2.1 » shown, ${where}`).toBe(await psoon.isVisible());
         if (await psoon.isVisible())
-          expect.soft(await lookBut(soon, 'width'), `« après la 2.0 », ${where}`).toEqual(await lookBut(psoon, 'width'));
+          expect.soft(await lookBut(soon, 'width'), `« dans la 2.1 », ${where}`).toEqual(await lookBut(psoon, 'width'));
 
         // The scope and the caption.
         const seg = side.locator('.scope');

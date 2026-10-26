@@ -2,9 +2,9 @@
 import { fmt, plural } from '~/data/catalog';
 import { BEAT_MS, SNAPSHOT, fUsd, squadAt, type Answer } from '~/data/squad';
 
-// An Escouade window, drawn in the app's own colours: five agents of one project at work, one of them asking a
-// question the visitor can answer, a ticket agent looping on its criteria. Without JavaScript, or with less
-// motion asked, it stands still on a telling moment.
+// An Escouade window as the app 2.0 draws it (design/app-redesign, DESIGN.md): the projects' tiles on the left, five
+// agents of one project at work on three harnesses, one of them asking a question the visitor can answer, a ticket
+// agent looping on its criteria. Without JavaScript, or with less motion asked, it stands still on a telling moment.
 
 const { lang, text } = useLang();
 const t = ref(SNAPSHOT);
@@ -24,7 +24,7 @@ let last = 0;
 function tick() {
   const now = performance.now();
   // Nothing moves under a visitor about to answer the question.
-  const answering = list.value?.contains(document.activeElement) && document.activeElement?.matches('.option');
+  const answering = list.value?.contains(document.activeElement) && document.activeElement?.matches('.opt');
   if (!answering) t.value += (now - last) / BEAT_MS;
   last = now;
 }
@@ -64,38 +64,60 @@ function answer(option: number) {
 </script>
 
 <template>
-  <figure ref="root" class="squad" :class="{ still: !playing }">
+  <figure ref="root" class="squad" :class="{ still: !playing }" :style="{ '--p': squad.project.color }">
     <div class="win">
       <div class="titlebar">
         <LogoMark :size="18" />
-        <span class="tab">
+        <span class="project">
           <i class="swatch" />
           <b>{{ squad.project.name }}</b>
-          <!-- As in the app's tab: a pill counting the agents that wait, or a dot while they all work. -->
-          <span v-if="squad.counts.waiting" class="badge">{{ squad.counts.waiting }}</span>
-          <i v-else-if="squad.counts.running" class="live" aria-hidden="true" />
           <span class="delta">Δ {{ squad.project.delta }}</span>
         </span>
-        <span v-for="p in squad.projects" :key="p.name" class="tab other" aria-hidden="true">
-          <i class="swatch" :style="{ background: p.color }" />
-          {{ p.name }}
-          <span v-if="p.agents.includes('question')" class="badge">{{ p.agents.filter((s) => s === 'question').length }}</span>
+        <span class="branch">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="4.75" cy="3.75" r="1.5" />
+            <circle cx="4.75" cy="12.25" r="1.5" />
+            <circle cx="11.25" cy="5.25" r="1.5" />
+            <path d="M4.75 5.25v5.5M11.25 6.75c0 2.6-2.1 3.4-5.6 4.25" /></svg
+          >{{ squad.project.branch }}
         </span>
-        <span class="branch">{{ squad.project.branch }}</span>
       </div>
-      <div class="head">
-        <span>{{ text.demo.agents }}</span
-        ><span class="n">{{ squad.agents.length }}</span>
+      <div class="body">
+        <ul class="rail" :aria-label="text.demo.projects">
+          <li class="tile on" :style="{ '--t': squad.project.color }">
+            {{ squad.project.letters }}
+            <span v-if="squad.counts.waiting" class="badge">{{ squad.counts.waiting }}</span>
+            <i v-else-if="squad.counts.running" class="live" aria-hidden="true" />
+          </li>
+          <li v-for="p in squad.projects" :key="p.name" class="tile" :style="{ '--t': p.color }" :title="p.name">
+            {{ p.letters }}
+            <span v-if="p.agents.includes('question')" class="badge">{{ p.agents.filter((s) => s === 'question').length }}</span>
+            <i v-else-if="p.agents.includes('running')" class="live" aria-hidden="true" />
+          </li>
+        </ul>
+        <div class="side">
+          <div class="seg" aria-hidden="true">
+            <span class="on"
+              >{{ text.demo.agents }} <span class="n">{{ squad.agents.length }}</span></span
+            >
+            <span>{{ text.demo.kanban }}</span>
+          </div>
+          <ul ref="list" class="agents">
+            <li v-for="a in squad.agents" :key="a.slot">
+              <AgentCard :agent="a" @answer="answer" />
+            </li>
+          </ul>
+        </div>
       </div>
-      <ul ref="list" class="agents">
-        <li v-for="a in squad.agents" :key="a.slot">
-          <AgentCard :agent="a" @answer="answer" />
-        </li>
-      </ul>
       <div class="statusbar">
         <span class="count"><i class="mini running" />{{ fmt(text.demo.running, { count: squad.counts.running }) }}</span>
-        <span class="count"><i class="mini question" />{{ fmt(text.demo.waiting, { count: squad.counts.waiting }) }}</span>
-        <span class="count done"><i class="mini done" />{{ plural(lang, text.demo.done, squad.counts.done) }}</span>
+        <span class="count" :class="{ waits: squad.counts.waiting }"
+          ><i class="mini question" />{{ fmt(text.demo.waiting, { count: squad.counts.waiting }) }}</span
+        >
+        <span class="count done">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-6.5" /></svg>
+          {{ plural(lang, text.demo.done, squad.counts.done) }}
+        </span>
         <span class="today">{{ fmt(text.demo.today, { amount: fUsd(squad.today, lang) }) }}</span>
         <button type="button" class="pause" :aria-label="text.demo.pause" :aria-pressed="!wanted" @click="wanted = !wanted">
           <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -114,21 +136,26 @@ function answer(option: number) {
 
 <style scoped>
 .squad {
-  /* The app's own colours (src/app.css): this is the app, not the site. */
-  --text: #ede7df;
-  --muted: #a8a095;
-  --dim: #8a8276;
-  --line: rgba(255, 236, 214, 0.08);
-  --line2: rgba(255, 236, 214, 0.15);
-  --panel: #211f1c;
-  --ink: #1b1512;
-  --accent: oklch(0.72 0.12 48);
-  --ok: oklch(0.76 0.12 150);
-  --wait: oklch(0.82 0.13 80);
-  --wait-soft: oklch(0.82 0.13 80 / 0.08);
-  --wait-ring: oklch(0.82 0.13 80 / 0.6);
-  --add: oklch(0.76 0.12 150);
-  --del: oklch(0.72 0.14 25);
+  /* The app's own tokens (src/app.css, the 2.0 design, dark theme): this is the app, not the site. `--p` is the colour of
+     the project in front, which tints the frame as in the app. */
+  --frame: color-mix(in oklch, var(--p) 8%, #08090a);
+  --line: rgba(255, 255, 255, 0.075);
+  --line-2: rgba(255, 255, 255, 0.12);
+  --line-3: rgba(255, 255, 255, 0.2);
+  --text: #f7f8f8;
+  --soft: #d0d3d8;
+  --muted: #989da6;
+  --sep: #4a4e55;
+  --p-ink: color-mix(in oklch, var(--p) 70%, white);
+  --run: oklch(0.79 0.15 155);
+  --wait: oklch(0.84 0.14 82);
+  --wait-bg: oklch(0.84 0.14 82 / 0.07);
+  --wait-line: oklch(0.84 0.14 82 / 0.32);
+  --add: oklch(0.8 0.13 155);
+  --del: oklch(0.74 0.14 22);
+  --on-tile: #101114;
+  --on-wait: #1a1405;
+  --font: 'Inter Variable', Inter, system-ui, 'Segoe UI', sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Menlo, monospace;
   margin: 0;
   color: var(--text);
@@ -137,9 +164,10 @@ function answer(option: number) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 14px;
-  background: #1d1a17;
-  font-size: 14px;
+  border-radius: 12px;
+  background: var(--frame);
+  font-family: var(--font);
+  font-size: 13px;
   line-height: 1.45;
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.1),
@@ -150,89 +178,159 @@ function answer(option: number) {
   display: flex;
   align-items: center;
   gap: 14px;
-  height: 44px;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--line);
+  height: 40px;
+  padding: 0 14px 0 17px;
   white-space: nowrap;
   overflow: hidden;
 }
-.tab {
+.project {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
+  margin-left: 16px;
 }
-.tab b {
-  font-weight: 700;
-}
-.tab.other {
-  color: var(--muted);
+.project b {
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 .swatch {
   flex: none;
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 2.5px;
-  background: var(--accent);
-}
-.live {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--ok);
+  background: var(--p);
 }
 .delta {
-  padding: 0 6px;
-  border-radius: 5px;
-  background: var(--line);
   color: var(--muted);
-  font-family: var(--mono);
   font-size: 12px;
-}
-.badge {
-  min-width: 20px;
-  padding: 0 6px;
-  border-radius: 10px;
-  background: var(--wait);
-  color: var(--ink);
-  font-size: 11.5px;
-  font-weight: 800;
-  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 .branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   margin-left: auto;
-  color: var(--dim);
-  font-family: var(--mono);
+  color: var(--muted);
   font-size: 12px;
 }
-.head {
-  display: flex;
-  gap: 8px;
-  padding: 14px 20px 6px;
-  color: var(--dim);
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.branch svg,
+.count svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
-.head .n {
-  font-family: var(--mono);
-  font-weight: 400;
+.body {
+  display: flex;
+  min-height: 0;
+}
+.rail {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 52px;
+  margin: 0;
+  padding: 8px 0 10px;
+  list-style: none;
+}
+.tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--t);
+  color: var(--on-tile);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  opacity: 0.8;
+}
+.tile.on {
+  opacity: 1;
+  box-shadow:
+    0 0 0 2px var(--frame),
+    0 0 0 3.5px var(--t);
+}
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -7px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--wait);
+  box-shadow: 0 0 0 2px var(--frame);
+  color: var(--on-wait);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+.live {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--run);
+  box-shadow: 0 0 0 2px var(--frame);
+}
+.side {
+  flex: 1;
+  min-width: 0;
+  padding: 0 8px 8px 0;
+}
+.seg {
+  display: flex;
+  gap: 2px;
+  margin: 2px 4px 8px;
+  padding: 3px;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 550;
+}
+.seg span {
+  flex: 1;
+  padding: 4px 0;
+  border-radius: 6px;
+  text-align: center;
+}
+.seg .on {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--text);
+}
+.seg .n {
+  color: var(--muted);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 .agents {
   display: grid;
-  gap: 3px;
+  gap: 2px;
   margin: 0;
-  padding: 0 8px 8px;
+  padding: 0 4px;
   list-style: none;
 }
 .statusbar {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 7px 10px 7px 20px;
+  height: 34px;
+  padding: 0 8px 0 16px;
   border-top: 1px solid var(--line);
   color: var(--muted);
-  font-family: var(--mono);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -240,48 +338,48 @@ function answer(option: number) {
 .count {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
+}
+.count.waits {
+  color: var(--wait);
 }
 .mini {
   display: inline-block;
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--ok);
+  background: var(--run);
 }
 .mini.question {
   background: var(--wait);
 }
-.mini.done {
-  background: color-mix(in oklch, var(--ok) 45%, transparent);
-}
 .today {
   margin-left: auto;
-  color: var(--text);
+  color: var(--soft);
 }
 .pause {
   flex: none;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   padding: 0;
-  border: 1px solid var(--line2);
-  border-radius: 50%;
+  border: none;
+  border-radius: 7px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
   transition:
     color 0.15s,
-    border-color 0.15s;
+    background-color 0.15s;
 }
 .pause:hover {
-  border-color: #35c1bd;
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text);
 }
 .pause svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
@@ -299,11 +397,14 @@ figcaption {
 }
 
 @media (max-width: 640px) {
-  .tab.other,
+  .rail,
   .branch,
   .statusbar .count,
   .agents :deep(.spend) {
     display: none;
+  }
+  .side {
+    padding-left: 8px;
   }
 }
 

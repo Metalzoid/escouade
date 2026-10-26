@@ -10,11 +10,14 @@ const ticketAgent = (s: Squad) => s.agents.find((a) => a.ticket)!;
 const firstAsk = times(0, CYCLE).find((t) => asking(squadAt(t)))!;
 
 describe('squad demo', () => {
-  it('shows five agents of demo-api, each with its model', () => {
+  it('shows five agents of demo-api on three harnesses, each with a model of its harness', () => {
     const s = squadAt(0);
     expect(s.project.name).toBe('demo-api');
+    expect(s.project.letters).toBe('DA');
     expect(s.agents).toHaveLength(5);
-    for (const a of s.agents) expect(['Fable', 'Opus', 'Sonnet', 'Haiku']).toContain(a.model);
+    const models = { Claude: ['Opus 5.5', 'Sonnet 5.5', 'Haiku 5.5'], Codex: ['GPT-5.5'], Cursor: ['Composer 2.5'] };
+    for (const a of s.agents) expect(models[a.harness]).toContain(a.model);
+    expect(new Set(s.agents.map((a) => a.harness))).toEqual(new Set(['Claude', 'Codex', 'Cursor']));
     expect(new Set(s.agents.map((a) => a.name)).size).toBe(5);
   });
 
@@ -134,7 +137,9 @@ describe('squad demo', () => {
 
   it('shows the projects behind with their agents, one of them waiting at some point', () => {
     const s = squadAt(0);
-    expect(s.projects.map((p) => p.name)).toEqual(['studio-web', 'mobile-app']);
+    expect(s.projects.map((p) => p.name)).toEqual(['studio-web', 'mobile-app', 'infra']);
+    // Their tiles' letters, as the app makes them (src/lib/project-rail.ts).
+    expect(s.projects.map((p) => p.letters)).toEqual(['SW', 'MA', 'In']);
     expect(times(0, CYCLE).some((t) => squadAt(t).projects.some((p) => p.agents.includes('question')))).toBe(true);
   });
 });

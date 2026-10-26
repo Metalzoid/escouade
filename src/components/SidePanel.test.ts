@@ -58,10 +58,10 @@ describe('SidePanel', () => {
     expect(app.filesOpen).toBe(false);
   });
 
-  it('keeps the place of « PR et CI » for after the 2.0, without drawing it', async () => {
+  it('keeps the place of « PR et CI » for 2.1, without drawing it', async () => {
     fakeBackend({ git_files: () => [], git_log: () => LOG });
     render(SidePanel, { project: project(), agent: app.agents.a1, docked: true });
-    const hosts = screen.getByRole('tab', { name: /PR et CI\s*après la 2\.0/ });
+    const hosts = screen.getByRole('tab', { name: /PR et CI\s*dans la 2\.1/ });
     await userEvent.click(hosts);
     expect(hosts).toHaveAttribute('aria-selected', 'true');
     expect(app.panelTab).toBe('hosts');

@@ -1,30 +1,9 @@
-// The website's pictures, from the video (`npm run site-images`): which moment of which scene, and where each language's file goes.
-// The moments follow the French voice, so the English pictures are the same moments with the interface in English.
+// What the website takes from the video (`npm run site-images`): its poster, and where each language's file goes. The
+// website's screenshots are no longer the video's: they are taken in the real app (`npm run site-shots` at the root,
+// tests/site-shots/README.md).
 
-import type { Cues } from './cues';
 import type { Lang } from './lang';
 import { sceneOf, type SceneId } from './timeline';
-
-export interface SiteShot {
-  name: string;
-  scene: SceneId;
-  /** The frame of the scene, from its cues (no spotlight, no pointer on the way). */
-  frame: (c: Cues) => number;
-}
-
-export const SITE_SHOTS: SiteShot[] = [
-  { name: 'agents', scene: 'agents', frame: (c) => c.at('card') - 12 },
-  { name: 'chat', scene: 'chat', frame: (c) => c.word('diff', 'déplie-les') + 50 },
-  { name: 'notifications', scene: 'notify', frame: (c) => c.end('jump') - 4 },
-  { name: 'git', scene: 'git', frame: (c) => c.word('split', 'pendant') + 40 },
-  { name: 'editor', scene: 'editor', frame: (c) => c.word('look', 'recherche') + 12 },
-  { name: 'board', scene: 'loop', frame: (c) => c.word('loop', 'repart') + 30 },
-  { name: 'test', scene: 'test', frame: (c) => c.at('open') + 2 },
-  { name: 'integrations', scene: 'integrations', frame: (c) => c.word('import', 'critères') + 8 },
-  { name: 'launch', scene: 'launch', frame: (c) => c.word('crash', 'plante') + 24 },
-  { name: 'stats', scene: 'stats', frame: (c) => c.word('page', 'entrée') - 2 },
-  { name: 'remote', scene: 'remote', frame: (c) => c.length - 6 },
-];
 
 /** The poster: the Kanban scene's last moments, with its title. */
 export const POSTER_SCENE: SceneId = 'board';

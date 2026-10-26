@@ -11,7 +11,9 @@ export const CYCLE = 24;
 /** Where the demo stands still (reduced motion, no JavaScript): work under way, a question, a finished task, a ticket mid-loop. */
 export const SNAPSHOT = 7;
 
-export type Model = 'Fable' | 'Opus' | 'Sonnet' | 'Haiku';
+export type Model = 'Opus 5.5' | 'Sonnet 5.5' | 'Haiku 5.5' | 'GPT-5.5' | 'Composer 2.5';
+/** The harness an agent runs on, as its card names it (« Claude », « Codex », « Cursor »). */
+export type Harness = 'Claude' | 'Codex' | 'Cursor';
 export type Status = 'ready' | 'running' | 'question' | 'done' | 'totest';
 
 export interface Activity {
@@ -37,6 +39,7 @@ export interface Ticket {
 export interface Agent {
   slot: number;
   name: string;
+  harness: Harness;
   model: Model;
   status: Status;
   ticket: Ticket | null;
@@ -52,13 +55,15 @@ export interface Agent {
 
 export interface Project {
   name: string;
+  /** Its tile's letters, as the app makes them from its name. */
+  letters: string;
   color: string;
   delta: number;
   agents: Status[];
 }
 
 export interface Squad {
-  project: { name: string; branch: string; delta: number };
+  project: { name: string; letters: string; color: string; branch: string; delta: number };
   agents: Agent[];
   counts: { running: number; waiting: number; done: number };
   /** Spent today, all projects. */
@@ -89,10 +94,11 @@ interface Step {
 
 /** Tokens per second while running, and dollars per million tokens. */
 const RATE: Record<Model, { tps: number; usd: number }> = {
-  Fable: { tps: 320, usd: 24 },
-  Opus: { tps: 260, usd: 13 },
-  Sonnet: { tps: 210, usd: 7.6 },
-  Haiku: { tps: 170, usd: 1.7 },
+  'Opus 5.5': { tps: 260, usd: 13 },
+  'Sonnet 5.5': { tps: 210, usd: 7.6 },
+  'Haiku 5.5': { tps: 170, usd: 1.7 },
+  'GPT-5.5': { tps: 230, usd: 6.2 },
+  'Composer 2.5': { tps: 320, usd: 4.1 },
 };
 
 /** What the other projects spent today. */
@@ -115,6 +121,7 @@ const onTicket = (at: number, tool: Activity['tool'], file: number, loop: number
 interface Slot {
   /** Its name in the catalog; none for the ticket agent, named after its ticket. */
   name: keyof SquadText['names'] | null;
+  harness: Harness;
   model: Model;
   tokens: number;
   ms: number;
@@ -124,7 +131,8 @@ interface Slot {
 const SLOTS: Slot[] = [
   {
     name: 'auth',
-    model: 'Opus',
+    harness: 'Claude',
+    model: 'Opus 5.5',
     tokens: 184_000,
     ms: 760_000,
     steps: [
@@ -139,7 +147,8 @@ const SLOTS: Slot[] = [
   },
   {
     name: 'e2e',
-    model: 'Sonnet',
+    harness: 'Claude',
+    model: 'Sonnet 5.5',
     tokens: 96_000,
     ms: 482_000,
     // Its question and what follows the answer: see ASK and AFTER.
@@ -147,7 +156,8 @@ const SLOTS: Slot[] = [
   },
   {
     name: null,
-    model: 'Sonnet',
+    harness: 'Codex',
+    model: 'GPT-5.5',
     tokens: 41_000,
     ms: 195_000,
     steps: [
@@ -161,7 +171,8 @@ const SLOTS: Slot[] = [
   },
   {
     name: 'docs',
-    model: 'Haiku',
+    harness: 'Claude',
+    model: 'Haiku 5.5',
     tokens: 12_000,
     ms: 110_000,
     steps: [
@@ -173,7 +184,8 @@ const SLOTS: Slot[] = [
   },
   {
     name: 'login',
-    model: 'Fable',
+    harness: 'Cursor',
+    model: 'Composer 2.5',
     tokens: 22_000,
     ms: 125_000,
     steps: [
@@ -219,7 +231,7 @@ const MAX_LOOPS = 5;
 const BEHIND: { name: string; color: string; delta: number; agents: Step[][] }[] = [
   {
     name: 'studio-web',
-    color: 'oklch(0.7 0.12 300)',
+    color: 'oklch(0.72 0.12 300)',
     delta: 3,
     agents: [
       [{ at: 0, status: 'running' }],
@@ -235,7 +247,7 @@ const BEHIND: { name: string; color: string; delta: number; agents: Step[][] }[]
   },
   {
     name: 'mobile-app',
-    color: 'oklch(0.75 0.11 215)',
+    color: 'oklch(0.72 0.12 200)',
     delta: 12,
     agents: [
       [{ at: 0, status: 'running' }],
@@ -247,7 +259,21 @@ const BEHIND: { name: string; color: string; delta: number; agents: Step[][] }[]
       [{ at: 0, status: 'ready' }],
     ],
   },
+  {
+    name: 'infra',
+    color: 'oklch(0.72 0.12 150)',
+    delta: 0,
+    agents: [[{ at: 0, status: 'ready' }]],
+  },
 ];
+/** The project in front, in the app's first colour. */
+const FRONT = { name: 'demo-api', color: 'oklch(0.72 0.12 48)' };
+
+/** A tile's letters, as the app makes them: the first of each word, or the first two of a single one (« In »). */
+export function lettersOf(name: string): string {
+  const words = name.split(/[-_ .]+/).filter(Boolean);
+  return words.length > 1 ? (words[0][0] + words[1][0]).toUpperCase() : words[0][0].toUpperCase() + (words[0][1] ?? '');
+}
 const DELTA_BASE = 7;
 
 /** The step under way at `b` (beats into the cycle). */
@@ -334,6 +360,7 @@ export function squadAt(t: number, answers: Answer[] = [], lang: Lang = 'fr'): S
     return {
       slot: i,
       name,
+      harness: slot.harness,
       model: slot.model,
       status: step.status,
       ticket,
@@ -353,11 +380,17 @@ export function squadAt(t: number, answers: Answer[] = [], lang: Lang = 'fr'): S
   );
   const count = (...st: Status[]) => agents.filter((a) => st.includes(a.status)).length;
   return {
-    project: { name: 'demo-api', branch: 'main', delta: DELTA_BASE + edits },
+    project: { ...FRONT, letters: lettersOf(FRONT.name), branch: 'main', delta: DELTA_BASE + edits },
     agents,
     counts: { running: count('running'), waiting: count('question'), done: count('done', 'totest') },
     today,
-    projects: BEHIND.map((p) => ({ name: p.name, color: p.color, delta: p.delta, agents: p.agents.map((s) => stepAt(s, b).status) })),
+    projects: BEHIND.map((p) => ({
+      name: p.name,
+      letters: lettersOf(p.name),
+      color: p.color,
+      delta: p.delta,
+      agents: p.agents.map((s) => stepAt(s, b).status),
+    })),
   };
 }
 

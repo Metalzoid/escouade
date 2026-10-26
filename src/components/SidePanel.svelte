@@ -110,7 +110,7 @@
     font-size: 11px;
     font-weight: 500;
   }
-  /* Narrow, « après la 2.0 » goes: the tabs hold on one line. */
+  /* Narrow, « dans la 2.1 » goes: the tabs hold on one line. */
   @container git-side (max-width: 400px) {
     .utabs .soon {
       display: none;

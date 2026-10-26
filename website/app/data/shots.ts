@@ -15,14 +15,14 @@ export interface Focus {
 
 export const FOCUS: Record<FeatureId, Focus> = {
   agents: { x: 30, y: 42, zoom: 1.5 },
-  chat: { x: 58, y: 40, zoom: 1.6 },
-  notifications: { x: 60, y: 62, zoom: 1.7 },
-  git: { x: 62, y: 42, zoom: 1.6 },
+  chat: { x: 55, y: 45, zoom: 1.5 },
+  notifications: { x: 52, y: 40, zoom: 1.5 },
+  git: { x: 66, y: 42, zoom: 1.5 },
   editeur: { x: 58, y: 48, zoom: 1.6 },
   tableau: { x: 60, y: 42, zoom: 1.5 },
-  test: { x: 30, y: 52, zoom: 1.7 },
-  integrations: { x: 50, y: 58, zoom: 1.5 },
-  lancement: { x: 52, y: 40, zoom: 1.6 },
+  test: { x: 50, y: 50, zoom: 1.7 },
+  integrations: { x: 50, y: 52, zoom: 1.5 },
+  lancement: { x: 36, y: 42, zoom: 1.5 },
   stats: { x: 52, y: 45, zoom: 1.5 },
-  remote: { x: 70, y: 55, zoom: 1.35 },
+  remote: { x: 46, y: 52, zoom: 1.4 },
 };

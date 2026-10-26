@@ -50,7 +50,7 @@ describe('catalogs', () => {
         'roadmap.items[2].title',
         'demo.status.question',
         'demo.agents',
-        'demo.tokens',
+        'demo.kanban',
         'squad.names.docs',
         'squad.names.login',
         'docs.title',

@@ -514,7 +514,8 @@ async function play(text) {
   }
   if (lower.includes('lent')) {
     await say('Je commence…', 'commentary');
-    const why = await pause(30_000);
+    // « lent 600s » lasts that long (the website's screenshots), a plain « lent » 30 s.
+    const why = await pause(Number(/lent (\d+)s/.exec(lower)?.[1] ?? 30) * 1000);
     if (why?.steer) {
       await say(`J'ai bien reçu en cours de route : ${why.steer}`);
       return 'completed';

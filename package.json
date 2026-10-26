@@ -12,6 +12,7 @@
     "tauri": "tauri",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "site-shots": "playwright test -c playwright.site-shots.config.ts",
     "version:set": "node scripts/version.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

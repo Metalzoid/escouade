@@ -10,6 +10,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 - Une très longue description ne cache plus les champs du formulaire d’un ticket : la fenêtre défile jusqu’aux critères, au compte, au modèle et aux autres champs, et ses boutons restent toujours visibles.
 - Le sélecteur de branches ne clignote plus au survol : sa liste ne défile plus sous la souris et la description de la branche garde sa hauteur, comme « Ouvrir un fichier », la recherche dans les conversations et les définitions de l’éditeur, qui ne défilent plus au survol.
+- L’onglet « PR et CI » du panneau Git annonce les hébergeurs pour la 2.1, et non plus « après la 2.0 ».
 
 ## [2.0.1] — 2026-10-25
 

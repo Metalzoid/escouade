@@ -112,8 +112,9 @@ function seed() {
 
 const JIRA_TYPES = { Story: '10001', Bug: '10004' };
 
-export function startFakeTrackers(port = 0) {
-  let db = seed();
+/** `adjust` changes the data it starts from (the website's screenshots give their own issues). */
+export function startFakeTrackers(port = 0, adjust = (db) => db) {
+  let db = adjust(seed());
   const server = http.createServer((req, res) => {
     let body = '';
     req.on('data', (d) => (body += d));

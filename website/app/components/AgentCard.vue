@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { fmt, plural } from '~/data/catalog';
-import { fDur, fTok, fUsd, type Activity, type Agent } from '~/data/squad';
+import { fDur, fTok, fUsd, type Agent } from '~/data/squad';
 
+// An agent's card as the app's sidebar draws it (2.0): its name and state, its harness, model and time (or its ticket and
+// loop), then what it does now, with what it spent. A question turns the card amber, its answers numbered as in the app.
 defineProps<{ agent: Agent }>();
 const { lang, text } = useLang();
 const emit = defineEmits<{ answer: [option: number] }>();
@@ -12,81 +14,70 @@ function answer(option: number, e: MouseEvent) {
   emit('answer', option);
   if (e.detail === 0) nextTick(() => card.value?.focus());
 }
-
-/** Each tool's pictogram, on a 16-unit grid. */
-const ICON: Record<Activity['tool'], string> = {
-  Read: 'M2.5 8s2-4 5.5-4 5.5 4 5.5 4-2 4-5.5 4S2.5 8 2.5 8zM8 9.6a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z',
-  Grep: 'M7 11.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zM10.4 10.4l3.1 3.1',
-  Edit: 'M10.5 3l2.5 2.5-7 7H3.5V10zM9 4.5l2.5 2.5',
-  Write: 'M4 2.5h5.5L12 5v8.5H4zM8 7v4M6 9h4',
-  Bash: 'M3 4.5l3.5 3.5L3 11.5M8.5 11.5H13',
-};
 </script>
 
 <template>
   <article ref="card" class="agent" :class="agent.status" tabindex="-1">
-    <div class="row top">
+    <div class="a-top">
       <i class="dot" aria-hidden="true" />
       <span class="name">{{ agent.name }}</span>
-      <span class="model">{{ agent.model }} · {{ fDur(agent.ms) }}</span>
-      <span class="state">{{ text.demo.status[agent.status] }}</span>
+      <span class="a-state">{{ text.demo.status[agent.status] }}</span>
     </div>
-    <div v-if="agent.ticket" class="row ticket">
-      <svg class="caret" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.5l5 4.5-5 4.5z" /></svg>
-      <span class="key">{{ agent.ticket.key }} · {{ fmt(text.demo.loop, { loop: agent.ticket.loop, max: agent.ticket.max }) }}</span>
-      <span
-        class="criteria"
-        role="img"
-        :aria-label="plural(lang, text.demo.criteria, agent.ticket.met.filter(Boolean).length, { total: agent.ticket.met.length })"
-      >
-        <svg v-for="(m, i) in agent.ticket.met" :key="i" class="criterion" :class="{ met: m }" viewBox="0 0 16 16" aria-hidden="true">
-          <circle cx="8" cy="8" r="6" />
-          <path d="M5.2 8.3l1.9 1.9 3.8-4" />
-        </svg>
-      </span>
-      <span class="bar" aria-hidden="true"
-        ><span :style="{ transform: `scaleX(${agent.ticket.met.filter(Boolean).length / agent.ticket.met.length})` }"
-      /></span>
+    <div class="a-meta">
+      <span class="mark">{{ agent.harness }}</span>
+      <template v-if="agent.ticket">
+        <b class="key">{{ agent.ticket.key }}</b>
+        <span>{{ fmt(text.demo.loop, { loop: agent.ticket.loop, max: agent.ticket.max }) }}</span>
+        <span
+          class="loops"
+          role="img"
+          :aria-label="plural(lang, text.demo.criteria, agent.ticket.met.filter(Boolean).length, { total: agent.ticket.met.length })"
+        >
+          <i v-for="(m, i) in agent.ticket.met" :key="i" :class="{ met: m }" />
+        </span>
+      </template>
+      <template v-else>
+        <span class="model">{{ agent.model }}</span>
+        <span class="sep">·</span>
+        <span class="num">{{ fDur(agent.ms) }}</span>
+      </template>
     </div>
-    <div class="row act">
-      <Transition name="swap" mode="out-in">
-        <div v-if="agent.question" key="ask" class="ask">
-          <p class="q">{{ agent.question.text }}</p>
-          <div class="options">
-            <button v-for="(o, i) in agent.question.options" :key="o" type="button" class="option" @click="answer(i, $event)">
-              {{ o }}
-            </button>
-          </div>
+    <Transition name="swap" mode="out-in">
+      <div v-if="agent.question" key="ask" class="ask">
+        <p class="q">{{ agent.question.text }}</p>
+        <div class="opts">
+          <button v-for="(o, i) in agent.question.options" :key="o" type="button" class="opt" @click="answer(i, $event)">
+            <kbd aria-hidden="true">{{ i + 1 }}</kbd
+            >{{ o }}
+          </button>
         </div>
-        <div v-else-if="agent.activity" :key="agent.activity.tool + agent.activity.target" class="tool">
-          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path :d="ICON[agent.activity.tool]" /></svg>
+      </div>
+      <div v-else :key="agent.activity ? agent.activity.tool + agent.activity.target : 'result'" class="a-act">
+        <template v-if="agent.activity">
           <b>{{ agent.activity.tool }}</b>
-          <span class="target">{{ agent.activity.target }}</span>
-          <span v-if="agent.activity.diff" class="diff"
+          <span class="tgt mono">{{ agent.activity.target }}</span>
+          <span v-if="agent.activity.diff" class="diff mono"
             ><span class="add">+{{ agent.activity.diff[0] }}</span> <span class="del">−{{ agent.activity.diff[1] }}</span></span
           >
-        </div>
-        <div v-else-if="agent.result" key="result" class="result">
-          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-6.5" /></svg>
-          <span>{{ agent.result }}</span>
-        </div>
-      </Transition>
-      <span class="spend">{{ fTok(agent.tokens, lang) }} {{ text.demo.tokens }} · {{ fUsd(agent.cost, lang) }}</span>
-    </div>
+        </template>
+        <span v-else-if="agent.result" class="result">{{ agent.result }}</span>
+        <span class="spend">{{ fTok(agent.tokens, lang) }} · {{ fUsd(agent.cost, lang) }}</span>
+      </div>
+    </Transition>
   </article>
 </template>
 
 <style scoped>
+/* The values of the app's sidebar (src/components/Sidebar.svelte, EngineMark.svelte). */
 .agent {
-  --tone: var(--ok);
+  --tone: var(--run);
   display: grid;
-  gap: 0.32em;
-  padding: 0.62em 0.85em 0.66em;
-  border-radius: 0.7em;
-  border: 1px solid transparent;
+  gap: 3px;
+  padding: 8px 10px 9px;
+  border-radius: 9px;
   transition:
     background-color 0.3s,
-    border-color 0.3s;
+    box-shadow 0.3s;
 }
 /* Inside the list, which clips what overflows. */
 .agent:focus-visible {
@@ -94,161 +85,138 @@ const ICON: Record<Activity['tool'], string> = {
 }
 .agent.question {
   --tone: var(--wait);
-  background: var(--wait-soft);
-  border-color: var(--wait-ring);
+  background: var(--wait-bg);
+  box-shadow: inset 0 0 0 1px var(--wait-line);
 }
 .agent.totest {
   --tone: var(--wait);
 }
+.agent.done,
 .agent.ready {
-  --tone: var(--dim);
+  --tone: var(--muted);
 }
-.row {
+.a-top,
+.a-meta,
+.a-act {
   display: flex;
   align-items: center;
-  gap: 0.55em;
   min-width: 0;
+  white-space: nowrap;
+}
+.a-top {
+  gap: 8px;
 }
 .dot {
   flex: none;
-  width: 0.56em;
-  height: 0.56em;
+  width: 7px;
+  height: 7px;
+  margin: 0 1px;
   border-radius: 50%;
   background: var(--tone);
   transition: background-color 0.3s;
 }
+.agent.question .dot {
+  width: 9px;
+  height: 9px;
+  margin: 0;
+  background: none;
+  box-shadow: inset 0 0 0 1.6px var(--tone);
+}
 .name {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   color: var(--text);
-  font-weight: 700;
-  white-space: nowrap;
+  font-weight: 590;
+  letter-spacing: -0.01em;
   text-overflow: ellipsis;
 }
-.model,
-.spend {
+.a-state {
   flex: none;
-  color: var(--dim);
-  font-family: var(--mono);
-  font-size: max(10px, 0.86em);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.state {
-  flex: none;
-  margin-left: auto;
   color: var(--tone);
-  font-size: 0.9em;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 550;
   transition: color 0.3s;
 }
-.ticket {
-  padding-left: 1.1em;
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: max(10px, 0.86em);
+.agent.done .a-state,
+.agent.ready .a-state {
+  font-weight: 500;
 }
-.caret {
+.a-meta,
+.a-act {
+  gap: 6px;
+  padding-left: 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.a-meta {
+  overflow: hidden;
+}
+.mark {
   flex: none;
-  width: 0.9em;
-  height: 0.9em;
-  margin-left: -1.05em;
-  fill: var(--brand);
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--soft);
+  font-size: 10.5px;
+  font-weight: 560;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+.model {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sep {
+  color: var(--sep);
+}
+.num,
+.spend {
+  font-variant-numeric: tabular-nums;
 }
 .key {
-  white-space: nowrap;
-}
-.criteria {
-  display: inline-flex;
-  gap: 0.25em;
-}
-.criterion {
-  width: 1.1em;
-  height: 1.1em;
-  fill: none;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.criterion circle {
-  stroke: var(--dim);
-  transition:
-    stroke 0.3s,
-    fill 0.3s;
-}
-.criterion path {
-  stroke: var(--ink);
-  stroke-dasharray: 10;
-  stroke-dashoffset: 10;
-  transition: stroke-dashoffset 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.1s;
-}
-.criterion.met circle {
-  stroke: var(--ok);
-  fill: var(--ok);
-}
-.criterion.met path {
-  stroke-dashoffset: 0;
-}
-.bar {
-  flex: 1;
-  max-width: 7em;
-  height: 0.28em;
-  margin-left: auto;
-  overflow: hidden;
-  border-radius: 1em;
-  background: var(--line2);
-}
-.bar span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--ok);
-  transform-origin: left;
-  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.act {
-  padding-left: 1.1em;
-  min-height: 1.6em;
-}
-.tool,
-.result {
-  display: flex;
-  align-items: center;
-  gap: 0.5em;
-  min-width: 0;
-  color: var(--muted);
-  font-size: 0.92em;
-}
-.tool b {
-  flex: none;
-  color: var(--text);
+  color: var(--p-ink);
   font-weight: 600;
 }
-.icon {
+.loops {
+  display: inline-flex;
+  gap: 3px;
+}
+.loops i {
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line-3);
+  transition: background-color 0.4s;
+}
+.loops i.met {
+  background: var(--run);
+}
+.a-act {
+  min-height: 18px;
+  color: var(--soft);
+}
+.a-act b {
   flex: none;
-  width: 1.05em;
-  height: 1.05em;
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  font-weight: 550;
 }
-.result .icon {
-  stroke: var(--tone);
-}
-.target {
+.tgt {
   min-width: 0;
   overflow: hidden;
-  font-family: var(--mono);
-  font-size: 0.94em;
-  white-space: nowrap;
+  color: var(--muted);
   text-overflow: ellipsis;
+}
+.mono {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  letter-spacing: -0.01em;
 }
 .diff {
   flex: none;
-  font-family: var(--mono);
-  font-size: 0.94em;
 }
 .add {
   color: var(--add);
@@ -256,49 +224,76 @@ const ICON: Record<Activity['tool'], string> = {
 .del {
   color: var(--del);
 }
+.result {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .spend {
+  flex: none;
   margin-left: auto;
+  padding-left: 6px;
+  color: var(--muted);
 }
 .ask {
   display: grid;
-  gap: 0.45em;
+  gap: 6px;
   min-width: 0;
+  padding: 2px 0 1px 16px;
 }
 .q {
   margin: 0;
   color: var(--text);
-  font-size: 0.95em;
-  line-height: 1.35;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
 }
-.options {
+.opts {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4em;
+  gap: 6px;
 }
-.option {
-  padding: 0.28em 0.8em;
-  border: 1px solid var(--wait-ring);
-  border-radius: 0.5em;
-  background: transparent;
+.opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 26px;
+  padding: 0 9px 0 6px;
+  border: none;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px var(--line-2);
   color: var(--text);
   font: inherit;
-  font-size: 0.9em;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 550;
   cursor: pointer;
   transition:
     background-color 0.15s,
-    color 0.15s;
+    box-shadow 0.15s;
 }
-.option:hover {
-  background: var(--wait);
-  color: var(--ink);
+.opt:first-child,
+.opt:hover {
+  background: oklch(from var(--wait) l c h / 0.14);
+  box-shadow: inset 0 0 0 1px var(--wait-line);
 }
-.option:focus-visible {
+.opt:focus-visible {
   outline: 2px solid var(--wait);
   outline-offset: 2px;
 }
-.agent.question .act .spend {
-  align-self: flex-start;
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 10.5px;
+  font-weight: 500;
 }
 
 .swap-enter-active,
@@ -334,12 +329,16 @@ const ICON: Record<Activity['tool'], string> = {
 }
 @keyframes pulse {
   50% {
-    box-shadow: 0 0 0 0.4em oklch(0.82 0.13 80 / 0);
-    scale: 1.25;
+    box-shadow:
+      inset 0 0 0 1.6px var(--tone),
+      0 0 0 4px oklch(0.84 0.14 82 / 0);
+    scale: 1.2;
   }
   0%,
   100% {
-    box-shadow: 0 0 0 0 var(--wait-ring);
+    box-shadow:
+      inset 0 0 0 1.6px var(--tone),
+      0 0 0 0 var(--wait-line);
   }
 }
 </style>

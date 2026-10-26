@@ -72,6 +72,29 @@ function makeRepo(root: string): string {
   return repo;
 }
 
+/**
+ * `ESCOUADE_E2E_ROOT`: the test's folder at a path that shows nothing of the machine (the site's screenshots,
+ * tests/site-shots), emptied at the start and kept at the end, to be looked at. Emptied only when it holds the mark the tests
+ * left there: never a folder of the user's.
+ */
+const FIXED_ROOT = process.env.ESCOUADE_E2E_ROOT;
+const ROOT_MARK = '.escouade-e2e-root';
+
+/** The test's folder: a new temporary one, or `FIXED_ROOT` emptied but its mark. */
+function testRoot(): string {
+  if (!FIXED_ROOT) return fs.mkdtempSync(path.join(os.tmpdir(), 'ccm-e2e-'));
+  const fixed = FIXED_ROOT;
+  if (fs.existsSync(fixed) && fs.readdirSync(fixed).length > 0) {
+    if (!fs.existsSync(path.join(fixed, ROOT_MARK)))
+      throw new Error(`ESCOUADE_E2E_ROOT: ${fixed} is not empty and was not made by the tests: not touched`);
+    for (const name of fs.readdirSync(fixed))
+      if (name !== ROOT_MARK) fs.rmSync(path.join(fixed, name), { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
+  }
+  fs.mkdirSync(fixed, { recursive: true });
+  fs.writeFileSync(path.join(fixed, ROOT_MARK), '');
+  return fixed;
+}
+
 /** Last lines of a log file, for failure messages (CI annotations are all we get there). */
 function tail(file: string, lines = 40): string {
   if (!fs.existsSync(file)) return `(no ${path.basename(file)})`;
@@ -284,7 +307,7 @@ export const test = base.extend<{
     if (!(await waitForPortToClose(port))) {
       throw new Error(`something still listens on port ${port} after 30 s: the app of the test before is not gone`);
     }
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ccm-e2e-'));
+    const root = testRoot();
     const data = path.join(root, 'data');
     fs.mkdirSync(data);
     // French unless a test asks otherwise, whatever the machine's language (CI runners are English): the tests read the
@@ -309,7 +332,8 @@ export const test = base.extend<{
         accounts: accountsFor(given, appEnv),
       }),
     );
-    const repo = makeRepo(root);
+    // A repository `run` made already (the site's screenshots make their own) is kept.
+    const repo = fs.existsSync(path.join(root, 'demo-api', '.git')) ? path.join(root, 'demo-api') : makeRepo(root);
     const log = path.join(root, 'fake-claude.jsonl');
     const stderr = path.join(root, 'app-stderr.log');
     // The same for every start of the test, `restart()`'s included: the data folder is what the app finds again.
@@ -443,7 +467,7 @@ export const test = base.extend<{
       // Windows releases the handles of killed processes (a terminal's shell sits in the repo)
       // with a delay: a temporary folder left behind must not fail the test.
       try {
-        fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
+        if (!FIXED_ROOT) fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
       } catch (e) {
         console.warn(`could not remove ${root}: ${(e as Error).message}`);
       }

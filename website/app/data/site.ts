@@ -60,8 +60,9 @@ export type FeatureId = (typeof FEATURE_SHOTS)[number]['id'];
 export const HERO_SHOT: FeatureId = 'git';
 
 /**
- * The folder of public/ holding the screenshots (and the video's poster) each language's page shows: the same
- * moments of the video, with the app in the language of the page (`npm run site-images` in video/ makes both).
+ * The folder of public/ holding the screenshots (and the video's poster) each language's page shows: the real app on
+ * a made-up demo, in the language of the page (`npm run site-shots` at the root makes both, tests/site-shots/README.md;
+ * the poster comes from the video, `npm run site-images` in video/).
  */
 export const IMAGE_DIR: Record<Lang, string> = { fr: 'images/', en: 'images/en/' };
 

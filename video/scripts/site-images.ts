@@ -1,20 +1,18 @@
-// The website's images, video and subtitles, from the video: `npm run site-images` (after `npm run render` and
-// `npm run web-video`). The images and the subtitles are made in each language: the pictures at the same moments of
-// the French voice, with the interface in English for the English page. `-- --lang=en` makes one language only.
-// Two guards: the tests compare the subtitles files byte for byte to the script's, and src/scenes/frenchText.test.tsx
-// keeps the French interface's text in a snapshot. The French images are deterministic: after a change to the
-// interface, `npm run site-images -- --lang=fr` and `git status` must show none of them modified.
+// The website's poster, video and subtitles, from the video: `npm run site-images` (after `npm run render` and
+// `npm run web-video`). The poster and the subtitles are made in each language, the interface in English for the English
+// page. `-- --lang=en` makes one language only. The tests compare the subtitles files byte for byte to the script's.
+// The website's screenshots are not the video's: they are taken in the real app (`npm run site-shots` at the root,
+// tests/site-shots/README.md).
 
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bundle } from '@remotion/bundler';
 import { renderStill, selectComposition } from '@remotion/renderer';
-import { cuesOf } from '../src/cues';
 import { LANGS } from '../src/lang';
-import { imagePath, posterFrame, SITE_SHOTS, subtitlesFile } from '../src/siteShots';
+import { imagePath, posterFrame, subtitlesFile } from '../src/siteShots';
 import { webvtt } from '../src/subtitles';
-import { sceneOf, TIMELINE } from '../src/timeline';
+import { TIMELINE } from '../src/timeline';
 
 const SITE = '../website/public';
 const only = process.argv.find((a) => a.startsWith('--lang='))?.slice(7);
@@ -23,17 +21,9 @@ if (!langs.length) throw new Error(`Langue inconnue : ${only}`);
 
 const serveUrl = await bundle({ entryPoint: fileURLToPath(new URL('../src/index.ts', import.meta.url)) });
 for (const lang of langs) {
-  for (const s of SITE_SHOTS) {
-    const inputProps = { scene: s.scene, lang };
-    const composition = await selectComposition({ serveUrl, id: 'Shot', inputProps });
-    const frame = s.frame(cuesOf(sceneOf(s.scene)));
-    const output = `${SITE}/${imagePath(lang, s.name)}`;
-    mkdirSync(dirname(output), { recursive: true });
-    await renderStill({ composition, serveUrl, output, frame, inputProps, imageFormat: 'jpeg', jpegQuality: 85 });
-    console.log(`${imagePath(lang, s.name)} (${s.scene}, image ${frame})`);
-  }
   // The poster: the board, with the scene's title.
   const inputProps = { lang };
+  mkdirSync(dirname(`${SITE}/${imagePath(lang, 'poster')}`), { recursive: true });
   const presentation = await selectComposition({ serveUrl, id: 'Presentation', inputProps });
   await renderStill({
     composition: presentation,

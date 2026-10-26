@@ -213,7 +213,8 @@ LOOP-3 et LOOP-4 peuvent avancer en même temps une fois LOOP-1 fait (LOOP-3 sur
 ## Restes du redesign
 
 Notés par la revue finale (ESC-84, `design/app-redesign/final/REVUE.md`) :
-- [ ] La vidéo, les captures du site et sa démonstration, qui montrent encore l'app de la 1.8 (ESC-85).
+- [x] Les captures du site, prises dans la vraie app 2.0 sur une démo fictive (`npm run site-shots`), et sa démonstration au design 2.0 (ESC-187).
+- [ ] La vidéo et son affiche, qui montrent encore l'app de la 1.8 (ESC-85).
 - [ ] Les anciens noms de jetons (`--ok`, `--accent`, `--line2`…), encore lus à une trentaine d'endroits : un renommage mécanique.
 - [ ] À 1028 px en anglais, l'en-tête d'un lancement coupe sa commande avant son dossier.
 - [ ] Sur une carte d'agent étroite, avec sous-agents et plan, le plan pourrait céder avant le modèle.

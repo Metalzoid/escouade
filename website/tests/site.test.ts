@@ -340,7 +340,8 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     for (const a of still.agents) expect(html, a.name).toContain(escapeText(a.name));
     expect(html).toContain(escapeText(still.agents.find((a) => a.question)!.question!.text));
     const t = still.agents.find((a) => a.ticket)!.ticket!;
-    expect(html).toContain(`${t.key} · ${fmt(text.demo.loop, { loop: t.loop, max: t.max })}`);
+    expect(html).toMatch(new RegExp(`>${t.key}</b>\\s*<span[^>]*>${fmt(text.demo.loop, { loop: t.loop, max: t.max })}<`));
+    for (const a of still.agents) expect(html, a.name).toContain(`>${a.harness}</span>`);
     for (const a of still.agents) if (a.result) expect(html, a.result).toContain(escapeText(a.result));
     expect(html).toContain(escapeText(text.demo.caption));
   });
