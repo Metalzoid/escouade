@@ -688,3 +688,134 @@ async fn the_reading_is_kept_in_the_data_folder_and_read_again_when_a_file_chang
     assert!(forced.read_at > changed.read_at);
     assert!(h.core.refresh_workflows("nope", false).await.is_err());
 }
+
+// ---------- what the reading may open ----------
+
+/// A project whose two commands name, one after the other, every file the reading must not open.
+fn hostile(name: &str, extra: &str) -> (PathBuf, Roots, String) {
+    let dir = test_dir(name);
+    let project = dir.join("project");
+    std::fs::create_dir_all(project.join(".claude/commands")).unwrap();
+    std::fs::create_dir_all(dir.join("outside")).unwrap();
+    let outside = dir.join("outside/secret.md");
+    std::fs::write(&outside, "TOPSECRET outside\n").unwrap();
+    let home = dir.join("home");
+    std::fs::create_dir_all(home.join(".claude/projects")).unwrap();
+    std::fs::write(home.join(".claude/.credentials.json"), "TOPSECRET token\n").unwrap();
+    std::fs::write(home.join(".claude/projects/chat.md"), "TOPSECRET chat\n").unwrap();
+    std::fs::create_dir_all(project.join("secrets")).unwrap();
+    std::fs::write(project.join("secrets/.env"), "TOPSECRET env\n").unwrap();
+    std::fs::write(project.join("data.bin"), "TOPSECRET bin\n").unwrap();
+    let abs = outside
+        .to_string_lossy()
+        .replace(std::path::MAIN_SEPARATOR, "/");
+    std::fs::write(
+        project.join(".claude/commands/one.md"),
+        format!(
+            "Run /two, then read\n@{abs}\n@../outside/secret.md\n@../../outside/secret.md\n@~/.claude/.credentials.json\n@~/.claude/projects/chat.md\n@secrets/.env\n@data.bin\n{extra}\n"
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        project.join(".claude/commands/two.md"),
+        "Done. Run /one again.\n",
+    )
+    .unwrap();
+    let roots = Roots {
+        claude: Some(home.join(".claude")),
+        codex: Some(home.join(".codex")),
+        home,
+    };
+    (project, roots, abs)
+}
+
+fn assert_not_read(scan: &Scan) {
+    let json = serde_json::to_string(scan).unwrap();
+    assert!(!json.contains("TOPSECRET"), "{json}");
+    for s in &scan.sources {
+        assert!(!s.path.contains("secret.md"), "{}", s.path);
+        assert!(!s.path.contains(".credentials"), "{}", s.path);
+        assert!(!s.path.contains(".env"), "{}", s.path);
+        assert!(!s.path.contains("chat.md"), "{}", s.path);
+        assert!(!s.path.contains("data.bin"), "{}", s.path);
+    }
+}
+
+#[test]
+fn an_include_that_names_a_file_outside_is_never_read_and_is_said_ignored() {
+    let (project, roots, abs) = hostile("workflow-hostile", "");
+    let scan = read(&project, &[], &roots, &[]);
+    assert_not_read(&scan);
+    let ignored: Vec<&String> = scan
+        .searched
+        .iter()
+        .filter(|s| s.starts_with(IGNORED))
+        .collect();
+    let has = |why: &str, what: &str| {
+        ignored
+            .iter()
+            .any(|s| s.starts_with(&format!("{IGNORED}{why}:")) && s.ends_with(what))
+    };
+    assert!(has("outside", &abs), "{ignored:?}");
+    assert!(has("outside", "../outside/secret.md"), "{ignored:?}");
+    assert!(has("secret", "~/.claude/.credentials.json"), "{ignored:?}");
+    assert!(
+        has("transcript", "~/.claude/projects/chat.md"),
+        "{ignored:?}"
+    );
+    assert!(has("secret", "secrets/.env"), "{ignored:?}");
+    assert!(has("extension", "data.bin"), "{ignored:?}");
+}
+
+#[test]
+fn a_state_file_outside_the_repository_or_a_secret_is_not_read() {
+    let (project, roots, _) = hostile(
+        "workflow-hostile-state",
+        "Write `../outside/secret.md` and `.env`; update `.planning/STATE.md`.",
+    );
+    std::fs::create_dir_all(project.join(".planning")).unwrap();
+    std::fs::write(project.join(".planning/STATE.md"), "Phase 1 of 2\n").unwrap();
+    let scan = read(&project, &[], &roots, &[]);
+    assert_not_read(&scan);
+    // The state file of the repository is still read.
+    assert!(scan
+        .workflows
+        .iter()
+        .flat_map(|w| &w.state_files)
+        .any(|f| f.path.ends_with("STATE.md") && f.exists));
+}
+
+#[test]
+fn a_link_that_leaves_the_repository_is_not_followed() {
+    let (project, roots, _) = hostile("workflow-hostile-link", "");
+    let dir = project.parent().unwrap();
+    let linked = project.join("linked.md");
+    #[cfg(unix)]
+    let made = std::os::unix::fs::symlink(dir.join("outside/secret.md"), &linked).is_ok();
+    #[cfg(windows)]
+    let made = std::os::windows::fs::symlink_file(dir.join("outside/secret.md"), &linked).is_ok();
+    if !made {
+        eprintln!("no symbolic link here: not tried");
+        return;
+    }
+    let one = project.join(".claude/commands/one.md");
+    let text = std::fs::read_to_string(&one).unwrap();
+    std::fs::write(&one, format!("{text}\n@linked.md\n")).unwrap();
+    // A command that is itself a link to a file outside.
+    #[cfg(unix)]
+    let _ = std::os::unix::fs::symlink(
+        dir.join("outside/secret.md"),
+        project.join(".claude/commands/three.md"),
+    );
+    #[cfg(windows)]
+    let _ = std::os::windows::fs::symlink_file(
+        dir.join("outside/secret.md"),
+        project.join(".claude/commands/three.md"),
+    );
+    let scan = read(&project, &[], &roots, &[]);
+    assert_not_read(&scan);
+    assert!(scan
+        .searched
+        .iter()
+        .any(|s| s.starts_with(IGNORED) && s.ends_with("linked.md")));
+}

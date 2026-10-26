@@ -660,6 +660,12 @@ pub async fn get_workflows(core: CoreState<'_>, id: String) -> Res<crate::workfl
     core.refresh_workflows(&id, false).await.map_err(err)
 }
 
+/// Where each agent of the project is in its workflows, and where it has been (ESC-193).
+#[tauri::command]
+pub fn get_workflow_tracks(core: CoreState, id: String) -> Vec<crate::workflow_track::TrackView> {
+    core.workflow_tracks(&id)
+}
+
 /// « Relire » the project's workflows (ESC-192).
 #[tauri::command]
 pub async fn refresh_workflows(core: CoreState<'_>, id: String) -> Res<crate::workflow::Scan> {

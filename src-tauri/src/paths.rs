@@ -396,6 +396,12 @@ impl DataDir {
         self.project_files(project_id).join("workflows.json")
     }
 
+    /// Where each agent of a project is in its workflows, and where it has been (`workflow_track`):
+    /// kept with the agents, of this machine.
+    pub fn workflow_tracks_file(&self, project_id: &str) -> PathBuf {
+        self.project_files(project_id).join("workflow-tracks.json")
+    }
+
     /// The tickets' files, a folder each: the images pasted in their form.
     pub fn tickets(&self) -> PathBuf {
         self.0.join("tickets")

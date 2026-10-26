@@ -31,6 +31,16 @@ const INCLUDE_DEPTH: usize = 4;
 /// A door that names more than this many others is a list of them (`/gsd:help`), not a step.
 const DIRECTORY: usize = 6;
 
+/// The only kinds of file a workflow is read from.
+const TEXT_EXT: &[&str] = &["md", "mdc", "txt", "yml", "yaml", "json", "toml"];
+/// What is never read, even named: a sign-in, a secret, a conversation.
+const SECRET_NAMES: &[&str] = &[".credentials.json", "auth.json"];
+/// The folders of a harness' own folder that hold its conversations.
+const TRANSCRIPTS: &[&str] = &["projects", "sessions"];
+/// What `Scan::searched` says of a file named and not read: `ignored:<why>:<as named>`, `<why>` one
+/// of `outside`, `extension`, `secret`, `transcript`. Never its content.
+pub const IGNORED: &str = "ignored:";
+
 /// The folders of each harness, from a repository (`user` ones from the harness' folder), and what
 /// each holds. What a reading tells it has looked in (« l'onglet dit ce qui a été cherché »).
 pub const FOLDERS: &[(EngineId, &str, DocKind)] = &[
@@ -502,9 +512,82 @@ struct Ctx<'a> {
     /// Its name from the project's folder: the paths shown are said from there.
     repo: String,
     sources: Vec<Source>,
+    /// What was named and not read, with why (`IGNORED`).
+    ignored: BTreeSet<String>,
 }
 
 impl Ctx<'_> {
+    /// Whether the file at `path` (named `token`) may be read: under the project's repository or a
+    /// harness' own folder once its links are followed, of a text kind, and neither a secret nor a
+    /// conversation. What is refused is noted, not read.
+    fn allow(&mut self, token: &str, path: &Path) -> bool {
+        match self.refusal(path) {
+            None => true,
+            Some(why) => {
+                self.ignored.insert(format!("{IGNORED}{why}:{token}"));
+                false
+            }
+        }
+    }
+
+    fn refusal(&self, path: &Path) -> Option<&'static str> {
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default()
+            .to_lowercase();
+        if SECRET_NAMES.contains(&name.as_str()) || name.starts_with(".env") {
+            return Some("secret");
+        }
+        let Ok(real) = path.canonicalize() else {
+            return Some("outside");
+        };
+        let real_name = real
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default()
+            .to_lowercase();
+        if SECRET_NAMES.contains(&real_name.as_str()) || real_name.starts_with(".env") {
+            return Some("secret");
+        }
+        let own: Vec<PathBuf> = [
+            Some(&self.repo_dir),
+            self.roots.claude.as_ref(),
+            self.roots.codex.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .filter_map(|d| d.canonicalize().ok())
+        .collect();
+        let Some(base) = own.iter().find(|b| real.starts_with(b)) else {
+            return Some("outside");
+        };
+        if *base != self.repo_dir.canonicalize().unwrap_or_default() {
+            let first = real
+                .strip_prefix(base)
+                .ok()
+                .and_then(|r| r.components().next())
+                .map(|c| c.as_os_str().to_string_lossy().to_lowercase());
+            if first.is_some_and(|f| TRANSCRIPTS.contains(&f.as_str())) {
+                return Some("transcript");
+            }
+        }
+        let ext = real
+            .extension()
+            .and_then(|x| x.to_str())
+            .unwrap_or_default()
+            .to_lowercase();
+        (!TEXT_EXT.contains(&ext.as_str())).then_some("extension")
+    }
+
+    /// `read_text`, for a file that `allow` lets be read.
+    fn read(&mut self, token: &str, path: &Path) -> Option<String> {
+        if !path.exists() || !self.allow(token, path) {
+            return None;
+        }
+        read_text(path)
+    }
+
     fn shown(&self, path: &Path, scope: Scope) -> String {
         match scope {
             Scope::Project => path
@@ -538,7 +621,7 @@ impl Ctx<'_> {
             if seen.contains(&file) {
                 continue;
             }
-            let Some(body) = read_text(&file) else {
+            let Some(body) = self.read(&token, &file) else {
                 continue;
             };
             seen.push(file.clone());
@@ -564,6 +647,7 @@ impl Ctx<'_> {
                 from.parent().map(|d| d.join(&token)).unwrap_or_default(),
             ]
         };
+        // The first that exists, if it may be read: a refused one is not replaced by another.
         candidates.into_iter().find(|c| c.is_file())
     }
 }
@@ -816,7 +900,7 @@ pub(crate) fn says_of(text: &str) -> Says {
 fn state_file(ctx: &mut Ctx, repo: &str, path: &str) -> StateFile {
     let literal = !path.contains(['{', '$', '*', '<']);
     let abs = ctx.repo_dir.join(path);
-    let text = if literal { read_text(&abs) } else { None };
+    let text = if literal { ctx.read(path, &abs) } else { None };
     if text.is_some() {
         ctx.sources.push(source_of(&abs, "state"));
     }
@@ -955,7 +1039,8 @@ fn load_docs(
         if kind == DocKind::Skill && file.file_name().and_then(|n| n.to_str()) != Some("SKILL.md") {
             continue;
         }
-        let Some(text) = read_text(&file) else {
+        let shown = ctx.shown(&file, scope);
+        let Some(text) = ctx.read(&shown, &file) else {
             continue;
         };
         let (front, body) = frontmatter(&text);
@@ -1785,6 +1870,7 @@ fn read_repo(roots: &Roots, repo_dir: &Path, repo: &str, launched: &[String], ou
         repo_dir: repo_dir.to_path_buf(),
         repo: repo.to_string(),
         sources: Vec::new(),
+        ignored: BTreeSet::new(),
     };
     for harness in [
         EngineId::Claude,
@@ -1798,7 +1884,7 @@ fn read_repo(roots: &Roots, repo_dir: &Path, repo: &str, launched: &[String], ou
     // A prompt run over and over: `PROMPT.md`.
     for p in PROMPTS {
         let file = repo_dir.join(p);
-        if let Some(text) = read_text(&file) {
+        if let Some(text) = ctx.read(p, &file) {
             ctx.sources.push(source_of(&file, "prompt"));
             let mut seen = vec![file.clone()];
             let full = ctx.with_includes(&file, &text, &mut seen, 0);
@@ -1823,6 +1909,7 @@ fn read_repo(roots: &Roots, repo_dir: &Path, repo: &str, launched: &[String], ou
         }
     }
     out.sources.extend(ctx.sources);
+    out.searched.extend(ctx.ignored);
 }
 
 /// Where each harness looks, said from a repository (what an empty tab says it searched).
@@ -1916,6 +2003,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             }
         })
         .await?;
+        self.workflow_read(project_id, &scan, changed);
         if changed {
             if let Some(dir) = file.parent() {
                 std::fs::create_dir_all(dir)?;
@@ -1946,4 +2034,17 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             }
         });
     }
+}
+
+/// What the checked list of a prompt loop (`path` from the project's folder) says now.
+pub fn list_progress(project_root: &Path, path: &str, roots: &Roots) -> Option<Progress> {
+    let mut ctx = Ctx {
+        roots,
+        repo_dir: project_root.to_path_buf(),
+        repo: String::new(),
+        sources: Vec::new(),
+        ignored: BTreeSet::new(),
+    };
+    let text = ctx.read(path, &project_root.join(path))?;
+    says_of(&text).checked
 }

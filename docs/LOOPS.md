@@ -71,6 +71,12 @@ Il manque : la lecture des commandes et de leurs `@`, le modèle d'un workflow, 
 | Cursor CLI | par ses commandes et les fichiers d'état | selon ACP | non | « Suivi partiel » |
 | Vue Cursor | par le transcript, à quelques secondes près | non | non | « Suivi partiel » |
 
+### Le suivi, tel que construit (ESC-193)
+
+`workflow_track.rs` : tous les adaptateurs, et les vues des interfaces terminal, posent leurs messages et leurs outils dans la conversation ; `Core::apply` en tire les faits (`facts_of_ops`) et le coût et la fin des tours, et les compare aux étapes lues (`AgentTrack::apply`). Une porte tapée ou un skill mène à l'étape qui le porte ; un sous-agent ou un fichier écrit seulement à l'étape en cours si elle les a, ou à la seule étape qui les a. « Hors du workflow » : un message sans porte, puis un tour d'outils dont aucun ne signale d'étape. Chaque passage garde la version du workflow où il a commencé (`behind` dit que le workflow a changé depuis). L'historique (300 passages, 300 tours) est gardé par projet dans `~/.escouade/projects/<id>/workflow-tracks.json`, retiré avec l'agent ; l'événement `workflowTrack` ne part que si ce qui se voit a changé. Le faux `claude` joue des faits avec `faits-workflow: [{"agent":"gsd-planner"},{"write":".planning/STATE.md"}]` dans un message (voir l'en-tête de `tests/fixtures/fake-claude.mjs`).
+
+Le lecteur n'ouvre que ce qui est sous le dossier du projet ou sous les dossiers propres des harness (liens suivis), en texte (`.md`, `.mdc`, `.txt`, `.yml`, `.yaml`, `.json`, `.toml`), jamais un secret (`.credentials.json`, `auth.json`, `.env*`) ni une conversation (`projects/`, `sessions/`) ; ce qui est refusé paraît dans `searched` en `ignored:<raison>:<chemin nommé>`, sans son contenu.
+
 ## Les risques
 
 - **Une lecture fausse vaut moins que rien** : d'où l'étape devinée en pointillé, les corrections qui passent devant, et l'agent qui affine, plutôt qu'un graphe affirmé.

@@ -60,6 +60,11 @@
 // its workspace removed, then "Plan terminé". "plan superpowers sans liste": the same without any task tool, so that the
 // plan file and the ledger are all there is to read; "interrompu" in the message cuts the turn in
 // the middle of the first implementer.
+// "faits-workflow: [...]" in a message plays the facts of an agent that follows a workflow (ESC-193, for the e2e of the
+// Workflow tab): a JSON list of { agent: "gsd-planner" } (a subagent in the foreground, back at once), { skill: "name" },
+// { write: "path" } (the file written for real in its folder), { bash: "command" }, { say: "text" } (its message) and
+// { wait: ms }, played in order in one turn that ends with its cost. The message itself may be a door (`/gsd:plan-phase 2
+// faits-workflow: [...]`); "faits-workflow-erreur: [...]" ends the turn in error instead.
 // "sous-agent long" and "sous-agent fini" launch a subagent in the background as Claude Code 2.1.300 does (ESC-13): its
 // own thread asks a permission (`can_use_tool` with its `agent_id`, request "req_subperm"); "sous-agent long" then runs
 // until a `stop_task` of its task ("fakelong-agent", logged to <log>.control.jsonl), "sous-agent fini" hands back its
@@ -1667,6 +1672,45 @@ function startSession() {
     });
   }
 
+  // ---------- "faits-workflow" ----------
+
+  // The facts of an agent in a workflow, one turn: see the head of this file.
+  async function workflowFacts(list, fails) {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    let n = 0;
+    for (const f of list) {
+      const id = `toolu_wf${msg}_${++n}`;
+      if (f.say) {
+        streamText(f.say);
+      } else if (f.agent) {
+        assistant({ type: 'tool_use', id, name: 'Agent', input: { description: f.agent, subagent_type: f.agent, prompt: 'go' } });
+        await wait(30);
+        toolResult(id, 'fait');
+      } else if (f.skill) {
+        assistant({ type: 'tool_use', id, name: 'Skill', input: { skill: f.skill } });
+        toolResult(id, 'Launching skill');
+      } else if (f.write) {
+        const file = path.resolve(process.cwd(), f.write);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.appendFileSync(
+          file,
+          `${f.text ?? 'écrit par le faux agent'}
+`,
+        );
+        assistant({ type: 'tool_use', id, name: 'Write', input: { file_path: file, content: f.text ?? '' } });
+        toolResult(id, `File written: ${f.write}`);
+      } else if (f.bash) {
+        assistant({ type: 'tool_use', id, name: 'Bash', input: { command: f.bash, description: f.bash } });
+        toolResult(id, 'ok');
+      } else if (f.wait) {
+        await wait(f.wait);
+      }
+      await wait(20);
+    }
+    streamText(fails ? 'Échec simulé.' : 'Fait.');
+    result({ isError: fails, subtype: fails ? 'error_during_execution' : 'success' });
+  }
+
   // ---------- "sous-agent long", "sous-agent fini" ----------
 
   // A subagent in the background, as Claude Code 2.1.300 runs one (measured, docs/PROTOCOL.md): its call, its
@@ -2334,6 +2378,14 @@ function startSession() {
     }
     if (text.includes('envoie des fichiers')) return sendFiles(text);
     if (sys) return ticketTurn(text);
+    const facts = /faits-workflow(-erreur)?:\s*(\[[\s\S]*\])/.exec(text);
+    if (facts) {
+      workflowFacts(JSON.parse(facts[2]), Boolean(facts[1])).catch((e) => {
+        process.stderr.write(`faits-workflow: ${e.stack}\n`);
+        result({ isError: true, subtype: 'error_during_execution' });
+      });
+      return;
+    }
     if (text.includes('plan superpowers')) {
       planRun(text).catch((e) => {
         // An interrupt came at any moment of the run: the turn already ended with its answer.

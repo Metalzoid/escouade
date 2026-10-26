@@ -133,6 +133,9 @@ mod which;
 mod workflow;
 #[cfg(test)]
 mod workflow_tests;
+mod workflow_track;
+#[cfg(test)]
+mod workflow_track_tests;
 mod worktrees;
 mod wsl;
 
@@ -472,6 +475,7 @@ pub fn run() {
             commands::inspect_folder,
             commands::refresh_repos,
             commands::get_workflows,
+            commands::get_workflow_tracks,
             commands::refresh_workflows,
             commands::agent_merge_check,
             commands::merge_agent_repos,

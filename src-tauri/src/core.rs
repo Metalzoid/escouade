@@ -859,6 +859,8 @@ pub struct Core<R: Runtime = Wry> {
     create_lock: tokio::sync::Mutex<()>,
     conv_buffer: Mutex<HashMap<String, Vec<ConvOp>>>,
     conv_flush: tokio::sync::Notify,
+    /// Where the agents are in their projects' workflows (ESC-193).
+    pub(crate) wf_tracks: Mutex<crate::workflow_track::Store>,
     /// When the usage endpoint was last asked, by account.
     pub(crate) last_oauth_call: Mutex<HashMap<String, i64>>,
     /// Where the usage endpoint is (`usage::api_from_env`; a fake one in tests).
@@ -1780,6 +1782,7 @@ impl<R: Runtime> Core<R> {
             create_lock: tokio::sync::Mutex::new(()),
             conv_buffer: Mutex::default(),
             conv_flush: tokio::sync::Notify::new(),
+            wf_tracks: Mutex::default(),
             last_oauth_call: Mutex::default(),
             usage_api: RwLock::new(usage::api_from_env()),
             resources: Mutex::default(),
@@ -2401,6 +2404,13 @@ impl<R: Runtime> Core<R> {
         fx: Effects,
         view: Option<AgentView>,
     ) {
+        self.track_workflow(
+            id,
+            project_id,
+            &fx.ops,
+            fx.turns.iter().map(|t| t.cost).sum(),
+            fx.turn_end.as_ref(),
+        );
         if !fx.ops.is_empty() {
             self.emit_conv(id, fx.ops);
         }
@@ -6949,6 +6959,7 @@ impl<R: Runtime> Core<R> {
         // Refused at once, without waiting for its process to end.
         self.mcp.forget_agent(id);
         self.hooks.revoke(id);
+        self.forget_workflow_track(&pid, id);
         // Its Claude Code interface quits as its user would (it archives its remote session), and
         // is gone before its worktree is removed; the launch lock is not held meanwhile.
         let quit = interface.map(|(t, key)| self.quit_soon(id, &t, key));

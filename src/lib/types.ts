@@ -1952,7 +1952,69 @@ export interface ConvSearchResult {
   timedOut: boolean;
 }
 
+/** How an agent's stay in a step, or outside the workflow (`step` null), ended. */
+export type WorkflowOutcome = 'running' | 'done' | 'back' | 'failed' | 'stopped' | 'left';
+
+/** One stay of an agent in a step of its project's workflow (ESC-193). */
+export interface WorkflowPassage {
+  n: number;
+  workflow: string;
+  step: string | null;
+  /** The version of the workflow when it began. */
+  version: string;
+  /** The nth stay of the agent in this step. */
+  pass: number;
+  door: string | null;
+  at: number;
+  ended: number | null;
+  ms: number;
+  cost: number;
+  /** `agent:<subagent_type>`, `skill:<name>`, `file:<path>`. */
+  did: string[];
+  outcome: WorkflowOutcome;
+  /** Why it went back, as the step wrote it, and the file that decided it. */
+  reason: string | null;
+  decidedBy: string | null;
+  backTo: string | null;
+  /** What the agent did, outside the workflow. */
+  doing: string | null;
+}
+
+/** One turn of a prompt run over and over. */
+export interface WorkflowTurn {
+  n: number;
+  at: number;
+  ended: number | null;
+  ms: number;
+  cost: number;
+  checked: { done: number; total: number } | null;
+  ticked: boolean | null;
+  outcome: WorkflowOutcome;
+}
+
+/** Where an agent is in its project's workflow, and where it has been; `behind`: the workflow changed since its step began. */
+export interface WorkflowTrack {
+  agentId: string;
+  projectId: string;
+  workflow: string | null;
+  step: string | null;
+  version: string;
+  outside: string | null;
+  subagents: string[];
+  passages: WorkflowPassage[];
+  turns: WorkflowTurn[];
+  /** `partial`: the harness tells only part (`missing`: subagents, cost, timing). */
+  support: { partial: boolean; missing: string[] };
+  since: number;
+  ms: number;
+  cost: number;
+  ticketLoop: [number, number] | null;
+  updated: number;
+  behind: boolean;
+}
+
 export type UiEvent =
+  | { type: 'workflowTrack'; track: WorkflowTrack }
   | { type: 'agent'; agent: Agent }
   | { type: 'agentRemoved'; id: string; projectId: string }
   | { type: 'conv'; agentId: string; ops: ConvOp[] }

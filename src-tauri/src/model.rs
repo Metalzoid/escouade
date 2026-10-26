@@ -2375,6 +2375,10 @@ pub enum ConvOp {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum UiEvent {
+    /// Where an agent is in its project's workflow, when what shows of it changed (ESC-193).
+    WorkflowTrack {
+        track: crate::workflow_track::TrackView,
+    },
     Agent {
         agent: AgentView,
     },
