@@ -22,6 +22,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - `/compact` compacte vraiment le contexte d’un agent Codex, Copilot CLI ou OpenCode au lieu de partir au modèle comme un message : la conversation montre son début et sa fin, et la jauge de contexte redescend.
 - Le menu des commandes s’ouvre aussi sur un `/` tapé après une espace ou en début de ligne, au milieu d’un message, mais jamais dans un chemin ni une adresse.
 - Réglages › Intégrations sépare les hébergeurs de code (PR, CI) des sources du Kanban (tickets), chacun dans sa partie nommée, et la fenêtre d’import sans source nomme les six sources et propose de lier d’un clic le dépôt GitHub ou le projet GitLab du projet, pour qu’un GitLab connecté ne laisse plus croire que ses tickets arrivent seuls.
+- Sous Linux, la fenêtre d’Escouade a son icône en Wayland, dans WSLg comme sur GNOME ou KDE, et non plus celle de Tux : elle porte le nom du raccourci que le .deb et l’AppImage installent.
+- Coller sous Linux ne lit plus jamais le presse-papiers deux fois à la fois ni ne retient la fenêtre : l’image n’est lue que si le presse-papiers en a une, et un presse-papiers qui ne répond pas est dit en trois secondes.
 
 ## [2.0.2] — 2026-10-26
 

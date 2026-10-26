@@ -272,11 +272,20 @@ export async function base64(f: File): Promise<string> {
 /**
  * The image of the system's clipboard, for a paste WebKitGTK (Linux) leaves without it (WebKit bug
  * 218519): the app reads it itself. Null without one, and always elsewhere (the WebView gives it).
+ * One read at a time (ESC-239): a paste made while one goes on gets null, the image going to the first.
  */
 export async function clipboardImage(): Promise<File | null> {
-  const png = await api.clipboardImage();
-  return png.byteLength ? new File([png], 'image.png', { type: 'image/png' }) : null;
+  if (readingClipboard) return null;
+  readingClipboard = true;
+  try {
+    const png = await api.clipboardImage();
+    return png.byteLength ? new File([png], 'image.png', { type: 'image/png' }) : null;
+  } finally {
+    readingClipboard = false;
+  }
 }
+
+let readingClipboard = false;
 
 /** A file dropped outside a drop zone would make the WebView open it in place of the app. */
 export function guardFileDrops(target: Window): () => void {

@@ -247,6 +247,16 @@ On this path a keystroke usually takes 10 to 40 ms, and seldom more than 150 ms,
 
 If you see the delay and the log notes nothing, the time was not spent in Escouade: it is in the machine’s display (a remote desktop), or the echo took more than 10 seconds (a keystroke left unanswered is then forgotten). Only a visible window measures its keystrokes.
 
+## Linux
+
+### In WSLg, the window has Tux’s icon, or an image doesn’t paste
+
+**Symptom.** In WSLg (WSL’s Linux apps, on Windows 11), the taskbar shows Tux instead of Escouade’s icon. Or, with Escouade started in X11 (`GDK_BACKEND=x11`), an image copied in Windows doesn’t paste.
+
+**Cause.** Under Wayland, WSLg finds a window’s icon in the shortcut (`.desktop`) that bears exactly its name: up to 2.0.2, the window was called `escouade` and the .deb’s shortcut `Escouade.desktop`. In X11, WSLg’s clipboard only carries text: an image copied in Windows doesn’t get there.
+
+**Solution.** Since 2.0.3, start Escouade under Wayland, its default (without `GDK_BACKEND`): the window has Escouade’s icon and images paste. WSLg only reads the shortcuts of `/usr/share/applications` and `/usr/local/share/applications`: with the AppImage, which installs none, the window keeps Tux; install the .deb instead. Escouade reads the clipboard once at a time, without holding the window, and says after three seconds “the clipboard does not answer” instead of waiting. If a paste still freezes the window, report it with the app’s log (see “Report a bug”).
+
 ## Voice
 
 ### Dictation or the conversation hears nothing

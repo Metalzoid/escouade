@@ -38,6 +38,7 @@ mod core_tests;
 mod cursor_tests;
 #[cfg(test)]
 mod cursor_tui_tests;
+mod desktop;
 mod engine;
 #[cfg(test)]
 mod engines_tests;
@@ -296,6 +297,9 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
 }
 
 pub fn run() {
+    // Before GTK starts: the window's app_id and WM_CLASS, which find its icon (ESC-239).
+    #[cfg(target_os = "linux")]
+    desktop::name_the_program();
     #[cfg(unix)]
     shellenv::adopt_login_path();
     // Started by a process whose PATH is older than the user's (ESC-186): today's, before any thread.

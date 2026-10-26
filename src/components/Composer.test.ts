@@ -515,6 +515,25 @@ describe('Composer', () => {
       await waitFor(() => expect(app.toasts.at(-1)?.text).toBe('le presse-papiers ne répond pas'));
     });
 
+    it('reads the system clipboard once for pastes made while it is read', async () => {
+      const { textarea } = setup();
+      let give: (png: ArrayBuffer) => void = () => {};
+      const backend = fakeBackend({ get_conversation: () => [], clipboard_image: () => new Promise((r) => (give = r)) });
+      paste(textarea, { files: [], types: [] });
+      paste(textarea, { files: [], types: [] });
+      paste(textarea, { files: [], types: [] });
+      await new Promise((r) => setTimeout(r, 20));
+      expect(backend.called('clipboard_image')).toHaveLength(1);
+      give(new Uint8Array(png).buffer);
+      expect(await screen.findByAltText('image.png')).toBeInTheDocument();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(screen.getAllByAltText('image.png')).toHaveLength(1);
+      // Once answered, the next paste reads it again.
+      paste(textarea, { files: [], types: [] });
+      await waitFor(() => expect(backend.called('clipboard_image')).toHaveLength(2));
+      give(new ArrayBuffer(0));
+    });
+
     it('leaves pasted text to the field without reading the system clipboard', async () => {
       const { textarea } = setup();
       const backend = fakeBackend({ get_conversation: () => [] });

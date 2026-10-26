@@ -247,6 +247,16 @@ Sur ce chemin, une frappe prend d’ordinaire 10 à 40 ms, et rarement plus de 1
 
 Si tu vois le retard et que le journal ne note rien, le temps n’est pas passé dans Escouade : il est dans l’affichage du poste (un bureau à distance), ou l’écho a mis plus de 10 secondes (une frappe restée sans réponse est alors oubliée). Seule une fenêtre visible mesure ses frappes.
 
+## Linux
+
+### Dans WSLg, la fenêtre a l’icône de Tux, ou une image ne se colle pas
+
+**Symptôme.** Dans WSLg (les apps Linux de WSL, sous Windows 11), la barre des tâches montre Tux au lieu de l’icône d’Escouade. Ou bien, Escouade lancé en X11 (`GDK_BACKEND=x11`), une image copiée dans Windows ne se colle pas.
+
+**Cause.** En Wayland, WSLg trouve l’icône d’une fenêtre dans le raccourci (`.desktop`) qui porte exactement son nom : jusqu’à la 2.0.2, la fenêtre s’appelait `escouade` et le raccourci du .deb `Escouade.desktop`. En X11, le presse-papiers de WSLg ne passe que du texte : une image copiée dans Windows n’y arrive pas.
+
+**Solution.** Depuis la 2.0.3, lance Escouade en Wayland, son mode par défaut (sans `GDK_BACKEND`) : la fenêtre a l’icône d’Escouade et les images se collent. WSLg ne lit que les raccourcis de `/usr/share/applications` et `/usr/local/share/applications` : avec l’AppImage, qui n’en installe pas, la fenêtre garde Tux ; installe plutôt le .deb. Escouade ne lit le presse-papiers qu’une fois à la fois, sans retenir la fenêtre, et dit au bout de trois secondes « le presse-papiers ne répond pas » au lieu d’attendre. Si un collage fige encore la fenêtre, signale-le avec le journal de l’app (voir « Signaler un bug »).
+
 ## Voix
 
 ### La dictée ou la conversation n’entend rien

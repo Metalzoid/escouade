@@ -22,6 +22,8 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - `/compact` now really compacts the context of a Codex, Copilot CLI or OpenCode agent instead of reaching the model as a message: the conversation shows its start and its end, and the context gauge goes down.
 - The commands menu also opens on a `/` typed after a space or at the start of a line, in the middle of a message, but never in a path or an address.
 - Settings › Integrations sets the code hosts (PRs, CI) apart from the Kanban sources (tickets), each in its own named part, and the import window with no source names the six sources and offers to link the project’s GitHub repository or GitLab project in one click, so that a connected GitLab no longer suggests its tickets come on their own.
+- On Linux, Escouade’s window has its own icon under Wayland, in WSLg as on GNOME or KDE, and no longer Tux’s: it bears the name of the shortcut the .deb and the AppImage install.
+- Pasting on Linux never reads the clipboard twice at once nor holds the window any more: the image is read only when the clipboard has one, and a clipboard that does not answer is said within three seconds.
 
 ## [2.0.2] — 2026-10-26
 
