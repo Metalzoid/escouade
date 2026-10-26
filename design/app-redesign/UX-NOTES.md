@@ -516,3 +516,55 @@ Demandé par l'utilisateur le 2026-10-26, pour la 2.1 : « analyser la loop du p
 - Les états : un workflow à étapes (GSD) et une boucle d'un prompt ; un agent en cours, trois agents, deux sur la même étape ; l'historique avec un échec et un retour ; replié ; vide ; une étape devinée, un agent dehors, un suivi partiel, un workflow changé ; les réglages et les corrections.
 - À 1028 px : les agents d'une étape passent sous elle, les onglets tiennent sur une ligne, l'historique passe à la ligne sans rien couper que par une ellipse ; dans les deux thèmes.
 - `node design/app-redesign/contrast.mjs` : 0 paire sous le seuil, dans les deux thèmes.
+
+# La place de marché des plugins, store.escouade.dev (ESC-202, 2026-10-26)
+
+Demandé par l'utilisateur le 2026-10-26 : une place de marché des plugins sur store.escouade.dev, avec la 2.1 : soumission depuis un dépôt public, comptes, revue en local et badge « Vérifié par Escouade ». L'analyse est dans `docs/STORE.md`. Deux aperçus : le store lui-même, dans le monde du site (`design/store/index.html`, captures `design/store/store-*.png`, sombre et clair à 1440, 1028 et 390 px), et le store dans l'app (`#store*` ici). Décidé par l'utilisateur le même jour : le code du store vit dans ce dépôt (`store/`), déployé par Coolify à chaque push sur `main`. Les choix 160 à 181 sont **à valider**.
+
+## Adresses
+
+- `#store` : Réglages › Plugins › « Parcourir le store » : la recherche, les catégories, « Vérifiés seulement », la liste (installer, installé, mise à jour non vérifiée).
+- `#store-plugin` : la page d'un plugin (Slack), dans l'onglet même : sa doc, ses versions (en revue, vérifiées, retirée), ses permissions, sa revue, d'où il vient.
+- `#store-install` : la fenêtre d'installation de PLG-4 pour une version vérifiée (Gemini CLI) ; `#store-unverified` : la même pour une version non vérifiée (Goose).
+- `#store-installed` : les plugins installés : vérifié avec une mise à jour non vérifiée, un dossier en développement, un plugin retiré par Escouade ; « N'installer que des versions vérifiées », la liste de révocation.
+- Le store : `design/store/index.html#home`, `#search`, `#plugin`, `#account`, `#submit`, `#review` (et `?theme=light`).
+
+## Choix
+
+### Le sceau
+
+160. **Un sceau, pas une coche** : l'étincelle du logo dans une petite tuile teal, « Vérifié par Escouade », puis la version qu'il couvre en mono (`v1.2.0`). Le teal est celui d'Escouade : le sceau dit que c'est Escouade qui répond de la version, et rien d'autre ne porte ce teal en aplat dans une liste. « Non vérifié » au trait neutre, « En revue » en pointillé : jamais de rouge pour un plugin simplement pas relu.
+161. **Le sceau nomme toujours sa version** sur une ligne de liste et en tête d'une page ; dans la liste des versions, il est seul sur chaque ligne vérifiée. Raison : le badge vaut par version (`docs/STORE.md`, §4.4) ; la mise à jour non vérifiée se lit à côté, en ambre (« v1.3.0 · non vérifiée »).
+162. **Le même sceau sur le store et dans l'app**, à la taille près, dans les deux thèmes.
+
+### Le store (le site)
+
+163. **Le monde du site** (`website/app/assets/main.css`) : fond presque noir, Inter, filets blancs translucides, teal pour l'action principale et le focus ; un thème clair en plus (le site n'en a pas), qui suit le système.
+164. **L'accueil** : un titre et la recherche en tête, les catégories, « Vérifiés par Escouade », puis « Nouveaux » et « Les plus installés » côte à côte, et une bande « Publier un plugin » en trois pas. Pas de note, pas d'étoiles : les installations et le sceau suffisent (`docs/STORE.md`, §5.3).
+165. **Des rangées entre filets, pas des cartes** : tuile, nom, sceau, description sur deux lignes, auteur, catégorie, ce que le plugin demande en une ligne, installations. Deux colonnes à l'accueil, une dans la recherche.
+166. **Ce que demande un plugin, partout en une ligne**, du plus fort au plus faible : « Lance un programme » appuyé, « Décide des autorisations » en rouge, les hôtes réseau en mono, « Un secret », ou « Sans programme ».
+167. **La recherche** : filtres à gauche (catégories, « Vérifiés seulement », « Sans programme », « Sans réseau », « Sans secret »), le tri à droite ; sur mobile, les filtres passent en puces défilantes au-dessus.
+168. **La page d'un plugin** : en tête le nom, le sceau, l'auteur, les installations, la licence, « Ouvrir dans Escouade » (le bouton principal, un lien `escouade://plugin/<id>`) et « Copier l'adresse du dépôt » ; puis la doc à gauche, et à droite **ce qu'il pourra faire**, le **résumé de la revue**, **d'où il vient** (dépôt, étiquette → commit, empreinte, signature : une chaîne dont chaque maillon se vérifie) et « Signaler ». Sur mobile, les permissions passent avant la doc.
+169. **Mes plugins** : une bande pour la version trouvée sur GitHub et contrôlée (« Publier la v1.3.0 », avec la permission qui grandit dite), puis le tableau (état, dernière version, installations, 30 jours, actions) ; un rejet s'ouvre sous sa ligne, avec ce qui a échoué, où, et comment corriger. À droite : les installations dans le temps, l'e-mail des avis, mes données (exporter, supprimer). La note sous le tableau dit que les installations sont sous-estimées (seules celles qui ont accepté les statistiques comptent).
+170. **La soumission en quatre pas** (Dépôt, Version, Contrôles, Publier) : le dépôt et la version choisis restent en tête, l'étiquette avec son commit et l'empreinte de l'archive ; les dix contrôles en direct, chacun avec ce qu'il a lu ; un échec dit le problème et la correction (« pousse l'étiquette v0.3.1, et le store relancera les contrôles seul ») ; « Continuer » reste éteint, avec la raison.
+171. **La file de revue** (l'utilisateur seul) : « À relire », « Signalements », « Noms proches », « Faites » ; les versions avec pourquoi (première version, mise à jour et son diff, nom proche), les installations et l'attente ; à droite, la version choisie : la commande à copier (`npm run plugin-review -- <id>@<version>`, ou `/review-plugin` dans Claude Code), ce qui a changé (les permissions nouvelles en ambre), le rapport quand il arrive, « Demander des changements » et « Refuser ». **Pas de bouton « Vérifier » sur le store** : la signature se fait sur le poste, le store ne fait que la recevoir.
+172. **Mobile (390 px)** : l'en-tête garde la marque, la recherche et le menu ; tout passe en une colonne ; le tableau des plugins de l'auteur devient des lignes (nom, puis état dessous).
+
+### Dans l'app
+
+173. **Dans Réglages › Plugins**, groupe Système, avant « Serveur MCP » ; deux vues par un sélecteur en tête : « Installés » et « Parcourir le store », et à droite « Depuis un dossier… » et « Depuis un dépôt git… ». Le store s'ouvre dans l'onglet même, pas dans une fenêtre de plus.
+174. **La recherche ne part pas** : « Catalogue de store.escouade.dev lu à 10:42 · la recherche reste sur ta machine » sous les catégories ; l'âge du catalogue en cache se lit là quand le store ne répond pas.
+175. **Une ligne par plugin** : tuile, nom, sceau ou état, auteur et installations, description sur une ligne, ce qu'il demande ; à droite « Installer », « Installé » ou la mise à jour (« v1.3.0 · non vérifiée », « Mettre à jour »).
+176. **La page d'un plugin dans l'onglet**, « ‹ Parcourir le store » pour revenir ; l'action en tête dit ce qui est installé et ce que vaut la mise à jour (« Installée : v1.2.0, vérifiée. La v1.3.0 n'est pas encore vérifiée, et demande un événement de plus. ») ; les versions avec leur sceau ; à droite les permissions, la revue, d'où il vient (la signature « vérifiée ici », par l'app) et « Signaler sur le store ».
+177. **La fenêtre d'installation de PLG-4**, venue du store : la tuile, le nom et le sceau ; un bloc des faits (vient de, version → commit, empreinte « archive reçue identique », signature) ; ce qu'il ajoute ; ce qu'il pourra faire, la plus forte d'abord ; « Installer ».
+178. **Une version non vérifiée** s'installe, après une bande qui dit les choses (« Personne n'a relu cette version. Elle vient du store, son archive est bien celle que l'auteur a publiée, mais rien ne dit ce que fait son programme. ») ; le bouton dit « Installer quand même », la signature « Aucune ».
+179. **Les installés** : le sceau de la version installée et, à côté, la mise à jour non vérifiée ; l'origine (store, dossier en développement) ; l'interrupteur de l'app.
+180. **Un plugin retiré par Escouade** : la tuile grisée, « Désactivé par Escouade » en rouge, une bande qui dit quelle version, quand et pourquoi, et que ses réglages et secrets sont encore là ; « Désinstaller ». Escouade arrête, ne supprime pas.
+181. **Deux réglages en bas** : « N'installer que des versions vérifiées » (éteint d'office), et la liste de révocation (« lue à 10:42 · nº 18 », toutes les 6 heures, signée, appliquée même si le store ne répond plus).
+
+## Vérifié sur l'aperçu
+
+- Le store : les six pages à 1440, 1028 et 390 px, dans les deux thèmes (36 captures, `node design/store/render.mjs`), sans débordement horizontal sur mobile.
+- L'app : les cinq écrans à 1440 et 1028 px, dans les deux thèmes (20 captures `store*.png`, `node design/app-redesign/render.mjs`) ; à 1028 px la fenêtre des réglages garde sa largeur, la page d'un plugin tient en deux colonnes.
+- `node design/app-redesign/contrast.mjs` : 0 paire sous le seuil, dans les deux thèmes (les jetons de l'app ; le sceau et les étiquettes en tirent leurs couleurs).
+- Le français seul : l'anglais suivra les libellés du site et de l'app à la construction (STORE-4, STORE-9).

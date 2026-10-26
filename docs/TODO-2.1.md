@@ -104,7 +104,7 @@ Ordre : PLG-1 → PLG-2 → PLG-3 → (PLG-4, PLG-5, PLG-6, PLG-7 en parallèle 
 #### Après la 2.1.0
 
 - **2.1.x** : les canaux de notification (ntfy, Pushover, Telegram, à côté de ceux du système, sur les réglages de ce qui notifie) ; l'interface déclarée (menus d'un agent, d'un ticket, d'un projet ; badges des cartes ; éléments de la barre d'état ; une section de réglages ; commandes et raccourcis), rendue par les composants d'Escouade, avec son aperçu par `impeccable`.
-- **2.2** : les sources du Kanban (`integrations::Client` passé en trait, comme `Forge`) ; les environnements de lancement (isola généralisé), les étapes de mise en place, les modèles de projet de l'assistant et les clés `plugins.<id>.*` de `.escouade.yml` avec `plugins.recommended` ; les textes rédigés et les consignes ajoutées (dans `instructions_room`) ; les outils ajoutés au serveur MCP et le plugin client du serveur (un jeton par plugin, la vue `Sight`) ; les hébergeurs, déploiements et CI tierce (après ESC-56 à 69) ; les statistiques en lecture et leur export ; une source de Ctrl+K ; **le runtime WASM** du même protocole (wasmtime, carburant et époque, mémoire bornée, réseau par les hôtes déclarés, disque filtré par la clôture), et les plugins WASM proposés par un projet ; **le registre** (un dépôt public avec revue par PR, une CI qui passe le banc, la page sur escouade.dev, la signature de l'archive).
+- **2.2** : les sources du Kanban (`integrations::Client` passé en trait, comme `Forge`) ; les environnements de lancement (isola généralisé), les étapes de mise en place, les modèles de projet de l'assistant et les clés `plugins.<id>.*` de `.escouade.yml` avec `plugins.recommended` ; les textes rédigés et les consignes ajoutées (dans `instructions_room`) ; les outils ajoutés au serveur MCP et le plugin client du serveur (un jeton par plugin, la vue `Sight`) ; les hébergeurs, déploiements et CI tierce (après ESC-56 à 69) ; les statistiques en lecture et leur export ; une source de Ctrl+K ; **le runtime WASM** du même protocole (wasmtime, carburant et époque, mémoire bornée, réseau par les hôtes déclarés, disque filtré par la clôture), et les plugins WASM proposés par un projet. Le registre n'attend plus la 2.2 : c'est la place de marché de la 2.1 (plus bas).
 - **2.3 et plus tard** : les vues libres (un panneau, une page) dans une iframe isolée, après un essai sous WKWebView et WebKitGTK ; les services de voix (transcription et voix, puis le direct) ; les langues (`i18n::Lang` ouvert, les textes du cœur passés en catalogues) ; les harness en programme ; un bac à sable du système pour les process (AppContainer, Seatbelt, bubblewrap).
 
 ### La documentation étendue
@@ -134,7 +134,7 @@ plugins/
   api.md                  L'API : le protocole JSON-RPC, ses méthodes et ses types (générés depuis le schéma)
   sdk.md                  Le SDK TypeScript, le gabarit, la CLI escouade-plugin, un exécutable unique
   testing.md              Tester un plugin : le faux Escouade, le banc de conformité, la CI
-  publishing.md           Publier : un dépôt git, les étiquettes, puis le registre (2.2)
+  publishing.md           Publier : un dépôt git, les étiquettes, puis store.escouade.dev (docs/STORE.md)
   versioning.md           La politique de versions : l'API majeure, escouade.min et max, ce qui casse et ce qui ne casse pas, l'annonce d'un retrait
   security.md             La sécurité pour les auteurs : secrets, consignes et injection, projets privés, ce que la revue refuse
   faq.md                  FAQ
@@ -163,8 +163,8 @@ Chaque exemple montre son code entier, tiré du dépôt `escouade-plugins` (pas 
 L'utilisateur a retenu chaque recommandation :
 1. **L'architecture** : un process à côté en JSON-RPC en 2.1, avec une interface déclarée et un niveau déclaratif sans code ; le WASM du même protocole en 2.2 ; les vues libres en iframe isolée en 2.3.
 2. **La 2.1.0** : le socle (PLG-1 à PLG-4, PLG-9), les événements (PLG-5), les harness ACP décrits (PLG-6) et les thèmes (PLG-7) ; PLG-8 en tête de la 2.1.x s'il retarde la 2.1.0.
-3. **Le registre** : aucun en 2.1.0 ; un dépôt public avec revue par PR et signature par Escouade en 2.2 ; l'installation depuis un dépôt git toujours permise, marquée « non vérifié ».
-4. **La licence** : le SDK et le schéma sous MIT, une licence libre exigée dans le registre (au choix de l'auteur), pas de vente par Escouade.
+3. ~~**Le registre** : aucun en 2.1.0 ; un dépôt public avec revue par PR et signature par Escouade en 2.2~~ — **remplacée le 2026-10-26** (ESC-202) : la place de marché **store.escouade.dev** arrive avec les plugins de la 2.1 (soumission depuis un dépôt public, comptes, revue locale et badge « Vérifié par Escouade », plus bas). Reste vrai : l'installation depuis un dépôt git toujours permise, marquée « non vérifié ».
+4. **La licence** : le SDK et le schéma sous MIT, une licence libre exigée dans le store (au choix de l'auteur), pas de vente par Escouade.
 5. **Un projet qui propose un plugin** : il propose, il n'installe jamais seul ; en 2.2 avec le WASM.
 6. **Les autorisations décidées par un plugin** : permises, comme une permission rouge (jamais donnée par un projet, journalisée), un refus qui l'emporte et un délai court qui rend la demande à l'utilisateur.
 
@@ -187,6 +187,30 @@ Compléments du 2026-10-26 (ESC-203) : tout ce qui est externe devient un plugin
 | PLG-10. Les plugins d'exemple | ESC-182 | ESC-177, ESC-178, ESC-179, ESC-181 |
 | PLG-11. La documentation du site | ESC-183 | PLG-1 à PLG-10 |
 | PLG-12. Les docs internes et l'essai réel | ESC-184 | le reste de la 2.1.0 |
+
+## La place de marché store.escouade.dev (demandé le 2026-10-26)
+
+« Pour le système de plugins, fais en même temps le système de marketplace qui sera sur store.escouade.dev. Chacun pourra soumettre des plugins via des repos publics, avec la documentation, etc. Une gestion de compte pour gérer ses plugins partagés. Un système de review de plugins que j'analyserai en local via un agent dans le repo d'escouade, pour avoir un flag "vérifié par escouade". »
+
+- [x] **L'analyse et la conception** (ESC-202, 2026-10-26) : `docs/STORE.md` (le service, les comptes et le RGPD, la soumission, la revue locale et la signature, l'app, les pages, la sécurité, le plan) ; l'aperçu du store (`design/store/`, captures sombre et clair à 1440, 1028 et 390 px) et de « Parcourir le store » dans l'app (`#store*` de `design/app-redesign/index.html`) ; les choix 160 et suivants d'`UX-NOTES.md` ; le traitement 3 et 4 de `docs/registre-rgpd.md` (en projet).
+- [x] Décidé par l'utilisateur le 2026-10-26 : le code vit dans ce dépôt (`store/`), et le push sur `main` le déploie par Coolify (`docs/STORE.md`, §1.1, §1.3, §1.5).
+- [x] Les décisions (`docs/STORE.md`, §8), prises par l'utilisateur le 2026-10-26 : chaque recommandation (GitHub App, badge par version, non vérifiés listés et marqués, PostgreSQL de Coolify et sauvegardes Scaleway, binaires attestés) ; le design validé.
+- [x] Les tickets, créés le 2026-10-26 pour jeudi (« On développera les plugins et la marketplace jeudi prochain ») : STORE-1 ESC-228, STORE-2 ESC-229, STORE-3 ESC-230, STORE-4 ESC-231, STORE-5 ESC-232, STORE-6 ESC-233, STORE-7 ESC-234, STORE-8 ESC-235, STORE-9 ESC-236, STORE-10 ESC-237.
+
+| Plan | Modèle conseillé | Dépend de |
+| --- | --- | --- |
+| STORE-1. Le socle du service | Sonnet medium | — |
+| STORE-2. Les comptes | Sonnet medium | STORE-1 |
+| STORE-3. La soumission et les contrôles | Sonnet medium | STORE-2, ESC-173, ESC-181 |
+| STORE-4. Les pages publiques | Opus medium | STORE-3 |
+| STORE-5. L'espace de l'auteur | Opus medium | STORE-3 |
+| STORE-6. L'API de l'app | Sonnet medium | STORE-3 |
+| STORE-7. La revue locale | Opus medium | STORE-6, ESC-175, ESC-181 |
+| STORE-8. La signature et la file | Opus medium | STORE-7, STORE-5 |
+| STORE-9. Le store dans l'app | Opus medium | ESC-176, STORE-6, STORE-8 |
+| STORE-10. Les docs et l'essai réel | Sonnet medium | STORE-1 à STORE-9, ESC-182 |
+
+PLG-11 (ESC-183) suit : `publishing.md` décrit le store, et non plus un dépôt git seul.
 
 ## Les loops d'un projet (demandé le 2026-10-26, avancé en 2.0.x)
 
@@ -297,6 +321,8 @@ Ordre : INT-0, INT-1, INT-2, INT-3 (dès maintenant, en parallèle) → ESC-173,
 | ESC-184, PLG-12, docs internes et essai réel | Les essais réels des plugins de première main migrés à la date de la release, en plus des cinq exemples. |
 
 Et ailleurs : **ESC-165** réécrit (une source du plugin « GitLab », avec INT-8.2, après INT-1, INT-5 et INT-6) ; **ESC-56, 57, 58** écrits dans la crate de leur plugin si INT-4 est fait, sinon dans le cœur puis sortis par INT-8.2 à 8.4 ; **ESC-69, 70** : la page dit qu'ils sont des plugins de première main, l'essai réel passe aussi par « plugin arrêté puis relancé » ; **ESC-202** : le store refuse les ids `dev.escouade.*`, l'app montre « Livré avec Escouade » ; **ESC-36** à fermer (doublon d'ESC-178). ESC-201, ESC-53, ESC-59 à 63 et ESC-65 à 68 (le flux des PR, au cœur) ne changent pas.
+
+**Les tickets INT, créés le 2026-10-26 pour jeudi** : INT-0 ESC-206, INT-1 ESC-207, INT-2 ESC-208, INT-3 ESC-209, INT-4 ESC-210, INT-5 ESC-211, INT-6 ESC-212, INT-7.1 ESC-213, INT-7.2 ESC-214, INT-7.3 ESC-215, INT-7.4 ESC-216, INT-8.1 ESC-217, INT-8.2 ESC-218, INT-8.3 ESC-219, INT-8.4 ESC-220, INT-9 ESC-221, INT-10.1 ESC-222, INT-10.2 ESC-223, INT-10.3 ESC-224, INT-10.4 ESC-225, INT-10.5 ESC-226, INT-11 ESC-227. Les modifications des tickets PLG (« Les tickets à modifier » ci-dessus) sont reportées dans leur description ; ESC-36, doublon d'ESC-178, est fermé.
 
 ## Restes du redesign
 

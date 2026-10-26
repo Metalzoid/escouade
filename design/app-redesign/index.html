@@ -8473,6 +8473,573 @@
         font-style: italic;
       }
     </style>
+    <style>
+      /*
+       * Réglages › Plugins › « Parcourir le store » (ESC-202, docs/STORE.md §5) : le catalogue de store.escouade.dev lu sur
+       * la machine, la page d'un plugin, la fenêtre d'installation de PLG-4 avec le sceau « Vérifié par Escouade », les
+       * plugins installés. #store, #store-plugin, #store-install, #store-unverified, #store-installed.
+       */
+      .st-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 16px 0 12px;
+      }
+      .st-bar .grow {
+        flex: 1;
+      }
+      .st-find {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        height: 30px;
+        padding: 0 10px;
+        border-radius: 7px;
+        background: var(--well);
+        box-shadow: inset 0 0 0 1px var(--line-2);
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      .st-find b {
+        color: var(--text);
+        font-weight: 450;
+      }
+      .st-find .caret {
+        width: 1.5px;
+        height: 15px;
+        margin-left: -6px;
+        background: var(--text);
+      }
+      .st-find kbd {
+        margin-left: auto;
+        font: 10.5px var(--mono);
+        color: var(--dim);
+      }
+      .st-only {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--soft);
+        font-size: 12.5px;
+        white-space: nowrap;
+      }
+      .st-cats {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        padding-bottom: 6px;
+      }
+      .st-cat {
+        height: 26px;
+        padding: 0 10px;
+        border-radius: 7px;
+        box-shadow: inset 0 0 0 1px var(--line);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 520;
+      }
+      .st-cat .n {
+        margin-left: 5px;
+        color: var(--dim);
+        font: 10.5px var(--mono);
+      }
+      .st-cat[aria-pressed='true'] {
+        background: rgba(var(--fg-rgb), 0.07);
+        box-shadow: inset 0 0 0 1px var(--line-2);
+        color: var(--text);
+      }
+      .st-meta-line {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        padding: 8px 0 6px;
+        color: var(--dim);
+        font-size: 11.5px;
+      }
+      .st-list {
+        border-top: 1px solid var(--line);
+      }
+      .st-row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        padding: 11px 6px;
+        border-bottom: 1px solid var(--line);
+        border-radius: 0;
+      }
+      .st-row:hover {
+        background: var(--hover);
+      }
+      .st-row .nm {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .st-row .nm b {
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .st-row .by {
+        color: var(--dim);
+        font-size: 11.5px;
+        white-space: nowrap;
+      }
+      .st-row .ds {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .st-row .act {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .st-row .act .done {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .st-asks {
+        display: flex;
+        gap: 4px 12px;
+        flex-wrap: wrap;
+        margin-top: 4px;
+        color: var(--dim);
+        font-size: 11.5px;
+      }
+      .st-asks span {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .st-asks .strong {
+        color: var(--soft);
+      }
+      .st-asks .red {
+        color: var(--del);
+      }
+      .st-asks svg.i {
+        width: 12px;
+        height: 12px;
+      }
+      .ptile {
+        --s: 34px;
+        display: grid;
+        place-items: center;
+        flex: none;
+        width: var(--s);
+        height: var(--s);
+        border-radius: calc(var(--s) * 0.27);
+        background: oklch(0.36 0.07 var(--h));
+        color: oklch(0.93 0.05 var(--h));
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+        font-size: calc(var(--s) * 0.38);
+        font-weight: 680;
+        letter-spacing: -0.02em;
+      }
+      :root[data-theme='light'] .ptile {
+        background: oklch(0.9 0.05 var(--h));
+        color: oklch(0.35 0.09 var(--h));
+        box-shadow: inset 0 0 0 1px rgba(15, 17, 22, 0.06);
+      }
+      .ptile.lg {
+        --s: 52px;
+      }
+      /* Le sceau : l'étincelle du logo sur le teal, puis la version qu'il couvre ; « Non vérifié » au trait. */
+      .seal {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 20px;
+        padding: 0 7px 0 2px;
+        border-radius: 6px;
+        background: color-mix(in oklch, var(--brand) 10%, transparent);
+        box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--brand) 32%, transparent);
+        color: var(--teal-ink);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1;
+        letter-spacing: normal;
+        white-space: nowrap;
+      }
+      .seal .sp {
+        display: grid;
+        place-items: center;
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        background: var(--brand);
+        color: #041413;
+      }
+      .seal .sp svg {
+        width: 10px;
+        height: 10px;
+        stroke-width: 2;
+      }
+      .seal .v {
+        font: 500 10.5px var(--mono);
+        opacity: 0.85;
+      }
+      .ptag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: 20px;
+        padding: 0 7px;
+        border-radius: 6px;
+        box-shadow: inset 0 0 0 1px var(--line-2);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 550;
+        white-space: nowrap;
+      }
+      .ptag.review {
+        box-shadow: none;
+        border: 1px dashed var(--line-3);
+      }
+      .ptag.bad {
+        box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--del) 45%, transparent);
+        background: color-mix(in oklch, var(--del) 9%, transparent);
+        color: var(--del);
+      }
+      .ptag.up {
+        box-shadow: inset 0 0 0 1px var(--wait-line);
+        background: var(--wait-bg);
+        color: var(--warn-ink);
+      }
+      /* La page d'un plugin, dans l'onglet même. */
+      .pp-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin: 14px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .pp-back svg {
+        transform: rotate(90deg);
+      }
+      .pp-head {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 14px;
+        align-items: start;
+        padding: 12px 0 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      .pp-head h3 {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 18px;
+        font-weight: 640;
+        letter-spacing: -0.02em;
+      }
+      .pp-head .ln {
+        margin-top: 4px;
+        display: flex;
+        gap: 4px 12px;
+        flex-wrap: wrap;
+        color: var(--dim);
+        font-size: 12px;
+      }
+      .pp-head .ln a {
+        color: var(--soft);
+      }
+      .pp-head p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 12.5px;
+        max-width: 56ch;
+      }
+      .pp-head .acts {
+        display: grid;
+        gap: 6px;
+        justify-items: end;
+      }
+      .pp-head .acts small {
+        color: var(--warn-ink);
+        font-size: 11.5px;
+        text-align: right;
+        max-width: 230px;
+      }
+      .pp-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 230px;
+        gap: 26px;
+        padding-top: 16px;
+      }
+      .pp-body > * {
+        min-width: 0;
+      }
+      .pp-read {
+        color: var(--soft);
+        font-size: 12.5px;
+        line-height: 1.6;
+      }
+      .pp-read h4 {
+        margin: 0 0 6px;
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 620;
+      }
+      .pp-read h4:not(:first-child) {
+        margin-top: 18px;
+      }
+      .pp-read p {
+        margin: 0 0 8px;
+      }
+      .pp-shot {
+        margin: 4px 0 6px;
+        padding: 10px 12px;
+        border-radius: 9px;
+        background: #1a1d21;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+        color: #d1d2d3;
+        font-size: 12px;
+      }
+      .pp-shot b {
+        color: #fff;
+      }
+      .pp-shot .pp-att {
+        margin-top: 4px;
+        padding: 6px 10px;
+        border-left: 3px solid #35c1bd;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 0 5px 5px 0;
+      }
+      .vers {
+        display: grid;
+        border-top: 1px solid var(--line);
+      }
+      .vers > div {
+        display: grid;
+        grid-template-columns: 54px minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 12px;
+      }
+      .vers .vn {
+        font: 12px var(--mono);
+        color: var(--text);
+      }
+      .vers .vd {
+        color: var(--muted);
+      }
+      .vers .vd.out {
+        color: var(--dim);
+        text-decoration: line-through;
+      }
+      .pp-aside {
+        display: grid;
+        gap: 16px;
+        align-content: start;
+      }
+      .pp-aside h5 {
+        margin: 0 0 4px;
+        color: var(--dim);
+        font-size: 11.5px;
+        font-weight: 600;
+      }
+      .perm-l {
+        display: grid;
+        grid-template-columns: 16px minmax(0, 1fr);
+        gap: 8px;
+        padding: 7px 0;
+        border-top: 1px solid rgba(var(--fg-rgb), 0.05);
+        color: var(--soft);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .perm-l:first-of-type {
+        border-top: 0;
+      }
+      .perm-l svg.i {
+        margin-top: 1px;
+        color: var(--dim);
+      }
+      .perm-l small {
+        display: block;
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .perm-l .mono {
+        font-size: 11px;
+      }
+      .perm-l.strong {
+        color: var(--text);
+        font-weight: 560;
+      }
+      .perm-l.strong svg.i {
+        color: var(--text);
+      }
+      .perm-l.red,
+      .perm-l.red svg.i {
+        color: var(--del);
+      }
+      .perm-l .new {
+        color: var(--warn-ink);
+        font-weight: 600;
+      }
+      .chain-l {
+        display: grid;
+        gap: 6px;
+        font-size: 11.5px;
+      }
+      .chain-l div {
+        display: grid;
+        grid-template-columns: 76px minmax(0, 1fr);
+        gap: 8px;
+      }
+      .chain-l .k {
+        color: var(--dim);
+      }
+      .chain-l .v {
+        color: var(--soft);
+        font-family: var(--mono);
+        font-size: 11px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .chain-l .v.ok {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-family: inherit;
+        font-size: 11.5px;
+        color: var(--teal-ink);
+        font-weight: 560;
+      }
+      .rev-note {
+        padding: 9px 11px;
+        border-radius: 8px;
+        background: color-mix(in oklch, var(--brand) 7%, transparent);
+        box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--brand) 24%, transparent);
+        color: var(--soft);
+        font-size: 11.5px;
+        line-height: 1.5;
+      }
+      .rev-note b {
+        color: var(--text);
+        font-weight: 600;
+      }
+      /* La fenêtre d'installation (PLG-4) venue du store. */
+      .inst-origin {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 12px;
+        align-items: center;
+      }
+      .inst-origin h3 {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 15px;
+        font-weight: 620;
+      }
+      .inst-origin .ln {
+        margin-top: 3px;
+        color: var(--dim);
+        font-size: 12px;
+      }
+      .inst-facts {
+        display: grid;
+        grid-template-columns: 110px minmax(0, 1fr);
+        gap: 6px 12px;
+        padding: 10px 12px;
+        border-radius: 9px;
+        background: var(--well);
+        box-shadow: inset 0 0 0 1px var(--line);
+        font-size: 12px;
+      }
+      .inst-facts .k {
+        color: var(--dim);
+      }
+      .inst-facts .v {
+        color: var(--soft);
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .inst-facts .v.mono {
+        font-size: 11px;
+      }
+      .inst-facts .v.ok {
+        color: var(--teal-ink);
+        display: inline-flex;
+        gap: 5px;
+        align-items: center;
+        font-weight: 560;
+      }
+      .inst-facts .v.no {
+        color: var(--warn-ink);
+        font-weight: 560;
+      }
+      .m-sec h4 {
+        margin: 0;
+        color: var(--dim);
+        font-size: 11.5px;
+        font-weight: 600;
+      }
+      /* Les plugins installés. */
+      .inst-row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        padding: 11px 0;
+        border-bottom: 1px solid rgba(var(--fg-rgb), 0.05);
+      }
+      .inst-row .nm {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .inst-row .nm b {
+        font-weight: 600;
+      }
+      .inst-row .sub {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .inst-row .why {
+        margin-top: 6px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: color-mix(in oklch, var(--del) 8%, transparent);
+        box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--del) 30%, transparent);
+        color: var(--soft);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .inst-row .why b {
+        color: var(--del);
+        font-weight: 600;
+      }
+      .inst-row .ctl {
+        align-self: start;
+      }
+      .inst-row.off .ptile {
+        filter: grayscale(1);
+        opacity: 0.6;
+      }
+    </style>
   </head>
   <body>
     <svg width="0" height="0" style="position: absolute" aria-hidden="true">
@@ -13154,6 +13721,126 @@ Chaque PR cite l’autre : à merger ensemble.</div>
           </section>`,
         );
         settingsAt('projects', route === 'loops-settings' ? 'sg-workflow' : 'sh-wf-found');
+      }
+
+      // Réglages › Plugins › « Parcourir le store » (ESC-202, docs/STORE.md §5): the catalogue of store.escouade.dev, read on
+      // the machine; a plugin's page in the tab itself; the install window of PLG-4 with the seal; the installed plugins.
+      if (route.startsWith('store')) {
+        $('#i-plus').parentNode.insertAdjacentHTML(
+          'beforeend',
+          '<symbol id="i-puzzle" viewBox="0 0 16 16"><path d="M6 2.75a1.5 1.5 0 0 1 3 0V4h2.25c.41 0 .75.34.75.75V7h1.25a1.5 1.5 0 0 1 0 3H12v2.25c0 .41-.34.75-.75.75H9v-1.25a1.5 1.5 0 0 0-3 0V13H3.75a.75.75 0 0 1-.75-.75V10h1.25a1.5 1.5 0 0 0 0-3H3V4.75c0-.41.34-.75.75-.75H6z" /></symbol>',
+        );
+        $('.s-tab[data-tab="mcp"]').insertAdjacentHTML('beforebegin', '<button class="s-tab" role="tab" data-tab="plugins" aria-selected="false"><svg class="i"><use href="#i-puzzle" /></svg>Plugins<i class="chg"></i></button>');
+        TABS.plugins = ['Plugins', 'Ce qu’ils ajoutent à Escouade, d’où ils viennent et ce qu’ils peuvent faire'];
+        const sv = (n) => `<svg class="i s14"><use href="#i-${n}" /></svg>`;
+        const seal = (v) => `<span class="seal" title="Vérifié par Escouade : la v${v} a été relue et signée"><span class="sp"><svg class="i"><use href="#i-spark" /></svg></span>Vérifié par Escouade<span class="v">v${v}</span></span>`;
+        const tile = (m, h, lg) => `<span class="ptile${lg ? ' lg' : ''}" style="--h:${h}" aria-hidden="true">${m}</span>`;
+        const ASK = { run: ['term', 'Lance un programme', 'strong'], decide: ['shield', 'Décide des autorisations', 'red'], read: ['read', 'Lit tes projets', ''], none: ['check-c', 'Sans programme', ''] };
+        const asks = (l) =>
+          `<div class="st-asks">${l
+            .map((a) => {
+              if (a.startsWith('net:')) return `<span>${sv('globe')}<span class="mono">${a.slice(4)}</span></span>`;
+              if (a === 'secret') return `<span>${sv('lock')}Un secret</span>`;
+              const [i, t, c] = ASK[a];
+              return `<span class="${c}">${sv(i)}${t}</span>`;
+            })
+            .join('')}</div>`;
+        const P = [
+          ['Gemini CLI', 'Ge', 250, 'kpetit', '968', seal('0.6.0'), 'Gemini CLI comme harness, par ACP : chat, permissions, plan, modèles du compte.', ['run'], 'install'],
+          ['Slack', 'Sl', 300, 'lea-martin', '1 284', seal('1.2.0'), 'Les tickets à tester et les agents qui attendent, dans un salon Slack, un salon par projet.', ['run', 'net:hooks.slack.com', 'secret'], 'update'],
+          ['Contraste élevé', 'Ce', 190, 'escouade', '2 310', seal('1.0.1'), 'Un thème clair et un thème sombre aux contrastes AAA, pour la fenêtre, le terminal et l’éditeur.', ['none'], 'installed'],
+          ['Règles de l’équipe', 'Rè', 30, 'nordlys-labs', '214', '<span class="ptag review">En revue</span>', 'Les autorisations de tes agents décidées par le fichier .escouade-rules du dépôt.', ['run', 'decide', 'read'], 'install'],
+          ['Nord', 'No', 220, 'amoreau', '1 120', seal('2.0.0'), 'La palette Nord, en clair et en sombre, avec ses couleurs de projet.', ['none'], 'install'],
+          ['Goose', 'Go', 80, 'tbernard', '131', '<span class="ptag">Non vérifié</span>', 'Le harness Goose, décrit par ACP : ses modèles, ses modes, son dossier par compte.', ['run'], 'install'],
+          ['Webhook Discord', 'Di', 265, 'escouade', '1 702', seal('1.1.0'), 'Prévient un salon Discord quand un ticket passe à tester ou qu’un agent attend.', ['none', 'net:discord.com', 'secret'], 'install'],
+        ];
+        const act = (k) =>
+          k === 'installed'
+            ? `<span class="done">${sv('check')}Installé</span>`
+            : k === 'update'
+              ? '<span class="ptag up">v1.3.0 · non vérifiée</span><button class="btn">Mettre à jour</button>'
+              : '<button class="btn">Installer</button>';
+        const row = ([n, m, h, by, inst, st, ds, a, k]) => `<div class="st-row">${tile(m, h)}<div><div class="nm"><b>${n}</b>${st}<span class="by">${by} · ${inst} installations</span></div><div class="ds">${ds}</div>${asks(a)}</div><div class="act">${act(k)}</div></div>`;
+        const head = (on) => `<div class="st-bar"><div class="seg inline" role="tablist" aria-label="Plugins"><button role="tab" aria-selected="${on === 'installed'}">Installés <span class="count">4</span></button><button role="tab" aria-selected="${on === 'store'}">Parcourir le store</button></div><span class="grow"></span><button class="btn">${sv('folder')}Depuis un dossier…</button><button class="btn">${sv('branch')}Depuis un dépôt git…</button></div>`;
+        const storePane = `${head('store')}
+          <div class="st-bar" style="padding-top: 0"><div class="st-find">${sv('search')}<span>Chercher dans 47 plugins</span><kbd>Ctrl F</kbd></div><label class="st-only"><button class="tgl" role="switch" aria-checked="false" aria-label="Vérifiés seulement"></button>Vérifiés seulement</label></div>
+          <div class="st-cats">${[['Tous', 47], ['Harness', 6], ['Thèmes', 14], ['Notifications', 11], ['Autorisations', 4], ['Outils', 7], ['Langues', 3]].map(([c, n], i) => `<button class="st-cat" aria-pressed="${i === 0}">${c}<span class="n">${n}</span></button>`).join('')}</div>
+          <div class="st-meta-line">${sv('clock')}Catalogue de store.escouade.dev lu à 10:42 · la recherche reste sur ta machine</div>
+          <div class="st-list">${P.map(row).join('')}</div>`;
+        const pluginPane = `<a class="pp-back" href="#store">${sv('down')}Parcourir le store</a>
+          <div class="pp-head">${tile('Sl', 300, true)}
+            <div><h3>Slack ${seal('1.2.0')}</h3><div class="ln"><a href="#">lea-martin</a><span>Notifications</span><span>1 284 installations</span><span>MIT</span><span class="mono">dev.lmartin.slack</span></div>
+            <p>Les tickets à tester et les agents qui attendent, dans un salon Slack : un salon par projet, un fil par ticket.</p></div>
+            <div class="acts"><button class="btn primary">Mettre à jour vers la v1.3.0</button><small>Installée : v1.2.0, vérifiée. La v1.3.0 n’est pas encore vérifiée, et demande un événement de plus.</small></div>
+          </div>
+          <div class="pp-body">
+            <div class="pp-read">
+              <h4>Ce qu’il fait</h4>
+              <p>Quand un ticket passe <b>À tester</b> ou qu’un agent attend ta réponse, le plugin poste un message dans le salon Slack du projet.</p>
+              <div class="pp-shot"><b># escouade-studio-web</b><div class="pp-att"><b>DEM-12 · Export CSV des factures</b> est à tester · boucle 2/5 · 4 critères sur 4</div></div>
+              <h4>Versions</h4>
+              <div class="vers">
+                <div><span class="vn">1.3.0</span><span class="vd">hier · ajoute agent.created</span><span class="ptag review">En revue</span></div>
+                <div><span class="vn">1.2.0</span><span class="vd">24 oct. · installée</span>${seal('1.2.0').replace('<span class="v">v1.2.0</span>', '')}</div>
+                <div><span class="vn">1.1.0</span><span class="vd">9 oct.</span>${seal('1.1.0').replace('<span class="v">v1.1.0</span>', '')}</div>
+                <div><span class="vn">1.0.0</span><span class="vd out">2 oct. · retirée par l’auteur</span><span class="ptag">Retirée</span></div>
+              </div>
+            </div>
+            <aside class="pp-aside">
+              <div><h5>Ce qu’il pourra faire</h5>
+                <div class="perm-l strong">${sv('term')}<span>Lance un programme sur ton ordinateur, avec tes droits</span></div>
+                <div class="perm-l">${sv('sparkle')}<span>Reçoit ces événements<small class="mono">ticket.column · agent.waiting</small></span></div>
+                <div class="perm-l">${sv('globe')}<span>Se connecte à <span class="mono">hooks.slack.com</span></span></div>
+                <div class="perm-l">${sv('lock')}<span>Garde un secret : Adresse du webhook</span></div></div>
+              <div class="rev-note"><b>Relu par Escouade le 24 oct.</b> Réseau vers hooks.slack.com seulement, aucun fichier hors de son dossier, banc 14/14, binaires attestés.</div>
+              <div><h5>D’où il vient</h5><div class="chain-l">
+                <div><span class="k">Dépôt</span><span class="v">lea-martin/escouade-slack</span></div>
+                <div><span class="k">Étiquette</span><span class="v">v1.2.0 → 3f9c2e1</span></div>
+                <div><span class="k">Empreinte</span><span class="v">sha256:9b1e…c07a</span></div>
+                <div><span class="k">Signature</span><span class="v ok">${sv('check')}vérifiée ici</span></div></div></div>
+              <button class="link" style="justify-self: start; color: var(--muted); font-size: 12px">Signaler sur le store</button>
+            </aside>
+          </div>`;
+        const installedPane = `${head('installed')}
+          <section class="sg" style="padding-top: 4px">
+            <div class="inst-row">${tile('Sl', 300)}<div><div class="nm"><b>Slack</b>${seal('1.2.0')}<span class="ptag up">v1.3.0 · non vérifiée</span></div><div class="sub">store.escouade.dev · actif pour 3 projets sur 4</div></div><div class="ctl"><button class="btn">Mettre à jour</button><button class="tgl" role="switch" aria-checked="true" aria-label="Slack"></button></div></div>
+            <div class="inst-row">${tile('Ce', 190)}<div><div class="nm"><b>Contraste élevé</b>${seal('1.0.1')}</div><div class="sub">store.escouade.dev · thème choisi dans Réglages › Application</div></div><div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Contraste élevé"></button></div></div>
+            <div class="inst-row">${tile('Mi', 120)}<div><div class="nm"><b>Mes raccourcis</b><span class="ptag">Non vérifié</span><span class="ptag">Dossier en développement</span></div><div class="sub mono" style="font-size: 11px">C:\\dev\\escouade-raccourcis · relu à chaque changement</div></div><div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Mes raccourcis"></button></div></div>
+            <div class="inst-row off">${tile('nt', 150)}<div><div class="nm"><b>ntfy</b><span class="ptag bad">Désactivé par Escouade</span></div>
+              <div class="why"><b>La v0.3.0 a été retirée le 25 oct.</b> Elle envoyait le texte des questions des agents à un serveur qu’elle ne déclarait pas. Escouade l’a arrêtée ; ses réglages et ses secrets sont encore là.</div></div><div class="ctl"><button class="btn">Désinstaller</button></div></div>
+          </section>
+          <section class="sg">
+            <div class="sr"><div class="lab"><b>N’installer que des versions vérifiées</b><span>Les plugins du store qui ne portent pas le sceau, et leurs mises à jour pas encore vérifiées, restent visibles mais ne s’installent pas. Un dossier ou un dépôt git reste permis.</span></div><div class="ctl"><button class="tgl" role="switch" aria-checked="false" aria-label="N’installer que des versions vérifiées"></button></div></div>
+            <div class="sr"><div class="lab"><b>Liste de révocation</b><span>Lue au démarrage puis toutes les 6 heures, signée par Escouade : un plugin retiré y est arrêté, même si le store ne répond plus.</span></div><div class="ctl"><span class="hint">lue à 10:42 · nº 18</span></div></div>
+          </section>`;
+        const pane = route === 'store-plugin' ? pluginPane : route === 'store-installed' ? installedPane : storePane;
+        $('.s-pane[data-pane="mcp"]').insertAdjacentHTML('beforebegin', `<div class="s-pane" data-pane="plugins" hidden>${pane}</div>`);
+        openSettings('plugins');
+        if (route === 'store-install' || route === 'store-unverified') {
+          const ok = route === 'store-install';
+          const [n, m, h, by] = ok ? ['Gemini CLI', 'Ge', 250, 'kpetit'] : ['Goose', 'Go', 80, 'tbernard'];
+          document.body.insertAdjacentHTML(
+            'beforeend',
+            `<div class="scrim" id="store-inst"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="si-title" style="width: min(560px, 100vw - 48px)">
+              <div class="m-head">${sv('puzzle')}<h2 id="si-title">Installer ${n} ?</h2><button class="icon-btn" aria-label="Fermer">${sv('close')}</button></div>
+              <div class="m-body">
+                <div class="inst-origin">${tile(m, h, true)}<div><h3>${n} ${ok ? seal('0.6.0') : '<span class="ptag">Non vérifié</span>'}</h3><div class="ln">${by} · Harness · ${ok ? 'v0.6.0 · Apache-2.0' : 'v0.2.1 · MIT'}</div></div></div>
+                ${ok ? '' : `<p class="notice">${sv('info')}<span><b>Personne n’a relu cette version.</b> Elle vient du store, son archive est bien celle que l’auteur a publiée, mais rien ne dit ce que fait son programme. Installe-la si tu as confiance en ${by}.</span></p>`}
+                <div class="inst-facts">
+                  <span class="k">Vient de</span><span class="v">store.escouade.dev · github.com/${by}/escouade-${ok ? 'gemini' : 'goose'}</span>
+                  <span class="k">Version</span><span class="v mono">${ok ? 'v0.6.0 → 8c41d0e' : 'v0.2.1 → 1f07b3a'}</span>
+                  <span class="k">Empreinte</span><span class="v mono">${ok ? 'sha256:2d9a…e41f · archive reçue identique' : 'sha256:77c0…a913 · archive reçue identique'}</span>
+                  <span class="k">Signature</span>${ok ? `<span class="v ok">${sv('check')}Vérifiée avec la clé d’Escouade · relue le 22 oct.</span>` : '<span class="v no">Aucune : version non vérifiée</span>'}
+                </div>
+                <div class="m-sec"><h4>Ce qu’il ajoute</h4><div class="perm-l">${sv('spark')}<span>Un harness, <b>${n}</b>, dans « Nouvel agent » et Réglages › Harness</span></div></div>
+                <div class="m-sec"><h4>Ce qu’il pourra faire</h4>
+                  <div class="perm-l strong">${sv('term')}<span>Lance un programme sur ton ordinateur, avec tes droits<small>${ok ? 'gemini, installé par toi ; l’adaptateur ACP d’Escouade lui parle' : 'goose, installé par toi'}</small></span></div>
+                  <div class="perm-l">${sv('lock')}<span>Tient la clôture des projets privés par ACP<small>${ok ? 'vérifié par la revue et par le banc de conformité' : 'déclaré par l’auteur, non vérifié'}</small></span></div></div>
+              </div>
+              <div class="m-foot"><button class="btn">Annuler</button><button class="btn primary">Installer${ok ? '' : ' quand même'}</button></div>
+            </div></div>`,
+          );
+        }
       }
 
       // ---------- The shared Kanban (ESC-190) ----------

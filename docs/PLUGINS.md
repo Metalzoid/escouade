@@ -17,6 +17,7 @@ Ce document est l'analyse. Il ne change pas l'app. Le découpage en tickets, le 
 - **Pas de HTML libre dans la fenêtre en 2.1** : l'interface d'un plugin est déclarée (manifeste et blocs), rendue par Escouade. Une vue libre viendra plus tard, dans une iframe isolée (le modèle de MCP Apps).
 - **WASM plus tard, pour le même protocole** : un module WASM (wasmtime) servira les plugins sans droits, ceux qu'on peut installer depuis un `.escouade.yml` sans risque. Les mêmes messages, un autre transport.
 - **La 2.1.0** : le socle (manifeste, chargement, Réglages › Plugins, permissions, journal, faux Escouade pour les tests), puis trois points : les **événements** (webhooks, Slack, Discord, commandes), les **harness ACP déclarés**, les **thèmes**. Les **règles d'autorisation** suivent, si la 2.1.0 a la place. Les sources du Kanban, les hébergeurs, les outils MCP, l'interface et les langues viennent après.
+- **La place de marché store.escouade.dev arrive avec la 2.1** (ESC-202, `docs/STORE.md`) : soumission depuis un dépôt public, comptes GitHub, revue en local par l'utilisateur et badge « Vérifié par Escouade » signé hors du serveur. L'installation depuis un dossier ou un dépôt git reste permise, « non vérifié ».
 
 ## 1. L'inventaire
 
@@ -352,9 +353,9 @@ Un fichier `escouade-plugin.json` à la racine du dossier du plugin (du JSON, co
 ### 3.2 L'installation, la signature, la mise à jour
 
 - **2.1.0 : un dossier local, et un dépôt git** (une URL et une étiquette, `git clone --depth 1` dans le dossier des plugins de l'app, `DataDir`) ; le dossier d'un plugin en développement est chargé en place et rechargé à chaque changement (comme `--plugin-dir` de Claude Code).
-- **Plus tard, un registre** : une liste dans un dépôt public (comme les places de marché de Claude Code, un `marketplace.json`, ou le dépôt d'extensions de Raycast, avec une revue par PR et une CI qui valide le manifeste), affichée sur escouade.dev et dans l'app.
+- **Avec la 2.1, la place de marché store.escouade.dev** (ESC-202, `docs/STORE.md`, qui remplace l'idée d'un registre en dépôt public pour la 2.2) : un auteur soumet un plugin depuis son dépôt public et une étiquette ; le store fige le commit et l'archive, contrôle seul le manifeste, la licence et la doc, et le liste ; l'app le parcourt dans Réglages › Plugins.
 - **L'intégrité** : chaque version installée est fixée par son empreinte (le commit git, ou le SHA-256 de l'archive) ; une mise à jour change l'empreinte et redemande l'accord si les permissions ont grandi.
-- **La signature** : pas en 2.1.0. Avec le registre, une signature de l'archive par Escouade après la revue (minisign, comme `latest.json` de l'updater de Tauri, ou Sigstore), vérifiée à l'installation. Un plugin hors du registre reste installable, marqué « non vérifié ».
+- **La signature** : avec le store, en 2.1. Une version revue en local par l'utilisateur (un agent de ce dépôt, `/review-plugin`) est signée par lui avec une clé minisign gardée sur son poste, jamais sur le serveur ; l'app la vérifie avec la clé publique embarquée : « Vérifié par Escouade », version par version, retirable par une liste de révocation signée (`docs/STORE.md`, §4). Un plugin installé depuis un dossier ou un dépôt git reste installable, marqué « non vérifié ».
 - **La mise à jour** : jamais en silence. Escouade cherche une nouvelle étiquette à son démarrage, la montre dans Réglages › Plugins, et l'installe sur un clic ; une version refusée laisse la précédente en place.
 
 ### 3.3 L'activation, les projets privés et `.escouade.yml`
@@ -383,7 +384,7 @@ Les secrets d'un plugin vont au coffre d'Escouade (`integrations/secrets.rs`, `S
 
 ### 3.6 La télémétrie
 
-Rien de neuf sans accord. Si l'utilisateur a accepté les statistiques d'usage (`telemetry.rs`), Escouade compte les fonctions des plugins comme les autres (« un plugin installé », « un plugin activé », sans son nom tant qu'il n'est pas dans le registre). Un plugin n'a pas accès à la télémétrie d'Escouade ; s'il envoie ses propres statistiques, c'est une permission réseau qu'il déclare et que l'utilisateur voit.
+Rien de neuf sans accord. Si l'utilisateur a accepté les statistiques d'usage (`telemetry.rs`), Escouade compte les fonctions des plugins comme les autres (« un plugin installé », « un plugin activé », « installé depuis le store », sans son nom) ; le store compte les installations de ses plugins, sans identifiant, avec le même accord (`docs/STORE.md`, §5.4). Un plugin n'a pas accès à la télémétrie d'Escouade ; s'il envoie ses propres statistiques, c'est une permission réseau qu'il déclare et que l'utilisateur voit.
 
 ## 4. Tout ce qui est externe est un plugin, en process (ESC-203)
 

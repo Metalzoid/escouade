@@ -1,0 +1,2382 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Escouade Store — aperçu (ESC-202)</title>
+    <!--
+      L'aperçu de store.escouade.dev (ESC-202, docs/STORE.md) : les pages du store, dans le monde du site
+      (website/app/assets/main.css : fond presque noir, Inter, filets blancs translucides, le teal pour l'action
+      principale et le focus), avec un thème clair qui suit le système. Une page par ancre : #home, #search, #plugin,
+      #account, #submit, #review ; ?theme=light. Données fictives. Captures : node design/store/render.mjs.
+    -->
+    <style>
+      @font-face {
+        font-family: 'Inter Variable';
+        src: url('../../website/node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2');
+        font-weight: 100 900;
+      }
+      @font-face {
+        font-family: 'JetBrains Mono';
+        src: url('../../website/node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+        font-weight: 400;
+      }
+      :root {
+        --bg: #08090a;
+        --surface: #0f1012;
+        --surface-2: #15161a;
+        --hover: rgba(255, 255, 255, 0.035);
+        --line: rgba(255, 255, 255, 0.08);
+        --line-strong: rgba(255, 255, 255, 0.14);
+        --text: #f7f8f8;
+        --soft: #c9ccd1;
+        --muted: #8a8f98;
+        --dim: #7b8089;
+        --brand: #35c1bd;
+        --brand-hi: #5ad3cf;
+        --brand-ink: #5ad3cf;
+        --ink: #041413;
+        --seal-bg: rgba(53, 193, 189, 0.1);
+        --seal-line: rgba(53, 193, 189, 0.32);
+        --danger: oklch(0.72 0.15 25);
+        --danger-bg: oklch(0.72 0.15 25 / 0.1);
+        --warn: oklch(0.82 0.12 80);
+        --warn-bg: oklch(0.82 0.12 80 / 0.09);
+        --ok: oklch(0.78 0.12 155);
+        --shot: 0 30px 80px -20px rgba(0, 0, 0, 0.7);
+        --font: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+        --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+        --ease: cubic-bezier(0.16, 1, 0.3, 1);
+        --wrap: 1200px;
+        --gutter: clamp(16px, 4vw, 40px);
+        color-scheme: dark;
+      }
+      /* Le thème clair : les mêmes rôles lus à l'envers, le teal assombri là où il est du texte. */
+      :root[data-theme='light'] {
+        --bg: #ffffff;
+        --surface: #f7f7f8;
+        --surface-2: #eff0f2;
+        --hover: rgba(15, 17, 22, 0.035);
+        --line: rgba(15, 17, 22, 0.09);
+        --line-strong: rgba(15, 17, 22, 0.16);
+        --text: #101216;
+        --soft: #343840;
+        --muted: #5a5f68;
+        --dim: #62676f;
+        --brand: #35c1bd;
+        --brand-hi: #2bb0ac;
+        --brand-ink: #0b6f6c;
+        --ink: #041413;
+        --seal-bg: rgba(11, 111, 108, 0.07);
+        --seal-line: rgba(11, 111, 108, 0.3);
+        --danger: oklch(0.5 0.18 25);
+        --danger-bg: oklch(0.5 0.18 25 / 0.07);
+        --warn: oklch(0.5 0.11 70);
+        --warn-bg: oklch(0.6 0.12 75 / 0.1);
+        --ok: oklch(0.47 0.12 155);
+        --shot: 0 24px 60px -24px rgba(15, 17, 22, 0.25);
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        background: var(--bg);
+        scrollbar-color: var(--line-strong) var(--bg);
+      }
+      body {
+        margin: 0;
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 15px;
+        line-height: 1.55;
+        font-feature-settings: 'cv11', 'ss03';
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+      button,
+      input,
+      select {
+        font: inherit;
+        color: inherit;
+      }
+      :focus-visible {
+        outline: 2px solid var(--brand);
+        outline-offset: 3px;
+        border-radius: 4px;
+      }
+      ::selection {
+        background: color-mix(in srgb, var(--brand) 40%, transparent);
+      }
+      .mono {
+        font-family: var(--mono);
+        font-size: 0.86em;
+        font-variant-numeric: tabular-nums;
+      }
+      .num {
+        font-variant-numeric: tabular-nums;
+      }
+      .wrap {
+        width: min(var(--wrap), 100% - 2 * var(--gutter));
+        margin-inline: auto;
+      }
+      svg.i {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      /* L'en-tête : celui de la documentation du site, la recherche au milieu. */
+      .top {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        border-bottom: 1px solid var(--line);
+        background: color-mix(in srgb, var(--bg) 88%, transparent);
+        backdrop-filter: saturate(1.4) blur(14px);
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 28px;
+        height: 60px;
+        padding: 0 var(--gutter);
+      }
+      .where {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex: none;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 16px;
+        font-weight: 650;
+        letter-spacing: -0.015em;
+      }
+      .slash {
+        color: var(--line-strong);
+        font-size: 20px;
+        font-weight: 300;
+      }
+      .crumb {
+        font-size: 15px;
+        font-weight: 560;
+        letter-spacing: -0.01em;
+      }
+      .find {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        max-width: 420px;
+        height: 34px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--dim);
+        font-size: 14px;
+      }
+      .find span {
+        flex: 1;
+      }
+      .find kbd,
+      kbd {
+        padding: 1px 6px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        font: 11.5px var(--mono);
+        color: var(--dim);
+      }
+      .tools {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        margin-left: auto;
+      }
+      .tools .link {
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      .tools .link:hover {
+        color: var(--text);
+      }
+      .me {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 550;
+      }
+      .avatar {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-size: 11px;
+        font-weight: 650;
+        color: #fff;
+        background: oklch(0.55 0.1 var(--h, 30));
+        flex: none;
+      }
+
+      .icon-btn {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: none;
+        color: var(--muted);
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: 38px;
+        padding: 0 16px;
+        border: 1px solid var(--line-strong);
+        border-radius: 9px;
+        background: var(--hover);
+        color: var(--text);
+        font-size: 14.5px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        white-space: nowrap;
+        cursor: pointer;
+        transition:
+          background-color 0.2s var(--ease),
+          border-color 0.2s var(--ease);
+      }
+      .btn:hover {
+        border-color: color-mix(in srgb, var(--text) 26%, transparent);
+      }
+      .btn.primary {
+        border-color: transparent;
+        background: var(--brand);
+        color: var(--ink);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      }
+      .btn.primary:hover {
+        background: var(--brand-hi);
+      }
+      .btn.sm {
+        height: 30px;
+        padding: 0 11px;
+        font-size: 13px;
+        border-radius: 7px;
+      }
+      .btn[disabled] {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .btn.ghost {
+        border-color: transparent;
+        background: none;
+        color: var(--muted);
+      }
+      .btn.danger {
+        color: var(--danger);
+      }
+
+      /* La tuile d'un plugin : ses deux lettres sur sa teinte, comme la tuile d'un projet dans l'app. */
+      .tile {
+        --s: 40px;
+        width: var(--s);
+        height: var(--s);
+        flex: none;
+        display: grid;
+        place-items: center;
+        border-radius: calc(var(--s) * 0.26);
+        background: oklch(0.36 0.07 var(--h));
+        color: oklch(0.93 0.05 var(--h));
+        font-weight: 680;
+        font-size: calc(var(--s) * 0.38);
+        letter-spacing: -0.02em;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+      }
+      :root[data-theme='light'] .tile {
+        background: oklch(0.9 0.05 var(--h));
+        color: oklch(0.35 0.09 var(--h));
+        box-shadow: inset 0 0 0 1px rgba(15, 17, 22, 0.06);
+      }
+      .tile.lg {
+        --s: 72px;
+      }
+      .tile.sm {
+        --s: 28px;
+      }
+
+      /* Le sceau « Vérifié par Escouade » : l'étincelle du logo dans sa petite tuile, puis la version qu'il couvre. */
+      .seal {
+        letter-spacing: normal;
+        line-height: 1;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 22px;
+        padding: 0 8px 0 3px;
+        border: 1px solid var(--seal-line);
+        border-radius: 6px;
+        background: var(--seal-bg);
+        color: var(--brand-ink);
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .seal .spark {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        background: var(--brand);
+        display: grid;
+        place-items: center;
+      }
+      .seal .spark svg {
+        width: 10px;
+        height: 10px;
+      }
+      .seal.lg {
+        height: 28px;
+        padding: 0 11px 0 4px;
+        font-size: 13px;
+        border-radius: 8px;
+      }
+      .seal.lg .spark {
+        width: 20px;
+        height: 20px;
+        border-radius: 5px;
+      }
+      .seal.lg .spark svg {
+        width: 12px;
+        height: 12px;
+      }
+      .seal .v {
+        font: 500 11px var(--mono);
+        opacity: 0.85;
+      }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 22px;
+        padding: 0 8px;
+        border: 1px solid var(--line-strong);
+        border-radius: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 550;
+        white-space: nowrap;
+      }
+      .tag.review {
+        border-style: dashed;
+      }
+      .tag.warn {
+        border-color: color-mix(in oklch, var(--warn) 45%, transparent);
+        background: var(--warn-bg);
+        color: var(--warn);
+      }
+      .tag.bad {
+        border-color: color-mix(in oklch, var(--danger) 45%, transparent);
+        background: var(--danger-bg);
+        color: var(--danger);
+      }
+      .tag.ok {
+        border-color: color-mix(in oklch, var(--ok) 40%, transparent);
+        color: var(--ok);
+      }
+
+      /* Ce que demande un plugin, en une ligne. */
+      .asks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 14px;
+        color: var(--dim);
+        font-size: 12.5px;
+      }
+      .asks span {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .asks svg.i {
+        width: 13px;
+        height: 13px;
+      }
+      .asks .strong {
+        color: var(--soft);
+      }
+      .asks .red {
+        color: var(--danger);
+      }
+
+      main {
+        padding-bottom: 96px;
+      }
+      .page-title {
+        font-size: clamp(26px, 2.6vw, 34px);
+        font-weight: 620;
+        letter-spacing: -0.03em;
+        line-height: 1.15;
+        text-wrap: balance;
+      }
+      .page-title .more {
+        color: var(--muted);
+      }
+      .h2 {
+        font-size: 17px;
+        font-weight: 620;
+        letter-spacing: -0.015em;
+      }
+      .sub {
+        color: var(--muted);
+      }
+      .section-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+        margin: 56px 0 14px;
+      }
+      .section-head .arrow {
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 500;
+      }
+      .section-head .arrow::after {
+        content: ' →';
+      }
+
+      /* Accueil */
+      .hero {
+        padding: 72px 0 8px;
+        display: grid;
+        grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+        gap: 64px;
+        align-items: end;
+      }
+      .hero h1 {
+        font-size: clamp(32px, 3.5vw, 50px);
+        font-weight: 640;
+        letter-spacing: -0.04em;
+        line-height: 1.02;
+        text-wrap: balance;
+      }
+      .hero h1 .more {
+        color: var(--muted);
+      }
+      .hero p {
+        margin-top: 18px;
+        max-width: 34em;
+        color: var(--muted);
+        font-size: 16.5px;
+      }
+      .bigfind {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 52px;
+        padding: 0 16px;
+        border: 1px solid var(--line-strong);
+        border-radius: 12px;
+        background: var(--surface);
+        color: var(--dim);
+        font-size: 16px;
+      }
+      .bigfind svg.i {
+        width: 18px;
+        height: 18px;
+      }
+      .bigfind span {
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .trust {
+        margin-top: 14px;
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        color: var(--dim);
+        font-size: 13px;
+      }
+      .trust span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .cats {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 40px;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: 32px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        color: var(--soft);
+        font-size: 13.5px;
+        font-weight: 520;
+        background: none;
+        white-space: nowrap;
+      }
+      .chip .n {
+        color: var(--dim);
+        font: 11.5px var(--mono);
+      }
+      .chip.on {
+        border-color: var(--line-strong);
+        background: var(--surface-2);
+        color: var(--text);
+      }
+      .chip svg.i {
+        width: 14px;
+        height: 14px;
+        color: var(--dim);
+      }
+
+      /* Une liste de plugins : des rangées entre filets, deux colonnes. */
+      .rows {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        column-gap: 40px;
+        border-top: 1px solid var(--line);
+      }
+      .row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 14px;
+        padding: 18px 4px;
+        border-bottom: 1px solid var(--line);
+        border-radius: 0;
+        transition: background-color 0.15s var(--ease);
+      }
+      .row:hover {
+        background: var(--hover);
+      }
+      .row .name {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        min-width: 0;
+      }
+      .row .name b {
+        font-size: 15px;
+        font-weight: 620;
+        letter-spacing: -0.01em;
+      }
+      .row .by {
+        color: var(--dim);
+        font-size: 13px;
+      }
+      .row .desc {
+        margin: 4px 0 8px;
+        color: var(--muted);
+        font-size: 14px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .row .meta {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        flex-wrap: wrap;
+        color: var(--dim);
+        font-size: 12.5px;
+      }
+      .row .meta .grow {
+        flex: 1;
+      }
+      .cols3 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 40px;
+      }
+      .mini {
+        border-top: 1px solid var(--line);
+      }
+      .mini a {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        padding: 11px 4px;
+        border-bottom: 1px solid var(--line);
+      }
+      .mini a:hover {
+        background: var(--hover);
+      }
+      .mini .t {
+        min-width: 0;
+      }
+      .mini .t b {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .mini .t div {
+        color: var(--dim);
+        font-size: 12.5px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .mini .r {
+        color: var(--dim);
+        font-size: 12.5px;
+        text-align: right;
+      }
+      .publish {
+        margin-top: 72px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+        gap: 48px;
+        padding: 36px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--surface);
+      }
+      .publish h2 {
+        font-size: 24px;
+        font-weight: 620;
+        letter-spacing: -0.03em;
+        line-height: 1.2;
+      }
+      .publish p {
+        margin: 10px 0 20px;
+        color: var(--muted);
+      }
+      .steps {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 14px;
+        counter-reset: s;
+      }
+      .steps li {
+        display: grid;
+        grid-template-columns: 26px 1fr;
+        gap: 12px;
+        counter-increment: s;
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .steps li::before {
+        content: counter(s);
+        display: grid;
+        place-items: center;
+        width: 26px;
+        height: 26px;
+        border: 1px solid var(--line-strong);
+        border-radius: 7px;
+        font: 12px var(--mono);
+        color: var(--text);
+      }
+      .steps b {
+        color: var(--text);
+        font-weight: 600;
+      }
+      code,
+      .code {
+        font-family: var(--mono);
+        font-size: 0.86em;
+        padding: 1px 5px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        background: var(--surface-2);
+      }
+
+      /* Recherche */
+      .search-layout {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+        gap: 48px;
+        padding-top: 36px;
+      }
+      .filters h3 {
+        margin: 26px 0 8px;
+        color: var(--dim);
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .filters h3:first-child {
+        margin-top: 0;
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 6px 8px;
+        margin: 0 -8px;
+        border-radius: 7px;
+        color: var(--soft);
+        font-size: 14px;
+      }
+      .opt:hover {
+        background: var(--hover);
+      }
+      .opt .n {
+        margin-left: auto;
+        color: var(--dim);
+        font: 11.5px var(--mono);
+      }
+      .opt.on {
+        background: var(--surface-2);
+        color: var(--text);
+        font-weight: 560;
+      }
+      .box {
+        width: 15px;
+        height: 15px;
+        border: 1.5px solid var(--line-strong);
+        border-radius: 4px;
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .box.on {
+        background: var(--brand);
+        border-color: var(--brand);
+      }
+      .box.on::after {
+        content: '';
+        width: 7px;
+        height: 4px;
+        border: 2px solid var(--ink);
+        border-top: 0;
+        border-right: 0;
+        transform: translateY(-1px) rotate(-45deg);
+      }
+      .switch {
+        width: 30px;
+        height: 18px;
+        border-radius: 9px;
+        background: var(--line-strong);
+        position: relative;
+        flex: none;
+      }
+      .switch::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--text);
+      }
+      .switch.on {
+        background: var(--brand);
+      }
+      .switch.on::after {
+        left: 14px;
+        background: var(--ink);
+      }
+      .results-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding-bottom: 14px;
+      }
+      .results-head .q {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 40px;
+        padding: 0 12px;
+        border: 1px solid var(--line-strong);
+        border-radius: 10px;
+        background: var(--surface);
+        font-size: 15px;
+      }
+      .results-head .q svg.i {
+        color: var(--dim);
+      }
+      .results-head .q .caret {
+        width: 1.5px;
+        height: 18px;
+        background: var(--brand);
+        margin-left: -8px;
+      }
+      .sort {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 40px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        color: var(--muted);
+        font-size: 13.5px;
+        white-space: nowrap;
+      }
+      .count {
+        color: var(--dim);
+        font-size: 13px;
+        margin-bottom: 4px;
+      }
+      .results .rows {
+        grid-template-columns: 1fr;
+      }
+      .results .row {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: start;
+      }
+      .results .row .side {
+        text-align: right;
+        color: var(--dim);
+        font-size: 12.5px;
+        display: grid;
+        gap: 6px;
+        justify-items: end;
+      }
+      mark {
+        background: color-mix(in srgb, var(--brand) 22%, transparent);
+        color: inherit;
+        border-radius: 2px;
+      }
+
+      /* La page d'un plugin */
+      .plug-head {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 22px;
+        align-items: start;
+        padding: 44px 0 28px;
+      }
+      .plug-head h1 {
+        font-size: clamp(28px, 2.8vw, 36px);
+        font-weight: 640;
+        letter-spacing: -0.035em;
+        line-height: 1.1;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .plug-head .line {
+        margin-top: 8px;
+        display: flex;
+        gap: 8px 16px;
+        flex-wrap: wrap;
+        color: var(--dim);
+        font-size: 13.5px;
+        align-items: center;
+      }
+      .plug-head .line a {
+        color: var(--soft);
+      }
+      .plug-head .desc {
+        margin-top: 12px;
+        max-width: 40em;
+        color: var(--muted);
+        font-size: 16px;
+      }
+      .plug-head .act {
+        display: grid;
+        gap: 8px;
+        justify-items: stretch;
+        min-width: 230px;
+      }
+      .plug-head .act .hint {
+        color: var(--dim);
+        font-size: 12px;
+        text-align: center;
+      }
+      .tabs {
+        display: flex;
+        gap: 24px;
+        border-bottom: 1px solid var(--line);
+      }
+      .tabs a {
+        padding: 10px 0;
+        margin-bottom: -1px;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 550;
+        border-bottom: 1.5px solid transparent;
+      }
+      .tabs a.on {
+        color: var(--text);
+        border-color: var(--text);
+      }
+      .tabs .n {
+        color: var(--dim);
+        font: 11.5px var(--mono);
+        margin-left: 4px;
+      }
+      .plug-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 56px;
+        padding-top: 28px;
+      }
+      .readme {
+        max-width: 68ch;
+        font-size: 15.5px;
+        color: var(--soft);
+      }
+      .readme h2 {
+        margin: 30px 0 10px;
+        color: var(--text);
+        font-size: 19px;
+        font-weight: 620;
+        letter-spacing: -0.02em;
+      }
+      .readme h2:first-child {
+        margin-top: 0;
+      }
+      .readme p {
+        margin: 0 0 12px;
+      }
+      .readme ul {
+        margin: 0 0 12px;
+        padding-left: 18px;
+      }
+      .readme li {
+        margin: 4px 0;
+      }
+      .readme pre {
+        margin: 0 0 14px;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface);
+        font: 13px/1.6 var(--mono);
+        color: var(--soft);
+        overflow: auto;
+      }
+      .readme pre .k {
+        color: var(--brand-ink);
+      }
+      .readme pre .c {
+        color: var(--dim);
+      }
+      .shot {
+        margin: 6px 0 22px;
+        border: 1px solid var(--line-strong);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: var(--shot);
+        background: #1a1d21;
+        color: #d1d2d3;
+        font-size: 13.5px;
+      }
+      .shot .chan {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        font-weight: 650;
+        color: #fff;
+      }
+      .shot .msg {
+        display: grid;
+        grid-template-columns: 34px 1fr;
+        gap: 10px;
+        padding: 12px 16px;
+      }
+      .shot .msg .who {
+        color: #fff;
+        font-weight: 650;
+      }
+      .shot .msg .who small {
+        color: #9a9b9e;
+        font-weight: 400;
+        margin-left: 6px;
+      }
+      .shot .msg .att {
+        margin-top: 6px;
+        padding: 8px 12px;
+        border-left: 3px solid #35c1bd;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 0 6px 6px 0;
+      }
+      .shot .msg .att b {
+        color: #fff;
+      }
+      .shot .bot {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        background: #35c1bd;
+        display: grid;
+        place-items: center;
+      }
+      .shot figcaption {
+        padding: 8px 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        color: #8b8d91;
+        font-size: 12px;
+      }
+      .aside {
+        display: grid;
+        gap: 28px;
+        align-content: start;
+      }
+      .aside h3 {
+        margin-bottom: 10px;
+        color: var(--dim);
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .perm {
+        display: grid;
+        grid-template-columns: 18px 1fr;
+        gap: 10px;
+        padding: 9px 0;
+        border-top: 1px solid var(--line);
+        font-size: 14px;
+        color: var(--soft);
+      }
+      .perm:first-of-type {
+        border-top: 0;
+      }
+      .perm svg.i {
+        margin-top: 2px;
+        color: var(--dim);
+      }
+      .perm.strong {
+        color: var(--text);
+        font-weight: 560;
+      }
+      .perm.strong svg.i {
+        color: var(--text);
+      }
+      .perm.red,
+      .perm.red svg.i {
+        color: var(--danger);
+      }
+      .perm small {
+        display: block;
+        color: var(--dim);
+        font-weight: 400;
+        font-size: 12.5px;
+      }
+      .perm .host {
+        font-family: var(--mono);
+        font-size: 12.5px;
+      }
+      /* La chaîne : du dépôt à la signature, chaque maillon vérifiable. */
+      .chain {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        position: relative;
+      }
+      .chain::before {
+        content: '';
+        position: absolute;
+        left: 8px;
+        top: 12px;
+        bottom: 12px;
+        width: 1px;
+        background: var(--line-strong);
+      }
+      .chain li {
+        position: relative;
+        display: grid;
+        grid-template-columns: 18px 1fr;
+        gap: 12px;
+        padding: 6px 0;
+        font-size: 13px;
+      }
+      .chain .dot {
+        width: 17px;
+        height: 17px;
+        border-radius: 50%;
+        background: var(--bg);
+        border: 1px solid var(--line-strong);
+        display: grid;
+        place-items: center;
+        margin-top: 1px;
+        color: var(--muted);
+      }
+      .chain .dot svg.i {
+        width: 10px;
+        height: 10px;
+        stroke-width: 2;
+      }
+      .chain li.signed .dot {
+        background: var(--brand);
+        border-color: var(--brand);
+        color: var(--ink);
+      }
+      .chain .k {
+        color: var(--dim);
+      }
+      .chain .v {
+        display: block;
+        color: var(--soft);
+        font-family: var(--mono);
+        font-size: 12px;
+        word-break: break-all;
+      }
+      .chain li.signed .v {
+        color: var(--brand-ink);
+        font-family: var(--font);
+        font-size: 13px;
+        font-weight: 560;
+      }
+      .review-note {
+        padding: 14px 16px;
+        border: 1px solid var(--seal-line);
+        border-radius: 10px;
+        background: var(--seal-bg);
+        font-size: 13.5px;
+        color: var(--soft);
+      }
+      .review-note b {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .review-note ul {
+        margin: 8px 0 0;
+        padding-left: 16px;
+      }
+      .facts {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 8px 16px;
+        font-size: 13.5px;
+      }
+      .facts dt {
+        color: var(--dim);
+      }
+      .facts dd {
+        margin: 0;
+        color: var(--soft);
+        text-align: right;
+      }
+      .report {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--dim);
+        font-size: 13px;
+      }
+      .versions {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      /* Tableaux : compte, file de revue */
+      table.t {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      table.t th {
+        text-align: left;
+        color: var(--dim);
+        font-size: 12.5px;
+        font-weight: 600;
+        padding: 0 12px 10px;
+        border-bottom: 1px solid var(--line);
+        white-space: nowrap;
+      }
+      table.t td {
+        padding: 14px 12px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      table.t th:first-child,
+      table.t td:first-child {
+        padding-left: 4px;
+      }
+      table.t td.r,
+      table.t th.r {
+        text-align: right;
+      }
+      table.t tr:has(+ .why-row) td {
+        border-bottom: 0;
+      }
+      table.t tr.why-row td {
+        padding-top: 0;
+      }
+      table.t tr.sel td {
+        background: var(--surface);
+      }
+      .pl {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .pl b {
+        font-weight: 600;
+      }
+      .pl small {
+        display: block;
+        color: var(--dim);
+        font-size: 12.5px;
+      }
+      .acct-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        gap: 56px;
+        padding-top: 36px;
+      }
+      .banner {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 14px;
+        align-items: center;
+        margin: 24px 0 28px;
+        padding: 14px 16px;
+        border: 1px solid var(--line-strong);
+        border-radius: 12px;
+        background: var(--surface);
+        font-size: 14px;
+      }
+      .banner .sub {
+        font-size: 13px;
+      }
+      .banner .acts {
+        display: flex;
+        gap: 8px;
+      }
+      .why {
+        margin-top: 10px;
+        padding: 12px 14px;
+        border: 1px solid color-mix(in oklch, var(--danger) 35%, transparent);
+        border-radius: 10px;
+        background: var(--danger-bg);
+        font-size: 13.5px;
+        color: var(--soft);
+        max-width: 60ch;
+      }
+      .why b {
+        color: var(--danger);
+        font-weight: 600;
+      }
+      .why .fix {
+        margin-top: 6px;
+        color: var(--muted);
+      }
+      .menu-acts {
+        display: flex;
+        gap: 2px;
+        justify-content: flex-end;
+      }
+      .side-card {
+        padding: 20px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        display: grid;
+        gap: 14px;
+        align-content: start;
+        font-size: 14px;
+      }
+      .side-card + .side-card {
+        margin-top: 16px;
+      }
+      .side-card p {
+        color: var(--muted);
+        font-size: 13.5px;
+      }
+      .field {
+        display: grid;
+        gap: 6px;
+      }
+      .field label {
+        color: var(--dim);
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .input {
+        display: flex;
+        align-items: center;
+        height: 36px;
+        padding: 0 11px;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        background: var(--surface);
+        font-size: 14px;
+        gap: 8px;
+      }
+      .input .ok {
+        margin-left: auto;
+        color: var(--ok);
+        font-size: 12.5px;
+      }
+      .stat-n {
+        font-size: 26px;
+        font-weight: 620;
+        letter-spacing: -0.03em;
+      }
+      .bars {
+        display: flex;
+        align-items: end;
+        gap: 3px;
+        height: 54px;
+      }
+      .bars i {
+        flex: 1;
+        background: color-mix(in srgb, var(--text) 22%, transparent);
+        border-radius: 2px 2px 0 0;
+      }
+      .bars i:last-child {
+        background: var(--brand);
+      }
+      .axis {
+        display: flex;
+        justify-content: space-between;
+        color: var(--dim);
+        font: 11px var(--mono);
+      }
+
+      /* Soumission */
+      .submit-layout {
+        display: grid;
+        grid-template-columns: 240px minmax(0, 1fr);
+        gap: 56px;
+        padding-top: 36px;
+      }
+      .stepper {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 4px;
+        align-content: start;
+      }
+      .stepper li {
+        display: grid;
+        grid-template-columns: 24px 1fr;
+        gap: 12px;
+        padding: 10px 10px;
+        border-radius: 9px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .stepper li small {
+        display: block;
+        color: var(--dim);
+        font-size: 12.5px;
+      }
+      .stepper li .d {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: 1px solid var(--line-strong);
+        display: grid;
+        place-items: center;
+        font: 11.5px var(--mono);
+        color: var(--muted);
+      }
+      .stepper li.done .d {
+        background: var(--surface-2);
+        color: var(--text);
+      }
+      .stepper li.on {
+        background: var(--surface);
+        color: var(--text);
+        font-weight: 560;
+      }
+      .stepper li.on .d {
+        border-color: var(--text);
+        color: var(--text);
+      }
+      .picked {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin: 22px 0 30px;
+      }
+      .pick {
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        font-size: 14px;
+      }
+      .pick .k {
+        color: var(--dim);
+        font-size: 12.5px;
+        font-weight: 600;
+        display: flex;
+        justify-content: space-between;
+      }
+      .pick .k a {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .pick .v {
+        margin-top: 6px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+      }
+      .pick .s {
+        color: var(--dim);
+        font-size: 12.5px;
+        margin-top: 2px;
+      }
+      .checks {
+        border-top: 1px solid var(--line);
+      }
+      .check {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr) auto;
+        gap: 12px;
+        padding: 12px 4px;
+        border-bottom: 1px solid var(--line);
+        font-size: 14px;
+        align-items: start;
+      }
+      .check .st {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        margin-top: 1px;
+      }
+      .check .st svg.i {
+        width: 12px;
+        height: 12px;
+        stroke-width: 2.2;
+      }
+      .check.pass .st {
+        color: var(--ok);
+        background: color-mix(in oklch, var(--ok) 14%, transparent);
+      }
+      .check.fail .st {
+        color: var(--danger);
+        background: var(--danger-bg);
+      }
+      .check.run .st {
+        border: 1.5px solid var(--line-strong);
+        border-top-color: var(--text);
+      }
+      .check .w {
+        color: var(--dim);
+        font-size: 12.5px;
+        white-space: nowrap;
+      }
+      .check .x {
+        color: var(--dim);
+        font-size: 13px;
+      }
+      .foot-acts {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-top: 24px;
+      }
+      .foot-acts .sub {
+        font-size: 13px;
+      }
+
+      /* File de revue */
+      .review-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 400px;
+        gap: 40px;
+        padding-top: 32px;
+      }
+      .qtabs {
+        display: flex;
+        gap: 8px;
+        margin: 18px 0 14px;
+        flex-wrap: wrap;
+      }
+      .grown {
+        color: var(--warn);
+        font-size: 12.5px;
+      }
+      .detail {
+        position: sticky;
+        top: 84px;
+        align-self: start;
+        padding: 22px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--surface);
+        display: grid;
+        gap: 18px;
+        font-size: 14px;
+      }
+      .acct-layout > *,
+      .submit-layout > *,
+      .review-layout > *,
+      .search-layout > *,
+      .plug-body > *,
+      .detail > *,
+      .aside > * {
+        min-width: 0;
+      }
+      .cmd {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid var(--line-strong);
+        border-radius: 9px;
+        background: var(--bg);
+        font: 12.5px var(--mono);
+        color: var(--soft);
+      }
+      .cmd span {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cmd .p {
+        color: var(--dim);
+      }
+      .diffstat {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        font: 12.5px var(--mono);
+      }
+      .diffstat .a {
+        color: var(--ok);
+      }
+      .diffstat .d {
+        color: var(--danger);
+      }
+      .flag {
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        font-size: 13px;
+        color: var(--soft);
+      }
+      .flag small {
+        display: block;
+        color: var(--dim);
+      }
+
+      .foot {
+        border-top: 1px solid var(--line);
+        padding: 28px 0;
+        color: var(--dim);
+        font-size: 13px;
+      }
+      .foot .wrap {
+        display: flex;
+        gap: 22px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .foot .grow {
+        flex: 1;
+      }
+
+      /* 1028 px : la colonne de droite se resserre, la navigation garde l'essentiel. */
+      @media (max-width: 1180px) {
+        .plug-body {
+          grid-template-columns: minmax(0, 1fr) 300px;
+          gap: 40px;
+        }
+        .review-layout {
+          grid-template-columns: minmax(0, 1fr) 340px;
+          gap: 28px;
+        }
+        .acct-layout {
+          grid-template-columns: minmax(0, 1fr) 260px;
+          gap: 36px;
+        }
+        .search-layout {
+          grid-template-columns: 190px minmax(0, 1fr);
+          gap: 36px;
+        }
+        .submit-layout {
+          grid-template-columns: 200px minmax(0, 1fr);
+          gap: 40px;
+        }
+        .tools .wide {
+          display: none;
+        }
+        .hide-mid {
+          display: none;
+        }
+      }
+      /* Mobile : une colonne, l'en-tête réduit à la marque, la recherche et le menu. */
+      @media (max-width: 720px) {
+        body {
+          font-size: 14.5px;
+        }
+        .bar {
+          gap: 12px;
+          height: 56px;
+        }
+        .find,
+        .tools .link,
+        .tools .me span,
+        .gh-label {
+          display: none;
+        }
+        .icon-btn.only-narrow {
+          display: grid;
+        }
+        .tools {
+          gap: 8px;
+        }
+        .hero {
+          grid-template-columns: 1fr;
+          gap: 24px;
+          padding-top: 36px;
+        }
+        .cats {
+          flex-wrap: nowrap;
+          overflow-x: auto;
+          margin: 28px calc(-1 * var(--gutter)) 0;
+          padding: 0 var(--gutter);
+          scrollbar-width: none;
+        }
+        .rows,
+        .cols3,
+        .publish,
+        .search-layout,
+        .plug-body,
+        .acct-layout,
+        .submit-layout,
+        .review-layout,
+        .picked {
+          grid-template-columns: 1fr;
+        }
+        .publish {
+          padding: 24px;
+          gap: 24px;
+        }
+        .filters {
+          display: flex;
+          gap: 8px;
+          overflow-x: auto;
+          margin: 0 calc(-1 * var(--gutter));
+          padding: 0 var(--gutter);
+          scrollbar-width: none;
+        }
+        .filters > :not(.chips-sm) {
+          display: none;
+        }
+        .chips-sm {
+          display: flex !important;
+          gap: 8px;
+        }
+        .search-layout {
+          gap: 16px;
+          padding-top: 20px;
+        }
+        .results .row {
+          grid-template-columns: auto minmax(0, 1fr);
+        }
+        .results .row .side {
+          display: none;
+        }
+        .plug-head {
+          grid-template-columns: auto minmax(0, 1fr);
+          gap: 16px;
+          padding-top: 28px;
+        }
+        .plug-head .tile.lg {
+          --s: 56px;
+        }
+        .plug-head .act {
+          grid-column: 1 / -1;
+          min-width: 0;
+        }
+        .plug-head .desc {
+          grid-column: 1 / -1;
+        }
+        .readme {
+          order: 2;
+        }
+        .aside {
+          order: 1;
+        }
+        table.t .hide-sm,
+        .hide-sm {
+          display: none;
+        }
+        .stepper {
+          grid-auto-flow: column;
+          overflow-x: auto;
+        }
+        .stepper li small {
+          display: none;
+        }
+        .banner {
+          grid-template-columns: auto minmax(0, 1fr);
+        }
+        .banner .acts {
+          grid-column: 1 / -1;
+        }
+        .detail {
+          position: static;
+        }
+        .why-row .why {
+          margin-left: 0 !important;
+        }
+        .mine thead {
+          display: none;
+        }
+        .mine tr {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          border-bottom: 1px solid var(--line);
+        }
+        .mine tr:has(+ .why-row) {
+          border-bottom: 0;
+        }
+        .mine td {
+          border: 0 !important;
+        }
+        .mine td:nth-child(2) {
+          grid-row: 2;
+          padding: 0 12px 14px 44px;
+        }
+        .mine td:last-child {
+          grid-column: 2;
+          grid-row: 1;
+        }
+        .mine tr.why-row {
+          display: block;
+        }
+        .banner .sub {
+          overflow-wrap: anywhere;
+        }
+      }
+      .chips-sm,
+      .only-narrow {
+        display: none;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <div class="bar">
+        <div class="where">
+          <a class="brand" href="#home"
+            ><svg width="24" height="24" viewBox="0 0 100 100" aria-hidden="true">
+              <rect x="8" y="8" width="84" height="84" rx="24" fill="#35C1BD" />
+              <path d="M25 33L42 50L25 67" fill="none" stroke="#08090A" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round" />
+              <g transform="translate(65 50)" stroke="#08090A" stroke-linecap="round">
+                <path d="M0 -12V12M-12 0H12" stroke-width="5.4" />
+                <path d="M-7.1 -7.1L7.1 7.1M-7.1 7.1L7.1 -7.1" stroke-width="4.4" />
+              </g></svg
+            ><span>Escouade</span></a
+          >
+          <span class="slash" aria-hidden="true">/</span>
+          <a class="crumb" href="#home">Store</a>
+        </div>
+        <a class="find" href="#search"
+          ><svg class="i"><use href="#i-search" /></svg><span>Chercher un plugin</span><kbd>/</kbd></a
+        >
+        <div class="tools" id="tools"></div>
+      </div>
+    </header>
+    <main id="page"></main>
+    <footer class="foot">
+      <div class="wrap">
+        <span>Escouade Store · données fictives (aperçu)</span>
+        <span class="grow"></span>
+        <a href="#">Conditions des auteurs</a><a href="#">Confidentialité</a><a href="#">Documentation</a><a href="#">English</a>
+      </div>
+    </footer>
+
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="i-search" viewBox="0 0 16 16">
+        <circle cx="7" cy="7" r="4.5" />
+        <path d="M10.5 10.5L14 14" />
+      </symbol>
+      <symbol id="i-spark" viewBox="-14 -14 28 28">
+        <g stroke="#041413" stroke-linecap="round" fill="none">
+          <path d="M0 -11V11M-11 0H11" stroke-width="4.2" />
+          <path d="M-6.6 -6.6L6.6 6.6M-6.6 6.6L6.6 -6.6" stroke-width="3.4" />
+        </g>
+      </symbol>
+      <symbol id="i-run" viewBox="0 0 16 16">
+        <rect x="1.8" y="2.8" width="12.4" height="10.4" rx="2" />
+        <path d="M4.8 6.3L7 8.3L4.8 10.3M8.6 10.3H11" />
+      </symbol>
+      <symbol id="i-net" viewBox="0 0 16 16">
+        <circle cx="8" cy="8" r="6" />
+        <path d="M2 8H14M8 2C9.8 4 9.8 12 8 14M8 2C6.2 4 6.2 12 8 14" />
+      </symbol>
+      <symbol id="i-key" viewBox="0 0 16 16">
+        <circle cx="5.5" cy="10.5" r="3" />
+        <path d="M7.7 8.3L13.5 2.5M11.5 4.5L13 6M10 6L11.3 7.3" />
+      </symbol>
+      <symbol id="i-bolt" viewBox="0 0 16 16"><path d="M9 1.8L3.5 9H8L7 14.2L12.5 7H8Z" /></symbol>
+      <symbol id="i-eye" viewBox="0 0 16 16">
+        <path d="M1.5 8C3 5 5.3 3.5 8 3.5S13 5 14.5 8C13 11 10.7 12.5 8 12.5S3 11 1.5 8Z" />
+        <circle cx="8" cy="8" r="2" />
+      </symbol>
+      <symbol id="i-gavel" viewBox="0 0 16 16">
+        <path d="M8 1.8L13.5 4V8C13.5 11 11 13.3 8 14.2C5 13.3 2.5 11 2.5 8V4Z" />
+        <path d="M6 8.2L7.4 9.6L10.2 6.6" />
+      </symbol>
+      <symbol id="i-leaf" viewBox="0 0 16 16">
+        <path d="M3 13C3 7 6.5 3 13 3C13 9.5 9 13 3 13Z" />
+        <path d="M3 13L8.5 7.5" />
+      </symbol>
+      <symbol id="i-check" viewBox="0 0 16 16"><path d="M3.5 8.5L6.5 11.5L12.5 4.5" /></symbol>
+      <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4L12 12M12 4L4 12" /></symbol>
+      <symbol id="i-flag" viewBox="0 0 16 16"><path d="M3.5 14V2.5M3.5 2.8H12L10.2 5.8L12 8.8H3.5" /></symbol>
+      <symbol id="i-copy" viewBox="0 0 16 16">
+        <rect x="5" y="5" width="8.5" height="8.5" rx="1.6" />
+        <path d="M11 5V3.6C11 3 10.5 2.5 9.9 2.5H3.6C3 2.5 2.5 3 2.5 3.6V9.9C2.5 10.5 3 11 3.6 11H5" />
+      </symbol>
+      <symbol id="i-git" viewBox="0 0 16 16">
+        <circle cx="4.5" cy="3.5" r="1.6" />
+        <circle cx="4.5" cy="12.5" r="1.6" />
+        <circle cx="11.5" cy="6" r="1.6" />
+        <path d="M4.5 5.1V10.9M11.5 7.6C11.5 9.6 8 9.4 4.5 10.9" />
+      </symbol>
+      <symbol id="i-tag" viewBox="0 0 16 16">
+        <path d="M2.5 2.5H8L13.5 8L8 13.5L2.5 8Z" />
+        <circle cx="5.5" cy="5.5" r="1" />
+      </symbol>
+      <symbol id="i-commit" viewBox="0 0 16 16">
+        <circle cx="8" cy="8" r="2.6" />
+        <path d="M1.5 8H5.4M10.6 8H14.5" />
+      </symbol>
+      <symbol id="i-box" viewBox="0 0 16 16">
+        <path d="M2.5 5L8 2.2L13.5 5V11L8 13.8L2.5 11Z" />
+        <path d="M2.5 5L8 7.8L13.5 5M8 7.8V13.8" />
+      </symbol>
+      <symbol id="i-pen" viewBox="0 0 16 16"><path d="M10.5 2.5L13.5 5.5L6 13H3V10Z" /></symbol>
+      <symbol id="i-down" viewBox="0 0 16 16"><path d="M8 2.5V10.5M4.5 7L8 10.5L11.5 7M3 13.5H13" /></symbol>
+      <symbol id="i-ext" viewBox="0 0 16 16"><path d="M9 2.5H13.5V7M13.5 2.5L7.5 8.5M11.5 9.5V13.5H2.5V4.5H6.5" /></symbol>
+      <symbol id="i-chev" viewBox="0 0 16 16"><path d="M4.5 6.5L8 10L11.5 6.5" /></symbol>
+      <symbol id="i-menu" viewBox="0 0 16 16"><path d="M2.5 4.5H13.5M2.5 8H13.5M2.5 11.5H13.5" /></symbol>
+      <symbol id="i-dots" viewBox="0 0 16 16">
+        <circle cx="3.5" cy="8" r="0.6" />
+        <circle cx="8" cy="8" r="0.6" />
+        <circle cx="12.5" cy="8" r="0.6" />
+      </symbol>
+      <symbol id="i-palette" viewBox="0 0 16 16">
+        <path
+          d="M8 2C4.5 2 2 4.6 2 7.8C2 11 4.5 14 7.4 14C8.4 14 8.6 13.2 8.2 12.5C7.7 11.6 8.2 10.6 9.2 10.6H11C12.7 10.6 14 9.3 14 7.6C14 4.5 11.3 2 8 2Z"
+        />
+        <circle cx="5.3" cy="7" r="0.7" />
+        <circle cx="8" cy="5" r="0.7" />
+        <circle cx="10.8" cy="6.5" r="0.7" />
+      </symbol>
+      <symbol id="i-bell" viewBox="0 0 16 16">
+        <path d="M4 11V7C4 4.8 5.8 3 8 3S12 4.8 12 7V11L13 12.5H3Z" />
+        <path d="M6.6 14H9.4" />
+      </symbol>
+      <symbol id="i-cpu" viewBox="0 0 16 16">
+        <rect x="3.5" y="3.5" width="9" height="9" rx="1.6" />
+        <path d="M6 1.5V3.5M10 1.5V3.5M6 12.5V14.5M10 12.5V14.5M1.5 6H3.5M1.5 10H3.5M12.5 6H14.5M12.5 10H14.5" />
+      </symbol>
+      <symbol id="i-board" viewBox="0 0 16 16">
+        <rect x="2" y="2.5" width="12" height="11" rx="1.8" />
+        <path d="M6 2.5V13.5M10 2.5V13.5" />
+      </symbol>
+      <symbol id="i-tool" viewBox="0 0 16 16">
+        <path d="M10 2.6A3.4 3.4 0 0 0 9.2 6.6L2.8 13L4 14.2L10.4 7.8A3.4 3.4 0 0 0 14.4 7L12.4 6.6L11.8 4.2L10 2.6Z" />
+      </symbol>
+      <symbol id="i-globe2" viewBox="0 0 16 16">
+        <path d="M2.5 4H9M5.8 2.5V4M8 4C7.5 7 5.5 9.5 3 11M5 7.5C6 9 7.5 10 9 10.5M9.5 14L11.5 8.5L13.5 14M10.2 12.4H12.8" />
+      </symbol>
+    </svg>
+
+    <script>
+      const q = new URLSearchParams(location.search);
+      if (q.get('theme') === 'light') document.documentElement.dataset.theme = 'light';
+      const ic = (n, cls = '') => `<svg class="i ${cls}"><use href="#i-${n}"/></svg>`;
+      const fmt = (n) => n.toLocaleString('fr-FR').replace(/ /g, ' ');
+      const seal = (v, lg) =>
+        `<span class="seal${lg ? ' lg' : ''}" title="Vérifié par Escouade${v ? ' : la v' + v + ' a été relue et signée' : ''}"><span class="spark"><svg><use href="#i-spark" width="100%" height="100%"/></svg></span>Vérifié par Escouade${v ? ` <span class="v">v${v}</span>` : ''}</span>`;
+      const state = (p) =>
+        p.verified === p.v ? seal(p.v) : p.review ? '<span class="tag review">En revue</span>' : '<span class="tag">Non vérifié</span>';
+
+      const CATS = [
+        ['Harness', 'cpu', 6],
+        ['Thèmes', 'palette', 14],
+        ['Notifications', 'bell', 11],
+        ['Autorisations', 'gavel', 4],
+        ['Outils', 'tool', 7],
+        ['Kanban', 'board', 2],
+        ['Langues', 'globe2', 3],
+      ];
+      // Ce que demande un plugin, du plus fort au plus faible (docs/PLUGINS.md, §3.4).
+      const ASK = {
+        run: ['run', 'Lance un programme', 'strong'],
+        decide: ['gavel', 'Décide des autorisations', 'red'],
+        read: ['eye', 'Lit tes projets', ''],
+        events: ['bolt', 'Reçoit des événements', ''],
+        none: ['leaf', 'Sans programme', ''],
+      };
+      const P = [
+        {
+          id: 'dev.lmartin.slack',
+          name: 'Slack',
+          m: 'Sl',
+          h: 300,
+          author: 'lea-martin',
+          ah: 300,
+          cat: 'Notifications',
+          v: '1.2.0',
+          verified: '1.2.0',
+          installs: 1284,
+          up: '24 oct.',
+          desc: 'Les tickets à tester et les agents qui attendent, dans un salon Slack : un salon par projet, un fil par ticket.',
+          asks: ['run', 'net:hooks.slack.com', 'secret'],
+        },
+        {
+          id: 'dev.escouade.high-contrast',
+          name: 'Contraste élevé',
+          m: 'Ce',
+          h: 190,
+          author: 'escouade',
+          ah: 190,
+          cat: 'Thèmes',
+          v: '1.0.1',
+          verified: '1.0.1',
+          installs: 2310,
+          up: '20 oct.',
+          desc: 'Un thème clair et un thème sombre aux contrastes AAA, pour la fenêtre, le terminal et l’éditeur.',
+          asks: ['none'],
+        },
+        {
+          id: 'io.github.kpetit.gemini-cli',
+          name: 'Gemini CLI',
+          m: 'Ge',
+          h: 250,
+          author: 'kpetit',
+          ah: 250,
+          cat: 'Harness',
+          v: '0.6.0',
+          verified: '0.6.0',
+          installs: 968,
+          up: '22 oct.',
+          desc: 'Gemini CLI comme harness, par ACP : chat, permissions, plan, modèles du compte et clôture des projets privés.',
+          asks: ['run'],
+        },
+        {
+          id: 'dev.escouade.discord-webhook',
+          name: 'Webhook Discord',
+          m: 'Di',
+          h: 265,
+          author: 'escouade',
+          ah: 190,
+          cat: 'Notifications',
+          v: '1.1.0',
+          verified: '1.1.0',
+          installs: 1702,
+          up: '18 oct.',
+          desc: 'Prévient un salon Discord quand un ticket passe à tester ou qu’un agent attend. Rien ne s’exécute.',
+          asks: ['none', 'net:discord.com', 'secret'],
+        },
+        {
+          id: 'dev.nordlys.team-rules',
+          name: 'Règles de l’équipe',
+          m: 'Rè',
+          h: 30,
+          author: 'nordlys-labs',
+          ah: 30,
+          cat: 'Autorisations',
+          v: '0.9.0',
+          verified: '0.8.2',
+          review: true,
+          installs: 214,
+          up: 'hier',
+          desc: 'Les autorisations de tes agents décidées par le fichier .escouade-rules du dépôt : ce que l’équipe permet passe sans te demander.',
+          asks: ['run', 'decide', 'read'],
+        },
+        {
+          id: 'io.github.amoreau.nord',
+          name: 'Nord',
+          m: 'No',
+          h: 220,
+          author: 'amoreau',
+          ah: 220,
+          cat: 'Thèmes',
+          v: '2.0.0',
+          verified: '2.0.0',
+          installs: 1120,
+          up: '12 oct.',
+          desc: 'La palette Nord, en clair et en sombre, avec ses couleurs de projet.',
+          asks: ['none'],
+        },
+        {
+          id: 'dev.sroux.ntfy',
+          name: 'ntfy',
+          m: 'nt',
+          h: 150,
+          author: 'sroux',
+          ah: 150,
+          cat: 'Notifications',
+          v: '0.3.0',
+          verified: null,
+          installs: 402,
+          up: '3 j',
+          desc: 'Les agents qui attendent, sur ton téléphone, par ntfy.sh ou ton propre serveur ntfy.',
+          asks: ['run', 'net:ntfy.sh'],
+        },
+        {
+          id: 'io.github.tbernard.goose',
+          name: 'Goose',
+          m: 'Go',
+          h: 80,
+          author: 'tbernard',
+          ah: 80,
+          cat: 'Harness',
+          v: '0.2.1',
+          verified: null,
+          installs: 131,
+          up: '5 j',
+          desc: 'Le harness Goose, décrit par ACP : ses modèles, ses modes et son dossier de configuration par compte.',
+          asks: ['run'],
+        },
+        {
+          id: 'io.github.cfaure.solarized',
+          name: 'Solarized',
+          m: 'So',
+          h: 60,
+          author: 'cfaure',
+          ah: 60,
+          cat: 'Thèmes',
+          v: '1.4.0',
+          verified: '1.4.0',
+          installs: 845,
+          up: '9 oct.',
+          desc: 'Solarized clair et sombre, fidèle à la palette d’Ethan Schoonover, jusqu’aux couleurs de diff.',
+          asks: ['none'],
+        },
+        {
+          id: 'dev.lmartin.teams',
+          name: 'Microsoft Teams',
+          m: 'Te',
+          h: 275,
+          author: 'lea-martin',
+          ah: 300,
+          cat: 'Notifications',
+          v: '0.4.0',
+          verified: null,
+          review: true,
+          installs: 96,
+          up: '2 j',
+          desc: 'Les mêmes avis que le plugin Slack, dans un canal Teams, par un webhook entrant.',
+          asks: ['none', 'net:*.webhook.office.com', 'secret'],
+        },
+      ];
+      const byId = Object.fromEntries(P.map((p) => [p.id, p]));
+      const tile = (p, cls = '') => `<span class="tile ${cls}" style="--h:${p.h}" aria-hidden="true">${p.m}</span>`;
+      const asks = (p) =>
+        `<div class="asks">${p.asks
+          .map((a) => {
+            if (a.startsWith('net:')) return `<span>${ic('net')}<span class="mono">${a.slice(4)}</span></span>`;
+            if (a === 'secret') return `<span>${ic('key')}Un secret</span>`;
+            const [i, t, c] = ASK[a];
+            return `<span class="${c}">${ic(i)}${t}</span>`;
+          })
+          .join('')}</div>`;
+      const row = (p, opts = {}) => `<a class="row" href="#plugin">${tile(p)}<div>
+          <div class="name"><b>${opts.hl ? p.name.replace(opts.hl, '<mark>$&</mark>') : p.name}</b>${state(p)}</div>
+          <p class="desc">${opts.hlDesc ? p.desc.replace(opts.hlDesc, '<mark>$&</mark>') : p.desc}</p>
+          <div class="meta"><span>${p.author}</span><span>${p.cat}</span>${opts.noAsks ? '' : asks(p)}<span class="grow"></span><span class="num">${fmt(p.installs)} installations</span></div>
+        </div>${opts.side ? `<div class="side"><span class="mono">v${p.v}</span><span>mis à jour ${p.up}</span></div>` : ''}</a>`;
+
+      const tools = {
+        visitor: `<a class="link wide" href="#">Documentation</a><a class="link" href="#submit">Publier un plugin</a><a class="btn sm" href="#account" aria-label="Se connecter avec GitHub">${ic('git')}<span class="gh-label">Se connecter avec GitHub</span></a><button class="icon-btn only-narrow" aria-label="Chercher">${ic('search')}</button><button class="icon-btn only-narrow" aria-label="Menu">${ic('menu')}</button>`,
+        author: `<a class="link wide" href="#">Documentation</a><a class="link" href="#account">Mes plugins</a><a class="btn sm primary" href="#submit">Soumettre</a><span class="me"><span class="avatar" style="--h:300">LM</span><span>lea-martin</span></span><button class="icon-btn only-narrow" aria-label="Menu">${ic('menu')}</button>`,
+        admin: `<a class="link wide" href="#">Documentation</a><a class="link" href="#review">File de revue <span class="mono" style="color:var(--dim)">7</span></a><span class="me"><span class="avatar" style="--h:190">GG</span><span>gagnaire</span></span><button class="icon-btn only-narrow" aria-label="Menu">${ic('menu')}</button>`,
+      };
+
+      const pages = {
+        home: () => {
+          const verified = [
+            'dev.lmartin.slack',
+            'io.github.kpetit.gemini-cli',
+            'dev.escouade.high-contrast',
+            'dev.escouade.discord-webhook',
+            'io.github.amoreau.nord',
+            'io.github.cfaure.solarized',
+          ].map((i) => byId[i]);
+          const fresh = ['dev.nordlys.team-rules', 'dev.lmartin.teams', 'dev.sroux.ntfy', 'io.github.tbernard.goose'].map((i) => byId[i]);
+          const top = [...P].sort((a, b) => b.installs - a.installs).slice(0, 4);
+          const mini = (p, r) =>
+            `<a href="#plugin">${tile(p, 'sm')}<div class="t"><b>${p.name}</b> <div>${p.author} · ${p.cat}</div></div><div class="r">${r(p)}</div></a>`;
+          return `<div class="wrap">
+            <section class="hero">
+              <div><h1>Des plugins pour Escouade. <span class="more">Relus, signés, installés depuis l’app.</span></h1>
+              <p>Des harness, des thèmes, des notifications et des règles d’autorisation, publiés par leurs auteurs depuis un dépôt public. Ceux qui portent le sceau ont été relus version par version.</p></div>
+              <div><a class="bigfind" href="#search">${ic('search')}<span>Chercher : Slack, Gemini, un thème…</span><kbd>/</kbd></a>
+              <div class="trust"><span>${seal()}</span><span>${ic('leaf')}Licence libre exigée</span><span>${ic('box')}Chaque version figée par son empreinte</span></div></div>
+            </section>
+            <div class="cats">${CATS.map(([c, i, n]) => `<a class="chip" href="#search">${ic(i)}${c}<span class="n">${n}</span></a>`).join('')}</div>
+            <div class="section-head"><h2 class="h2">Vérifiés par Escouade</h2><a class="arrow" href="#search">Tous les vérifiés</a></div>
+            <div class="rows">${verified.map((p) => row(p)).join('')}</div>
+            <div class="cols3">
+              <div><div class="section-head"><h2 class="h2">Nouveaux</h2><a class="arrow" href="#search">Voir tout</a></div><div class="mini">${fresh.map((p) => mini(p, (x) => state(x))).join('')}</div></div>
+              <div><div class="section-head"><h2 class="h2">Les plus installés</h2><a class="arrow" href="#search">Voir tout</a></div><div class="mini">${top.map((p) => mini(p, (x) => `<span class="num">${fmt(x.installs)}</span>`)).join('')}</div></div>
+            </div>
+            <section class="publish">
+              <div><h2>Tu as écrit un plugin ? Publie-le depuis son dépôt.</h2>
+              <p>Une étiquette suffit. Le store fige le commit, lit le manifeste, la licence et le README, et te dit champ par champ ce qui manque.</p>
+              <a class="btn primary" href="#submit">Publier un plugin</a> <a class="btn ghost" href="#">Lire le guide</a></div>
+              <ol class="steps">
+                <li><span><b>Connecte-toi avec GitHub</b> et installe l’App « Escouade Store » sur ton dépôt public : elle lit, elle n’écrit jamais.</span></li>
+                <li><span><b>Choisis une étiquette.</b> Avant, vérifie en local : <code>npx escouade-plugin validate</code></span></li>
+                <li><span><b>Ton plugin paraît aussitôt</b>, « non vérifié ». Coche la revue : une fois relue et signée, la version porte le sceau.</span></li>
+              </ol>
+            </section>
+          </div>`;
+        },
+        search: () => {
+          const res = ['dev.lmartin.slack', 'dev.escouade.discord-webhook', 'dev.lmartin.teams', 'dev.sroux.ntfy'].map((i) => byId[i]);
+          return `<div class="wrap search-layout">
+            <aside class="filters">
+              <div class="chips-sm"><span class="chip on">${ic('bell')}Notifications</span><span class="chip">Vérifiés seulement</span><span class="chip">Sans programme</span><span class="chip">Pertinence ${ic('chev')}</span></div>
+              <h3>Catégories</h3>
+              <a class="opt" href="#search">Toutes<span class="n">47</span></a>
+              ${CATS.map(([c, i, n]) => `<a class="opt${c === 'Notifications' ? ' on' : ''}" href="#search">${c}<span class="n">${n}</span></a>`).join('')}
+              <h3>Confiance</h3>
+              <label class="opt"><span class="switch"></span>Vérifiés seulement</label>
+              <h3>Ce qu’il demande</h3>
+              <label class="opt"><span class="box"></span>Sans programme</label>
+              <label class="opt"><span class="box"></span>Sans réseau</label>
+              <label class="opt"><span class="box"></span>Sans secret</label>
+            </aside>
+            <section class="results">
+              <div class="results-head"><div class="q">${ic('search')}<span>attend</span><span class="caret"></span></div><span class="sort hide-sm">Pertinence ${ic('chev')}</span></div>
+              <p class="count">4 plugins dans Notifications · 2 vérifiés · la recherche se fait dans ton navigateur</p>
+              <div class="rows">${res.map((p) => row(p, { side: true, hlDesc: /attendw*/ })).join('')}</div>
+            </section>
+          </div>`;
+        },
+        plugin: () => {
+          const p = byId['dev.lmartin.slack'];
+          return `<div class="wrap">
+            <section class="plug-head">${tile(p, 'lg')}
+              <div><h1>Slack ${seal('1.2.0', true)}</h1>
+                <div class="line"><span class="me"><span class="avatar" style="--h:300">LM</span><a href="#account">lea-martin</a></span><span>Notifications</span><span class="mono">v1.2.0</span><span class="num">1 284 installations</span><span>MIT</span></div>
+                <p class="desc">${p.desc}</p></div>
+              <div class="act"><a class="btn primary" href="#">${ic('ext')}Ouvrir dans Escouade</a><a class="btn" href="#">${ic('copy')}Copier l’adresse du dépôt</a><span class="hint">Escouade 2.1 ou plus · Windows, macOS, Linux</span></div>
+            </section>
+            <nav class="tabs"><a class="on" href="#plugin">Présentation</a><a href="#plugin">Documentation<span class="n">3</span></a><a href="#plugin">Versions<span class="n">5</span></a></nav>
+            <div class="plug-body">
+              <article class="readme">
+                <h2>Ce qu’il fait</h2>
+                <p>Quand un ticket passe <b>À tester</b> ou qu’un agent attend ta réponse, le plugin poste un message dans le salon Slack du projet. Les messages d’un même ticket restent dans un fil.</p>
+                <figure class="shot">
+                  <div class="chan"># escouade-studio-web</div>
+                  <div class="msg"><span class="bot"><svg width="18" height="18"><use href="#i-spark" width="100%" height="100%"/></svg></span><div><div class="who">Escouade <small>10:47</small></div>
+                  <div class="att"><b>DEM-12 · Export CSV des factures</b> est à tester<br />Boucle 2/5 · 4 critères sur 4 · <span style="color:#35c1bd">Ouvrir dans Escouade</span></div></div></div>
+                  <figcaption>Capture fournie par l’auteur · copiée sur le store à la soumission</figcaption>
+                </figure>
+                <h2>Installer</h2>
+                <ul><li>Depuis Escouade : Réglages › Plugins › Parcourir le store, puis « Installer ».</li><li>Crée un webhook entrant dans Slack et colle son adresse dans les réglages du plugin : elle va au trousseau du système.</li></ul>
+                <h2>Régler</h2>
+                <pre><span class="c"># .escouade.yml du projet</span>
+<span class="k">plugins</span>:
+  <span class="k">dev.lmartin.slack</span>:
+    <span class="k">channel</span>: escouade-studio-web
+    <span class="k">events</span>: [ticket.column, agent.waiting]</pre>
+              </article>
+              <aside class="aside">
+                <div><h3>Ce qu’il pourra faire</h3>
+                  <div class="perm strong">${ic('run')}<span>Lance un programme sur ton ordinateur, avec tes droits<small>bin/escouade-slack, compilé par la CI du dépôt</small></span></div>
+                  <div class="perm">${ic('bolt')}<span>Reçoit ces événements<small class="host">ticket.column · agent.waiting</small></span></div>
+                  <div class="perm">${ic('net')}<span>Se connecte à <span class="host">hooks.slack.com</span></span></div>
+                  <div class="perm">${ic('key')}<span>Garde un secret : Adresse du webhook</span></div>
+                </div>
+                <div class="review-note"><b>Relu par Escouade le 24 oct. 2026</b>
+                  <ul><li>Réseau vers hooks.slack.com seulement</li><li>Aucun fichier hors de son dossier</li><li>Banc de conformité : 14 scénarios sur 14</li><li>Binaires attestés, construits depuis le commit relu</li></ul></div>
+                <div><h3>D’où il vient</h3>
+                  <ol class="chain">
+                    <li><span class="dot">${ic('git')}</span><span><span class="k">Dépôt</span><span class="v">github.com/lea-martin/escouade-slack</span></span></li>
+                    <li><span class="dot">${ic('tag')}</span><span><span class="k">Étiquette</span><span class="v">v1.2.0 → 3f9c2e1</span></span></li>
+                    <li><span class="dot">${ic('box')}</span><span><span class="k">Empreinte de la version</span><span class="v">sha256:9b1e…c07a</span></span></li>
+                    <li class="signed"><span class="dot">${ic('check')}</span><span><span class="k">Signature</span><span class="v">Vérifiée par l’app avec la clé d’Escouade</span></span></li>
+                  </ol></div>
+                <dl class="facts"><dt>Licence</dt><dd>MIT</dd><dt>Mis à jour</dt><dd>24 oct. 2026</dd><dt>Escouade</dt><dd class="mono">≥ 2.1.0</dd><dt>Identifiant</dt><dd class="mono">dev.lmartin.slack</dd></dl>
+                <a class="report" href="#">${ic('flag')}Signaler ce plugin</a>
+              </aside>
+            </div>
+          </div>`;
+        },
+        account: () => {
+          const mine = [
+            { p: byId['dev.lmartin.slack'], st: `${seal('1.2.0')}`, vs: 'v1.2.0', n: 1284, d: '+86', note: 'v1.3.0 en attente' },
+            { p: byId['dev.lmartin.teams'], st: '<span class="tag review">En revue</span>', vs: 'v0.4.0', n: 96, d: '+31', note: '' },
+            {
+              p: { name: 'Mattermost', m: 'Ma', h: 230, id: 'dev.lmartin.mattermost' },
+              st: '<span class="tag bad">Rejetée</span>',
+              vs: 'v0.1.0',
+              n: 0,
+              d: '—',
+              note: 'rejected',
+            },
+            {
+              p: { name: 'Rappel du soir', m: 'Ra', h: 340, id: 'dev.lmartin.evening' },
+              st: '<span class="tag">Retiré de la liste</span>',
+              vs: 'v0.2.0',
+              n: 41,
+              d: '0',
+              note: '',
+            },
+          ];
+          return `<div class="wrap acct-layout">
+            <section>
+              <h1 class="page-title">Mes plugins <span class="more">· lea-martin</span></h1>
+              <div class="banner">${tile(byId['dev.lmartin.slack'], 'sm')}<div><b>Slack v1.3.0</b> trouvée sur GitHub, contrôles passés<div class="sub">Étiquette poussée il y a 12 min · 3f9c2e1 → 81d0a4b · elle demande une permission de plus : <span class="mono">agent.created</span></div></div><div class="acts"><a class="btn sm ghost" href="#">Ignorer</a><a class="btn sm primary" href="#">Publier la v1.3.0</a></div></div>
+              <table class="t mine"><thead><tr><th>Plugin</th><th>État</th><th class="hide-sm">Dernière version</th><th class="r hide-sm">Installations</th><th class="r hide-sm">30 jours</th><th></th></tr></thead><tbody>
+              ${mine
+                .map(
+                  (r) =>
+                    `<tr><td><div class="pl">${tile(r.p, 'sm')}<span><b>${r.p.name}</b><small class="mono">${r.p.id}</small></span></div></td><td>${r.st}</td><td class="mono hide-sm">${r.vs}</td><td class="r num hide-sm">${fmt(r.n)}</td><td class="r num hide-sm" style="color:var(--dim)">${r.d}</td><td><div class="menu-acts"><button class="btn sm ghost" aria-label="Actions">${ic('dots')}</button></div></td></tr>${
+                      r.note === 'rejected'
+                        ? `<tr class="why-row"><td colspan="6"><div class="why" style="margin:0 0 0 40px"><b>La licence de la v0.1.0 ne correspond pas.</b> Le manifeste dit MIT, le fichier LICENSE est sous GPL-3.0 (<span class="mono">license</span>).<div class="fix">Mets les deux d’accord, puis pousse une nouvelle étiquette. <a class="arrow" style="color:var(--text)" href="#">Ce que le store contrôle</a></div></div></td></tr>`
+                        : ''
+                    }`,
+                )
+                .join('')}
+              </tbody></table>
+              <p class="sub" style="margin-top:14px;font-size:13px">Les installations ne comptent que celles dont l’utilisateur a accepté les statistiques d’Escouade : elles sont en dessous de la réalité.</p>
+            </section>
+            <aside>
+              <div class="side-card"><h3 class="h2">Slack · installations</h3><div><span class="stat-n num">1 284</span> <span class="sub" style="font-size:13px">dont 86 ces 30 jours</span></div>
+                <div class="bars">${[18, 22, 20, 30, 26, 34, 31, 40, 36, 44, 52, 47].map((h) => `<i style="height:${h * 1.6}%"></i>`).join('')}</div><div class="axis"><span>il y a 12 semaines</span><span>cette semaine</span></div></div>
+              <div class="side-card"><h3 class="h2">Avis par e-mail</h3><div class="field"><label>Adresse</label><div class="input">lea@exemple.dev<span class="ok">vérifiée</span></div></div><p>Rejets, revues faites, signalements. Facultatif : sans adresse, ils restent ici.</p></div>
+              <div class="side-card"><h3 class="h2">Mes données</h3><p>Ton identifiant GitHub, ton nom et ton avatar viennent de GitHub ; rien d’autre sans toi.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn sm" href="#">${ic('down')}Exporter</a><a class="btn sm danger" href="#">Supprimer le compte</a></div></div>
+            </aside>
+          </div>`;
+        },
+        submit: () => {
+          const C = [
+            ['pass', 'Manifeste', 'escouade-plugin.json au schéma plugin-1, escouade-plugin validate passe', '0,4 s'],
+            ['pass', 'Version', 'v0.3.0 dans le manifeste, comme l’étiquette ; plus grande que v0.2.4', ''],
+            ['pass', 'Identifiant', 'dev.sroux.ntfy est à toi', ''],
+            ['pass', 'Dépôt', 'repository du manifeste : github.com/sroux/escouade-ntfy', ''],
+            ['fail', 'Licence', '', ''],
+            ['pass', 'README', 'README.fr.md et README.en.md', ''],
+            ['run', 'Captures', '2 sur 3 réencodées…', ''],
+            ['pass', 'Archive', '1,8 Mo, 41 fichiers, ni lien ni chemin qui sorte', ''],
+            ['pass', 'Permissions', 'Lance un programme ; se connecte à ntfy.sh', ''],
+            ['pass', 'Binaires', 'windows-x64, macos-arm64, linux-x64 · attestés par le workflow release.yml', ''],
+          ];
+          return `<div class="wrap submit-layout">
+            <ol class="stepper"><li class="done"><span class="d">1</span><span>Dépôt<small>sroux/escouade-ntfy</small></span></li><li class="done"><span class="d">2</span><span>Version<small>v0.3.0</small></span></li><li class="on"><span class="d">3</span><span>Contrôles<small>9 sur 10</small></span></li><li><span class="d">4</span><span>Publier<small>catégorie, revue</small></span></li></ol>
+            <section>
+              <h1 class="page-title">Les contrôles <span class="more">de ntfy v0.3.0</span></h1>
+              <div class="picked">
+                <div class="pick"><div class="k">Dépôt <a href="#">Changer</a></div><div class="v">${ic('git')}sroux/escouade-ntfy</div><div class="s">Public · l’App Escouade Store y est installée, en lecture</div></div>
+                <div class="pick"><div class="k">Version <a href="#">Changer</a></div><div class="v">${ic('tag')}v0.3.0 <span class="mono" style="color:var(--dim);font-weight:400">→ a41c9d2</span></div><div class="s">Release du 25 oct. · archive figée : sha256:4e7f…91b2</div></div>
+              </div>
+              <div class="checks">${C.map(
+                ([s, k, t, w]) =>
+                  `<div class="check ${s}"><span class="st">${s === 'pass' ? ic('check') : s === 'fail' ? ic('x') : ''}</span><div><b style="font-weight:600">${k}</b> ${
+                    s === 'fail'
+                      ? `<div class="why" style="margin-top:8px"><b>Le manifeste dit MIT, le fichier LICENSE est sous Apache-2.0.</b> <span class="mono">license</span> doit nommer la licence du fichier, en identifiant SPDX.<div class="fix">Corrige l’un ou l’autre, pousse l’étiquette v0.3.1, et le store relancera les contrôles seul.</div></div>`
+                      : `<span class="x">${t}</span>`
+                  }</div><span class="w">${w}</span></div>`,
+              ).join('')}</div>
+              <div class="foot-acts"><button class="btn primary" disabled>Continuer</button><span class="sub">Un contrôle a échoué : rien n’est publié tant qu’il ne passe pas.</span></div>
+            </section>
+          </div>`;
+        },
+        review: () => {
+          const Q = [
+            {
+              p: byId['dev.nordlys.team-rules'],
+              why: 'Mise à jour de v0.8.2',
+              diff: ['+212', '−38'],
+              grown: 'Lit tes projets (nouveau)',
+              n: 214,
+              wait: '1 j',
+              sel: true,
+            },
+            { p: byId['dev.lmartin.teams'], why: 'Première version', diff: null, grown: '', n: 96, wait: '2 j' },
+            { p: byId['dev.sroux.ntfy'], why: 'Première version', diff: null, grown: '', n: 402, wait: '3 j' },
+            { p: byId['io.github.tbernard.goose'], why: 'Première version', diff: null, grown: '', n: 131, wait: '5 j' },
+            {
+              p: { name: 'slak-notify', m: 'sn', h: 5, author: 'q7x', v: '0.0.1' },
+              why: 'Nom proche de « Slack »',
+              diff: null,
+              grown: '',
+              n: 0,
+              wait: '6 h',
+              flag: true,
+            },
+          ];
+          return `<div class="wrap review-layout">
+            <section>
+              <h1 class="page-title">File de revue <span class="more">· 7 à relire</span></h1>
+              <div class="qtabs"><span class="chip on">À relire <span class="n">5</span></span><span class="chip">Signalements <span class="n">1</span></span><span class="chip">Noms proches <span class="n">1</span></span><span class="chip">Faites</span></div>
+              <table class="t"><thead><tr><th>Version</th><th class="hide-sm">Pourquoi</th><th class="r hide-sm">Installations</th><th class="r">Attend</th></tr></thead><tbody>
+              ${Q.map(
+                (r) =>
+                  `<tr class="${r.sel ? 'sel' : ''}"><td><div class="pl">${tile(r.p, 'sm')}<span><b>${r.p.name}</b> <span class="mono" style="color:var(--dim)">v${r.p.v}</span><small>${r.p.author}${r.grown ? ` · <span class="grown">${r.grown}</span>` : ''}</small></span></div></td><td class="hide-sm">${r.flag ? '<span class="tag warn">' + r.why + '</span>' : r.why}${r.diff ? `<div class="diffstat" style="margin-top:4px"><span class="a">${r.diff[0]}</span><span class="d">${r.diff[1]}</span><span style="color:var(--dim)">6 fichiers</span></div>` : ''}</td><td class="r num hide-sm">${fmt(r.n)}</td><td class="r" style="color:var(--dim)">${r.wait}</td></tr>`,
+              ).join('')}
+              </tbody></table>
+            </section>
+            <aside class="detail">
+              <div class="pl">${tile(byId['dev.nordlys.team-rules'])}<span><b>Règles de l’équipe</b> <span class="mono" style="color:var(--dim)">v0.9.0</span><small>nordlys-labs · v0.8.2 vérifiée le 14 oct.</small></span></div>
+              <div><h3 class="h2" style="font-size:14px;margin-bottom:8px">Relire sur ton poste</h3>
+                <div class="cmd"><span><span class="p">$ </span>npm run plugin-review -- dev.nordlys.team-rules@0.9.0</span>${ic('copy')}</div>
+                <p class="sub" style="font-size:12.5px;margin-top:6px">Ou <code>/review-plugin dev.nordlys.team-rules@0.9.0</code> dans Claude Code, à la racine du dépôt d’Escouade. Le diff depuis la v0.8.2 seulement.</p></div>
+              <div><h3 class="h2" style="font-size:14px;margin-bottom:8px">Ce qui a changé</h3>
+                <div class="perm red">${ic('gavel')}<span>Décide des autorisations de tes agents<small>déjà dans la v0.8.2</small></span></div>
+                <div class="perm strong">${ic('eye')}<span>Lit tes projets<small style="color:var(--warn)">nouvelle dans la v0.9.0</small></span></div>
+                <div class="diffstat" style="margin-top:8px"><span class="a">+212</span><span class="d">−38</span><span style="color:var(--dim)">6 fichiers · src/rules.ts, src/projects.ts…</span></div></div>
+              <div><h3 class="h2" style="font-size:14px;margin-bottom:8px">Le rapport</h3>
+                <div class="flag">Pas encore reçu<small>Il arrive ici quand le script a fini ; la signature se dépose de ton poste.</small></div></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn sm" href="#">Demander des changements</a><a class="btn sm danger" href="#">Refuser</a></div>
+            </aside>
+          </div>`;
+        },
+      };
+      const who = { home: 'visitor', search: 'visitor', plugin: 'visitor', account: 'author', submit: 'author', review: 'admin' };
+      function render() {
+        const h = (location.hash.slice(1) || 'home').split('-')[0];
+        const k = pages[h] ? h : 'home';
+        document.getElementById('page').innerHTML = pages[k]();
+        document.getElementById('tools').innerHTML = tools[who[k]];
+        document.title = `Escouade Store — ${k}`;
+      }
+      addEventListener('hashchange', render);
+      render();
+    </script>
+  </body>
+</html>
