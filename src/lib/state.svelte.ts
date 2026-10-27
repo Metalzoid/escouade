@@ -214,6 +214,9 @@ export interface ToastAction {
 /** Statuses that call for the user: a question, the end of a turn, an error. */
 const ALERT: ReadonlySet<AgentStatus> = new Set(['waiting', 'done', 'error']);
 
+/** An agent working, or waiting for an answer (a pending request always comes with « waiting »): its turn is under way. */
+export const atWork = (a: Pick<Agent, 'status'>) => a.status === 'running' || a.status === 'waiting';
+
 /** How many of the last lines of the step running a worktree's setup the window keeps (as the backend does). */
 const SETUP_LINES = 500;
 
@@ -433,11 +436,19 @@ class AppState {
   private ticketDoneHooks = new Set<(agentId: string) => void>();
   /** What must be written before the app restarts by itself for an update (the composers' drafts). */
   private restartHooks = new Set<() => void>();
+  /** What waits for an agent's turn to be over: the messages held until then (`outbox.svelte.ts`). */
+  private turnEndHooks = new Set<(agentId: string) => void>();
 
   /** `f` runs when the backend removes an agent, before the state forgets it. Returns what unregisters it. */
   onAgentRemoved(f: (agentId: string) => void) {
     this.removalHooks.add(f);
     return () => void this.removalHooks.delete(f);
+  }
+
+  /** `f` runs when an agent that was at work (running, or waiting for an answer) no longer is, after the state has its new self. Returns what unregisters it. */
+  onTurnEnded(f: (agentId: string) => void) {
+    this.turnEndHooks.add(f);
+    return () => void this.turnEndHooks.delete(f);
   }
 
   /** `f` runs when an agent the window knows gets another launch recipe. Returns what unregisters it. */
@@ -592,7 +603,7 @@ class AppState {
    */
   private atWork(id: string): boolean {
     const a = this.agents[id];
-    return !!a && (a.status === 'running' || a.status === 'waiting');
+    return !!a && atWork(a);
   }
 
   private onEvent(e: UiEvent) {
@@ -606,6 +617,7 @@ class AppState {
         if (shown && !bgRow(e.agent.plan, shown)) this.closeTask(e.agent.id);
         this.noteAttention(prev, e.agent);
         if (newRecipe) this.runHooks(this.recipeHooks, e.agent.id);
+        if (prev && atWork(prev) && !atWork(e.agent)) this.runHooks(this.turnEndHooks, e.agent.id);
         // Its setup is over: what it wrote is in its log (and its failure in the conversation).
         if (!e.agent.setup) this.dropSetupOutput(e.agent.id);
         break;
