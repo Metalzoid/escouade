@@ -351,6 +351,14 @@ Notées par l'utilisateur pour plus tard, sans ticket ni étude pour l'instant :
     - les projets privés (ESC-140) ;
     - ce qui est repris des mémoires existantes (`CLAUDE.md`, `AGENTS.md`, la mémoire de Claude Code) ;
     - le lien avec la gestion documentaire ci-dessus.
+- [ ] **Les tokens « chauds » et « froids »** (noté le 2026-10-27).
+  - Voir ce qui est utilisé en tokens servis par le cache (lus du cache, « chauds ») et en tokens payés plein tarif (écrits dans le cache ou hors cache, « froids »).
+  - Par agent, par tour, et dans les statistiques, pour chaque harness qui le dit (Claude Code et ses `cache_read_input_tokens` / `cache_creation_input_tokens`, Codex, OpenCode…).
+  - Avec ce que le cache fait gagner, et quand il expire (5 min, 1 h).
+- [ ] **Choisir ce que l'interface affiche** (noté le 2026-10-27).
+  - Pouvoir afficher ou cacher chaque élément de l'interface : jauges de la barre d'état, colonnes et lignes des cartes, compteurs, onglets, boutons de l'en-tête…
+  - Un réglage par élément, groupé par zone, avec un aperçu, et un retour aux réglages par défaut.
+  - À penser avec les thèmes et les plugins (PLG-7, ESC-179).
 
 ## Restes du redesign
 
