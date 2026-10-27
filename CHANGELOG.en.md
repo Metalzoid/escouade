@@ -4,26 +4,29 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
-## [Unreleased]
+## [2.0.3] — 2026-10-27
 
 ### New
 
-- Escouade reads your project’s workflow from the commands, skills, sub-agents and prompts of your harnesses (GSD, Superpowers, a `PROMPT.md` loop…): its steps, their sub-agents, their ways back and its state files, at no cost. Each repository of a project has its own, and the reading is redone when a file changes. Each agent is followed through that workflow in real time, with its history (time, duration, cost, outcome, ways back and why) kept after a restart. It all reads in the Workflow tab of the right panel: the steps and their ways back, each agent on its own, its history, and an entry point put in the message box with a click. An agent’s card says the step it is at, its conversation marks each entry in a step, and the loop of the Kanban’s tickets is followed there as a workflow, “Tickets”. The MCP server reads them: `get_workflow`, and `workflow` (with the history of the steps) in `list_agents` and `get_agent_summary`, showing nothing of a private project to the others. In Settings › Projects › Workflow, you correct its steps (rename, merge, remove, reorder, add); its configuration is kept in the repository’s `.escouade/workflows/`, which you commit yourself for the whole team to see the same, and that of the workflows of your own folders stays on your machine. “Refine…” hands the workflow to a short agent, on request: the model, the account and the cost are said first, and whatever it makes up gets in only marked as guessed. Tried for real on Claude Code, Codex, OpenCode, Copilot CLI and Cursor CLI; a command typed in the Cursor view is recognised, and an `.escouade/` folder that is a link or leaves the project is ignored.
-- A ticket of the Kanban can be shared with the team: Escouade writes a file of it in the repository, keeps its status up to date, and you commit it with your work. For your teammates, it lands in “To do” with your name; their autopilot never starts it, but they can start it by hand. Escouade asks for your name at the first launch.
-- The quota projection now has three settings in Settings › Accounts: “Above 80%” (the default), “Always” and “Never”. Each meter’s tooltip always gives it, even when the narrow status bar no longer shows it. Thanks to @epommereuil (#16).
-- ClickUp joins Jira, Trello, GitHub Issues and Linear: an API key, a list linked to each project, and its tasks come in with their checklist as criteria, then change status and get a comment as their ticket moves on.
-- The sidebar of the agents and the Kanban widens or narrows by dragging its right edge, and the side panel closes by its × button even when it sits beside the conversation.
-- The status bar shows the branch of the agent open, its worktree’s as git sees it, and the state of its pull request beside it, which a click opens in the browser. Its picker moves the agent’s worktree to a branch that already exists: the agent learns it with your next message. It opens on the agent’s branch, and when it refuses (a turn under way, uncommitted changes…), it says why under the list, without closing.
-- An agent’s pull requests are found on the branch it really is on, whoever opened them: a branch taken up, a pull request opened from a fork into the original repository, the project folder’s branch, or a ticket agent’s. Thanks to @Metalzoid (#17).
-- GitLab Issues becomes a source of the Kanban, on gitlab.com as on your own instance: it takes the GitLab account already connected as a code host, asking nothing again, and its issues come in with their criteria, then change label or state and get a note as their ticket moves on.
+- Escouade reads your project’s workflow from the skills, commands and sub-agents of your harnesses (`.claude`, `.agents`, GSD, Superpowers, a `PROMPT.md` loop…), at no cost, and follows each agent through it in real time, with its history.
+- The Workflow tab of the right panel shows its steps, their ways back and each agent on its own. An agent’s card says its step, its conversation marks each entry in a step, and the loop of the tickets is followed there as a “Tickets” workflow.
+- In Settings › Projects › Workflow, you correct the steps, and “Refine…” has a short agent make them more precise, on request and with its cost said first. The configuration is kept in the repository’s `.escouade/workflows/`: commit it for the whole team to see the same.
+- The MCP server reads the workflows: `get_workflow`, and `workflow` in `list_agents` and `get_agent_summary`.
+- A ticket of the Kanban can be shared with the team: Escouade writes a file of it in the repository, keeps its status up to date, and you commit it with your work. For your teammates, it lands in “To do” with your name; their autopilot never starts it, but they can start it by hand.
+- GitLab Issues becomes a source of the Kanban, on gitlab.com as on your own instance, with the GitLab account already connected as a code host.
+- ClickUp joins Jira, Trello, GitHub Issues and Linear: a list linked to each project, its tasks imported with their checklist as criteria, then their status and a comment as the ticket moves on.
+- The status bar shows the branch of the agent open and the state of its pull request, which a click opens. Its picker moves the agent’s worktree to an existing branch, and the agent learns it with your next message.
+- An agent’s pull requests are found on the branch it really is on, whoever opened them, from a fork included. Thanks to @Metalzoid (#17).
+- The quota projection now has three settings in Settings › Accounts: “Above 80%” (the default), “Always” and “Never”. Each meter’s tooltip always gives it. Thanks to @epommereuil (#16).
+- The sidebar of the agents and the Kanban widens by dragging its right edge, and the side panel closes by its × button.
 
 ### Fixes
 
-- `/compact` now really compacts the context of a Codex, Copilot CLI or OpenCode agent instead of reaching the model as a message: the conversation shows its start and its end, and the context gauge goes down.
-- The commands menu also opens on a `/` typed after a space or at the start of a line, in the middle of a message, but never in a path or an address.
-- Settings › Integrations sets the code hosts (PRs, CI) apart from the Kanban sources (tickets), each in its own named part, and the import window with no source names the six sources and offers to link the project’s GitHub repository or GitLab project in one click, so that a connected GitLab no longer suggests its tickets come on their own.
-- On Linux, Escouade’s window has its own icon under Wayland, in WSLg as on GNOME or KDE, and no longer Tux’s: it bears the name of the shortcut the .deb and the AppImage install.
-- Pasting on Linux never reads the clipboard twice at once nor holds the window any more: the image is read only when the clipboard has one, and a clipboard that does not answer is said within three seconds.
+- `/compact` now really compacts the context of a Codex, Copilot CLI or OpenCode agent, instead of reaching the model as a message.
+- The commands menu also opens on a `/` typed in the middle of a message, after a space.
+- Settings › Integrations sets the code hosts (PRs, CI) apart from the Kanban’s ticket sources, and the import window offers to link your GitHub repository or GitLab project in one click.
+- On Linux, Escouade’s window has its own icon under Wayland (WSLg, GNOME, KDE), no longer Tux’s.
+- Pasting on Linux no longer holds the window: the image is read only when the clipboard has one, and a clipboard that does not answer is said within three seconds.
 
 ## [2.0.2] — 2026-10-26
 

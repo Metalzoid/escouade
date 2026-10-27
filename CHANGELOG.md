@@ -4,26 +4,29 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
-## [Non publié]
+## [2.0.3] — 2026-10-27
 
 ### Nouveautés
 
-- Escouade lit le workflow de ton projet à partir des commandes, skills, sous-agents et prompts de tes harness (GSD, Superpowers, une boucle `PROMPT.md`…) : ses étapes, leurs sous-agents, leurs retours et ses fichiers d’état, sans rien dépenser. Chaque dépôt d’un projet a le sien, et la lecture se refait quand un fichier change. Chaque agent est suivi dans ce workflow en temps réel, avec son historique (heure, durée, coût, issue, retours et leur raison) gardé après un redémarrage. Tout se lit dans l’onglet Workflow du panneau de droite : les étapes et leurs retours, chaque agent sur la sienne, son historique, et une porte d’entrée d’un clic dans la saisie. La carte d’un agent dit l’étape où il en est, sa conversation marque chaque entrée dans une étape, et la boucle des tickets du Kanban s’y suit comme un workflow, « Tickets ». Le serveur MCP les lit : `get_workflow`, et `workflow` (avec l’historique des étapes) dans `list_agents` et `get_agent_summary`, sans rien montrer d’un projet privé aux autres. Dans Réglages › Projets › Workflow, tu corriges ses étapes (renommer, fusionner, retirer, réordonner, ajouter) ; sa configuration est gardée dans `.escouade/workflows/` du dépôt, que tu commites toi-même pour que toute l’équipe voie la même, et celle des workflows de tes propres dossiers reste sur ta machine. « Affiner… » confie le workflow à un court agent, à la demande : le modèle, le compte et le coût sont dits avant, et ce qu’il invente n’entre que marqué deviné. Essayé pour de vrai sur Claude Code, Codex, OpenCode, Copilot CLI et Cursor CLI ; une commande tapée dans la vue Cursor est reconnue, et un dossier `.escouade/` qui est un lien ou sort du projet est ignoré.
-- Un ticket du Kanban se partage avec l’équipe : Escouade en écrit un fichier dans le dépôt, tient son statut à jour, et tu le commites avec ton travail. Chez tes coéquipiers, il arrive dans « À faire » avec ton nom ; leur pilote auto ne le lance jamais, mais ils peuvent le lancer à la main. Escouade te demande ton nom au premier lancement.
-- La projection des quotas se règle en trois choix dans Réglages › Comptes : « Au-delà de 80 % » (par défaut), « Toujours » et « Jamais ». L’infobulle de chaque jauge la donne toujours, même quand la barre d’état, étroite, ne la montre plus. Merci à @epommereuil (#16).
-- ClickUp rejoint Jira, Trello, GitHub Issues et Linear : une clé d’API, une liste liée à chaque projet, et ses tâches s’importent avec leur checklist en critères puis changent de statut et reçoivent un commentaire à mesure que leur ticket avance.
-- La barre des agents et du Kanban s’élargit ou se rétrécit en tirant son bord droit, et le panneau de droite se ferme par son bouton × aussi quand il est côte à côte avec la conversation.
-- La barre d’état montre la branche de l’agent ouvert, celle de son worktree telle que git la voit, et l’état de sa PR à côté, qu’un clic ouvre dans le navigateur. Son sélecteur fait passer le worktree de l’agent sur une branche qui existe déjà : l’agent l’apprend avec ton prochain message. Il s’ouvre sur la branche de l’agent, et quand il refuse (un tour en cours, des changements non commités…), il dit pourquoi sous la liste, sans se fermer.
-- Les PR d’un agent sont trouvées sur la branche où il est vraiment, qui que soit leur auteur : une branche reprise, une PR ouverte depuis un fork vers le dépôt d’origine, la branche du dossier du projet, ou celle d’un agent de ticket. Merci à @Metalzoid (#17).
-- GitLab Issues devient une source du Kanban, sur gitlab.com comme sur ton instance : il reprend le compte GitLab déjà connecté comme hébergeur, sans rien redemander, et ses issues s’importent avec leurs critères puis changent d’étiquette ou d’état et reçoivent une note à mesure que leur ticket avance.
+- Escouade lit le workflow de ton projet dans les skills, commandes et sous-agents de tes harness (`.claude`, `.agents`, GSD, Superpowers, une boucle `PROMPT.md`…), sans rien dépenser, et suit chaque agent dedans en temps réel, avec son historique.
+- L’onglet Workflow du panneau de droite montre ses étapes, leurs retours et chaque agent sur la sienne. La carte d’un agent dit son étape, sa conversation marque chaque entrée dans une étape, et la boucle des tickets s’y suit comme un workflow « Tickets ».
+- Dans Réglages › Projets › Workflow, tu corriges les étapes, et « Affiner… » les fait préciser par un court agent, à la demande et coût annoncé. La configuration est gardée dans `.escouade/workflows/` du dépôt : commite-la pour que toute l’équipe voie la même.
+- Le serveur MCP lit les workflows : `get_workflow`, et `workflow` dans `list_agents` et `get_agent_summary`.
+- Un ticket du Kanban se partage avec l’équipe : Escouade en écrit un fichier dans le dépôt, tient son statut à jour, et tu le commites avec ton travail. Chez tes coéquipiers, il arrive dans « À faire » avec ton nom ; leur pilote auto ne le lance jamais, mais ils peuvent le lancer à la main.
+- GitLab Issues devient une source du Kanban, sur gitlab.com comme sur ton instance, avec le compte GitLab déjà connecté comme hébergeur.
+- ClickUp rejoint Jira, Trello, GitHub Issues et Linear : une liste liée à chaque projet, ses tâches importées avec leur checklist en critères, puis leur statut et un commentaire à mesure que le ticket avance.
+- La barre d’état montre la branche de l’agent ouvert et l’état de sa PR, qu’un clic ouvre. Son sélecteur fait passer le worktree de l’agent sur une branche existante, et l’agent l’apprend à ton prochain message.
+- Les PR d’un agent sont trouvées sur la branche où il est vraiment, qui que soit leur auteur, depuis un fork compris. Merci à @Metalzoid (#17).
+- La projection des quotas se règle en trois choix dans Réglages › Comptes : « Au-delà de 80 % » (par défaut), « Toujours » et « Jamais ». L’infobulle de chaque jauge la donne toujours. Merci à @epommereuil (#16).
+- La barre des agents et du Kanban s’élargit en tirant son bord droit, et le panneau de droite se ferme par son bouton ×.
 
 ### Corrections
 
-- `/compact` compacte vraiment le contexte d’un agent Codex, Copilot CLI ou OpenCode au lieu de partir au modèle comme un message : la conversation montre son début et sa fin, et la jauge de contexte redescend.
-- Le menu des commandes s’ouvre aussi sur un `/` tapé après une espace ou en début de ligne, au milieu d’un message, mais jamais dans un chemin ni une adresse.
-- Réglages › Intégrations sépare les hébergeurs de code (PR, CI) des sources du Kanban (tickets), chacun dans sa partie nommée, et la fenêtre d’import sans source nomme les six sources et propose de lier d’un clic le dépôt GitHub ou le projet GitLab du projet, pour qu’un GitLab connecté ne laisse plus croire que ses tickets arrivent seuls.
-- Sous Linux, la fenêtre d’Escouade a son icône en Wayland, dans WSLg comme sur GNOME ou KDE, et non plus celle de Tux : elle porte le nom du raccourci que le .deb et l’AppImage installent.
-- Coller sous Linux ne lit plus jamais le presse-papiers deux fois à la fois ni ne retient la fenêtre : l’image n’est lue que si le presse-papiers en a une, et un presse-papiers qui ne répond pas est dit en trois secondes.
+- `/compact` compacte vraiment le contexte d’un agent Codex, Copilot CLI ou OpenCode, au lieu de partir au modèle comme un message.
+- Le menu des commandes s’ouvre aussi sur un `/` tapé au milieu d’un message, après une espace.
+- Réglages › Intégrations sépare les hébergeurs de code (PR, CI) des sources de tickets du Kanban, et la fenêtre d’import propose de lier d’un clic ton dépôt GitHub ou ton projet GitLab.
+- Sous Linux, la fenêtre d’Escouade a son icône en Wayland (WSLg, GNOME, KDE), et non plus celle de Tux.
+- Coller sous Linux ne retient plus la fenêtre : l’image n’est lue que si le presse-papiers en a une, et un presse-papiers qui ne répond pas est dit en trois secondes.
 
 ## [2.0.2] — 2026-10-26
 
