@@ -3,7 +3,7 @@ import { agent, BARE_ENGINE, CLAUDE_ENGINE, CURSOR_ENGINE, fakeBackend, project,
 import type { DraftAttachment } from './attachments';
 import { forgetDraft, getDraft } from './drafts';
 import { conversationOf } from './conversations.svelte';
-import { cancelHeld, editHeld, heldOf, hold, holdModeOf, sendNow, settled } from './outbox.svelte';
+import { cancelHeld, editHeld, heldOf, hold, holdModeOf, restoreHeld, sendNow, settled } from './outbox.svelte';
 import { readPref } from './prefs';
 import { app } from './state.svelte';
 import type { Agent, InitialState, UiEvent } from './types';
@@ -213,6 +213,32 @@ describe('outbox', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     expect(sent()).toEqual([]);
     expect(getDraft('c1').text).toBe('délai');
+  });
+
+  it('keeps what it holds in the preferences, given back to the drafts at the next start', async () => {
+    await start([claude(), cursor()]);
+    const a = holdNow('c1', 'A');
+    holdNow('c1', 'B');
+    holdNow('k1', 'K');
+    expect(JSON.parse(readPref('held')!)).toEqual({ c1: 'A\n\nB', k1: 'K' });
+    cancelHeld(a.id);
+    expect(JSON.parse(readPref('held')!)).toEqual({ c1: 'B', k1: 'K' });
+    // The app stopped without the window being told: the next start finds them there.
+    restoreHeld();
+    expect(getDraft('c1').text).toBe('B');
+    expect(getDraft('k1').text).toBe('K');
+    expect(readPref('held')).toBeNull();
+  });
+
+  it('never sends a message before the one held before it, the delay shortened meanwhile', async () => {
+    await start([claude()]);
+    holdNow('c1', 'A');
+    app.settings.midTurnDelaySecs = 0;
+    holdNow('c1', 'B');
+    await settle();
+    expect(sent()).toEqual([]);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(sent()).toEqual(['A', 'B']);
   });
 
   it('writes the held messages to the draft when the window goes', async () => {

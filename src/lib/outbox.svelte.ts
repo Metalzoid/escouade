@@ -6,6 +6,7 @@ import { flushDrafts, giveBack } from './drafts';
 import { conversationOf } from './conversations.svelte';
 import { capsOf } from './engines';
 import { api } from './ipc';
+import { readPref, removePref, writePref } from './prefs';
 import { reportRefusal, sendDraft } from './send.svelte';
 import { app, atWork } from './state.svelte';
 import type { Agent } from './types';
@@ -22,6 +23,7 @@ export interface Held {
   at: number | null;
 }
 
+const KEPT = 'held';
 let held = $state.raw<Record<string, Held[]>>({});
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 /** Each agent's sends, one after the other: a message never overtakes one held before it. */
@@ -55,13 +57,15 @@ export function holdModeOf(agent: Agent): HoldMode | null {
 }
 
 export function hold(agentId: string, body: string, files: DraftAttachment[], mode: HoldMode): Held {
-  const delay = Math.max(0, app.settings.midTurnDelaySecs) * 1000;
-  const h: Held = { id: `held-${++seq}`, agentId, body, files, mode, at: mode === 'delay' ? Date.now() + delay : null };
+  // Never before the one held before it, whatever the delay is now.
+  const after = heldOf(agentId).at(-1)?.at ?? 0;
+  const at = mode === 'delay' ? Math.max(Date.now() + Math.max(0, app.settings.midTurnDelaySecs) * 1000, after) : null;
+  const h: Held = { id: `held-${++seq}`, agentId, body, files, mode, at };
   put(agentId, [...heldOf(agentId), h]);
-  if (mode === 'delay')
+  if (at !== null)
     timers.set(
       h.id,
-      setTimeout(() => sendNow(h.id), delay),
+      setTimeout(() => sendNow(h.id), at - Date.now()),
     );
   return h;
 }
@@ -111,6 +115,34 @@ function put(agentId: string, list: Held[]) {
   held = list.length ? { ...rest, [agentId]: list } : rest;
   // The backend then skips the « done » alert and holds off an update's restart.
   if (had !== list.length > 0) api.setHeld(Object.keys(held)).catch(() => {});
+  keep();
+}
+
+/** The texts held, in the preferences: a quit or a crash before they go leaves them for the next start. */
+function keep() {
+  const texts = Object.entries(held)
+    .map(([agentId, list]) => [
+      agentId,
+      list
+        .map((h) => h.body)
+        .filter(Boolean)
+        .join('\n\n'),
+    ])
+    .filter(([, text]) => text);
+  if (texts.length) writePref(KEPT, JSON.stringify(Object.fromEntries(texts)));
+  else removePref(KEPT);
+}
+
+/** Gives the texts held when the app last stopped back to their drafts. */
+export function restoreHeld() {
+  const kept = readPref(KEPT);
+  if (!kept) return;
+  removePref(KEPT);
+  try {
+    for (const [agentId, text] of Object.entries(JSON.parse(kept) as Record<string, string>)) giveBack(agentId, text, []);
+  } catch {
+    // Not written by this version: dropped.
+  }
 }
 
 function drop(h: Held) {
@@ -160,6 +192,7 @@ function returnAll() {
   flushDrafts();
 }
 
+restoreHeld();
 app.onTurnEnded(turnEnded);
 app.onAgentRemoved((agentId) => {
   for (const h of heldOf(agentId)) drop(h);
