@@ -2624,6 +2624,59 @@ function startSession() {
           ],
         },
       ]);
+    // Four questions, the first one long with a very long choice (ESC-249: the card held to the sidebar's width).
+    if (text.includes('questions longues'))
+      return askQuestion(null, [
+        {
+          question: 'La page de démo doit-elle appeler le vrai Purse (sandbox) ou un Purse simulé, le temps que les clés arrivent ?',
+          header: 'Purse',
+          multiSelect: false,
+          options: [
+            { label: 'Simulé + bascule sandbox (Recommandé), par une variable d’environnement lue au démarrage', description: '' },
+            { label: 'Purse simulé uniquement', description: '' },
+            { label: 'Purse sandbox uniquement', description: '' },
+            { label: 'Autre', description: '' },
+          ],
+        },
+        ...['Quel port ?', 'Quelle langue ?', 'Quel thème ?'].map((question, i) => ({
+          question,
+          header: `Q${i + 2}`,
+          multiSelect: false,
+          options: [
+            { label: 'Oui', description: '' },
+            { label: 'Non', description: '' },
+          ],
+        })),
+      ]);
+    // A long question with several answers: answered in the conversation, the card saying it (ESC-249).
+    if (text.includes('question multiple'))
+      return askQuestion(null, [
+        {
+          question: 'Quels environnements la page de démo doit-elle couvrir, entre la sandbox, la préproduction et la production ?',
+          header: 'Envs',
+          multiSelect: true,
+          options: [
+            { label: 'Sandbox', description: '' },
+            { label: 'Préproduction', description: '' },
+          ],
+        },
+      ]);
+    // A permission with a long summary, still answered from the list (ESC-249).
+    if (text.includes('permission longue')) {
+      const tuid = `toolu_p${msg}`;
+      const input = {
+        command: 'npx playwright test tests/e2e/checkout-sdk-surcharge-avec-la-bascule-sandbox.spec.ts --project=chromium --reporter=line',
+        description: 'Lance les tests de la page de démo',
+      };
+      assistant({ type: 'tool_use', id: tuid, name: 'Bash', input });
+      pendingAnswer = { id: 'req_perm', tuid, kind: 'permission' };
+      out({
+        type: 'control_request',
+        request_id: 'req_perm',
+        request: { subtype: 'can_use_tool', tool_name: 'Bash', input, tool_use_id: tuid },
+      });
+      return;
+    }
     if (text.includes('question')) return askQuestion();
     if (text.includes('permission')) {
       const tuid = `toolu_p${msg}`;

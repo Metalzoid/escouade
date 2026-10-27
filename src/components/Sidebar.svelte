@@ -1486,6 +1486,8 @@
     --tone: var(--run);
     flex: none;
     display: grid;
+    /* One column held to the sidebar: a long choice or name never widens the card past it (ESC-249). */
+    grid-template-columns: minmax(0, 1fr);
     gap: 3px;
     padding: 8px 10px 9px;
     border-radius: 9px;
@@ -1649,6 +1651,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* Narrow, the branch is cut before the model, which keeps its name (ESC-249). */
+  .a-meta .model {
+    flex: none;
+    max-width: 45%;
+  }
   .said {
     display: block;
     overflow: hidden;
@@ -1764,6 +1771,7 @@
   /* The question, answered from the list. */
   .a-ask {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
     padding: 4px 0 2px 16px;
   }
@@ -1772,6 +1780,7 @@
     color: var(--text);
     font-size: 12.5px;
     line-height: 1.4;
+    overflow-wrap: anywhere;
   }
   .a-ask .step,
   .a-ask .note {
@@ -1806,6 +1815,7 @@
     color: var(--wait);
     font-size: 12px;
     font-weight: 550;
+    text-align: left;
   }
   .in-conv:hover {
     text-decoration: underline;
@@ -1830,22 +1840,23 @@
     flex-wrap: wrap;
     gap: 6px;
   }
+  /* A long choice on more lines, as in the conversation's card, its number on its first one (ESC-249). */
   .opt {
     display: inline-flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 7px;
     max-width: 100%;
-    height: 26px;
-    padding: 0 9px 0 6px;
+    min-height: 26px;
+    padding: 4px 9px 4px 6px;
     border-radius: 7px;
     background: rgba(var(--fg-rgb), 0.06);
     box-shadow: inset 0 0 0 1px var(--line-2);
     color: var(--text);
     font-size: 12px;
     font-weight: 550;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 18px;
+    text-align: left;
+    overflow-wrap: anywhere;
     transition:
       background-color 0.15s,
       box-shadow 0.15s;
@@ -1867,6 +1878,8 @@
     cursor: default;
   }
   .opt kbd {
+    flex: none;
+    margin-top: 1px;
     height: 16px;
     min-width: 16px;
     justify-content: center;
