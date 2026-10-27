@@ -599,8 +599,8 @@ export interface EngineCaps {
   /** Copying an agent (« Dupliquer la conversation »), and up to where; 'none': hidden. */
   fork: 'none' | 'entry' | 'turn' | 'event' | 'message';
   resumeOtherAccount: boolean;
-  /** A message sent while a turn runs: queued, read at once, or refused. */
-  midTurn: 'queued' | 'immediate' | 'refused';
+  /** A message sent while a turn runs: queued by the harness (read at its next step), read at once, kept by Escouade until the turn ends, or refused. */
+  midTurn: 'queued' | 'immediate' | 'turnEnd' | 'refused';
   slashCommands: boolean;
   quota: 'windows' | 'credits' | 'none';
   /** The lengths of the windows of its quota, in minutes: the bars the status bar shows before their first reading. */

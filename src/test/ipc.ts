@@ -468,7 +468,7 @@ export const CURSOR_ENGINE: EngineDecl = {
   ...BARE_ENGINE,
   id: 'cursor',
   name: 'Cursor CLI',
-  caps: { ...BARE_ENGINE.caps, usagePage: 'https://cursor.com/dashboard?tab=usage', accountsByKey: true },
+  caps: { ...BARE_ENGINE.caps, midTurn: 'turnEnd', usagePage: 'https://cursor.com/dashboard?tab=usage', accountsByKey: true },
 };
 
 /** Claude Code's two windows of a reading, the shorthand of the tests: `fiveHour` and `sevenDay`, as before 1.8. */
