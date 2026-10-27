@@ -150,6 +150,15 @@ for (const size of [
       expect(await label.locator('.tx').evaluate((x) => x.scrollWidth > x.clientWidth)).toBe(false);
       await expect(rail(page).getByRole('button', { name: 'Vue d’ensemble' }).locator('.lbl')).toBeVisible();
       await expect(rail(page).getByRole('button', { name: 'Ajouter un projet' }).locator('.lbl')).toBeVisible();
+      // A click on a name opens what its tile opens, not only one on the tile.
+      const overview = rail(page).getByRole('button', { name: 'Vue d’ensemble' });
+      await overview.locator('.lbl').click();
+      await expect(overview).toHaveAttribute('aria-pressed', 'true');
+      await label.click();
+      await expect(tile(page)).toHaveAttribute('aria-selected', 'true');
+      await expect(overview).toHaveAttribute('aria-pressed', 'false');
+      // Out of the button the click left the pointer on, for its tooltip to come anew.
+      await page.mouse.move(size.width - 20, size.height / 2);
       // Its tooltip beside the rail's edge, over none of the names.
       await tile(page).hover();
       const tip = page.getByRole('tooltip');

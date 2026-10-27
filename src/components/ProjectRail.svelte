@@ -428,7 +428,9 @@
     letter-spacing: 0;
     text-align: center;
     white-space: nowrap;
-    pointer-events: none;
+    /* Part of its button, though drawn out of its box: a click on it opens what the tile opens (a click passing through
+       it reached nothing, the rail widened to a list most of all). */
+    cursor: pointer;
   }
   .rail :global(.lbl .tx) {
     display: block;

@@ -11,6 +11,10 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Azure DevOps devient un hébergeur de code, sur dev.azure.com comme sur Azure DevOps Server : connecte ton organisation par un jeton ou par `az`, puis ouvre la PR d’un agent, suis ses builds et ses relectures sur sa carte, et donne-lui à corriger un build en échec ou les retours.
 - Azure Boards devient une source du Kanban, sur le même compte Azure DevOps : importe les éléments de travail d’un projet avec leurs critères d’acceptation ; leur état et des commentaires suivent leur ticket, et la PR de son agent leur est liée.
 
+### Corrections
+
+- Dans la barre des projets élargie, un clic sur le nom d’un projet l’ouvre, comme un clic sur sa tuile.
+
 ## [2.0.3] — 2026-10-27
 
 ### Nouveautés
