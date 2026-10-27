@@ -1669,6 +1669,7 @@ impl<R: Runtime> Core<R> {
         // Principal named in them, the first time.
         accounts::normalize(&mut settings);
         settings.normalize_display();
+        settings.normalize_mid_turn_delay();
         let mut state: PersistedState = read_json(&data.state_file()).unwrap_or_default();
         // « Les agents partent de la branche cible » kept as their branch to start from (ESC-160).
         for p in &mut state.projects {
@@ -2131,6 +2132,7 @@ impl<R: Runtime> Core<R> {
             s.user_id = self.settings.read().user_id.clone();
         }
         s.normalize_attachments();
+        s.normalize_mid_turn_delay();
         s.normalize_display();
         accounts::normalize(&mut s);
         accounts::check(&s)?;

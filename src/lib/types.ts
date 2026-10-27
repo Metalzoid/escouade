@@ -22,6 +22,8 @@ export interface Settings {
   attachBigText: 'path' | 'refuse';
   /** « Purger les copies après », in days: 0 = kept as long as their owner (agent, project, ticket). */
   attachKeepDays: number;
+  /** « Délai avant l’envoi pendant un tour », in seconds (0, 5, 10, 20 or 30; 0: off): a message typed during a turn waits this long in the window, where it can be edited or cancelled (`outbox.svelte.ts`). */
+  midTurnDelaySecs: number;
   pwshPath: string;
   bashPath: string;
   wslDistro: string;

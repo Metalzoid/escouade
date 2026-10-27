@@ -69,6 +69,8 @@ export const SETTINGS: Settings = {
   attachOrigin: true,
   attachBigText: 'path',
   attachKeepDays: 0,
+  // The tests opt in to the delay: a message sent during a turn goes at once, as before.
+  midTurnDelaySecs: 0,
   pwshPath: '',
   bashPath: '',
   wslDistro: '',

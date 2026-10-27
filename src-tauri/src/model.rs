@@ -134,6 +134,10 @@ pub struct Settings {
     /// « Effacer les copies après », in days (0: they stay as long as their owner does): the copies
     /// of joined files older than this go (`attachfiles::purge`).
     pub attach_keep_days: u32,
+    /// « Délai avant l'envoi pendant un tour », in seconds (0: off): a message typed during a turn
+    /// waits this long in the window, where it can be edited or cancelled (`outbox.svelte.ts`).
+    /// One of `MID_TURN_DELAYS` (`normalize_mid_turn_delay`).
+    pub mid_turn_delay_secs: u32,
     /// « Remote control pour tous les agents »: every agent, those of tickets too, is reachable
     /// from claude.ai (`AgentMeta::remote_control`, `RemoteSource::Global`).
     pub remote_control_all: bool,
@@ -479,6 +483,10 @@ impl Default for IntegrationSettings {
     }
 }
 
+/// The steps of « Délai avant l'envoi pendant un tour », in seconds (0: off).
+pub const MID_TURN_DELAYS: [u32; 5] = [0, 5, 10, 20, 30];
+const DEFAULT_MID_TURN_DELAY: u32 = 10;
+
 /// The variable that turns on Claude Code's task list tools (read in its binary, not documented).
 pub const TODO_TOOLS_VAR: &str = "CLAUDE_CODE_ENABLE_TODO_TOOLS";
 
@@ -488,6 +496,14 @@ impl Settings {
     pub fn normalize_attachments(&mut self) {
         if self.attach_big_text != "refuse" {
             self.attach_big_text = "path".into();
+        }
+    }
+
+    /// « Délai avant l'envoi pendant un tour » off its steps (written by hand, or by a later
+    /// version): the default.
+    pub fn normalize_mid_turn_delay(&mut self) {
+        if !MID_TURN_DELAYS.contains(&self.mid_turn_delay_secs) {
+            self.mid_turn_delay_secs = DEFAULT_MID_TURN_DELAY;
         }
     }
 
@@ -607,6 +623,7 @@ impl Default for Settings {
             attach_origin: true,
             attach_big_text: "path".into(),
             attach_keep_days: 0,
+            mid_turn_delay_secs: DEFAULT_MID_TURN_DELAY,
             remote_control_all: false,
             private_projects: false,
             theme: ThemeChoice::System,
@@ -2967,6 +2984,23 @@ mod tests {
         assert_eq!(fit_zoom(200, 2560.0, 700.0), 110);
         assert_eq!(fit_zoom(80, 1000.0, 600.0), 80);
         assert_eq!(fit_zoom(125, 1000.0, 600.0), 100);
+    }
+
+    #[test]
+    fn the_delay_before_a_message_sent_during_a_turn_is_ten_seconds_and_one_of_its_steps() {
+        assert_eq!(Settings::default().mid_turn_delay_secs, 10);
+        let read: Settings = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(read.mid_turn_delay_secs, 10);
+        for (saved, kept) in [(7, 10), (0, 0), (5, 5), (20, 20), (30, 30), (45, 10)] {
+            let mut s = Settings {
+                mid_turn_delay_secs: saved,
+                ..Default::default()
+            };
+            s.normalize_mid_turn_delay();
+            assert_eq!(s.mid_turn_delay_secs, kept, "{saved}");
+        }
+        let v = serde_json::to_value(Settings::default()).unwrap();
+        assert_eq!(v["midTurnDelaySecs"], json!(10));
     }
 
     #[test]
