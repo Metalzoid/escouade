@@ -132,6 +132,10 @@ pub struct ProviderView {
     pub needs_email: bool,
     /// Its CLI, whose token serves when none is given.
     pub cli: Option<String>,
+    /// How its CLI is logged in (`gh auth login`, `az login`).
+    pub cli_login: Option<String>,
+    /// What the address field shows when empty (`dev.azure.com/acme`).
+    pub address_hint: Option<String>,
     pub scopes: Vec<String>,
     pub capabilities: Capabilities,
 }
@@ -201,7 +205,13 @@ impl<R: Runtime> Core<R> {
             return self.gh_token().await;
         }
         if !fresh {
-            if let Some(t) = self.forge_cli_tokens.lock().get(host) {
+            // An Entra ID token (`az`'s) lasts an hour: asked again before it ends.
+            if let Some(t) = self
+                .forge_cli_tokens
+                .lock()
+                .get(host)
+                .filter(|t| !expires_soon(t, now_secs()))
+            {
                 return Ok(t.clone());
             }
         }
@@ -209,11 +219,11 @@ impl<R: Runtime> Core<R> {
         let Some(cli) = provider.cli(host) else {
             bail!(tr!("{name} : donne un jeton.", "{name}: give a token."));
         };
-        let program = cli.program;
+        let (program, login) = (cli.program, cli.login);
         let none = || {
             anyhow!(tr!(
-                "{name} : donne un jeton, ou connecte la CLI {program} à {host} ({program} auth login)",
-                "{name}: give a token, or log the {program} CLI in to {host} ({program} auth login)"
+                "{name} : donne un jeton, ou connecte la CLI {program} à {host} ({login})",
+                "{name}: give a token, or log the {program} CLI in to {host} ({login})"
             ))
         };
         let path = if program == "gh" {
@@ -312,6 +322,8 @@ impl<R: Runtime> Core<R> {
                 default_host: p.default_host().map(str::to_string),
                 needs_email: p.needs_email(),
                 cli: p.cli("").map(|c| c.program.to_string()),
+                cli_login: p.cli("").map(|c| c.login.to_string()),
+                address_hint: p.address_hint().map(str::to_string),
                 scopes: p.scopes().iter().map(|s| s.to_string()).collect(),
                 capabilities: p.capabilities(),
             })
@@ -412,11 +424,11 @@ impl<R: Runtime> Core<R> {
     /// The page that makes a token for `kind` on `url`'s instance (its public one when empty).
     pub fn forge_token_page(&self, kind: &str, url: &str) -> Result<String> {
         let p = self.provider(kind)?;
-        let url = instance_url(if url.trim().is_empty() {
+        let url = p.instance(instance_url(if url.trim().is_empty() {
             p.default_host().unwrap_or("")
         } else {
             url
-        });
+        }));
         Ok(p.token_page(&url))
     }
 
@@ -429,7 +441,7 @@ impl<R: Runtime> Core<R> {
         } else {
             form.url.as_str()
         };
-        let url = instance_url(typed);
+        let url = provider.instance(instance_url(typed));
         if url.is_empty() {
             bail!(tr!(
                 "Indique l'adresse de l'instance.",
@@ -542,6 +554,33 @@ impl<R: Runtime> Core<R> {
         crate::integrations::secrets::save_accounts(&self.data, &self.accounts.read())?;
         Ok(self.forges_view().await)
     }
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// A JWT whose `exp` comes within five minutes of `now`; any other token never expires here.
+pub fn expires_soon(token: &str, now: u64) -> bool {
+    use base64::Engine;
+    let mut parts = token.split('.');
+    let (Some(_), Some(payload), Some(_), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return false;
+    };
+    let Ok(bytes) =
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(payload.trim_end_matches('='))
+    else {
+        return false;
+    };
+    serde_json::from_slice::<Value>(&bytes)
+        .ok()
+        .and_then(|v| v["exp"].as_u64())
+        .is_some_and(|exp| exp <= now + 300)
 }
 
 fn insecure() -> String {

@@ -19,7 +19,7 @@ Accounts are connected in Settings › Integrations, “Connected accounts” gr
 
 ### Code host or source of tickets
 
-A code host (GitHub, GitLab, Bitbucket, Gitea) serves the agents’ pull requests, CI and deployments; a source of the Kanban serves the tickets. Settings › Integrations shows them in two named parts. Connecting your GitLab as a code host puts no ticket in the Kanban: a GitLab project still has to be linked as a source (see below), which the import window offers in one click. Bitbucket and Gitea have no source: their row says “No tickets: PRs and CI only”.
+A code host (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) serves the agents’ pull requests, CI and deployments; a source of the Kanban serves the tickets. Settings › Integrations shows them in two named parts. Connecting your GitLab as a code host puts no ticket in the Kanban: a GitLab project still has to be linked as a source (see below), which the import window offers in one click. Bitbucket, Gitea and Azure DevOps have no source yet: their row says “No tickets: PRs and CI only”.
 
 “Disconnect” forgets the account and its secrets. Projects keep their links, unused until you connect again.
 

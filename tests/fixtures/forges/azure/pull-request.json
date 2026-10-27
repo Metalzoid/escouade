@@ -1,0 +1,62 @@
+{
+  "repository": {
+    "id": "3411ebc1-d5aa-464f-9615-0b527bc66719",
+    "name": "demo",
+    "url": "https://dev.azure.com/acme/7c3e4d55-6b1a-4c2a-9f7f-2b3e4d5f6a7b/_apis/git/repositories/3411ebc1-d5aa-464f-9615-0b527bc66719",
+    "webUrl": "https://dev.azure.com/acme/Demo%20Project/_git/demo",
+    "project": {
+      "id": "7c3e4d55-6b1a-4c2a-9f7f-2b3e4d5f6a7b",
+      "name": "Demo Project",
+      "state": "wellFormed",
+      "visibility": "private"
+    }
+  },
+  "pullRequestId": 22,
+  "codeReviewId": 22,
+  "status": "active",
+  "createdBy": {
+    "displayName": "Ada Lovelace",
+    "uniqueName": "ada@acme.dev",
+    "id": "6f7e6b4f-1c2d-4a3b-9e8f-0a1b2c3d4e5f"
+  },
+  "creationDate": "2026-10-20T09:12:44.0832Z",
+  "title": "Connexion par jeton",
+  "description": "- feat: connexion par jeton",
+  "sourceRefName": "refs/heads/feat/login",
+  "targetRefName": "refs/heads/main",
+  "mergeStatus": "succeeded",
+  "isDraft": false,
+  "mergeId": "f5fc8381-3fb2-49fe-8a0d-27dcc2d6ef82",
+  "lastMergeSourceCommit": { "commitId": "b60280bc6e62e2f880f1b63c1e24987664d3bda3" },
+  "lastMergeTargetCommit": { "commitId": "f47a4e5f0c4d0b6e6f2a0e1b8d1b5f5c1a2b3c4d" },
+  "lastMergeCommit": { "commitId": "39f52d24533cc712fc845ed9fd1b6c06b3942588" },
+  "reviewers": [
+    {
+      "reviewerUrl": "https://dev.azure.com/acme/_apis/git/repositories/3411ebc1-d5aa-464f-9615-0b527bc66719/pullRequests/22/reviewers/d6245f20-2af8-44f4-9451-8107cb2767db",
+      "vote": 10,
+      "displayName": "Grace Hopper",
+      "uniqueName": "grace@acme.dev",
+      "id": "d6245f20-2af8-44f4-9451-8107cb2767db"
+    },
+    {
+      "vote": -5,
+      "hasDeclined": false,
+      "isFlagged": false,
+      "displayName": "Bob Martin",
+      "uniqueName": "bob@acme.dev",
+      "id": "1f2e3d4c-5b6a-4978-8a9b-0c1d2e3f4a5b"
+    },
+    {
+      "vote": 10,
+      "isContainer": true,
+      "votedFor": [{ "displayName": "Grace Hopper", "vote": 10 }],
+      "displayName": "[Demo Project]\\Demo Project Team",
+      "uniqueName": "vstfs:///Classification/TeamProject/7c3e4d55-6b1a-4c2a-9f7f-2b3e4d5f6a7b\\Demo Project Team",
+      "id": "8e9f0a1b-2c3d-4e5f-8a7b-6c5d4e3f2a1b"
+    }
+  ],
+  "labels": [{ "id": "a1b2c3d4-e5f6-4789-8abc-def012345678", "name": "escouade", "active": true }],
+  "url": "https://dev.azure.com/acme/7c3e4d55-6b1a-4c2a-9f7f-2b3e4d5f6a7b/_apis/git/repositories/3411ebc1-d5aa-464f-9615-0b527bc66719/pullRequests/22",
+  "supportsIterations": true,
+  "completionOptions": { "mergeStrategy": "squash" }
+}

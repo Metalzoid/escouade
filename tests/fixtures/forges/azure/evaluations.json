@@ -1,0 +1,53 @@
+{
+  "value": [
+    {
+      "evaluationId": "1c9d5b3f-0b1a-4a6e-9b5c-7e1d2f3a4b5c",
+      "artifactId": "vstfs:///CodeReview/CodeReviewId/7c3e4d55-6b1a-4c2a-9f7f-2b3e4d5f6a7b/22",
+      "configuration": {
+        "id": 17,
+        "isEnabled": true,
+        "isBlocking": true,
+        "type": { "id": "0609b952-1397-4640-95ec-e00a01b2c241", "displayName": "Build" },
+        "settings": {
+          "buildDefinitionId": 7,
+          "queueOnSourceUpdateOnly": true,
+          "manualQueueOnly": false,
+          "displayName": "CI",
+          "validDuration": 720
+        }
+      },
+      "status": "rejected",
+      "context": {
+        "lastMergeCommitId": "39f52d24533cc712fc845ed9fd1b6c06b3942588",
+        "buildId": 501,
+        "isExpired": false,
+        "buildIsNotCurrent": false
+      }
+    },
+    {
+      "evaluationId": "2d0e6c4a-1c2b-4b7f-8c6d-8f2e3a4b5c6d",
+      "configuration": {
+        "id": 18,
+        "isEnabled": true,
+        "isBlocking": true,
+        "type": { "id": "fa4e907d-c16b-4a4c-9dfa-4916e5d171ab", "displayName": "Minimum number of reviewers" },
+        "settings": { "minimumApproverCount": 2, "creatorVoteCounts": false }
+      },
+      "status": "rejected",
+      "context": null
+    },
+    {
+      "evaluationId": "3e1f7d5b-2d3c-4c8a-9d7e-9a3f4b5c6d7e",
+      "configuration": {
+        "id": 19,
+        "isEnabled": true,
+        "isBlocking": false,
+        "type": { "id": "cbdc66da-9728-4af8-aada-9a5a32e4a226", "displayName": "Status" },
+        "settings": { "statusName": "sonar", "statusGenre": "quality", "defaultDisplayName": "Qualité" }
+      },
+      "status": "approved",
+      "context": null
+    }
+  ],
+  "count": 3
+}

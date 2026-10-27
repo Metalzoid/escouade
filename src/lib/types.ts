@@ -457,10 +457,10 @@ export interface ForgeCapabilities {
   reviews: boolean;
   reviewThreads: boolean;
   deployments: boolean;
-  mergeStrategies: ('merge' | 'squash' | 'rebase')[];
+  mergeStrategies: ('merge' | 'squash' | 'rebase' | 'semiLinear')[];
 }
 
-/** A code host Escouade knows (GitHub, GitLab, Bitbucket, Gitea / Forgejo). */
+/** A code host Escouade knows (GitHub, GitLab, Bitbucket, Gitea / Forgejo, Azure DevOps). */
 export interface ForgeProvider {
   kind: string;
   name: string;
@@ -470,8 +470,12 @@ export interface ForgeProvider {
   defaultHost: string | null;
   /** Its tokens belong to an e-mail (Bitbucket). */
   needsEmail: boolean;
-  /** Its CLI, whose token serves when none is given (gh, glab). */
+  /** Its CLI, whose token serves when none is given (gh, glab, az). */
   cli: string | null;
+  /** How its CLI is logged in (`gh auth login`, `az login`). */
+  cliLogin?: string | null;
+  /** What its address field shows when empty (`dev.azure.com/acme`). */
+  addressHint?: string | null;
   /** The rights its tokens need. */
   scopes: string[];
   capabilities: ForgeCapabilities;

@@ -83,6 +83,7 @@ impl Provider for GithubProvider {
             args: ["auth", "token", "--hostname", host]
                 .map(str::to_string)
                 .to_vec(),
+            login: "gh auth login",
             parse: |out, _| Some(out.trim().to_string()).filter(|t| !t.is_empty()),
         })
     }

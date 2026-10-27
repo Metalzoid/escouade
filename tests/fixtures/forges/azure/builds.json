@@ -1,0 +1,40 @@
+{
+  "value": [
+    {
+      "id": 502,
+      "buildNumber": "20261020.3",
+      "status": "completed",
+      "result": "succeeded",
+      "definition": { "id": 9, "name": "e2e" },
+      "sourceBranch": "refs/pull/22/merge",
+      "_links": { "web": { "href": "https://dev.azure.com/acme/Demo%20Project/_build/results?buildId=502" } }
+    },
+    {
+      "id": 501,
+      "buildNumber": "20261020.2",
+      "status": "completed",
+      "result": "failed",
+      "definition": { "id": 7, "name": "CI" },
+      "sourceBranch": "refs/pull/22/merge",
+      "_links": { "web": { "href": "https://dev.azure.com/acme/Demo%20Project/_build/results?buildId=501" } }
+    },
+    {
+      "id": 499,
+      "buildNumber": "20261020.1",
+      "status": "completed",
+      "result": "failed",
+      "definition": { "id": 9, "name": "e2e" },
+      "sourceBranch": "refs/pull/22/merge",
+      "_links": { "web": { "href": "https://dev.azure.com/acme/Demo%20Project/_build/results?buildId=499" } }
+    },
+    {
+      "id": 503,
+      "buildNumber": "20261020.4",
+      "status": "inProgress",
+      "definition": { "id": 11, "name": "lint" },
+      "sourceBranch": "refs/pull/22/merge",
+      "_links": { "web": { "href": "https://dev.azure.com/acme/Demo%20Project/_build/results?buildId=503" } }
+    }
+  ],
+  "count": 4
+}

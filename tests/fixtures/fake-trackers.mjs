@@ -1,12 +1,13 @@
 #!/usr/bin/env node
-// Test double of Jira Cloud, Trello, GitHub Issues, ClickUp and a self-hosted GitLab on one local HTTP server, for the end-to-end
+// Test double of Jira Cloud, Trello, GitHub Issues, ClickUp, a self-hosted GitLab and Azure DevOps on one local HTTP server, for the end-to-end
 // tests and to try the integrations without real accounts:
 //   node tests/fixtures/fake-trackers.mjs --port 4101
 // then, in Escouade: Jira's site = http://127.0.0.1:4101 (any e-mail, any token but "bad"), and the
 // app started with ESCOUADE_TRELLO_API=http://127.0.0.1:4101/1 and
 // ESCOUADE_GITHUB_API=http://127.0.0.1:4101/github, ESCOUADE_CLICKUP_API=http://127.0.0.1:4101/clickup/api/v2
 // (any key or token but "bad"); GitLab: connect a code host of kind GitLab at http://127.0.0.1:4101 (its API at
-// the root, /api/v4), its projects then GitLab Issues' sources.
+// the root, /api/v4), its projects then GitLab Issues' sources; Azure DevOps: the app started with
+// ESCOUADE_AZURE_DEVOPS_API=http://127.0.0.1:4101/azure, then a code host of kind Azure DevOps at dev.azure.com/acme.
 // What the app changed is kept in memory: GET /__writes lists the writes received.
 
 import http from 'node:http';
@@ -111,6 +112,9 @@ function seed() {
       // The forks and the repository each was forked from (`repository.parent`).
       forks: { 'ada/demo': 'acme/demo', 'bob/demo': 'acme/demo' },
     },
+    // Azure DevOps (ESC-241): the pull requests opened by the app on acme/demo/demo, from #101, until POST
+    // /__azure/pulls/<n> sets what a test wants of them ({ checks: 'FAILURE', changesRequested: true, … }).
+    azure: { pulls: [] },
     // ClickUp: the workspace Atlas, its space Produit, the list « Sprint 12 » in the folder Sprints
     // (its own statuses) and the list « Backlog » outside any folder.
     clickup: {
@@ -481,6 +485,102 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       return send(404, { err: `Route not found: ${method} ${r}`, ECODE: 'APP_001' });
     }
 
+    // ---------- Azure DevOps (ESC-241): the organization acme, its project and repository demo ----------
+    const az = db.azure;
+    m = p.match(/^\/__azure\/pulls\/(\d+)$/);
+    if (m) {
+      const pull = az.pulls.find((x) => x.id === Number(m[1]));
+      if (!pull) return send(404, { message: 'TF401180: The requested pull request was not found.' });
+      Object.assign(pull, json() ?? {});
+      return send(200, pull);
+    }
+    if (p.startsWith('/azure/')) {
+      const a = p.slice('/azure'.length).toLowerCase();
+      const web = 'https://dev.azure.com/acme/demo/_git/demo';
+      const azPull = (x) => ({
+        pullRequestId: x.id,
+        status: x.status,
+        isDraft: x.draft,
+        title: x.title,
+        description: x.description,
+        sourceRefName: `refs/heads/${x.head}`,
+        targetRefName: `refs/heads/${x.base}`,
+        mergeStatus: 'succeeded',
+        lastMergeSourceCommit: { commitId: `sha${x.id}` },
+        reviewers: x.changesRequested ? [{ id: 'bob-id', displayName: 'Bob Martin', uniqueName: 'bob@acme.dev', vote: -5 }] : [],
+        autoCompleteSetBy: null,
+        repository: { id: 'repo-demo', name: 'demo', webUrl: web, project: { id: 'project-demo', name: 'demo' } },
+      });
+      if (a === '/acme/_apis/connectiondata')
+        return send(200, {
+          authenticatedUser: {
+            id: 'ada-id',
+            descriptor: 'Microsoft.IdentityModel.Claims.ClaimsIdentity;acme\\ada@acme.dev',
+            providerDisplayName: 'Ada Lovelace',
+            properties: { Account: { $type: 'System.String', $value: 'ada@acme.dev' } },
+          },
+        });
+      const repo = '/acme/demo/_apis/git/repositories/demo';
+      if (a === `${repo}/pullrequests` && method === 'POST') {
+        const b = json();
+        const pull = {
+          id: 101 + az.pulls.length,
+          title: b.title,
+          description: b.description,
+          head: b.sourceRefName.replace('refs/heads/', ''),
+          base: b.targetRefName.replace('refs/heads/', ''),
+          draft: !!b.isDraft,
+          status: 'active',
+          checks: 'PENDING',
+          changesRequested: false,
+        };
+        az.pulls.push(pull);
+        return send(201, azPull(pull));
+      }
+      if (a === `${repo}/pullrequests`) {
+        const ref = url.searchParams.get('searchCriteria.sourceRefName');
+        return send(200, { value: az.pulls.filter((x) => `refs/heads/${x.head}` === ref).map(azPull) });
+      }
+      m = a.match(/^\/acme\/demo\/_apis\/git\/repositories\/demo\/pullrequests\/(\d+)(\/threads|\/statuses)?$/);
+      if (m) {
+        const pull = az.pulls.find((x) => x.id === Number(m[1]));
+        if (!pull) return send(404, { message: 'TF401180: The requested pull request was not found.' });
+        if (m[2] === '/statuses') return send(200, { value: [] });
+        if (m[2] === '/threads') {
+          const thread = {
+            id: 1,
+            status: 'active',
+            threadContext: { filePath: '/src/app.ts', rightFileStart: { line: 1, offset: 1 } },
+            comments: [{ id: 1, author: { displayName: 'Bob Martin' }, content: 'Ce nom est peu clair.', commentType: 'text' }],
+          };
+          return send(200, { value: pull.changesRequested ? [thread] : [] });
+        }
+        return send(200, azPull(pull));
+      }
+      if (a === '/acme/demo/_apis/policy/evaluations') {
+        const n = Number(url.searchParams.get('artifactId')?.split('/').pop());
+        const pull = az.pulls.find((x) => x.id === n);
+        const status = { FAILURE: 'rejected', SUCCESS: 'approved' }[pull?.checks] ?? 'running';
+        return send(200, {
+          value: [
+            {
+              configuration: {
+                type: { id: '0609b952-1397-4640-95ec-e00a01b2c241', displayName: 'Build' },
+                settings: { displayName: 'test', buildDefinitionId: 3 },
+              },
+              status,
+              context: { buildId: 77 },
+            },
+          ],
+        });
+      }
+      if (a === '/acme/demo/_apis/build/builds') return send(200, { value: [] });
+      if (a === '/acme/demo/_apis/build/builds/77/timeline')
+        return send(200, { records: [{ type: 'Task', name: 'npm test', result: 'failed', log: { id: 5 } }] });
+      if (a === '/acme/demo/_apis/build/builds/77/logs/5') return send.text(200, 'npm test\nFAIL src/app.test.ts\n  expected 2, got 1\n');
+      return send(404, { message: `Not Found: ${method} ${p}` });
+    }
+
     // ---------- GitHub ----------
     const g = db.github;
     const ghIssue = (i) => ({
@@ -657,9 +757,9 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const i = process.argv.indexOf('--port');
   const port = Number(i > 0 ? process.argv[i + 1] : process.env.PORT || 4101);
   startFakeTrackers(port).then(({ url }) => {
-    console.log(`fake Jira, Trello, GitHub, ClickUp and GitLab on ${url}`);
+    console.log(`fake Jira, Trello, GitHub, ClickUp, GitLab and Azure DevOps on ${url}`);
     console.log(
-      `  Jira : site ${url} · Trello : ESCOUADE_TRELLO_API=${url}/1 · GitHub : ESCOUADE_GITHUB_API=${url}/github · ClickUp : ESCOUADE_CLICKUP_API=${url}/clickup/api/v2 · GitLab : hébergeur GitLab à ${url}`,
+      `  Jira : site ${url} · Trello : ESCOUADE_TRELLO_API=${url}/1 · GitHub : ESCOUADE_GITHUB_API=${url}/github · ClickUp : ESCOUADE_CLICKUP_API=${url}/clickup/api/v2 · GitLab : hébergeur GitLab à ${url} · Azure DevOps : ESCOUADE_AZURE_DEVOPS_API=${url}/azure`,
     );
   });
 }

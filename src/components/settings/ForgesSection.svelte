@@ -103,6 +103,9 @@
     if (url) app.run(openUrl(url));
   }
 
+  /** Where it is: its host, with the organization or collection its address names (Azure DevOps). */
+  const where = (a: ForgeAccountView) => a.url.replace(/^https?:\/\//, '').replace(/\/+$/, '') || a.host;
+
   /** What its last check found, in a sentence. */
   function standing(a: ForgeAccountView): { text: string; tone: 'on' | 'warn' | 'bad' | '' } {
     const label = a.label;
@@ -147,7 +150,7 @@
     <div class="acct" role="group" aria-label={a.host}>
       {@render badge(a.kind)}
       <div class="txt">
-        <span class="l">{a.name} <span class="host">· {a.host}</span></span>
+        <span class="l">{a.name} <span class="host">· {where(a)}</span></span>
         <span class="d {st.tone}">{st.text}</span>
         {#if a.status.health === 'missingScopes'}<span class="d">{a.label}</span>{/if}
         {#if a.status.error && a.status.health !== 'connected'}<span class="d why">{a.status.error}</span>{/if}
@@ -195,7 +198,7 @@
         ><span>{t('integrations.forges.address')}</span><input
           class="field mono"
           bind:value={form.url}
-          placeholder={chosen?.defaultHost ?? 'git.example.com'}
+          placeholder={chosen?.addressHint ?? chosen?.defaultHost ?? 'git.example.com'}
           spellcheck="false"
         /></label
       >
@@ -218,7 +221,7 @@
           class="field mono"
           type="password"
           bind:value={form.token}
-          placeholder={chosen?.cli ? `${chosen.cli} auth login` : ''}
+          placeholder={chosen?.cli ? (chosen.cliLogin ?? `${chosen.cli} auth login`) : ''}
           autocomplete="off"
         /></label
       >

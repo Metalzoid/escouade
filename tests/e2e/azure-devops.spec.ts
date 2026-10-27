@@ -1,0 +1,173 @@
+// Azure DevOps as a code host (ESC-241) on the real app, in the window of the CI runner (1024 × 728),
+// against the fake Azure DevOps of tests/fixtures/fake-trackers.mjs: its organization connected with
+// a PAT in Réglages › Intégrations, then an ordinary agent's pull request opened from the header of
+// its conversation (pushed to a local remote that stands for dev.azure.com/acme/demo/_git/demo), its
+// build policy and its reviewer read on its card and in the status bar, and the two corrections
+// handed to the agent on a click.
+
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import type { Page } from '@playwright/test';
+import { addProject, expect, test } from './fixture';
+import { startFakeTrackers } from '../fixtures/fake-trackers.mjs';
+
+let fake: { url: string; close: () => Promise<void> };
+
+const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+const writes = async (): Promise<{ method: string; path: string; body: any }[]> => (await fetch(`${fake.url}/__writes`)).json();
+const PULLS = '/azure/acme/demo/_apis/git/repositories/demo/pullrequests';
+
+test.beforeAll(async () => {
+  fake = await startFakeTrackers(0);
+  // Read by the app the fixture starts next: dev.azure.com's API is the fake one, and the pull
+  // requests are read again at each selection of the agent.
+  process.env.ESCOUADE_AZURE_DEVOPS_API = `${fake.url}/azure`;
+  process.env.ESCOUADE_PR_READ_EVERY_MS = '0';
+});
+
+test.beforeEach(async () => {
+  await fetch(`${fake.url}/__reset`, { method: 'POST' });
+});
+
+test.afterAll(async () => {
+  await fake?.close();
+  delete process.env.ESCOUADE_AZURE_DEVOPS_API;
+  delete process.env.ESCOUADE_PR_READ_EVERY_MS;
+});
+
+/** Connects the organization acme of dev.azure.com (the fake one's) with a PAT, in Réglages › Intégrations. */
+async function connectAzure(page: Page) {
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+  const settings = page.getByRole('dialog', { name: 'Réglages' });
+  await settings.getByRole('tab', { name: 'Intégrations' }).click();
+  await settings.getByRole('button', { name: 'Connecter un hébergeur…' }).click();
+  const form = settings.getByRole('form', { name: 'Connexion à un hébergeur' });
+  await form.getByLabel('Hébergeur').selectOption('azure');
+  await expect(form.getByLabel('Adresse')).toHaveAttribute('placeholder', 'dev.azure.com/acme');
+  await form.getByLabel('Adresse').fill('dev.azure.com/acme');
+  await form.getByLabel(/^Jeton/).fill('pat-azure');
+  await form.getByRole('button', { name: 'Connecter' }).click();
+  const row = settings.getByRole('group', { name: 'dev.azure.com' });
+  await expect(row).toContainText('Azure DevOps · dev.azure.com/acme');
+  await expect(row).toContainText('Connecté · ada@acme.dev');
+  await expect(row).toContainText('Projet : ');
+  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(settings).toHaveCount(0);
+}
+
+/** The Kanban, then the agents again: the agent's conversation is shown anew, and its pull requests read again. */
+async function showAgain(page: Page) {
+  await page.getByRole('button', { name: /^Kanban/ }).click();
+  await page.getByRole('button', { name: 'Agents', exact: true }).click();
+  await page.locator('.side .card').first().click();
+}
+
+test('an agent opens its pull request on Azure DevOps, and its card follows its build and its reviewer', async ({ app }) => {
+  const { page } = app;
+  await page.setViewportSize({ width: 1024, height: 728 });
+  // dev.azure.com/acme/demo/_git/demo, whose pushes land in a bare repository of the test.
+  const bare = path.join(app.root, 'origin.git');
+  git(app.root, 'init', '-q', '--bare', bare);
+  const url = 'https://dev.azure.com/acme/demo/_git/demo';
+  git(app.repo, 'remote', 'add', 'origin', url);
+  git(app.repo, 'config', `url.${bare.replace(/\\/g, '/')}.insteadOf`, url);
+  git(app.repo, 'push', '-q', 'origin', 'main');
+  await addProject(page, app.repo, { worktrees: true, firstAgent: false });
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
+  const cards = page.locator('.side .card');
+  await expect(cards).toHaveCount(1, { timeout: 60_000 });
+  // No account yet: nothing to open.
+  await expect(page.getByRole('button', { name: 'Ouvrir une PR' })).toHaveCount(0);
+  await connectAzure(page);
+  await showAgain(page);
+
+  const worktrees = () =>
+    git(app.repo, 'worktree', 'list', '--porcelain')
+      .split('\n')
+      .filter((l) => l.startsWith('worktree '))
+      .map((l) => l.slice('worktree '.length))
+      .slice(1);
+  await expect.poll(() => worktrees().length).toBe(1);
+  const wt = worktrees()[0];
+  const branch = git(wt, 'branch', '--show-current');
+  fs.writeFileSync(path.join(wt, 'login.ts'), 'export const login = 1;\n');
+  git(wt, 'add', '-A');
+  git(wt, 'commit', '-qm', 'feat: connexion par jeton');
+
+  // « Ouvrir une PR » from the header: proposed, read, then pushed and opened as a draft.
+  await page.getByRole('button', { name: 'Ouvrir une PR' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Ouvrir une PR sur Azure DevOps' });
+  await expect(dialog.getByRole('textbox', { name: 'Titre' })).toHaveValue('Le travail de l’agent, proposé par le faux claude');
+  await expect(dialog.getByRole('textbox', { name: 'Description' })).toHaveValue('- feat: connexion par jeton');
+  await expect(dialog.getByText(`· ${branch} → main`)).toBeVisible();
+  await dialog.getByRole('checkbox', { name: 'En brouillon' }).check();
+  await dialog.getByRole('button', { name: 'Pousser et ouvrir' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByText('PR #101 ouverte.')).toBeVisible();
+  const created = (await writes()).filter((w) => w.path === PULLS);
+  expect(created.map((w) => w.body)).toEqual([
+    {
+      sourceRefName: `refs/heads/${branch}`,
+      targetRefName: 'refs/heads/main',
+      title: 'Le travail de l’agent, proposé par le faux claude',
+      description: '- feat: connexion par jeton',
+      isDraft: true,
+    },
+  ]);
+  expect(git(bare, 'log', '-1', '--format=%s', branch)).toBe('feat: connexion par jeton');
+  // Its number in the header, under the card and beside its branch in the status bar.
+  await expect(page.getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (brouillon)' })).toHaveCount(3);
+  await expect(page.locator('footer').getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (brouillon)' })).toBeVisible();
+  await expect(page.locator('footer .sync')).toContainText(branch);
+  await expect(page.getByRole('button', { name: 'Ouvrir une PR' })).toHaveCount(0);
+
+  // Its build policy fails and a reviewer waits for the author: read again when the agent is shown.
+  await fetch(`${fake.url}/__azure/pulls/101`, {
+    method: 'POST',
+    body: JSON.stringify({ checks: 'FAILURE', changesRequested: true, draft: false }),
+  });
+  await showAgain(page);
+  const prs = page.getByRole('group', { name: /^Pull requests de / });
+  const num = prs.getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (ouverte)' });
+  await expect(num).toHaveText('#101');
+  await expect(num.locator('[data-icon="close"]')).toHaveCount(1);
+  await expect(page.locator('footer').getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (ouverte)' })).toBeVisible();
+  await expect(prs.getByRole('button', { name: 'L’agent corrige', exact: true })).toBeVisible();
+  await expect(prs.getByRole('button', { name: 'L’agent corrige les retours' })).toBeVisible();
+
+  // The failed build's log goes to the agent, on the click.
+  await prs.getByRole('button', { name: 'L’agent corrige', exact: true }).click();
+  await expect(
+    page
+      .locator('.conv')
+      .getByText(/La CI de la PR #101 \(https:\/\/dev\.azure\.com\/acme\/demo\/_git\/demo\/pullrequest\/101\) échoue/)
+      .first(),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator('.conv')
+      .getByText(/FAIL src\/app\.test\.ts/)
+      .first(),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator('.conv')
+      .getByText(/Bonjour, tu as dit : La CI de la PR #101/)
+      .first(),
+  ).toBeVisible({ timeout: 30_000 });
+  // Then the reviewer's thread.
+  await prs.getByRole('button', { name: 'L’agent corrige les retours' }).click();
+  await expect(
+    page
+      .locator('.conv')
+      .getByText(/a des retours de relecture/)
+      .first(),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator('.conv')
+      .getByText(/Ce nom est peu clair\./)
+      .first(),
+  ).toBeVisible();
+});

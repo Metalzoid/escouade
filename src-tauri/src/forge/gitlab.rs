@@ -79,6 +79,7 @@ impl Provider for GitlabProvider {
             args: ["auth", "status", "--show-token", "--hostname", host]
                 .map(str::to_string)
                 .to_vec(),
+            login: "glab auth login",
             parse: |out, err| glab_token(&format!("{out}\n{err}")),
         })
     }

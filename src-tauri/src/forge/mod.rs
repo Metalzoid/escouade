@@ -1,4 +1,4 @@
-//! Code hosts (GitHub, GitLab, Bitbucket Cloud, Gitea and Forgejo): one interface for all of them,
+//! Code hosts (GitHub, GitLab, Bitbucket Cloud, Gitea and Forgejo, Azure DevOps): one interface for all of them,
 //! as for the harnesses. A host is a `Provider` (what it is called, the addresses it knows, the
 //! rights its tokens need, what it can do) that gives a `Forge` client per account; the rest of
 //! Escouade only talks to these two traits, so that adding a host comes down to its client.
@@ -8,6 +8,10 @@
 #![allow(dead_code)]
 
 pub mod accounts;
+pub mod azure;
+pub mod azure_api;
+#[cfg(test)]
+mod azure_tests;
 pub mod bitbucket;
 pub mod connect;
 pub mod gitea;
@@ -40,6 +44,8 @@ pub enum MergeStrategy {
     Merge,
     Squash,
     Rebase,
+    /// Rebased onto its base, then merged with a merge commit (Azure DevOps' « semi-linear »).
+    SemiLinear,
 }
 
 /// What a host can do, declared by its provider: the window and the PR's cycle offer only these.
@@ -375,6 +381,16 @@ pub trait Forge: Send + Sync {
         unsupported("reply")
     }
 
+    /// Resolves the thread of a comment of a line (`ReviewComment::id`).
+    fn resolve<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+        _comment: &'a str,
+    ) -> BoxFuture<'a, Result<()>> {
+        unsupported("resolve")
+    }
+
     /// What the host's last answer said of its limit, when it says it.
     fn rate_limit(&self) -> Option<RateLimit> {
         None
@@ -408,6 +424,8 @@ pub struct Credentials {
 pub struct CliToken {
     pub program: &'static str,
     pub args: Vec<String>,
+    /// How the user logs it in (`gh auth login`, `az login`).
+    pub login: &'static str,
     /// The token in what the command printed (stdout, then stderr).
     pub parse: fn(&str, &str) -> Option<String>,
 }
@@ -438,6 +456,24 @@ pub trait Provider: Send + Sync {
     fn repo_of(&self, segments: &[String]) -> Option<RepoRef> {
         RepoRef::two(segments)
     }
+    /// `repo_of`, for a host whose name holds part of the repository (`<org>.visualstudio.com`).
+    fn repo_in(&self, _host: &str, segments: &[String]) -> Option<RepoRef> {
+        self.repo_of(segments)
+    }
+    /// The address of the instance a remote's repository is on, given its host's (`url`): an
+    /// Azure DevOps organization's (`https://dev.azure.com/acme`).
+    fn instance_of(&self, url: String, _repo: &RepoRef) -> String {
+        url
+    }
+    /// The instance's address as the account keeps it, from the one typed (an Azure DevOps
+    /// organization's former `https://acme.visualstudio.com` becomes `https://dev.azure.com/acme`).
+    fn instance(&self, url: String) -> String {
+        url
+    }
+    /// What the window shows in the address field: its public instance, else an example.
+    fn address_hint(&self) -> Option<&'static str> {
+        self.default_host()
+    }
     /// What tells a self-hosted instance of it.
     fn probe(&self) -> Option<Probe> {
         None
@@ -464,7 +500,7 @@ pub struct Registry {
 }
 
 impl Registry {
-    /// GitHub, GitLab, Bitbucket Cloud, Gitea and Forgejo.
+    /// GitHub, GitLab, Bitbucket Cloud, Gitea and Forgejo, Azure DevOps.
     pub fn standard() -> Self {
         Self {
             providers: vec![
@@ -472,6 +508,7 @@ impl Registry {
                 Arc::new(gitlab::GitlabProvider),
                 Arc::new(bitbucket::BitbucketProvider),
                 Arc::new(gitea::GiteaProvider),
+                Arc::new(azure::AzureProvider),
             ],
         }
     }
@@ -510,7 +547,7 @@ impl Registry {
             ),
         };
         let repo = match &provider {
-            Some(p) => p.repo_of(&addr.segments)?,
+            Some(p) => p.repo_in(&addr.host, &addr.segments)?,
             // Unknown: its path as most hosts lay it out.
             None => RepoRef::nested(&addr.segments)?,
         };
@@ -520,6 +557,10 @@ impl Registry {
             ("https" | "http", Some(port)) => format!("{}://{host}:{port}", addr.scheme),
             ("https" | "http", None) => format!("{}://{host}", addr.scheme),
             _ => format!("https://{host}"),
+        };
+        let url = match &provider {
+            Some(p) => p.instance_of(url, &repo),
+            None => url,
         };
         Some(Remote {
             kind: provider.map(|p| p.kind().to_string()),

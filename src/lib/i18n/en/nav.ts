@@ -179,7 +179,7 @@ export default defineZone('nav', {
     hosts: 'PR and CI',
     soon: 'in 2.1',
     laterTitle: 'PRs, CI and deployments of the agent’s branch',
-    laterBody: 'Here, in 2.1: the repository’s host (GitHub, GitLab, Bitbucket, Gitea) tells what becomes of the branch.',
+    laterBody: 'Here, in 2.1: the repository’s host (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) tells what becomes of the branch.',
     laterPr: 'the open pull request, its reviews and its comments;',
     laterCi: 'the CI checks, their log, run again;',
     laterDeploy: 'the preview deployments and their address.',

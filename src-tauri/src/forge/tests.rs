@@ -1,4 +1,4 @@
-//! The code hosts' interface: the four hosts' remotes in every form, each client's identity check
+//! The code hosts' interface: the five hosts' remotes in every form, each client's identity check
 //! on a fake server, the accounts and their tokens, and a fake host plugged into the real core
 //! without touching it.
 
@@ -177,7 +177,8 @@ fn the_board_still_reads_github_com_repositories() {
 fn each_host_says_its_word_and_what_it_can_do() {
     let r = Registry::standard();
     let kinds: Vec<&str> = r.all().iter().map(|p| p.kind()).collect();
-    assert_eq!(kinds, ["github", "gitlab", "bitbucket", "gitea"]);
+    assert_eq!(kinds, ["github", "gitlab", "bitbucket", "gitea", "azure"]);
+    assert_eq!(r.get("azure").unwrap().request_word(), "PR");
     assert_eq!(r.get("gitlab").unwrap().request_word(), "MR");
     assert_eq!(r.get("github").unwrap().request_word(), "PR");
     assert!(!r.get("bitbucket").unwrap().capabilities().auto_merge);

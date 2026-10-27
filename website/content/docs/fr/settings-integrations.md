@@ -163,10 +163,18 @@ L’import automatique n’importe un ticket qu’une fois par projet : un ticke
 
 ## Hébergeurs de code
 
-La première partie de l’onglet connecte les hébergeurs de code : GitHub, GitLab, Bitbucket Cloud, Gitea et Forgejo. Ils servent aux pull requests (merge requests sur GitLab) des agents, à la CI et aux déploiements, pas aux tickets. Un compte par instance (github.com, gitlab.com, celle de ton entreprise…) ; chaque projet trouve le sien par son remote. « Connecter un hébergeur… » demande l’hébergeur, l’adresse (vide : son instance publique) et un jeton (vide : celui de sa CLI, `gh` ou `glab`) ; un remote sans compte propose « Connecter » suivi de son hôte.
+La première partie de l’onglet connecte les hébergeurs de code : GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo et Azure DevOps. Ils servent aux pull requests (merge requests sur GitLab) des agents, à la CI et aux déploiements, pas aux tickets. Un compte par instance (github.com, gitlab.com, celle de ton entreprise…) ; chaque projet trouve le sien par son remote. « Connecter un hébergeur… » demande l’hébergeur, l’adresse (vide : son instance publique) et un jeton (vide : celui de sa CLI, `gh`, `glab` ou `az`) ; un remote sans compte propose « Connecter » suivi de son hôte.
 
 Chaque instance dit sur sa ligne si elle sert aussi de source du Kanban :
 
 - « Sert aussi à GitHub Issues » : le compte de github.com ;
 - « Sert aussi à GitLab Issues » : chaque compte GitLab, gitlab.com ou auto-hébergé ;
-- « Pas de tickets : PR et CI seulement » : Bitbucket, Gitea, Forgejo, et un GitHub d’entreprise.
+- « Pas de tickets : PR et CI seulement » : Bitbucket, Gitea, Forgejo, un GitHub d’entreprise, et Azure DevOps pour l’instant.
+
+### Azure DevOps
+
+Un compte Azure DevOps est celui d’une organisation : son adresse est `dev.azure.com/<organisation>` (un ancien `<organisation>.visualstudio.com` est la même), ou pour Azure DevOps Server l’adresse de sa collection, comme `https://serveur/tfs/DefaultCollection`. Ses remotes sont lus sous toutes leurs formes : `https://dev.azure.com/<organisation>/<projet>/_git/<dépôt>`, `<organisation>.visualstudio.com`, ssh `git@ssh.dev.azure.com:v3/<organisation>/<projet>/<dépôt>`, et ceux d’un Server.
+
+Le jeton est un jeton d’accès personnel (PAT), créé sur la page qu’ouvre « Créer un jeton », avec ces droits : Code (lecture et écriture), Build (lecture et exécution) et Work Items (lecture et écriture). Laissé vide, Escouade prend celui du CLI `az` si tu y es connecté (`az login`), redemandé avant qu’il expire. La ligne dit alors qui est le jeton, par l’e-mail de son compte.
+
+Sur Azure DevOps, la pull request d’un agent s’ouvre en brouillon ou non, depuis « Ouvrir une PR ». Sa carte montre les votes des relecteurs, ses conflits et ses checks : les stratégies de build et de statut de la branche, les statuts posés sur la pull request et les builds d’Azure Pipelines. « L’agent corrige » lui passe le journal des tâches en échec ; « L’agent corrige les retours » les commentaires des fils ouverts. Le merge suit les stratégies que la branche cible permet (merge, squash, rebase, semi-linéaire), et l’auto-merge est l’auto-complete d’Azure.

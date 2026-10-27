@@ -19,7 +19,7 @@ Les comptes se connectent dans Réglages › Intégrations, groupe « Comptes c
 
 ### Hébergeur de code ou source de tickets
 
-Un hébergeur de code (GitHub, GitLab, Bitbucket, Gitea) sert aux pull requests, à la CI et aux déploiements des agents ; une source du Kanban sert aux tickets. Réglages › Intégrations les montre en deux parties nommées. Connecter son GitLab comme hébergeur ne met aucun ticket dans le Kanban : il faut encore lier un projet GitLab comme source (voir plus bas), ce que la fenêtre d’import propose d’un clic. Bitbucket et Gitea n’ont pas de source : leur ligne dit « Pas de tickets : PR et CI seulement ».
+Un hébergeur de code (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) sert aux pull requests, à la CI et aux déploiements des agents ; une source du Kanban sert aux tickets. Réglages › Intégrations les montre en deux parties nommées. Connecter son GitLab comme hébergeur ne met aucun ticket dans le Kanban : il faut encore lier un projet GitLab comme source (voir plus bas), ce que la fenêtre d’import propose d’un clic. Bitbucket, Gitea et Azure DevOps n’ont pas encore de source : leur ligne dit « Pas de tickets : PR et CI seulement ».
 
 « Déconnecter » oublie le compte et ses secrets. Les projets gardent leurs liens, inutilisés jusqu’à une nouvelle connexion.
 

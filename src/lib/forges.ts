@@ -6,6 +6,7 @@ const BADGES: Record<string, { letter: string; color: string; ink: string }> = {
   gitlab: { letter: 'GL', color: 'oklch(0.68 0.17 45)', ink: '#fff' },
   bitbucket: { letter: 'BB', color: 'oklch(0.58 0.15 255)', ink: '#fff' },
   gitea: { letter: 'GT', color: 'oklch(0.62 0.14 150)', ink: '#fff' },
+  azure: { letter: 'AZ', color: 'oklch(0.6 0.15 245)', ink: '#fff' },
 };
 
 const UNKNOWN = { letter: '?', color: 'var(--line)', ink: 'var(--muted)' };

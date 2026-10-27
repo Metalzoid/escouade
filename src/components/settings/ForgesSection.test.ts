@@ -198,6 +198,70 @@ describe('ForgesSection', () => {
     expect(be.called('forge_guess')[0].args.url).toBe('https://git.example.org:8443');
   });
 
+  it('connects an Azure DevOps organization with a PAT or az, and says who it is', async () => {
+    const AZURE: ForgeProvider = {
+      kind: 'azure',
+      name: 'Azure DevOps',
+      requestWord: 'PR',
+      defaultHost: 'dev.azure.com',
+      addressHint: 'dev.azure.com/acme',
+      needsEmail: false,
+      cli: 'az',
+      cliLogin: 'az login',
+      scopes: ['vso.code_write', 'vso.build_execute', 'vso.work_write'],
+      capabilities: { ...CAPS, deployments: false, mergeStrategies: ['merge', 'squash', 'rebase', 'semiLinear'] },
+    };
+    const connected: ForgesView = {
+      ...VIEW,
+      providers: [...PROVIDERS, AZURE],
+      accounts: [
+        account({
+          kind: 'azure',
+          name: 'Azure DevOps',
+          host: 'dev.azure.com',
+          url: 'https://dev.azure.com/acme',
+          label: 'ada@acme.dev',
+          projects: ['demo'],
+        }),
+      ],
+      unknown: [],
+    };
+    const be = fakeBackend({
+      forges: () => ({ ...connected, accounts: [] }),
+      forge_check: () => ({ ...connected, accounts: [] }),
+      forge_connect: () => connected,
+      forge_token_page: () => 'https://dev.azure.com/acme/_usersSettings/tokens',
+    });
+    render(ForgesSection);
+    await userEvent.click(await screen.findByRole('button', { name: 'Connecter un hébergeur…' }));
+    const form = screen.getByRole('form', { name: 'Connexion à un hébergeur' });
+    await userEvent.selectOptions(within(form).getByLabelText('Hébergeur'), 'azure');
+    // Its address is an organization's; its token a PAT, else the az CLI's.
+    expect(within(form).getByLabelText('Adresse')).toHaveAttribute('placeholder', 'dev.azure.com/acme');
+    expect(within(form).getByLabelText(/^Jeton/)).toHaveAttribute('placeholder', 'az login');
+    expect(within(form).getByText('(vide : celui de az)')).toBeInTheDocument();
+    expect(within(form).getByText('Droits à donner au jeton : vso.code_write, vso.build_execute, vso.work_write')).toBeInTheDocument();
+    await userEvent.type(within(form).getByLabelText('Adresse'), 'dev.azure.com/acme');
+    await userEvent.click(within(form).getByRole('button', { name: 'Créer un jeton' }));
+    await waitFor(() => expect(opened).toEqual(['https://dev.azure.com/acme/_usersSettings/tokens']));
+    await userEvent.type(within(form).getByLabelText(/^Jeton/), 'pat-azure');
+    await userEvent.click(within(form).getByRole('button', { name: 'Connecter' }));
+    await waitFor(() => expect(screen.queryByRole('form')).toBeNull());
+    expect(be.called('forge_connect').at(-1)!.args.form).toEqual({
+      kind: 'azure',
+      url: 'dev.azure.com/acme',
+      email: '',
+      token: 'pat-azure',
+    });
+    // Its row: the organization, who the token is, and no tickets yet.
+    const az = row('dev.azure.com');
+    expect(az).toHaveTextContent('Azure DevOps · dev.azure.com/acme');
+    expect(az).toHaveTextContent('Connecté · ada@acme.dev');
+    expect(az).toHaveTextContent('Projet : demo');
+    expect(az).toHaveTextContent('Pas de tickets : PR et CI seulement');
+    expect(az.querySelector('.badge')).toHaveTextContent('AZ');
+  });
+
   it('disconnects an instance', async () => {
     const be = fakeBackend({
       forges: () => VIEW,

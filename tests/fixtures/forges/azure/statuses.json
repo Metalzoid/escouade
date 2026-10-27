@@ -1,0 +1,28 @@
+{
+  "value": [
+    {
+      "id": 1,
+      "state": "pending",
+      "description": "Analyse en cours",
+      "context": { "name": "sonar", "genre": "quality" },
+      "targetUrl": "https://sonar.acme.dev/dashboard?id=demo&pullRequest=22",
+      "creationDate": "2026-10-20T09:20:00Z"
+    },
+    {
+      "id": 2,
+      "state": "succeeded",
+      "description": "Qualité OK",
+      "context": { "name": "sonar", "genre": "quality" },
+      "targetUrl": "https://sonar.acme.dev/dashboard?id=demo&pullRequest=22",
+      "creationDate": "2026-10-20T09:31:00Z"
+    },
+    {
+      "id": 3,
+      "state": "failed",
+      "description": "Licences refusées",
+      "context": { "name": "licenses" },
+      "targetUrl": "https://licenses.acme.dev/demo/22"
+    }
+  ],
+  "count": 3
+}

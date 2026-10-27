@@ -1,0 +1,19 @@
+{
+  "value": [
+    {
+      "id": 21,
+      "isEnabled": true,
+      "isBlocking": true,
+      "isDeleted": false,
+      "type": { "id": "fa4e907d-c16b-4a4c-9dfa-4916e5d171ab", "displayName": "Require a merge strategy" },
+      "settings": {
+        "allowNoFastForward": false,
+        "allowSquash": true,
+        "allowRebase": false,
+        "allowRebaseMerge": true,
+        "scope": [{ "refName": "refs/heads/main", "matchKind": "Exact", "repositoryId": "3411ebc1-d5aa-464f-9615-0b527bc66719" }]
+      }
+    }
+  ],
+  "count": 1
+}

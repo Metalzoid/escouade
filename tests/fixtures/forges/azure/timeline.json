@@ -1,0 +1,36 @@
+{
+  "records": [
+    { "id": "a1", "parentId": null, "type": "Stage", "name": "__default", "state": "completed", "result": "failed" },
+    {
+      "id": "b2",
+      "parentId": "a1",
+      "type": "Job",
+      "name": "Job",
+      "state": "completed",
+      "result": "failed",
+      "log": { "id": 2, "type": "Container" }
+    },
+    {
+      "id": "c3",
+      "parentId": "b2",
+      "type": "Task",
+      "name": "Checkout demo@feat/login",
+      "state": "completed",
+      "result": "succeeded",
+      "log": { "id": 3 }
+    },
+    {
+      "id": "d4",
+      "parentId": "b2",
+      "type": "Task",
+      "name": "npm test",
+      "state": "completed",
+      "result": "failed",
+      "log": { "id": 12 },
+      "errorCount": 1
+    },
+    { "id": "e5", "parentId": "b2", "type": "Task", "name": "Publish results", "state": "completed", "result": "skipped" }
+  ],
+  "lastChangedBy": "00000002-0000-8888-8000-000000000000",
+  "id": "f6a7b8c9-0000-0000-0000-000000000000"
+}

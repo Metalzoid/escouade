@@ -1,0 +1,20 @@
+{
+  "authenticatedUser": {
+    "id": "6f7e6b4f-1c2d-4a3b-9e8f-0a1b2c3d4e5f",
+    "descriptor": "Microsoft.IdentityModel.Claims.ClaimsIdentity;a1b2c3d4-0000-0000-0000-000000000000\\ada@acme.dev",
+    "subjectDescriptor": "aad.NmY3ZTZiNGYtMWMyZC00YTNiLTllOGYtMGExYjJjM2Q0ZTVm",
+    "providerDisplayName": "Ada Lovelace",
+    "isActive": true,
+    "properties": { "Account": { "$type": "System.String", "$value": "ada@acme.dev" } },
+    "resourceVersion": 2,
+    "metaTypeId": 0
+  },
+  "authorizedUser": {
+    "id": "6f7e6b4f-1c2d-4a3b-9e8f-0a1b2c3d4e5f",
+    "providerDisplayName": "Ada Lovelace"
+  },
+  "instanceId": "2f6c1b44-6a1e-4b6f-9a2c-6d1f7f0e9c11",
+  "deploymentId": "8d0e1a9c-3c5e-4bb5-a0d4-2c0f5d7f1e22",
+  "deploymentType": "hosted",
+  "locationServiceData": { "serviceOwner": "00025394-6065-48ca-87d9-7f5672854ef7" }
+}

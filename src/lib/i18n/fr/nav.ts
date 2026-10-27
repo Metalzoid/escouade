@@ -218,7 +218,7 @@ export default {
     hosts: 'PR et CI',
     soon: 'dans la 2.1',
     laterTitle: 'PR, CI et déploiements de la branche de l’agent',
-    laterBody: 'Ici, dans la 2.1 : l’hébergeur du dépôt (GitHub, GitLab, Bitbucket, Gitea) dit ce que devient la branche.',
+    laterBody: 'Ici, dans la 2.1 : l’hébergeur du dépôt (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) dit ce que devient la branche.',
     laterPr: 'la pull request ouverte, ses revues et ses commentaires ;',
     laterCi: 'les vérifications de la CI, leur log, relancer ;',
     laterDeploy: 'les déploiements de prévisualisation et leur adresse.',

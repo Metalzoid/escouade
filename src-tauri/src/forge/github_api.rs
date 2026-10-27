@@ -564,11 +564,13 @@ fn pr_of_rest(p: &Value) -> Result<PullRequest> {
     })
 }
 
-fn method_name(strategy: MergeStrategy) -> &'static str {
+/// GitHub's name of a strategy; it has no semi-linear merge.
+fn method_name(strategy: MergeStrategy) -> Result<&'static str> {
     match strategy {
-        MergeStrategy::Merge => "merge",
-        MergeStrategy::Squash => "squash",
-        MergeStrategy::Rebase => "rebase",
+        MergeStrategy::Merge => Ok("merge"),
+        MergeStrategy::Squash => Ok("squash"),
+        MergeStrategy::Rebase => Ok("rebase"),
+        MergeStrategy::SemiLinear => Err(Unsupported("semi-linear merge").into()),
     }
 }
 
@@ -766,7 +768,7 @@ impl Forge for Github {
             self.write(
                 reqwest::Method::PUT,
                 &format!("{}/pulls/{number}/merge", Self::repo_path(repo)),
-                json!({ "merge_method": method_name(strategy) }),
+                json!({ "merge_method": method_name(strategy)? }),
             )
             .await?;
             Ok(())
@@ -780,6 +782,7 @@ impl Forge for Github {
         strategy: MergeStrategy,
     ) -> BoxFuture<'a, Result<()>> {
         Box::pin(async move {
+            let method = method_name(strategy)?;
             let data = self
                 .graphql(
                     "PullRequestId",
@@ -803,7 +806,7 @@ impl Forge for Github {
                     "mutation EnableAutoMerge($id: ID!, $method: PullRequestMergeMethod!) { \
                      enablePullRequestAutoMerge(input: {pullRequestId: $id, mergeMethod: $method}) { \
                      pullRequest { number autoMergeRequest { enabledAt } } } }",
-                    json!({ "id": id, "method": method_name(strategy).to_uppercase() }),
+                    json!({ "id": id, "method": method.to_uppercase() }),
                 )
                 .await?;
             if done["enablePullRequestAutoMerge"]["pullRequest"].is_null() {

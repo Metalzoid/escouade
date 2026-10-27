@@ -4,6 +4,12 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [Non publié]
+
+### Nouveautés
+
+- Azure DevOps devient un hébergeur de code, sur dev.azure.com comme sur Azure DevOps Server : connecte ton organisation par un jeton ou par `az`, puis ouvre la PR d’un agent, suis ses builds et ses relectures sur sa carte, et donne-lui à corriger un build en échec ou les retours.
+
 ## [2.0.3] — 2026-10-27
 
 ### Nouveautés

@@ -1,0 +1,93 @@
+{
+  "value": [
+    {
+      "id": 148,
+      "publishedDate": "2026-10-20T10:01:12.37Z",
+      "lastUpdatedDate": "2026-10-20T10:04:55.03Z",
+      "comments": [
+        {
+          "id": 1,
+          "parentCommentId": 0,
+          "author": { "displayName": "Bob Martin", "uniqueName": "bob@acme.dev", "id": "1f2e3d4c-5b6a-4978-8a9b-0c1d2e3f4a5b" },
+          "content": "Ce nom est peu clair.",
+          "publishedDate": "2026-10-20T10:01:12.37Z",
+          "commentType": "text"
+        },
+        {
+          "id": 2,
+          "parentCommentId": 1,
+          "author": { "displayName": "Ada Lovelace", "uniqueName": "ada@acme.dev", "id": "6f7e6b4f-1c2d-4a3b-9e8f-0a1b2c3d4e5f" },
+          "content": "Je le renomme.",
+          "publishedDate": "2026-10-20T10:04:55.03Z",
+          "commentType": "text"
+        }
+      ],
+      "status": "active",
+      "threadContext": {
+        "filePath": "/src/login.ts",
+        "rightFileStart": { "line": 12, "offset": 1 },
+        "rightFileEnd": { "line": 12, "offset": 20 }
+      },
+      "properties": {},
+      "isDeleted": false
+    },
+    {
+      "id": 149,
+      "comments": [
+        {
+          "id": 1,
+          "parentCommentId": 0,
+          "author": { "displayName": "Microsoft.VisualStudio.Services.TFS", "id": "00000002-0000-8888-8000-000000000000" },
+          "content": "Bob Martin voted -5",
+          "commentType": "system"
+        }
+      ],
+      "status": "unknown",
+      "threadContext": null,
+      "properties": { "CodeReviewThreadType": { "$type": "System.String", "$value": "VoteUpdate" } },
+      "isDeleted": false
+    },
+    {
+      "id": 150,
+      "comments": [
+        {
+          "id": 1,
+          "parentCommentId": 0,
+          "author": { "displayName": "Grace Hopper", "uniqueName": "grace@acme.dev" },
+          "content": "Ajoute un test.",
+          "commentType": "text"
+        }
+      ],
+      "status": "fixed",
+      "threadContext": {
+        "filePath": "/src/login.test.ts",
+        "rightFileStart": { "line": 3, "offset": 1 },
+        "rightFileEnd": { "line": 3, "offset": 9 }
+      },
+      "isDeleted": false
+    },
+    {
+      "id": 151,
+      "comments": [
+        {
+          "id": 1,
+          "parentCommentId": 0,
+          "author": { "displayName": "Grace Hopper", "uniqueName": "grace@acme.dev" },
+          "content": "Pense au changelog.",
+          "commentType": "text"
+        }
+      ],
+      "status": "active",
+      "threadContext": null,
+      "isDeleted": false
+    },
+    {
+      "id": 152,
+      "comments": [{ "id": 1, "parentCommentId": 0, "content": "Effacé", "commentType": "text" }],
+      "status": "active",
+      "threadContext": { "filePath": "/README.md", "rightFileStart": { "line": 1, "offset": 1 } },
+      "isDeleted": true
+    }
+  ],
+  "count": 5
+}

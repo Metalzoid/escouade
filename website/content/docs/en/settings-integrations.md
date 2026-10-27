@@ -163,10 +163,18 @@ The automatic import brings a ticket in only once per project: a ticket already 
 
 ## Code hosts
 
-The first part of the tab connects the code hosts: GitHub, GitLab, Bitbucket Cloud, Gitea and Forgejo. They serve the agents’ pull requests (merge requests on GitLab), CI and deployments, not the tickets. One account per instance (github.com, gitlab.com, your company’s…); each project finds its own through its remote. “Connect a code host…” asks for the code host, the address (empty: its public instance) and a token (empty: the one from its CLI, `gh` or `glab`); a remote without an account offers “Connect” followed by its host.
+The first part of the tab connects the code hosts: GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo and Azure DevOps. They serve the agents’ pull requests (merge requests on GitLab), CI and deployments, not the tickets. One account per instance (github.com, gitlab.com, your company’s…); each project finds its own through its remote. “Connect a code host…” asks for the code host, the address (empty: its public instance) and a token (empty: the one from its CLI, `gh`, `glab` or `az`); a remote without an account offers “Connect” followed by its host.
 
 Each instance says on its row whether it also serves as a source of the Kanban:
 
 - “Also used for GitHub Issues”: the github.com account;
 - “Also used for GitLab Issues”: every GitLab account, gitlab.com or self-hosted;
-- “No tickets: PRs and CI only”: Bitbucket, Gitea, Forgejo, and a GitHub Enterprise.
+- “No tickets: PRs and CI only”: Bitbucket, Gitea, Forgejo, a GitHub Enterprise, and Azure DevOps for now.
+
+### Azure DevOps
+
+An Azure DevOps account is an organization’s: its address is `dev.azure.com/<organization>` (a former `<organization>.visualstudio.com` is the same one), or for Azure DevOps Server the address of its collection, such as `https://server/tfs/DefaultCollection`. Its remotes are read in every form: `https://dev.azure.com/<organization>/<project>/_git/<repository>`, `<organization>.visualstudio.com`, ssh `git@ssh.dev.azure.com:v3/<organization>/<project>/<repository>`, and a Server’s.
+
+The token is a personal access token (PAT), made on the page “Create a token” opens, with these rights: Code (read and write), Build (read and execute), and Work Items (read and write). Left empty, Escouade takes the one of the `az` CLI when you are logged in to it (`az login`), asked again before it expires. The row then says who the token is, by the e-mail of its account.
+
+On Azure DevOps, an agent’s pull request opens as a draft or not, from “Open a PR”. Its card shows the reviewers’ votes, its conflicts, and its checks: the build and status policies of the branch, the statuses posted on the pull request and the Azure Pipelines builds. “Agent fixes it” hands it the log of the failed tasks; “Agent addresses the feedback” the comments of the open threads. The merge follows the strategies the target branch allows (merge, squash, rebase, semi-linear), and auto-merge is Azure’s auto-complete.
