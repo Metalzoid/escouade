@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { conversationOf } from '../lib/conversations.svelte';
 import { fileOrigins } from '../lib/file-origin';
-import { cancelHeld, editHeld, heldOf } from '../lib/outbox.svelte';
+import { cancelHeld, editHeld, heldOf, sendNow } from '../lib/outbox.svelte';
 import { setLang } from '../lib/i18n';
 import { readPref, writePref } from '../lib/prefs';
 import { app } from '../lib/state.svelte';
@@ -615,6 +615,26 @@ describe('Composer', () => {
       editHeld(heldOf(a.id)[0].id);
       await waitFor(() => expect(textarea.value).toBe('a\n\nb'));
       await waitFor(() => expect(document.activeElement).toBe(textarea));
+    });
+
+    it('sends a message typed while a held one is on its way only once that one is sent', async () => {
+      const { a, textarea } = setup({ status: 'running' });
+      let finish = () => {};
+      const backend = fakeBackend({
+        get_conversation: () => [],
+        send_message: (args: any) => (args.text === 'Premier' ? new Promise<void>((r) => (finish = r)) : null),
+      });
+      app.settings.midTurnDelaySecs = 10;
+      await userEvent.type(textarea, 'Premier{Enter}');
+      // The turn is over: the next message is not held, but must not overtake the one going.
+      app.agents[a.id].status = 'done';
+      sendNow(heldOf(a.id)[0].id);
+      await waitFor(() => expect(backend.called('send_message')).toHaveLength(1));
+      await userEvent.type(textarea, 'Second{Enter}');
+      await new Promise((r) => setTimeout(r, 20));
+      expect(backend.called('send_message').map((c) => c.args.text)).toEqual(['Premier']);
+      finish();
+      await waitFor(() => expect(backend.called('send_message').map((c) => c.args.text)).toEqual(['Premier', 'Second']));
     });
 
     it('says on « Send » that a message sent now can be cancelled until it goes', async () => {

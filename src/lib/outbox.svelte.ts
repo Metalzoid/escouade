@@ -36,6 +36,11 @@ export function heldOf(agentId: string): Held[] {
   return held[agentId] ?? [];
 }
 
+/** Once the messages of `agentId` the outbox let go of are sent (or refused): what a message sent after them waits for. */
+export function settled(agentId: string): Promise<void> {
+  return chains.get(agentId) ?? Promise.resolve();
+}
+
 /**
  * How a message typed now in the composer of `agent` is held, or null when it goes at once: behind one still held
  * (even at rest), as that one is; during a turn, as its harness takes such a message. Never during the preparation of
@@ -145,6 +150,10 @@ async function deliver(h: Held) {
   } catch (e) {
     giveBack(h.agentId, h.body, h.files);
     reportRefusal(h.agentId, e);
+    // Refused at the end of a turn, it started none: the next one waiting for that end goes now, never left for an
+    // end that will not come.
+    const now = app.agents[h.agentId];
+    if (h.mode === 'turnEnd' && now && !atWork(now)) turnEnded(h.agentId);
   }
 }
 

@@ -18,7 +18,7 @@
   import { applyCompletion, detectTrigger, filterCommands, type Trigger } from '../lib/complete';
   import { conversationOf } from '../lib/conversations.svelte';
   import { getDraft, giveBack, setDraft } from '../lib/drafts';
-  import { hold, holdModeOf } from '../lib/outbox.svelte';
+  import { hold, holdModeOf, settled } from '../lib/outbox.svelte';
   import { injectedSource } from '../lib/events';
   import { parseLocalCommand } from '../lib/localcmd';
   import { reportRefusal, sendDraft } from '../lib/send.svelte';
@@ -535,6 +535,8 @@
     if (!answering) files = [];
     const mine = (async () => {
       if (before) await before;
+      // Nor before a message held during the turn that is on its way.
+      await settled(message.id);
       await deliver(message);
     })();
     inflight = mine;

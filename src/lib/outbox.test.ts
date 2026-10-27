@@ -142,6 +142,20 @@ describe('outbox', () => {
     expect(sent()).toEqual(['un', 'deux']);
   });
 
+  it('still sends the next message to Cursor when the one sent at the end of the turn is refused', async () => {
+    await start([cursor()]);
+    refused.add('un');
+    holdNow('k1', 'un');
+    holdNow('k1', 'deux');
+    update('k1', { status: 'done' });
+    await settle();
+    // No turn of its started for the refused one: the next goes now, rather than wait for an end that never comes.
+    expect(sent()).toEqual(['un', 'deux']);
+    expect(getDraft('k1').text).toBe('un');
+    expect(heldOf('k1')).toEqual([]);
+    expect(holdModeOf(app.agents.k1)).toBeNull();
+  });
+
   it('sends the older held messages first when one is sent now', async () => {
     await start([claude()]);
     holdNow('c1', 'A');
