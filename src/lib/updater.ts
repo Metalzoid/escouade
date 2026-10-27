@@ -6,6 +6,7 @@
 
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { t } from './i18n';
+import { api } from './ipc';
 import { check, UpdateTrouble, type FoundUpdate } from './update-check';
 import { app } from './state.svelte';
 
@@ -98,6 +99,17 @@ export async function checkForUpdate(manual = false): Promise<boolean | null> {
     }
     return null;
   }
+}
+
+/** Seconds left before the automatic restart for the update, when one is planned. */
+export function restartIn(): number | null {
+  return app.restartAt === null ? null : Math.max(0, Math.ceil((app.restartAt - app.now) / 1000));
+}
+
+/** The automatic restart the backend planned for the update, put off (the status bar's and Réglages › À propos's « Plus tard »). */
+export function postponeRestart() {
+  app.restartAt = null;
+  app.run(api.updatePostpone());
 }
 
 /**

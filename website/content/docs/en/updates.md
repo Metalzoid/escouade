@@ -50,7 +50,7 @@ The app stays on the old version and says so: “The update to 1.8.0 couldn’t 
 
 ## Checking by hand
 
-Settings › About shows the installed version (“Escouade 1.7.5”, for example) and a “Check for updates” button. The answer is “No update available.” (only when the check really got an answer), or the update appears in the status bar. When you check yourself, a failure is always shown, with its reason: “Couldn’t check for updates” or “Couldn’t download the update”, followed by the cause. An automatic check is more patient: see [“When it fails”](#when-it-fails). Behind a proxy or a corporate certificate, see [“Behind a company proxy”](#behind-a-company-proxy) and [troubleshooting](troubleshooting).
+Settings › About shows the installed version (“Escouade 1.7.5”, for example) and a “Check for updates” button. The answer is “No update available.” (only when the check really got an answer), or the update appears in the tab, “Escouade 1.8.0 available” then “Escouade 1.8.0 ready” with “Restart now”, as in the status bar. When you check yourself, a failure is always shown, with its reason: “Couldn’t check for updates” or “Couldn’t download the update”, followed by the cause. An automatic check is more patient: see [“When it fails”](#when-it-fails). Behind a proxy or a corporate certificate, see [“Behind a company proxy”](#behind-a-company-proxy) and [troubleshooting](troubleshooting).
 
 ## When it fails
 

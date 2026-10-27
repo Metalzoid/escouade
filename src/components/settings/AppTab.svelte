@@ -11,7 +11,8 @@
   import { CREDITS_URL } from '../../lib/conversation';
   import { DISCORD_URL, siteUrl, supportUrl } from '../../lib/links';
   import type { ClaudeLocated, ClaudeUpdateStatus, EngineDecl, EngineInfo } from '../../lib/types';
-  import { checkForUpdate } from '../../lib/updater';
+  import { checkForUpdate, postponeRestart, restartIn } from '../../lib/updater';
+  import Markdown from '../conv/Markdown.svelte';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import ModelFavorites from './ModelFavorites.svelte';
@@ -147,6 +148,20 @@
     if (l.path === null) return l.canWsl ? t('settings.claude.notLocated') : t('settings.claude.notLocatedHere');
     return l.wsl ? t('settings.claude.locatedWsl', { distro: l.wsl, path: l.path }) : t('settings.claude.located', { path: l.path });
   }
+
+  // The update found (ESC-250), by the button or the automatic check: downloading, then ready. A download that failed keeps
+  // its own row while the same version is tried again (choice 13), never both; once ready, or a newer one found, the update's.
+  const update = $derived(app.update && !app.update.ready && app.updateTrouble?.version === app.update.version ? null : app.update);
+  const restartSeconds = $derived(restartIn());
+  let notesOpen = $state(false);
+  /** What a screen reader hears of the update as it comes: its region is there from the start, so it is told. */
+  const updateLive = $derived(
+    !update
+      ? ''
+      : update.ready
+        ? t('settings.about.updateReadyLive', { version: update.version })
+        : t('settings.about.updateFoundLive', { version: update.version }),
+  );
 
   async function check() {
     checking = true;
@@ -421,13 +436,42 @@
       >
     </div>
     <button class="btn" disabled={checking} onclick={check}>{checking ? t('settings.about.checking') : t('settings.about.check')}</button>
+    <span class="live" role="status" aria-live="polite" data-testid="update-live">{updateLive}</span>
   </div>
   <Group aria-label="Escouade">
     <Row label={t('settings.about.autoUpdate')} desc={t('settings.about.autoUpdateDesc')}>
       <Switch label={t('settings.about.autoUpdate')} bind:on={s.autoUpdate} />
     </Row>
+    <!-- The update found, as the status bar says it (ESC-250): downloading, then ready with its restart and its notes. -->
+    {#if update?.ready}
+      {@const notes = update.notes.trim()}
+      <Row label={t('settings.about.updateReady', { version: update.version })} desc={t('settings.about.updateReadyDesc')}>
+        {#snippet extra()}
+          <div class="upd" data-update="ready">
+            {#if restartSeconds !== null}
+              <b class="restart-in">{t('shell.status.restartIn', { seconds: restartSeconds })}</b>
+            {/if}
+            {#if notes}
+              <button class="link" aria-expanded={notesOpen} aria-controls="update-notes" onclick={() => (notesOpen = !notesOpen)}
+                >{notesOpen ? t('settings.about.hideNotes') : t('settings.about.seeNotes')}</button
+              >
+              {#if notesOpen}<div class="notes" id="update-notes"><Markdown text={notes} /></div>{/if}
+            {/if}
+          </div>
+        {/snippet}
+        {#if restartSeconds !== null}
+          <button class="btn" onclick={postponeRestart}>{t('common.later')}</button>
+        {/if}
+        <!-- The update's window, as the status bar's: it says what a restart cuts, and « Plus tard » comes back here. -->
+        <button class="btn primary" onclick={() => (app.modal = { kind: 'update', back: 'about' })}>{t('shell.update.restartNow')}</button>
+      </Row>
+    {:else if update}
+      <Row label={t('settings.about.updateFound', { version: update.version })}>
+        {#snippet extra()}<span class="more upd" data-update="downloading">{t('settings.about.updateDownloading')}</span>{/snippet}
+      </Row>
+    {/if}
     <!-- An update that does not download, said here while it lasts (choice 13 of the 2.0 design). -->
-    {#if app.updateTrouble}
+    {#if app.updateTrouble && !update}
       {@const trouble = app.updateTrouble}
       <Row label={t('settings.about.updateTrouble', { version: trouble.version })}>
         {#snippet extra()}
@@ -579,6 +623,43 @@
   .about-id .btn {
     flex: none;
     margin-left: auto;
+  }
+  /* Heard, not seen: the update found, told to a screen reader. */
+  .live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .upd {
+    display: grid;
+    justify-items: start;
+    gap: 4px;
+    margin-top: 2px;
+  }
+  .restart-in {
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  /* The notes, as the update's window has them: soft, their items close together. */
+  .notes {
+    max-width: 520px;
+    color: var(--soft);
+  }
+  .notes :global(.md) {
+    color: var(--soft);
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+  .notes :global(.md li) {
+    margin: 0 0 3px;
+  }
+  .notes :global(.md ul) {
+    margin: 0;
+    padding-left: 18px;
   }
   .link {
     justify-self: start;

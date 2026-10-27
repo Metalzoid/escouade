@@ -50,7 +50,7 @@ L’app reste sur l’ancienne version et le dit : « La mise à jour vers 1.8.
 
 ## Chercher à la main
 
-Réglages › À propos montre la version installée (« Escouade 1.7.5 », par exemple) et un bouton « Rechercher une mise à jour ». La réponse est « Aucune mise à jour disponible. » (seulement quand la vérification a vraiment répondu), ou la mise à jour apparaît dans la barre d’état. Quand tu cherches toi-même, une panne se dit toujours, avec sa raison : « Vérification des mises à jour impossible » ou « Téléchargement de la mise à jour impossible », suivis de la cause. Une recherche automatique est plus patiente : voir [« Quand ça échoue »](#quand-ca-echoue). Derrière un proxy ou un certificat d’entreprise, voir [« Derrière un proxy d’entreprise »](#derriere-un-proxy-d-entreprise) et le [dépannage](troubleshooting).
+Réglages › À propos montre la version installée (« Escouade 1.7.5 », par exemple) et un bouton « Rechercher une mise à jour ». La réponse est « Aucune mise à jour disponible. » (seulement quand la vérification a vraiment répondu), ou la mise à jour apparaît dans l’onglet, « Escouade 1.8.0 disponible » puis « Escouade 1.8.0 prête » avec « Redémarrer maintenant », comme dans la barre d’état. Quand tu cherches toi-même, une panne se dit toujours, avec sa raison : « Vérification des mises à jour impossible » ou « Téléchargement de la mise à jour impossible », suivis de la cause. Une recherche automatique est plus patiente : voir [« Quand ça échoue »](#quand-ca-echoue). Derrière un proxy ou un certificat d’entreprise, voir [« Derrière un proxy d’entreprise »](#derriere-un-proxy-d-entreprise) et le [dépannage](troubleshooting).
 
 ## Quand ça échoue
 

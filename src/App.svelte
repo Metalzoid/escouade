@@ -237,7 +237,7 @@
 {:else if app.modal?.kind === 'import'}
   <ImportModal projectId={app.modal.projectId} />
 {:else if app.modal?.kind === 'update' && app.update}
-  <UpdateModal version={app.update.version} notes={app.update.notes} />
+  <UpdateModal version={app.update.version} notes={app.update.notes} back={app.modal.back} />
 {:else if app.modal?.kind === 'telemetry'}
   <TelemetryModal />
 {:else if app.modal?.kind === 'teamName'}

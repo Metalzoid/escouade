@@ -280,6 +280,16 @@ export default {
     /** A download of an update that failed, kept in sight while it lasts. */
     updateTrouble: 'Mise à jour {version}',
     updateTroubleDesc: 'Téléchargement impossible : {error}',
+    /** An update found, by « Rechercher une mise à jour » or the automatic check (ESC-250): downloading, then ready. */
+    updateFound: 'Escouade {version} disponible',
+    updateDownloading: 'Téléchargement…',
+    updateReady: 'Escouade {version} prête',
+    updateReadyDesc: 'Elle s’installe au redémarrage d’Escouade.',
+    /** What a screen reader hears of it as it comes. */
+    updateFoundLive: 'Escouade {version} disponible : téléchargement…',
+    updateReadyLive: 'Escouade {version} prête : redémarre pour l’installer.',
+    seeNotes: 'Voir les nouveautés',
+    hideNotes: 'Masquer les nouveautés',
     credits: 'Crédits et licences',
     creditsDesc: 'Piper, eSpeak NG, ONNX Runtime, whisper.cpp, et la licence et le crédit de chaque voix',
     creditsOpen: 'Ouvrir',

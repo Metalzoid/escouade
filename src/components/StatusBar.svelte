@@ -25,6 +25,7 @@
   import { api } from '../lib/ipc';
   import { estimatedBy, estimateHint, fSpentUsd } from '../lib/spend';
   import { app } from '../lib/state.svelte';
+  import { postponeRestart, restartIn as restartSeconds } from '../lib/updater';
   import type { EngineId } from '../lib/types';
   import AccountsPanel from './AccountsPanel.svelte';
   import BranchPicker from './branches/BranchPicker.svelte';
@@ -147,12 +148,7 @@
   }
 
   /** Seconds left before the automatic restart for the update, when one is planned. */
-  const restartIn = $derived(app.restartAt === null ? null : Math.max(0, Math.ceil((app.restartAt - app.now) / 1000)));
-
-  function postpone() {
-    app.restartAt = null;
-    app.run(api.updatePostpone());
-  }
+  const restartIn = $derived(restartSeconds());
 
   /** What the branch button says while a sync runs. */
   const runningLabel = (op: SyncOp) =>
@@ -333,7 +329,7 @@
     <div class="end">
       {#if restartIn !== null}
         <span class="it"><b>{t('shell.status.restartIn', { seconds: restartIn })}</b></span>
-        <button class="small" onclick={postpone}>{t('common.later')}</button>
+        <button class="small" onclick={postponeRestart}>{t('common.later')}</button>
       {:else if app.update?.ready}
         <button class="it link upd" onclick={() => (app.modal = { kind: 'update' })}
           ><Icon name="download" size={14} /><Rich k="shell.status.updateReady" version={app.update.version}

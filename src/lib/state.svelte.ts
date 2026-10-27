@@ -125,8 +125,8 @@ export type Modal =
   | { kind: 'account'; accountId?: string; back?: SettingsTab; engine?: EngineId; reserveFor?: string }
   | { kind: 'testLaunch'; agentId: string }
   | { kind: 'import'; projectId: string }
-  /** The update downloaded (`app.update`), which a restart installs. */
-  | { kind: 'update' }
+  /** The update downloaded (`app.update`), which a restart installs; `back`, the settings' tab it was opened from and goes back to. */
+  | { kind: 'update'; back?: SettingsTab }
   /** The release notes of the update installed since the last start. */
   | { kind: 'notes'; version: string; notes: string }
   /** « Rechercher dans les conversations » (Ctrl+K). */

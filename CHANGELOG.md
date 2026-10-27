@@ -4,6 +4,12 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [Non publié]
+
+### Corrections
+
+- Une mise à jour trouvée, par « Rechercher une mise à jour » comme par la recherche automatique, se voit aussi dans Réglages › À propos : en téléchargement, puis prête avec « Redémarrer maintenant » et ses nouveautés.
+
 ## [2.0.4] — 2026-10-27
 
 ### Nouveautés

@@ -1789,4 +1789,115 @@ describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
     expect(screen.getByText('Téléchargement impossible : délai dépassé')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Télécharger dans le navigateur' })).toBeNull();
   });
+
+  /** The backend with an update found (each test its own version: the updater keeps the one it found), its download held until `ready()`. */
+  function found(version: string, over: Record<string, (a: any) => unknown> = {}) {
+    let ready!: (answer: unknown) => void;
+    const download = new Promise((r) => (ready = r));
+    const backend = fakeBackend({
+      update_check: () => ({ kind: 'found', update: { id: 1, version, notes: `- Nouveauté de la ${version}` } }),
+      update_download: () => download,
+      update_close: () => null,
+      ...over,
+    });
+    return { backend, ready: (answer: unknown = { kind: 'ready' }) => ready(answer) };
+  }
+  /** The row of the update in « À propos ». */
+  const updateRow = () => screen.getByText(/^Escouade \S+ (disponible|prête)$/).closest('.sr') as HTMLElement;
+
+  it('shows an update found by the button while it downloads, then ready, and says so to a screen reader (ESC-250)', async () => {
+    const { ready } = found('2.5.0');
+    render(SettingsModal, { tab: 'about' });
+    const live = screen.getByTestId('update-live');
+    expect(live).toHaveAttribute('aria-live', 'polite');
+    expect(live).toHaveTextContent('');
+    await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
+    expect(await screen.findByText('Escouade 2.5.0 disponible')).toBeInTheDocument();
+    expect(within(updateRow()).getByText('Téléchargement…')).toBeInTheDocument();
+    expect(live).toHaveTextContent('Escouade 2.5.0 disponible : téléchargement…');
+    // Found: no « Aucune mise à jour » toast.
+    expect(app.toasts).toEqual([]);
+    ready();
+    expect(await screen.findByText('Escouade 2.5.0 prête')).toBeInTheDocument();
+    expect(screen.queryByText('Escouade 2.5.0 disponible')).toBeNull();
+    expect(live).toHaveTextContent('Escouade 2.5.0 prête : redémarre pour l’installer.');
+  });
+
+  it('shows an update the automatic check found, ready, its restart through the update’s window and its notes', async () => {
+    const backend = fakeBackend();
+    app.update = { version: '2.6.0', notes: '- Une rangée dans À propos', ready: true };
+    render(SettingsModal, { tab: 'about' });
+    const row = within(updateRow());
+    expect(row.getByText('Escouade 2.6.0 prête')).toBeInTheDocument();
+    // The notes, folded until asked for.
+    expect(screen.queryByText('Une rangée dans À propos')).toBeNull();
+    await userEvent.click(row.getByRole('button', { name: 'Voir les nouveautés' }));
+    expect(screen.getByText('Une rangée dans À propos')).toBeInTheDocument();
+    expect(row.getByRole('button', { name: 'Masquer les nouveautés' })).toHaveAttribute('aria-expanded', 'true');
+    // As the status bar: the update’s window (unsaved files, agents at work), which comes back here once put off.
+    await userEvent.click(row.getByRole('button', { name: 'Redémarrer maintenant' }));
+    expect(app.modal).toEqual({ kind: 'update', back: 'about' });
+    expect(backend.called('update_restart')).toEqual([]);
+  });
+
+  it('says the restart the backend planned, put off from here as from the status bar', async () => {
+    const backend = fakeBackend({ update_postpone: () => null });
+    app.update = { version: '2.6.1', notes: '', ready: true };
+    app.now = 1_000_000;
+    app.restartAt = 1_000_000 + 9_500;
+    render(SettingsModal, { tab: 'about' });
+    const row = within(updateRow());
+    expect(row.getByText('Redémarrage dans 10 s')).toBeInTheDocument();
+    // No notes: nothing to unfold.
+    expect(row.queryByRole('button', { name: 'Voir les nouveautés' })).toBeNull();
+    await userEvent.click(row.getByRole('button', { name: 'Plus tard' }));
+    expect(app.restartAt).toBeNull();
+    expect(backend.called('update_postpone')).toHaveLength(1);
+    expect(row.queryByText(/^Redémarrage dans/)).toBeNull();
+  });
+
+  it('finds and offers an update with the automatic updates turned off', async () => {
+    found('2.7.0');
+    render(SettingsModal, { tab: 'about' });
+    await userEvent.click(screen.getByRole('switch', { name: 'Installer les mises à jour automatiquement' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
+    expect(await screen.findByText('Escouade 2.7.0 disponible')).toBeInTheDocument();
+  });
+
+  it('shows nothing found with the toast alone, and a failed check with its error alone', async () => {
+    fakeBackend({ update_check: () => ({ kind: 'none' }) });
+    render(SettingsModal, { tab: 'about' });
+    await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
+    await expect.poll(() => app.toasts.at(-1)?.text).toBe('Aucune mise à jour disponible.');
+    expect(screen.queryByText(/^Escouade \S+ (disponible|prête)$/)).toBeNull();
+    fakeBackend({ update_check: () => ({ kind: 'failed', trouble: { message: 'délai dépassé', show: true, page: null } }) });
+    await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
+    await expect.poll(() => app.toasts.at(-1)?.text).toBe('Vérification des mises à jour impossible : délai dépassé');
+    expect(screen.queryByText(/^Escouade \S+ (disponible|prête)$/)).toBeNull();
+    expect(screen.getByTestId('update-live')).toHaveTextContent('');
+  });
+
+  it('gives way to the download that failed, never both rows, and to a newer version found meanwhile', async () => {
+    const { ready } = found('2.8.0');
+    render(SettingsModal, { tab: 'about' });
+    await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
+    expect(await screen.findByText('Escouade 2.8.0 disponible')).toBeInTheDocument();
+    ready({ kind: 'failed', trouble: { message: 'le proxy a refusé le fichier (403)', show: false, page: null } });
+    expect(await screen.findByText('Mise à jour 2.8.0')).toBeInTheDocument();
+    expect(screen.queryByText(/^Escouade \S+ (disponible|prête)$/)).toBeNull();
+    // Looked for again: the failure stays said while the download is tried again.
+    found('2.8.0');
+    await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
+    await expect.poll(() => app.update?.version).toBe('2.8.0');
+    expect(screen.getByText('Mise à jour 2.8.0')).toBeInTheDocument();
+    expect(screen.queryByText('Escouade 2.8.0 disponible')).toBeNull();
+    // A newer one found meanwhile takes the row.
+    const newer = found('2.9.0');
+    await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
+    expect(await screen.findByText('Escouade 2.9.0 disponible')).toBeInTheDocument();
+    expect(screen.queryByText('Mise à jour 2.8.0')).toBeNull();
+    newer.ready();
+    expect(await screen.findByText('Escouade 2.9.0 prête')).toBeInTheDocument();
+    expect(screen.queryByText(/2\.8\.0/)).toBeNull();
+  });
 });

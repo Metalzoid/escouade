@@ -8,7 +8,7 @@ Open the settings with `Ctrl+,` (`⌘,` on macOS), then choose “About” (“V
 
 ## Escouade
 
-The tab has a single group, “Escouade”, with eight lines.
+The tab has a single group, “Escouade”, with eight lines, plus that of an update found, under “Install updates automatically”, until it is installed (see [“Check for updates”](#check-for-updates)).
 
 | Line | What it shows or does | Default |
 |---|---|---|
@@ -27,7 +27,9 @@ If an installed harness isn’t found, give its path in the [“Harness”](sett
 
 Escouade looks on its own: once a few seconds after it starts, then five minutes after each check ends. The “Check for updates” button (it reads “Checking…” during the call) starts a check right away. With no newer version, a message says “No update available.”; if the check fails, an error message gives the reason. Only a check started with this button shows it right away: an automatic check waits for several failures in a row (see [“When it fails”](updates#when-it-fails)).
 
-A version found is downloaded right away and its signature is checked, then it waits. When it’s ready, the status bar shows a button, for example “Update 1.8.0 ready · Restart”. It opens a window, for example “Escouade 1.8.0 is ready”, which shows the version’s notes. “Restart now” installs the update. It’s grayed out while a file in the editor isn’t saved (the window tells you), and the window warns you when agents are working, since the restart interrupts their turn. “Later” closes the window without installing anything.
+A version found, by the button or by the automatic check, is downloaded right away and its signature is checked, then it waits. The tab shows it under “Install updates automatically”: “Escouade 1.8.0 available” with “Downloading…”, then “Escouade 1.8.0 ready” with the “Restart now” button and the “See what’s new” link, which unfolds its notes. During the countdown of an automatic restart, the line shows it too (“Restarting in 20 s”) with a “Later” button. If the download fails, the “Update 1.8.0” line takes its place and gives the reason (“Download failed: …”), with “Download in the browser” when it can; a newer version found later takes the place back.
+
+When it’s ready, the status bar also shows a button, for example “Update 1.8.0 ready · Restart”. It, like the tab’s “Restart now”, opens a window, for example “Escouade 1.8.0 is ready”, which shows the version’s notes. “Restart now” installs the update. It’s grayed out while a file in the editor isn’t saved (the window tells you), and the window warns you when agents are working, since the restart interrupts their turn. “Later” closes the window without installing anything (opened from the tab, it takes you back to “About”).
 
 Checking and downloading go through the proxy of the [“Network”](settings-network) tab. The whole flow is in [updates](updates).
 
