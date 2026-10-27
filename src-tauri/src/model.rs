@@ -134,9 +134,7 @@ pub struct Settings {
     /// « Effacer les copies après », in days (0: they stay as long as their owner does): the copies
     /// of joined files older than this go (`attachfiles::purge`).
     pub attach_keep_days: u32,
-    /// « Délai avant l'envoi pendant un tour », in seconds (0: off): a message typed during a turn
-    /// waits this long in the window, where it can be edited or cancelled (`outbox.svelte.ts`).
-    /// One of `MID_TURN_DELAYS` (`normalize_mid_turn_delay`).
+    /// « Délai avant l'envoi pendant un tour », in seconds (0: off), one of `MID_TURN_DELAYS`.
     pub mid_turn_delay_secs: u32,
     /// « Remote control pour tous les agents »: every agent, those of tickets too, is reachable
     /// from claude.ai (`AgentMeta::remote_control`, `RemoteSource::Global`).
@@ -499,8 +497,7 @@ impl Settings {
         }
     }
 
-    /// « Délai avant l'envoi pendant un tour » off its steps (written by hand, or by a later
-    /// version): the default.
+    /// A delay off its steps becomes the default.
     pub fn normalize_mid_turn_delay(&mut self) {
         if !MID_TURN_DELAYS.contains(&self.mid_turn_delay_secs) {
             self.mid_turn_delay_secs = DEFAULT_MID_TURN_DELAY;

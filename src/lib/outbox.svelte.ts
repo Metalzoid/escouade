@@ -1,18 +1,15 @@
-// The messages typed in an agent's composer during its turn, kept by the window for as long as they can be: the delay
-// of « Délai avant l’envoi pendant un tour » for a harness that reads them at its turn's next step (Claude Code, Codex,
-// Copilot CLI), the end of the turn for one that waits for it anyway (Cursor, OpenCode: `midTurn` `turnEnd`). Until
-// then each can be edited (given back to the composer), cancelled, or sent at once; the backend hears of it only once
-// it goes, the composer's own way (`sendDraft`), so nothing is ever taken out of a conversation.
+// The messages typed during a turn, held by the window until their delay is over or the turn ends (Cursor, OpenCode),
+// so they can be edited or cancelled. The backend only hears of one once it goes.
 
 import type { DraftAttachment } from './attachments';
 import { flushDrafts, giveBack } from './drafts';
+import { conversationOf } from './conversations.svelte';
 import { capsOf } from './engines';
 import { api } from './ipc';
 import { reportRefusal, sendDraft } from './send.svelte';
 import { app, atWork } from './state.svelte';
 import type { Agent } from './types';
 
-/** `delay`: it goes once its delay is over; `turnEnd`: at the end of the turn, one per end. */
 export type HoldMode = 'delay' | 'turnEnd';
 
 export interface Held {
@@ -21,14 +18,13 @@ export interface Held {
   body: string;
   files: DraftAttachment[];
   mode: HoldMode;
-  /** When it goes, in ms since the epoch; null for one that waits for the end of the turn. */
+  /** When it goes (ms since the epoch); null when it waits for the end of the turn. */
   at: number | null;
 }
 
-/** By agent, oldest first. Raw: the attachments it holds are not the window's to watch. */
 let held = $state.raw<Record<string, Held[]>>({});
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
-/** The sends of each agent, one after the other: a message held never overtakes one held before it. */
+/** Each agent's sends, one after the other: a message never overtakes one held before it. */
 const chains = new Map<string, Promise<void>>();
 let seq = 0;
 
@@ -36,16 +32,12 @@ export function heldOf(agentId: string): Held[] {
   return held[agentId] ?? [];
 }
 
-/** Once the messages of `agentId` the outbox let go of are sent (or refused): what a message sent after them waits for. */
+/** Resolves once the messages of `agentId` let go of are sent or refused. */
 export function settled(agentId: string): Promise<void> {
   return chains.get(agentId) ?? Promise.resolve();
 }
 
-/**
- * How a message typed now in the composer of `agent` is held, or null when it goes at once: behind one still held
- * (even at rest), as that one is; during a turn, as its harness takes such a message. Never during the preparation of
- * its worktree, which holds it its own way, nor for a harness that refuses it.
- */
+/** How a message typed now for `agent` is held, or null when it goes at once. Behind a held one, it is held the same way. */
 export function holdModeOf(agent: Agent): HoldMode | null {
   const before = heldOf(agent.id).at(-1);
   if (before) return before.mode;
@@ -74,7 +66,7 @@ export function hold(agentId: string, body: string, files: DraftAttachment[], mo
   return h;
 }
 
-/** Sends the message `id` now, and before it the ones of its agent held before it. */
+/** Sends the message `id` now, after the ones held before it. */
 export function sendNow(id: string) {
   const h = find(id);
   if (!h) return;
@@ -82,7 +74,6 @@ export function sendNow(id: string) {
   for (const m of list.slice(0, list.indexOf(h) + 1)) release(m);
 }
 
-/** Gives the message back to its agent's composer, before what was typed there since, and sends nothing. */
 export function editHeld(id: string) {
   const h = find(id);
   if (!h) return;
@@ -91,7 +82,6 @@ export function editHeld(id: string) {
   app.focusComposer++;
 }
 
-/** Drops the message, and the copies of the files it joined (never a file joined where it is). */
 export function cancelHeld(id: string) {
   const h = find(id);
   if (!h) return;
@@ -99,9 +89,9 @@ export function cancelHeld(id: string) {
   for (const f of h.files) if (f.file && !f.file.origin) api.attachDiscard(h.agentId, f.file.path).catch(() => {});
 }
 
-/** Gives every message held for `agentId` back to its draft, sending none (an agent being archived), in their order. */
+/** Gives every message held for `agentId` back to its draft, in their order, sending none. */
 export function returnHeld(agentId: string) {
-  // Each goes before what the draft holds: the newest first, so that the oldest ends at its head.
+  // `giveBack` puts each before the draft: newest first, so the oldest ends at its head.
   for (const h of [...heldOf(agentId)].reverse()) {
     drop(h);
     giveBack(agentId, h.body, h.files);
@@ -117,10 +107,12 @@ function find(id: string): Held | undefined {
 
 function put(agentId: string, list: Held[]) {
   const { [agentId]: _, ...rest } = held;
+  const had = agentId in held;
   held = list.length ? { ...rest, [agentId]: list } : rest;
+  // The backend then skips the « done » alert and holds off an update's restart.
+  if (had !== list.length > 0) api.setHeld(Object.keys(held)).catch(() => {});
 }
 
-/** Takes the message out of the outbox, its timer with it. */
 function drop(h: Held) {
   clearTimeout(timers.get(h.id));
   timers.delete(h.id);
@@ -133,7 +125,7 @@ function drop(h: Held) {
 function release(h: Held) {
   drop(h);
   const before = chains.get(h.agentId) ?? Promise.resolve();
-  const mine = before.then(() => deliver(h));
+  const mine = before.then(() => deliver(h)).catch((e) => console.error(e));
   chains.set(h.agentId, mine);
   void mine.then(() => {
     if (chains.get(h.agentId) === mine) chains.delete(h.agentId);
@@ -142,29 +134,27 @@ function release(h: Held) {
 
 async function deliver(h: Held) {
   const agent = app.agents[h.agentId];
-  // Removed meanwhile: nothing to send to. Archived: it reads nothing more, the message waits in its draft.
   if (!agent) return;
   if (agent.archived) return giveBack(h.agentId, h.body, h.files);
   try {
     await sendDraft(h.agentId, h.body, h.files);
+    conversationOf(h.agentId).noAccount = null;
   } catch (e) {
+    if (!app.agents[h.agentId]) return;
     giveBack(h.agentId, h.body, h.files);
     reportRefusal(h.agentId, e);
-    // Refused at the end of a turn, it started none: the next one waiting for that end goes now, never left for an
-    // end that will not come.
-    const now = app.agents[h.agentId];
-    if (h.mode === 'turnEnd' && now && !atWork(now)) turnEnded(h.agentId);
+    // Refused, it started no turn: the next one waiting for a turn end goes now.
+    if (h.mode === 'turnEnd' && !atWork(app.agents[h.agentId])) turnEnded(h.agentId);
   }
 }
 
-/** The end of a turn: the first message waiting for it goes, and starts the next (an archived agent's go back to its draft). */
 function turnEnded(agentId: string) {
   if (app.agents[agentId]?.archived) return returnHeld(agentId);
   const first = heldOf(agentId).find((m) => m.mode === 'turnEnd');
   if (first) release(first);
 }
 
-/** The window closing or reloading, or the app restarting for an update: what is held is written in the drafts. */
+/** The window closing or reloading: what is held goes to the drafts. */
 function returnAll() {
   for (const agentId of Object.keys(held)) returnHeld(agentId);
   flushDrafts();
@@ -174,5 +164,4 @@ app.onTurnEnded(turnEnded);
 app.onAgentRemoved((agentId) => {
   for (const h of heldOf(agentId)) drop(h);
 });
-app.onRestartWarned(returnAll);
 if (typeof window !== 'undefined') window.addEventListener('pagehide', returnAll);

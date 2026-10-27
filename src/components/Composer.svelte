@@ -46,7 +46,7 @@
   } from '../lib/engines';
   import { keyLabel } from '../lib/platform';
   import { observeWidth } from '../lib/resize';
-  import { app } from '../lib/state.svelte';
+  import { app, atWork } from '../lib/state.svelte';
   import type { Agent, QuestionItem } from '../lib/types';
   import { insertAt } from '../lib/dictation';
   import type { DictationTarget } from '../lib/dictation.svelte';
@@ -103,21 +103,15 @@
 
   const conv = $derived(conversationOf(agent.id));
   const pendingItem = $derived(agent.pending.length ? conv.items.find((i) => i.id === agent.pending[0]) : undefined);
-  const busy = $derived(agent.status === 'running' || agent.status === 'waiting');
-  // What « Envoyer » does now: during a turn, how the message is held (`holdModeOf`), or that the harness takes it at its
-  // next step.
+  const busy = $derived(atWork(agent));
   const sendTitle = $derived.by(() => {
     const engine = speakerOf(agent.engine);
     const enter = keyLabel('Enter');
-    if (!busy || pendingItem) return t('composer.send.title', { enter, newline: keyLabel('Shift+Enter') });
-    switch (holdModeOf(agent)) {
-      case 'delay':
-        return t('composer.send.titleHeld', { engine, s: app.settings.midTurnDelaySecs, enter });
-      case 'turnEnd':
-        return t('composer.send.titleTurnEnd', { engine, enter });
-      default:
-        return t('composer.send.titleQueued', { engine, enter });
-    }
+    const mode = pendingItem ? null : holdModeOf(agent);
+    if (mode === 'delay') return t('composer.send.titleHeld', { engine, s: app.settings.midTurnDelaySecs, enter });
+    if (mode === 'turnEnd') return t('composer.send.titleTurnEnd', { engine, enter });
+    if (busy && !pendingItem) return t('composer.send.titleQueued', { engine, enter });
+    return t('composer.send.title', { enter, newline: keyLabel('Shift+Enter') });
   });
   // The menus are those of the agent's harness: its models, its efforts, its modes.
   const effortOk = $derived(modelTakes(agent, agent.model, 'effort'));
@@ -234,10 +228,9 @@
     queueMicrotask(autosize);
   });
 
-  // A message given back to this draft from elsewhere (refused, or taken back before it went: `giveBack`): read again.
+  // A message given back to this draft from elsewhere (`giveBack`).
   $effect(() => {
-    const back = app.draftReturned;
-    if (!back || back.agentId !== agentId) return;
+    if (!app.draftReturned[agentId]) return;
     untrack(() => {
       const d = getDraft(draftFor);
       text = d.text;
@@ -519,7 +512,6 @@
     }
     // Text typed while Claude waits answers the question / refuses the permission.
     const answering = body ? pendingItem : undefined;
-    // During a turn, the window holds it for a while, or until the turn ends: it can be edited or cancelled until then.
     const mode = answering ? null : holdModeOf(agent);
     if (mode) {
       hold(agent.id, body, files.slice(), mode);
@@ -535,7 +527,7 @@
     if (!answering) files = [];
     const mine = (async () => {
       if (before) await before;
-      // Nor before a message held during the turn that is on its way.
+      // Nor before a held message on its way.
       await settled(message.id);
       await deliver(message);
     })();

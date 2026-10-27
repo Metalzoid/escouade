@@ -485,7 +485,7 @@
     const archive = () => {
       // Archiving stops its test launches: stopped first, their ends are no crashes.
       stopTests(a.id);
-      // Its messages held during the turn go back to its draft: the end of that turn, archived, must not send them.
+      // What it holds goes back to its draft, unsent.
       returnHeld(a.id);
       return app.run(api.archiveAgent(a.id, true));
     };

@@ -221,7 +221,6 @@ describe('SettingsModal', () => {
     const backend = backendSaving();
     render(SettingsModal);
     const delay = group('Tous les harness').getByRole('group', { name: 'Délai avant l’envoi pendant un tour' });
-    // Its help says what the delay is for, and that Cursor and OpenCode keep the message until the turn ends anyway.
     expect(screen.getByText(/tu peux le modifier ou l’annuler d’ici là/)).toHaveTextContent(/Cursor et OpenCode/);
     expect(
       within(delay)

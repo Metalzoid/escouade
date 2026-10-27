@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { agent, BARE_ENGINE, CLAUDE_ENGINE, CURSOR_ENGINE, fakeBackend, project, SETTINGS } from '../test/ipc';
 import type { DraftAttachment } from './attachments';
 import { forgetDraft, getDraft } from './drafts';
-import { cancelHeld, editHeld, heldOf, hold, holdModeOf, sendNow } from './outbox.svelte';
+import { conversationOf } from './conversations.svelte';
+import { cancelHeld, editHeld, heldOf, hold, holdModeOf, sendNow, settled } from './outbox.svelte';
 import { readPref } from './prefs';
 import { app } from './state.svelte';
 import type { Agent, InitialState, UiEvent } from './types';
@@ -26,6 +27,8 @@ describe('outbox', () => {
   let backend: ReturnType<typeof fakeBackend>;
   /** What `send_message` refuses, by text. */
   let refused: Set<string>;
+  /** What `send_message` answers instead, when set. */
+  let answer: Promise<void> | null;
 
   async function start(agents: Agent[], delay = 10) {
     let channel: { onmessage: (e: UiEvent) => void } | null = null;
@@ -51,6 +54,7 @@ describe('outbox', () => {
       },
       get_conversation: () => [],
       send_message: (args: any) => {
+        if (answer) return answer;
         if (refused.has(args.text)) throw new Error('Claude Code s’est arrêté');
       },
     });
@@ -68,6 +72,7 @@ describe('outbox', () => {
   beforeEach(() => {
     localStorage.clear();
     refused = new Set();
+    answer = null;
     for (const id of ['c1', 'k1']) forgetDraft(id);
     vi.useFakeTimers();
   });
@@ -149,7 +154,7 @@ describe('outbox', () => {
     holdNow('k1', 'deux');
     update('k1', { status: 'done' });
     await settle();
-    // No turn of its started for the refused one: the next goes now, rather than wait for an end that never comes.
+    // Refused, it started no turn: the next goes now.
     expect(sent()).toEqual(['un', 'deux']);
     expect(getDraft('k1').text).toBe('un');
     expect(heldOf('k1')).toEqual([]);
@@ -204,7 +209,6 @@ describe('outbox', () => {
     update('k1', { status: 'idle', archived: true });
     expect(heldOf('k1')).toEqual([]);
     expect(getDraft('k1').text).toBe('fin de tour');
-    // Archived while its turn went on: the delay is over after.
     update('c1', { archived: true });
     await vi.advanceTimersByTimeAsync(10_000);
     expect(sent()).toEqual([]);
@@ -220,6 +224,65 @@ describe('outbox', () => {
     expect(readPref('draft.c1')).toBe('A\n\nB');
     expect(readPref('draft.k1')).toBe('K');
     expect(heldOf('c1')).toEqual([]);
+  });
+
+  it('tells the backend which agents it holds a message for', async () => {
+    await start([claude(), cursor()]);
+    const held = () => backend.called('set_held').map((c) => c.args.agents);
+    const x = holdNow('c1', 'x');
+    holdNow('c1', 'y');
+    holdNow('k1', 'K');
+    expect(held()).toEqual([['c1'], ['c1', 'k1']]);
+    cancelHeld(x.id);
+    expect(held()).toHaveLength(2);
+    update('k1', { status: 'done' });
+    await settle();
+    expect(held().at(-1)).toEqual(['c1']);
+  });
+
+  it('keeps what it holds when the app warns of a restart: the backend waits for it', async () => {
+    await start([claude()]);
+    holdNow('c1', 'x');
+    emit({ type: 'updateRestart', at: Date.now() + 30_000 });
+    expect(heldOf('c1').map((h) => h.body)).toEqual(['x']);
+  });
+
+  it('still sends the next message when what tells a refusal throws', async () => {
+    await start([claude()]);
+    refused.add('A');
+    vi.spyOn(app, 'toast').mockImplementationOnce(() => {
+      throw new Error('toast');
+    });
+    holdNow('c1', 'A');
+    const b = holdNow('c1', 'B');
+    sendNow(b.id);
+    await settle();
+    expect(sent()).toEqual(['A', 'B']);
+    await expect(settled('c1')).resolves.toBeUndefined();
+  });
+
+  it('takes down the missing account card once a held message goes', async () => {
+    await start([claude()]);
+    conversationOf('c1').noAccount = { engine: 'claude', text: 'Aucun compte' };
+    holdNow('c1', 'x');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(sent()).toEqual(['x']);
+    expect(conversationOf('c1').noAccount).toBeNull();
+  });
+
+  it('says nothing of a refusal that comes back once its agent is deleted', async () => {
+    await start([claude()]);
+    let refuse = (_: Error) => {};
+    answer = new Promise((_, reject) => (refuse = reject));
+    const x = holdNow('c1', 'x');
+    sendNow(x.id);
+    await settle();
+    emit({ type: 'agentRemoved', id: 'c1', projectId: 'p1' });
+    const toasts = app.toasts.length;
+    refuse(new Error('Agent introuvable'));
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(app.toasts).toHaveLength(toasts);
+    expect(readPref('draft.c1')).toBeNull();
   });
 
   it('gives a refused message back and still sends the next one', async () => {

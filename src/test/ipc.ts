@@ -398,7 +398,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.filesScope = 'agent';
   app.panelTab = 'files';
   app.composerPut = null;
-  app.draftReturned = null;
+  app.draftReturned = {};
   workflows.reset();
   app.diffSplit = false;
   app.modal = null;

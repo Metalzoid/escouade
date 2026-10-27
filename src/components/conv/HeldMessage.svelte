@@ -6,8 +6,7 @@
   import type { EngineId, UserItem } from '../../lib/types';
   import UserMessage from './UserMessage.svelte';
 
-  // A message the outbox holds (typed during a turn): drawn as one sent, then when it goes and what can be done until
-  // then. `engine`: its agent's harness, which the note names.
+  // A message the outbox holds, with when it goes and what can be done until then.
   let { held, engine = null }: { held: Held; engine?: EngineId | null } = $props();
 
   const item = $derived<UserItem>({
@@ -20,7 +19,6 @@
     queued: false,
   });
 
-  // The countdown, read again each second while it runs.
   let now = $state(Date.now());
   $effect(() => {
     if (held.at === null) return;
@@ -32,7 +30,7 @@
 
 <UserMessage {item} {engine}>
   {#snippet extra()}
-    {#if held.at === null}
+    {#if held.mode === 'turnEnd'}
       <span class="note" use:tip={t('conv.held.turnEndHint', { engine: speakerOf(engine) })}>{t('conv.held.turnEnd')}</span>
     {:else}
       <span class="note">{t('conv.held.delay', { s: left })}</span>

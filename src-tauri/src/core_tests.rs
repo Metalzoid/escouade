@@ -3725,6 +3725,46 @@ async fn archiving_a_running_agent_ends_what_it_was_doing() {
 }
 
 #[tokio::test]
+async fn the_end_of_the_turn_an_archive_stops_says_the_agent_is_archived() {
+    let h = harness("archive-turn-end");
+    let (p, _) = h.project(false).await;
+    // The stopped turn's end is read before the archive goes on.
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                append_prompt: Some("[fin-d-abord]".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    h.core
+        .send_message(&id, "slow".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("the turn", |h| h.agent(&id).status == AgentStatus::Running)
+        .await;
+    let from = h.events.lock().len();
+
+    h.core.archive_agent(&id, true).await.unwrap();
+
+    let events = h.events.lock();
+    let end = events[from..]
+        .iter()
+        .find(|e| {
+            e["type"] == "agent"
+                && e["agent"]["id"] == id.as_str()
+                && e["agent"]["status"] != "running"
+        })
+        .expect("its turn was seen to end");
+    assert_eq!(end["agent"]["archived"], true, "{end}");
+}
+
+#[tokio::test]
 async fn a_message_after_a_crash_restarts_claude() {
     let h = harness("crash");
     let (p, _) = h.project(false).await;
@@ -8190,6 +8230,23 @@ async fn a_question_or_a_permission_is_told_with_its_own_words() {
         h.alerts()[1].ends_with(" | Autoriser Bash : rm -rf build ?"),
         "{:?}",
         h.alerts()
+    );
+}
+
+#[tokio::test]
+async fn the_end_of_a_turn_is_not_told_while_the_window_holds_a_message_for_it() {
+    let h = harness("notify-held");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    *h.core.held.lock() = [id.clone()].into();
+    h.turn(&id, "Bonjour").await;
+    h.core.held.lock().clear();
+    h.turn(&id, "Encore").await;
+    h.wait_alerts(1).await;
+    let sent = h.alerts();
+    assert!(
+        sent.len() == 1 && sent[0].ends_with(" | Bonjour, tu as dit : Encore"),
+        "{sent:?}"
     );
 }
 

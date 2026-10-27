@@ -22,7 +22,7 @@ export interface Settings {
   attachBigText: 'path' | 'refuse';
   /** « Purger les copies après », in days: 0 = kept as long as their owner (agent, project, ticket). */
   attachKeepDays: number;
-  /** « Délai avant l’envoi pendant un tour », in seconds (0, 5, 10, 20 or 30; 0: off): a message typed during a turn waits this long in the window, where it can be edited or cancelled (`outbox.svelte.ts`). */
+  /** « Délai avant l’envoi pendant un tour », in seconds (0: off). */
   midTurnDelaySecs: number;
   pwshPath: string;
   bashPath: string;
@@ -601,7 +601,7 @@ export interface EngineCaps {
   /** Copying an agent (« Dupliquer la conversation »), and up to where; 'none': hidden. */
   fork: 'none' | 'entry' | 'turn' | 'event' | 'message';
   resumeOtherAccount: boolean;
-  /** A message sent while a turn runs: queued by the harness (read at its next step), read at once, kept by Escouade until the turn ends, or refused. */
+  /** A message sent while a turn runs: queued, read at once, held until the turn ends, or refused. */
   midTurn: 'queued' | 'immediate' | 'turnEnd' | 'refused';
   slashCommands: boolean;
   quota: 'windows' | 'credits' | 'none';

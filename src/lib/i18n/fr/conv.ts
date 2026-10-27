@@ -145,7 +145,7 @@ export default {
     saidAloud: 'Dit à voix haute',
   },
 
-  /** A message typed during a turn, which the window holds before it goes (`outbox.svelte.ts`). `{s}`: seconds left. */
+  /** A message held before it goes (`outbox.svelte.ts`). `{s}`: seconds left. */
   held: {
     delay: 'Envoi dans {s} s',
     turnEnd: 'Attend la fin du tour',

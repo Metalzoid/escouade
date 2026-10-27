@@ -1,7 +1,9 @@
 import { createEvent, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { conversationOf } from '../lib/conversations.svelte';
+import { giveBack } from '../lib/drafts';
 import { fileOrigins } from '../lib/file-origin';
 import { cancelHeld, editHeld, heldOf, sendNow } from '../lib/outbox.svelte';
 import { setLang } from '../lib/i18n';
@@ -635,6 +637,26 @@ describe('Composer', () => {
       expect(backend.called('send_message').map((c) => c.args.text)).toEqual(['Premier']);
       finish();
       await waitFor(() => expect(backend.called('send_message').map((c) => c.args.text)).toEqual(['Premier', 'Second']));
+    });
+
+    it('reads its draft again when messages go back to several drafts at once', async () => {
+      const { a, textarea } = setup({ status: 'done' });
+      giveBack(a.id, 'Ajoute un test', []);
+      giveBack('autre', 'Ailleurs', []);
+      await waitFor(() => expect(textarea.value).toBe('Ajoute un test'));
+    });
+
+    it('says on « Send » that a message is held behind one still held, the turn over', async () => {
+      setLang('en');
+      const { a, textarea } = setup({ status: 'running' });
+      app.settings.midTurnDelaySecs = 10;
+      await userEvent.type(textarea, 'a{Enter}');
+      app.agents[a.id].status = 'done';
+      await tick();
+      expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute(
+        'data-tip',
+        'Sent to Claude in 10 s, can be cancelled until then · Enter to send',
+      );
     });
 
     it('says on « Send » that a message sent now can be cancelled until it goes', async () => {

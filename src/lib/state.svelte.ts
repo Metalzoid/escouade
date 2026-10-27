@@ -214,7 +214,7 @@ export interface ToastAction {
 /** Statuses that call for the user: a question, the end of a turn, an error. */
 const ALERT: ReadonlySet<AgentStatus> = new Set(['waiting', 'done', 'error']);
 
-/** An agent working, or waiting for an answer (a pending request always comes with « waiting »): its turn is under way. */
+/** Its turn is under way: working, or waiting for an answer. */
 export const atWork = (a: Pick<Agent, 'status'>) => a.status === 'running' || a.status === 'waiting';
 
 /** How many of the last lines of the step running a worktree's setup the window keeps (as the backend does). */
@@ -295,8 +295,8 @@ class AppState {
   panelTab = $state<'files' | 'history' | 'workflow' | 'hosts'>('files');
   /** A text to put in an agent's composer without sending it (a door of the Workflow tab): taken by its composer, which then clears it. */
   composerPut = $state<{ agentId: string; text: string } | null>(null);
-  /** A message given back to an agent's draft from outside its composer (`giveBack`): its composer, if shown, reads the draft again. `n` tells one from the next. */
-  draftReturned = $state<{ agentId: string; n: number } | null>(null);
+  /** How many messages went back to each agent's draft (`giveBack`): its composer reads the draft again. */
+  draftReturned = $state<Record<string, number>>({});
   /** Side-by-side diffs (else unified), shared by the diff dialog and the split layout. */
   diffSplit = $state(readPref('diffSplit') === '1');
   showArchived = $state(false);
@@ -436,7 +436,6 @@ class AppState {
   private ticketDoneHooks = new Set<(agentId: string) => void>();
   /** What must be written before the app restarts by itself for an update (the composers' drafts). */
   private restartHooks = new Set<() => void>();
-  /** What waits for an agent's turn to be over: the messages held until then (`outbox.svelte.ts`). */
   private turnEndHooks = new Set<(agentId: string) => void>();
 
   /** `f` runs when the backend removes an agent, before the state forgets it. Returns what unregisters it. */
@@ -445,7 +444,7 @@ class AppState {
     return () => void this.removalHooks.delete(f);
   }
 
-  /** `f` runs when an agent that was at work (running, or waiting for an answer) no longer is, after the state has its new self. Returns what unregisters it. */
+  /** `f` runs when an agent's turn ends, after the state has its new self. Returns what unregisters it. */
   onTurnEnded(f: (agentId: string) => void) {
     this.turnEndHooks.add(f);
     return () => void this.turnEndHooks.delete(f);

@@ -124,9 +124,6 @@ fn only_codex_declares_a_sandbox() {
     }
 }
 
-/// A message sent during a turn: Claude Code reads it at the turn's next step, Codex and Copilot
-/// CLI at once, Cursor and OpenCode wait in Escouade's process for the turn to end (the window
-/// keeps it that long, `outbox.svelte.ts`).
 #[test]
 fn the_harnesses_that_hold_a_message_until_the_turn_ends_say_so() {
     for e in all() {

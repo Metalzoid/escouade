@@ -603,6 +603,7 @@ pub fn run() {
             commands::play_chime,
             commands::quit_app,
             commands::set_unsaved,
+            commands::set_held,
             commands::ticket_create,
             commands::ticket_update,
             commands::ticket_delete,

@@ -73,9 +73,8 @@ export default {
     label: 'Envoyer',
     /** `{enter}`: the Enter key as written on this keyboard. */
     titleQueued: '{engine} en tiendra compte dès sa prochaine étape · {enter} pour envoyer',
-    /** Held by the window for `{s}` seconds (« Délai avant l’envoi pendant un tour »), then sent. */
+    /** `{s}`: seconds before it goes. */
     titleHeld: 'Envoyé à {engine} dans {s} s, annulable d’ici là · {enter} pour envoyer',
-    /** Held by the window until the end of the turn (Cursor, OpenCode). */
     titleTurnEnd: '{engine} le recevra à la fin de son tour, annulable d’ici là · {enter} pour envoyer',
     title: '{enter} pour envoyer · {newline} pour aller à la ligne',
     alreadyWaiting: 'Un message attend déjà la fin de la préparation.',

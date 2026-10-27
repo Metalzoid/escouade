@@ -8,7 +8,7 @@
   import EngineMark from '../EngineMark.svelte';
   import Icon from '../Icon.svelte';
 
-  // `engine`: its agent's harness, which the note names; `extra`: what follows the notes under the bubble (a held message's).
+  // `engine`: its agent's harness, which the note names; `extra`: more notes (a held message's).
   let {
     item,
     waiting = false,

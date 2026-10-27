@@ -894,6 +894,8 @@ pub struct Core<R: Runtime = Wry> {
     pub quitting: AtomicBool,
     /// Files left unsaved in the editor, as the window last said.
     pub unsaved: AtomicUsize,
+    /// The agents the window holds a message for (`outbox.svelte.ts`).
+    pub held: Mutex<HashSet<String>>,
     /// Work under way outside of an agent's turn that a restart would cut (`Core::working`): a
     /// ticket being started, a validation and its cleanup, a message being delivered, a merge.
     pub(crate) works: AtomicUsize,
@@ -1817,6 +1819,7 @@ impl<R: Runtime> Core<R> {
             waiting: AtomicUsize::new(usize::MAX),
             quitting: AtomicBool::new(false),
             unsaved: AtomicUsize::new(0),
+            held: Mutex::default(),
             works: AtomicUsize::new(0),
             board_lock: tokio::sync::Mutex::new(()),
             cut_turns: Mutex::new(cut_turns),
@@ -2500,7 +2503,9 @@ impl<R: Runtime> Core<R> {
         if let Some(alert) = fx.notify {
             // A ticket's agent at work: its board tells when the ticket is ready or blocked; its
             // questions still call for the user.
-            if alert.kind == NotifyKind::Question || !self.ticket_doing(id) {
+            // Nor a turn's end the window follows with a message it holds.
+            let next = alert.kind == NotifyKind::Done && self.held.lock().contains(id);
+            if (alert.kind == NotifyKind::Question || !self.ticket_doing(id)) && !next {
                 self.notify_agent(alert, project_id, id, name);
             }
         }
@@ -7023,6 +7028,8 @@ impl<R: Runtime> Core<R> {
                 let running = rt.proc.clone().filter(|_| rt.meta.status.is_active());
                 if running.is_some() {
                     rt.interrupted = true;
+                    // Told archived with its turn's end: the window sends it none of its held messages.
+                    rt.meta.archived = true;
                 }
                 running
             };

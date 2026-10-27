@@ -143,7 +143,7 @@ export default defineZone('settings', {
     midTurnDelayDesc:
       'A message sent while an agent works waits this long: you can edit or cancel it until then. Cursor and OpenCode keep it until the end of the turn, whatever this setting.',
     midTurnDelayOff: 'Off',
-    /** `{s}`: a number of seconds. */
+    /** `{s}`: seconds. */
     midTurnDelaySecs: '{s} s',
     terminalView: 'New agents’ view',
     terminalViewDesc:

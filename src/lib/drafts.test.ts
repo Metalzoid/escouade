@@ -92,12 +92,12 @@ describe('drafts', () => {
     setDraft('a1', { text: 'b', files: [other] });
     giveBack('a1', 'a', [file]);
     expect(getDraft('a1')).toEqual({ text: 'a\n\nb', files: [file, other] });
-    expect(app.draftReturned?.agentId).toBe('a1');
-    const seen = app.draftReturned!.n;
+    const seen = app.draftReturned.a1;
     giveBack('a2', 'a', []);
     expect(getDraft('a2')).toEqual({ text: 'a', files: [] });
-    // Each one is told, even to the same agent twice.
-    expect(app.draftReturned).toEqual({ agentId: 'a2', n: seen + 1 });
+    giveBack('a1', '', [file]);
+    expect(getDraft('a1').text).toBe('a\n\nb');
+    expect(app.draftReturned).toMatchObject({ a1: seen + 1, a2: expect.any(Number) });
   });
 
   it('are kept apart for each agent', () => {

@@ -173,7 +173,7 @@ export default {
     midTurnDelayDesc:
       'Un message envoyé pendant qu’un agent travaille attend ce délai : tu peux le modifier ou l’annuler d’ici là. Cursor et OpenCode le gardent jusqu’à la fin du tour, quel que soit ce réglage.',
     midTurnDelayOff: 'Désactivé',
-    /** `{s}`: a number of seconds. */
+    /** `{s}`: seconds. */
     midTurnDelaySecs: '{s} s',
     terminalView: 'Vue des nouveaux agents',
     terminalViewDesc:
