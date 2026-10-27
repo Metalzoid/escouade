@@ -31,11 +31,12 @@
 </div>
 
 <style>
-  /* On one line, as the preview has them; in a narrow window, the segments wrap rather than overflow. */
+  /* On one line, as the preview has them; in a narrow window, the segments wrap rather than overflow, from the start of
+     their line as text would (under its label, the control starts where the label does). */
   .chips {
     flex: 0 1 auto;
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: flex-start;
     max-width: 100%;
   }
   .chip.mono {

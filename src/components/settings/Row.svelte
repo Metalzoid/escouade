@@ -39,11 +39,13 @@
 </div>
 
 <style>
+  /* In a flex that wraps rather than a grid: the label keeps a readable width (ESC-246), and a control that does not fit
+     beside it goes under it, with or without the `settings` container (the assistant has none). */
   .sr {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 28px;
+    gap: 10px 28px;
     padding: 13px 0;
   }
   :global(.sg) > :global(h2) + .sr,
@@ -55,13 +57,17 @@
     border-top: 1px solid rgba(var(--fg-rgb), 0.05);
   }
   .sr.wide {
-    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
   }
   .lab {
     display: grid;
+    flex: 1 1 180px;
     gap: 3px;
-    min-width: 0;
+    min-width: min(180px, 100%);
+  }
+  .wide > .lab,
+  .wide > .ctl {
+    flex-basis: 100%;
   }
   .l {
     font-weight: 550;
@@ -108,6 +114,7 @@
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
+    flex: 0 1 auto;
     min-width: 0;
     /* What it sets keeps its room: a control wider than this wraps or goes under it. */
     max-width: 62cqw;
@@ -118,9 +125,9 @@
   }
   /* Narrow (the CI's window, a long label): the control goes under what it sets. */
   @container settings (max-width: 520px) {
-    .sr {
-      grid-template-columns: minmax(0, 1fr);
-      gap: 10px;
+    .sr > .lab,
+    .sr > .ctl {
+      flex-basis: 100%;
     }
     .ctl {
       justify-content: flex-start;

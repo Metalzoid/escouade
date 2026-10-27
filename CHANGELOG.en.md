@@ -16,6 +16,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 - In the widened projects rail, a click on a project’s name opens it, as a click on its tile does.
 - The name on your shared tickets is taken from git when you gave none: “Share” no longer asks for it, and Settings › Application shows it filled in.
+- A setting with wide choices, like “When I approve a ticket” in the “New project” assistant, no longer has its label squeezed word by word: its choices go under it when they do not fit beside it.
 
 ## [2.0.3] — 2026-10-27
 
