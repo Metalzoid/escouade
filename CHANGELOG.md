@@ -4,6 +4,12 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [Non publié]
+
+### Nouveautés
+
+- Un message posté pendant qu’un agent travaille peut encore être modifié ou annulé avant de lui parvenir : il attend quelques secondes, ou la fin du tour chez Cursor et OpenCode, et peut aussi partir tout de suite.
+
 ## [2.0.5] — 2026-10-27
 
 ### Corrections
