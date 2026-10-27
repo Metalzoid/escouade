@@ -549,11 +549,11 @@ pub struct CreateTicketArgs {
     )]
     pub account: Option<String>,
     #[schemars(
-        description = "The model of its agents, as the window's model menu offers it (sonnet, opus, haiku…), or auto (the default): the Kanban's, else its account's."
+        description = "The model of its agents, as the window's model menu offers it for the harness of the ticket, else of its account, else of its project (sonnet, opus, haiku for Claude Code; gpt-6-luna… for Codex; list_projects gives the project's models), or auto (the default): the Kanban's, else its account's."
     )]
     pub model: Option<String>,
     #[schemars(
-        description = "The effort of its agents (low, medium, high, xhigh or max), or auto (the default): the Kanban's, else its account's (a model that takes none, Haiku, goes without)."
+        description = "The effort of its agents (low, medium, high, xhigh or max: those of the harness and of the model, see list_projects), or auto (the default): the Kanban's, else its account's (a model that takes none, Haiku, goes without)."
     )]
     pub effort: Option<String>,
     #[schemars(
@@ -671,11 +671,11 @@ pub struct UpdateTicketArgs {
     )]
     pub account: Option<String>,
     #[schemars(
-        description = "The model of its agents, as the window's model menu offers it (sonnet, opus, haiku…), or auto: the Kanban's, else its account's. Leave it out to keep it."
+        description = "The model of its agents, as the window's model menu offers it for the harness of the ticket, else of its account, else of its project (sonnet, opus, haiku for Claude Code; gpt-6-luna… for Codex; list_projects gives the project's models), or auto: the Kanban's, else its account's. Leave it out to keep it."
     )]
     pub model: Option<String>,
     #[schemars(
-        description = "The effort of its agents (low, medium, high, xhigh or max), or auto: the Kanban's, else its account's (a model that takes none, Haiku, goes without). Leave it out to keep it."
+        description = "The effort of its agents (low, medium, high, xhigh or max: those of the harness and of the model, see list_projects), or auto: the Kanban's, else its account's (a model that takes none, Haiku, goes without). Leave it out to keep it."
     )]
     pub effort: Option<String>,
     #[schemars(
@@ -719,11 +719,11 @@ pub struct StartTicketArgs {
     )]
     pub account: Option<String>,
     #[schemars(
-        description = "The model of this ticket's agent, as Claude Code names it (sonnet, opus, haiku…), for this ticket alone: it takes precedence over the Kanban's, e.g. keep opus on an architecture ticket while the Kanban is on sonnet. An empty string, or auto, goes back to the Kanban's. Leave it out to leave it as it is."
+        description = "The model of this ticket's agent, as its harness names it (sonnet, opus, haiku for Claude Code; gpt-6-luna… for Codex; list_projects gives the project's models), for this ticket alone: it takes precedence over the Kanban's, e.g. keep opus on an architecture ticket while the Kanban is on sonnet. An empty string, or auto, goes back to the Kanban's. Leave it out to leave it as it is."
     )]
     pub model: Option<String>,
     #[schemars(
-        description = "The effort of this ticket's agent (low, medium, high, xhigh or max), for this ticket alone: it takes precedence over the Kanban's (a model that takes none, Haiku, goes without). An empty string, or auto, goes back to the Kanban's. Leave it out to leave it as it is."
+        description = "The effort of this ticket's agent (low, medium, high, xhigh or max: those of its harness and model, see list_projects), for this ticket alone: it takes precedence over the Kanban's (a model that takes none, Haiku, goes without). An empty string, or auto, goes back to the Kanban's. Leave it out to leave it as it is."
     )]
     pub effort: Option<String>,
 }
@@ -845,11 +845,11 @@ pub struct SetBoardArgs {
     )]
     pub autopilot: Option<bool>,
     #[schemars(
-        description = "The model of the tickets' agents, as Claude Code names it (sonnet, opus, haiku…). An empty string is the app's default model. Leave it out to keep the current one."
+        description = "The model of the tickets' agents, as the project's harness names it (sonnet, opus, haiku for Claude Code; gpt-6-luna… for Codex; list_projects gives its models). An empty string is the app's default model. Leave it out to keep the current one."
     )]
     pub model: Option<String>,
     #[schemars(
-        description = "The effort of the tickets' agents: low, medium, high, xhigh or max. An empty string is the app's default effort. Leave it out to keep the current one."
+        description = "The effort of the tickets' agents: low, medium, high, xhigh or max, those of the project's harness and model (list_projects). An empty string is the app's default effort. Leave it out to keep the current one."
     )]
     pub effort: Option<String>,
     #[schemars(
@@ -927,7 +927,7 @@ pub struct CreateAgentArgs {
     )]
     pub worktree: Option<bool>,
     #[schemars(
-        description = "The model, as Claude Code names it (sonnet, opus, haiku…). Leave it out for the default model."
+        description = "The model, as the project's harness names it (sonnet, opus, haiku for Claude Code; gpt-6-luna… for Codex; list_projects gives its models). Leave it out for the default model."
     )]
     pub model: Option<String>,
 }
@@ -1003,7 +1003,7 @@ pub struct SplitTicketArgs {
 #[tool_router(vis = "pub(crate)")]
 impl<R: Runtime> Tools<R> {
     #[tool(
-        description = "List Escouade's projects, in the app's order (for an agent of Escouade, those it sees: a private project is listed to its own agents alone, and they see no other project): for each one its id, name, folder, current git branch (null when none), number of agents (archived ones left out), number of tickets in each column of its Kanban board (todo, doing, review, done), and its Remote Control settings: remoteControl (the project's own, which makes its agents reachable from claude.ai) and remoteControlAll (the global one, the same on every row, which covers every agent of every project). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
+        description = "List Escouade's projects, in the app's order (for an agent of Escouade, those it sees: a private project is listed to its own agents alone, and they see no other project): for each one its id, name, folder, current git branch (null when none), harness (engine) with the models and efforts its tools take (models, efforts: what model and effort accept for this project), number of agents (archived ones left out), number of tickets in each column of its Kanban board (todo, doing, review, done), and its Remote Control settings: remoteControl (the project's own, which makes its agents reachable from claude.ai) and remoteControlAll (the global one, the same on every row, which covers every agent of every project). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn list_projects(&self, ctx: ToolCtx<R>) -> CallToolResult {

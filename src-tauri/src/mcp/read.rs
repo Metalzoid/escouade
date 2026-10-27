@@ -58,6 +58,10 @@ struct ProjectRow {
     /// Of a project of several repositories (ESC-169): each one and its branch.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     repos: Vec<RepoBranch>,
+    /// Its harness, and the models and efforts the tools take for it (ESC-248).
+    engine: Value,
+    models: Vec<String>,
+    efforts: Vec<String>,
 }
 
 /// A repository of a project of several, and its branch (ESC-169).
@@ -234,7 +238,11 @@ pub(super) async fn projects<R: Runtime>(
             Some(branch) => branch,
             None => Some(git::head_branch(&p.path).await),
         };
+        let (engine, models, efforts) = super::act::harness_choices(core, &p);
         rows.push(ProjectRow {
+            engine: serde_json::to_value(engine).unwrap_or_default(),
+            models,
+            efforts,
             branch: branch.filter(|b| !b.is_empty() && b != "(detached)"),
             agents: agents.get(&p.id).copied().unwrap_or(0),
             tickets: tickets.remove(&p.id).unwrap_or_default(),

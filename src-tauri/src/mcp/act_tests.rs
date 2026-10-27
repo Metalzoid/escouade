@@ -4840,3 +4840,280 @@ async fn a_shared_ticket_is_said_by_the_tools_and_another_ones_is_never_started_
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }
+
+/// A Codex account on the fake `codex`, its models read (ESC-186), and the project `p` on Codex.
+async fn on_codex(h: &Harness, p: &Project) {
+    let home = h.dir.join("codex-work");
+    h.set_settings(|s| {
+        s.accounts.push(Account {
+            id: "codex-work".into(),
+            name: "Codex".into(),
+            engine: EngineId::Codex,
+            config_dir: home.to_string_lossy().into(),
+            claude_path: crate::engine::fake_codex(),
+            active: true,
+            ..Default::default()
+        })
+    });
+    h.core.read_account_models("codex-work").await;
+    h.core
+        .projects
+        .write()
+        .iter_mut()
+        .find(|x| x.id == p.id)
+        .unwrap()
+        .engine = Some(EngineId::Codex);
+}
+
+#[tokio::test]
+async fn the_model_and_the_effort_are_checked_against_the_harness_of_the_project_that_carries_them()
+{
+    let h = harness("mcp-act-codex-models");
+    let p = project(&h).await;
+    // Claude Code's models are known too: they must not be what a Codex project is held to.
+    known_models(&h);
+    on_codex(&h, &p).await;
+    let c = external(&h).await;
+
+    // list_projects tells the harness of the project and what its tools take for it.
+    let listed = read(&c, "list_projects", json!({})).await;
+    let row = &listed[0];
+    assert_eq!(row["engine"], "codex");
+    let models: Vec<&str> = row["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m.as_str().unwrap())
+        .collect();
+    assert!(
+        models.contains(&"gpt-6-luna") && !models.contains(&"sonnet"),
+        "{row}"
+    );
+    assert!(
+        row["efforts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e == "max"),
+        "{row}"
+    );
+
+    // A model of Codex, by its name as the menu shows it: the agent goes on it, not on the default.
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": p.id, "message": "Bonjour", "model": "GPT-5.6-Terra" }),
+    )
+    .await;
+    let id = v["id"].as_str().unwrap();
+    let agent = h.agent(id);
+    assert_eq!(
+        (agent.engine, agent.model.as_str()),
+        (EngineId::Codex, "gpt-5.6-terra")
+    );
+    turn_over(&h, id).await;
+
+    // A model of Claude is refused, with the models of Codex.
+    let said = refused(
+        &c,
+        "create_agent",
+        json!({ "project": p.id, "message": "x", "model": "sonnet" }),
+    )
+    .await;
+    for part in [
+        "sonnet",
+        "Codex",
+        "compte Codex",
+        "gpt-6-luna",
+        "gpt-5.6-terra",
+    ] {
+        assert!(said.contains(part), "{said}");
+    }
+    assert!(!said.contains("opus"), "{said}");
+
+    // The Kanban: a model of Codex goes in, its effort is one of that model's.
+    let said = refused(&c, "set_board", json!({ "project": p.id, "model": "opus" })).await;
+    assert!(
+        said.contains("Codex") && said.contains("gpt-6-luna"),
+        "{said}"
+    );
+    let said = refused(
+        &c,
+        "set_board",
+        json!({ "project": p.id, "model": "gpt-5.6-terra", "effort": "max" }),
+    )
+    .await;
+    assert!(
+        said.contains("Codex") && said.contains("low, medium, high"),
+        "{said}"
+    );
+    assert!(!said.contains("xhigh"), "{said}");
+    let v = read(
+        &c,
+        "set_board",
+        json!({ "project": p.id, "model": "gpt-6-luna", "effort": "max" }),
+    )
+    .await;
+    assert_eq!(
+        (v["model"].as_str(), v["effort"].as_str()),
+        (Some("gpt-6-luna"), Some("max"))
+    );
+    let board = h.core.project(&p.id).unwrap().board;
+    assert_eq!(
+        (board.model.as_str(), board.effort.as_str()),
+        ("gpt-6-luna", "max")
+    );
+
+    // A ticket: its model and its effort too, when it is made and when it is changed.
+    let said = refused(
+        &c,
+        "create_ticket",
+        json!({ "project": p.id, "title": "Un", "model": "haiku" }),
+    )
+    .await;
+    assert!(
+        said.contains("Codex") && said.contains("gpt-6-luna"),
+        "{said}"
+    );
+    let v = read(
+        &c,
+        "create_ticket",
+        json!({ "project": p.id, "title": "Deux [ok]", "model": "gpt-6-luna", "effort": "xhigh" }),
+    )
+    .await;
+    let key = v["key"].as_str().unwrap().to_string();
+    let said = refused(
+        &c,
+        "update_ticket",
+        json!({ "ticket": key, "model": "gpt-5.6-terra", "effort": "xhigh" }),
+    )
+    .await;
+    assert!(
+        said.contains("Codex") && said.contains("low, medium, high"),
+        "{said}"
+    );
+    let v = read(
+        &c,
+        "update_ticket",
+        json!({ "ticket": key, "model": "GPT-5.6-TERRA", "effort": "high" }),
+    )
+    .await;
+    assert_eq!(
+        (v["model"].as_str(), v["effort"].as_str()),
+        (Some("gpt-5.6-terra"), Some("high"))
+    );
+
+    // Started: nothing is written on a model that does not fit, and the agent runs on the one asked.
+    let said = refused(
+        &c,
+        "start_ticket",
+        json!({ "ticket": key, "model": "opus" }),
+    )
+    .await;
+    assert!(said.contains("Codex"), "{said}");
+    let t = h
+        .core
+        .tickets
+        .read()
+        .iter()
+        .find(|t| t.key == key)
+        .cloned()
+        .unwrap();
+    assert_eq!(t.column, Column::Todo);
+    let v = read(
+        &c,
+        "start_ticket",
+        json!({ "ticket": key, "model": "gpt-6-luna", "effort": "max" }),
+    )
+    .await;
+    assert_eq!(v["model"], "gpt-6-luna");
+    let agent_id = wait_running_key(&h, &key).await;
+    assert_eq!(h.agent(&agent_id).model, "gpt-6-luna");
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+/// The id of the agent of the ticket `key`, once it has one.
+async fn wait_running_key(h: &Harness, key: &str) -> String {
+    let id = h
+        .core
+        .tickets
+        .read()
+        .iter()
+        .find(|t| t.key == key)
+        .unwrap()
+        .id
+        .clone();
+    h.wait("the ticket's agent", |h| {
+        h.core
+            .tickets
+            .read()
+            .iter()
+            .any(|t| t.id == id && t.agent_id.is_some())
+    })
+    .await;
+    h.ticket(&id).agent_id.unwrap()
+}
+
+#[tokio::test]
+async fn a_ticket_set_on_codex_in_a_claude_project_takes_the_models_of_codex_and_a_claude_project_stays_as_it_was(
+) {
+    let h = harness("mcp-act-ticket-harness");
+    let p = project(&h).await;
+    known_models(&h);
+    on_codex(&h, &p).await;
+    // Back on Claude Code (the default), the ticket alone on Codex (ESC-153).
+    h.core
+        .projects
+        .write()
+        .iter_mut()
+        .find(|x| x.id == p.id)
+        .unwrap()
+        .engine = None;
+    let mut t = ticket(&p, "DEM-9", "Codex [ok]", Column::Todo, 5);
+    t.engine = Some(EngineId::Codex);
+    let t = put(&h, t);
+    let c = external(&h).await;
+
+    let said = refused(
+        &c,
+        "start_ticket",
+        json!({ "ticket": t.key, "model": "sonnet" }),
+    )
+    .await;
+    assert!(
+        said.contains("Codex") && said.contains("gpt-6-luna"),
+        "{said}"
+    );
+    let v = read(
+        &c,
+        "start_ticket",
+        json!({ "ticket": t.key, "model": "gpt-6-luna" }),
+    )
+    .await;
+    assert_eq!(v["model"], "gpt-6-luna");
+
+    // The project, on Claude Code, is held to Claude Code's models as before.
+    let said = refused(
+        &c,
+        "set_board",
+        json!({ "project": p.id, "model": "gpt-6-luna" }),
+    )
+    .await;
+    assert!(said.contains("sonnet") && !said.contains("Codex"), "{said}");
+    let said = refused(
+        &c,
+        "set_board",
+        json!({ "project": p.id, "effort": "ultra" }),
+    )
+    .await;
+    assert!(said.contains("low, medium, high, xhigh, max"), "{said}");
+    read(
+        &c,
+        "set_board",
+        json!({ "project": p.id, "model": "opus", "effort": "max" }),
+    )
+    .await;
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}

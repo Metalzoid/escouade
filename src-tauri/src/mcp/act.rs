@@ -475,6 +475,10 @@ pub(super) async fn create_ticket<R: Runtime>(
     may_act_on(core, caller, &project.id)?;
     // The copies of the drafts the core does not move into the ticket go once the call is over.
     let mut drafted = Drafted::new(core);
+    // The model and the effort fit the harness that will carry them (ESC-248).
+    let account = account_setting(core, a.account.as_deref());
+    let on = carrier(core, &project, None, account.as_deref());
+    let (model, effort) = model_and_effort(core, &on, a.model.as_deref(), a.effort.as_deref())?;
     let draft = TicketDraft {
         title: title(&a.title)?,
         description: described(core, caller, a.description.as_deref().unwrap_or_default())?,
@@ -503,9 +507,9 @@ pub(super) async fn create_ticket<R: Runtime>(
         },
         // The tools do not name a harness: the project's.
         engine: None,
-        account: account_setting(core, a.account.as_deref()),
-        model: model_setting(core, auto_off(a.model.as_deref()))?,
-        effort: effort_setting(i18n::ui(), auto_off(a.effort.as_deref()))?,
+        account,
+        model,
+        effort,
         shared: a.shared,
     };
     let made = core
@@ -582,6 +586,9 @@ pub(super) async fn update_ticket<R: Runtime>(
         None if edited => without_origin(&t.description).to_string(),
         None => t.description.clone(),
     };
+    let account = account_setting(core, a.account.as_deref());
+    let on = carrier(core, &project, Some(&t), account.as_deref());
+    let (model, effort) = model_and_effort(core, &on, a.model.as_deref(), a.effort.as_deref())?;
     let mut draft = TicketDraft {
         title: match &a.title {
             Some(new) => title(new)?,
@@ -609,9 +616,9 @@ pub(super) async fn update_ticket<R: Runtime>(
         files: None,
         // Not the tools' to change either: the ticket keeps its harness.
         engine: None,
-        account: account_setting(core, a.account.as_deref()),
-        model: model_setting(core, auto_off(a.model.as_deref()))?,
-        effort: effort_setting(i18n::ui(), auto_off(a.effort.as_deref()))?,
+        account,
+        model,
+        effort,
         shared: a.shared,
     };
     let (images_given, files_given) = (
@@ -690,9 +697,10 @@ pub(super) fn start_ticket<R: Runtime>(
         return Err(ToolError::Refused(why));
     }
     // Before anything: a model or an effort that does not fit starts nothing, writes nothing.
-    let model = model_setting(core, auto_off(a.model.as_deref()))?;
-    let effort = effort_setting(i18n::ui(), auto_off(a.effort.as_deref()))?;
     let account = account_setting(core, a.account.as_deref());
+    let project = project_of(core, &t.project_id)?;
+    let on = carrier(core, &project, Some(&t), account.as_deref());
+    let (model, effort) = model_and_effort(core, &on, a.model.as_deref(), a.effort.as_deref())?;
     // A ticket that left « À faire » is told so by the core.
     if t.column == Column::Todo {
         let project = project_of(core, &t.project_id)?;
@@ -782,11 +790,25 @@ const BRANCHES_LISTED: usize = 20;
 /// goes back to the default, else one the app offers (`model`).
 fn model_setting<R: Runtime>(
     core: &Core<R>,
+    on: &Carrier,
     asked: Option<&str>,
 ) -> Result<Option<String>, ToolError> {
     asked
-        .map(|m| model(core, Some(m)).map(Option::unwrap_or_default))
+        .map(|m| model(core, on, Some(m)).map(Option::unwrap_or_default))
         .transpose()
+}
+
+/// The model and the effort a tool sets, each checked against the harness that carries them.
+fn model_and_effort<R: Runtime>(
+    core: &Core<R>,
+    on: &Carrier,
+    model: Option<&str>,
+    effort: Option<&str>,
+) -> Result<(Option<String>, Option<String>), ToolError> {
+    let model = model_setting(core, on, auto_off(model))?;
+    check_effort(core, on, model.as_deref(), auto_off(effort))?;
+    let effort = effort_setting(i18n::ui(), auto_off(effort))?;
+    Ok((model, effort))
 }
 
 /// `auto` (in any case) as a ticket's account, model or effort has it: empty, its default.
@@ -1101,7 +1123,9 @@ pub(super) async fn set_board<R: Runtime>(
 ) -> Result<(String, String), ToolError> {
     let project = resolve::project(core, caller, &a.project)?;
     may_act_on(core, caller, &project.id)?;
-    let model = model_setting(core, a.model.as_deref())?;
+    let on = carrier(core, &project, None, None);
+    let model = model_setting(core, &on, a.model.as_deref())?;
+    check_effort(core, &on, model.as_deref(), a.effort.as_deref())?;
     // Git is read only for a target that is not the Kanban's own: giving that one back needs no
     // repository at all.
     let kept = core.project(&project.id).map_err(failure)?.board.target;
@@ -1398,13 +1422,145 @@ pub(super) async fn delete_ticket<R: Runtime>(
 
 // ---------- agents ----------
 
-/// A model as Claude Code names it, one the window offers when it knows the list: what a
-/// `claude` last reported, or that of an account told (ESC-124: a model of one account only).
-fn model<R: Runtime>(core: &Core<R>, asked: Option<&str>) -> Result<Option<String>, ToolError> {
+/// The harness that will carry what a tool sets (ESC-248), and the account whose catalog says its
+/// models: the harness the call names through its account, else the ticket's own, else its
+/// account's, else the project's.
+pub(super) struct Carrier {
+    engine: EngineId,
+    account: Option<String>,
+}
+
+/// The harness of a model or an effort given for `project`, for its `ticket` when there is one, and
+/// for `account` (`account_setting`: the call's, `Some("")` for auto) when the call names one.
+fn carrier<R: Runtime>(
+    core: &Core<R>,
+    project: &Project,
+    ticket: Option<&Ticket>,
+    account: Option<&str>,
+) -> Carrier {
+    let named = account
+        .filter(|a| !a.is_empty())
+        .or_else(|| ticket.map(|t| t.account.as_str()).filter(|a| !a.is_empty()))
+        .map(str::to_string);
+    let settings = core.settings.read();
+    let of_account = named
+        .as_deref()
+        .and_then(|id| accounts::find(&settings, id))
+        .map(|a| a.engine);
+    let engine = ticket
+        .and_then(|t| t.engine)
+        .or(of_account)
+        .unwrap_or(project.engine());
+    drop(settings);
+    // No account named, or of another harness: the one a new agent of the harness would go to.
+    let account = named
+        .filter(|id| accounts::find(&core.settings.read(), id).is_some_and(|a| a.engine == engine))
+        .or_else(|| core.account_for_new(&project.id, engine).ok());
+    Carrier { engine, account }
+}
+
+/// A model its harness offers, as the menu of the account lists it.
+struct Offered {
+    id: String,
+    label: String,
+    efforts: Vec<String>,
+}
+
+/// The models of a harness other than Claude Code, for the account that will take them: what it
+/// listed (ESC-124, ESC-186), else what its harness listed for any account, else what it declares.
+fn offered<R: Runtime>(core: &Core<R>, on: &Carrier) -> Vec<Offered> {
+    let told = |m: &crate::engine::registry::ToldModel| Offered {
+        id: m.id.clone(),
+        label: m.label.clone(),
+        efforts: m.efforts.clone(),
+    };
+    let by_account = on
+        .account
+        .as_deref()
+        .and_then(|id| core.account_models.read().get(id).cloned())
+        .map(|m| m.catalog)
+        .filter(|c| !c.is_empty());
+    if let Some(list) = by_account {
+        return list.iter().map(told).collect();
+    }
+    if let Some(list) = core
+        .engine_models
+        .read()
+        .get(&on.engine)
+        .filter(|c| !c.is_empty())
+    {
+        return list.iter().map(told).collect();
+    }
+    crate::engine::by_id(on.engine)
+        .models()
+        .into_iter()
+        .map(|m| Offered {
+            id: m.id.to_string(),
+            label: m.label.to_string(),
+            efforts: Vec::new(),
+        })
+        .collect()
+}
+
+/// Where a harness other than Claude Code is named in an error: « Codex (compte Perso) ».
+fn carrier_name<R: Runtime>(core: &Core<R>, on: &Carrier) -> String {
+    let name = crate::engine::by_id(on.engine).name();
+    let settings = core.settings.read();
+    match on
+        .account
+        .as_deref()
+        .and_then(|id| accounts::find(&settings, id))
+    {
+        Some(a) => tr!(
+            "{name} (compte {account})",
+            "{name} (account {account})",
+            account = accounts::name_in(i18n::ui(), a)
+        ),
+        None => name.to_string(),
+    }
+}
+
+/// The harness of `project`, and the models and efforts it takes for the account that would carry
+/// a new agent (`list_projects`, ESC-248): what `create_agent`, `set_board` and the tickets check
+/// their `model` and `effort` against.
+pub(super) fn harness_choices<R: Runtime>(
+    core: &Core<R>,
+    project: &Project,
+) -> (EngineId, Vec<String>, Vec<String>) {
+    let on = carrier(core, project, None, None);
+    let efforts = crate::engine::by_id(on.engine)
+        .efforts()
+        .iter()
+        .map(|e| e.to_string())
+        .collect();
+    if on.engine != EngineId::Claude {
+        let ids = offered(core, &on).into_iter().map(|k| k.id).collect();
+        return (on.engine, ids, efforts);
+    }
+    let mut ids: Vec<String> = core.models.read().iter().map(|m| m.value.clone()).collect();
+    for told in core.account_models.read().values() {
+        for m in &told.models {
+            if !ids.contains(&m.value) {
+                ids.push(m.value.clone());
+            }
+        }
+    }
+    (on.engine, ids, efforts)
+}
+
+/// A model as its harness names it, one the window offers when it knows the list: for Claude Code
+/// what a `claude` last reported, or that of an account told (ESC-124: a model of one account
+/// only); for another harness the catalog of the account that will take it (ESC-248). Its id, in the
+/// case its harness has it.
+fn model<R: Runtime>(
+    core: &Core<R>,
+    on: &Carrier,
+    asked: Option<&str>,
+) -> Result<Option<String>, ToolError> {
     let Some(m) = asked.map(str::trim).filter(|m| !m.is_empty()) else {
         return Ok(None);
     };
-    // It rides on Claude Code's command line: nothing a flag could be made of.
+    // It rides on its harness's command line: nothing a flag could be made of.
     let shaped = m.chars().count() <= 100
         && m.starts_with(|c: char| c.is_ascii_alphanumeric())
         && m.chars()
@@ -1413,6 +1569,28 @@ fn model<R: Runtime>(core: &Core<R>, asked: Option<&str>) -> Result<Option<Strin
         return Err(ToolError::Failed(tr!(
             "« {m} » n’est pas un nom de modèle.",
             "“{m}” is not a model name."
+        )));
+    }
+    if on.engine != EngineId::Claude {
+        let known = offered(core, on);
+        if known.is_empty() {
+            return Ok(Some(m.to_string()));
+        }
+        if let Some(k) = known
+            .iter()
+            .find(|k| k.id.eq_ignore_ascii_case(m) || k.label.eq_ignore_ascii_case(m))
+        {
+            return Ok(Some(k.id.clone()));
+        }
+        let choices = known
+            .iter()
+            .map(|k| k.id.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let harness = carrier_name(core, on);
+        return Err(ToolError::Failed(tr!(
+            "Modèle « {m} » inconnu de {harness}. Modèles : {choices}.",
+            "Unknown model “{m}” for {harness}. Models: {choices}."
         )));
     }
     let mut known = core.models.read().clone();
@@ -1446,6 +1624,44 @@ fn model<R: Runtime>(core: &Core<R>, asked: Option<&str>) -> Result<Option<Strin
     )))
 }
 
+/// An effort given for a harness other than Claude Code checked against its own: the levels the
+/// model takes when its account lists them, else those of the harness (ESC-248). Claude Code's are
+/// checked by `effort_setting`; an empty effort, the default, always fits.
+fn check_effort<R: Runtime>(
+    core: &Core<R>,
+    on: &Carrier,
+    model: Option<&str>,
+    asked: Option<&str>,
+) -> Result<(), ToolError> {
+    let Some(asked) = asked.map(str::trim).filter(|e| !e.is_empty()) else {
+        return Ok(());
+    };
+    if on.engine == EngineId::Claude {
+        return Ok(());
+    }
+    let per_model = model
+        .filter(|m| !m.is_empty())
+        .and_then(|m| offered(core, on).into_iter().find(|k| k.id == m))
+        .map(|k| k.efforts)
+        .filter(|e| !e.is_empty());
+    let allowed: Vec<String> = per_model.unwrap_or_else(|| {
+        crate::engine::by_id(on.engine)
+            .efforts()
+            .iter()
+            .map(|e| e.to_string())
+            .collect()
+    });
+    if allowed.is_empty() || allowed.iter().any(|e| e.eq_ignore_ascii_case(asked)) {
+        return Ok(());
+    }
+    let harness = carrier_name(core, on);
+    let choices = allowed.join(", ");
+    Err(ToolError::Failed(tr!(
+        "Effort « {asked} » inconnu de {harness}. Efforts : {choices}.",
+        "Unknown effort “{asked}” for {harness}. Efforts: {choices}."
+    )))
+}
+
 /// `create_agent`: a new agent of the project, and its first message. The window's selection is
 /// the user's: the agent is not selected.
 pub(super) async fn create_agent<R: Runtime>(
@@ -1462,7 +1678,8 @@ pub(super) async fn create_agent<R: Runtime>(
             "Write the message that starts the agent."
         )));
     }
-    let model = model(core, a.model.as_deref())?;
+    let on = carrier(core, &project, None, None);
+    let model = model(core, &on, a.model.as_deref())?;
     not_held(core, &project.id, project.engine())?;
     // One at a time from the count to the first message: two calls at once do not both find a
     // place free.

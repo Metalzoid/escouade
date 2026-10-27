@@ -16,6 +16,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Corrections
 
+- Par le serveur MCP, le modèle et l’effort d’un agent ou d’un ticket sont vérifiés contre son harness (Codex, Copilot CLI…) et non plus contre Claude Code : un projet Codex accepte GPT-6-Luna, et `list_projects` donne les modèles de chaque projet.
 - Dans la barre des projets élargie, un clic sur le nom d’un projet l’ouvre, comme un clic sur sa tuile.
 - Le nom de tes tickets partagés est repris de git quand tu n’en as pas donné : « Partager » ne le redemande plus, et Réglages › Application le montre pré-rempli.
 - Un réglage dont les choix prennent de la place, comme « Quand je valide un ticket » dans l’assistant « Nouveau projet », ne voit plus son libellé écrasé mot par mot : ses choix passent dessous quand ils ne tiennent pas à côté.

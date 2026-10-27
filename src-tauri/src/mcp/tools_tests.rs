@@ -301,6 +301,10 @@ async fn the_projects_are_listed_with_their_branch_agents_and_tickets_by_column(
             "tickets": { "todo": 2, "doing": 1, "review": 0, "done": 1 },
             "remoteControl": false,
             "remoteControlAll": false,
+            // Its harness, and what the tools take for it (ESC-248): no model told yet.
+            "engine": "claude",
+            "models": [],
+            "efforts": ["low", "medium", "high", "xhigh", "max"],
         })
     );
     assert_eq!(projects.as_array().unwrap().len(), 2);
