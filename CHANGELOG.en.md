@@ -4,15 +4,15 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
-## [Unreleased]
+## [2.0.4] — 2026-10-27
 
 ### New
 
 - Azure DevOps becomes a code host, on dev.azure.com as on Azure DevOps Server: connect your organization with a token or through `az`, then open an agent’s pull request, follow its builds and reviews on its card, and hand it a failed build or the feedback to fix.
-- The Workflow tab can also be read as a diagram, which brings out the loops, the ways back and the choices, and where each agent is; it enlarges over the whole work area, and “Copy as Mermaid” gives the workflow to paste into a doc or a pull request.
 - Azure Boards becomes a Kanban source, on the same Azure DevOps account: import a project’s work items with their acceptance criteria; their state and comments follow their ticket, and its agent’s pull request is linked to them.
 - The agent and branch of an imported ticket carry the original ticket’s key and its title (`proj-123-fix-the-login`, `45-…`), as its pull request does: your tool links them to the ticket.
 - The Workflow tab shows where each agent is: its steps done ticked, the one it is on, and the next marked “Next”, with both ends of a choice; its line and its card’s tooltip say “Next: …” too.
+- The Workflow tab can also be read as a diagram, which brings out the loops, the ways back and the choices, and where each agent is; it enlarges over the whole work area, and “Copy as Mermaid” gives the workflow to paste into a doc or a pull request.
 
 ### Fixes
 

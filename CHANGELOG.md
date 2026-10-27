@@ -4,15 +4,15 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
-## [Non publié]
+## [2.0.4] — 2026-10-27
 
 ### Nouveautés
 
 - Azure DevOps devient un hébergeur de code, sur dev.azure.com comme sur Azure DevOps Server : connecte ton organisation par un jeton ou par `az`, puis ouvre la PR d’un agent, suis ses builds et ses relectures sur sa carte, et donne-lui à corriger un build en échec ou les retours.
-- L’onglet Workflow se lit aussi en diagramme, qui met en évidence les boucles, les retours et les choix, et où en est chaque agent ; il s’agrandit sur tout l’espace de travail, et « Copier en Mermaid » donne le workflow à coller dans une doc ou une PR.
 - Azure Boards devient une source du Kanban, sur le même compte Azure DevOps : importe les éléments de travail d’un projet avec leurs critères d’acceptation ; leur état et des commentaires suivent leur ticket, et la PR de son agent leur est liée.
 - L’agent et la branche d’un ticket importé portent la clé du ticket d’origine et son titre (`proj-123-corriger-la-connexion`, `45-…`), comme la PR : ton outil les relie à son ticket.
 - L’onglet Workflow montre où en est chaque agent : ses étapes faites cochées, celle en cours, et la suivante marquée « Ensuite », avec les deux issues d’un choix ; sa ligne et l’infobulle de sa carte disent aussi « Ensuite : … ».
+- L’onglet Workflow se lit aussi en diagramme, qui met en évidence les boucles, les retours et les choix, et où en est chaque agent ; il s’agrandit sur tout l’espace de travail, et « Copier en Mermaid » donne le workflow à coller dans une doc ou une PR.
 
 ### Corrections
 
