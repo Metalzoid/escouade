@@ -1841,7 +1841,7 @@ impl<R: Runtime> Core<R> {
         let (new_branch, taken_up, base) = match t.branch.as_str() {
             "" => (
                 Some((
-                    board::branch_of(&project.ticket_branch_prefix, &t.key),
+                    board::ticket_branch(&project.ticket_branch_prefix, t),
                     target.clone(),
                 )),
                 None,
@@ -1863,7 +1863,7 @@ impl<R: Runtime> Core<R> {
                     model: Some(model),
                     effort: Some(effort),
                     mode: Some(mode),
-                    name: Some(board::agent_name(&t.key, &t.title)),
+                    name: Some(board::ticket_agent_name(t)),
                     worktree: new_branch,
                     // Within the room its harness gives it.
                     append_prompt: Some(board::protocol_prompt_for(
@@ -2815,7 +2815,7 @@ impl<R: Runtime> Core<R> {
             )
             .await
         {
-            Ok(answer) => board::commit_from_answer(&answer, &t.key)
+            Ok(answer) => board::commit_from_answer(&answer, board::shown_key(t))
                 .unwrap_or_else(|| board::fallback_commit(t)),
             Err(e) => {
                 log::info!("ticket {}: no commit message from Haiku: {e:#}", t.key);

@@ -4800,6 +4800,82 @@ async fn a_gh_installed_while_the_app_runs_opens_the_pull_request() {
     assert_eq!(h.core.gh.read().clone(), Some(fake_gh()));
 }
 
+#[tokio::test]
+async fn an_imported_ticket_gets_an_agent_and_a_branch_named_after_its_source_key() {
+    let h = harness("tk-name-external");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let mut ids = Vec::new();
+    for title in [
+        "Corriger la connexion",
+        "Corriger la connexion",
+        "Autre chose",
+    ] {
+        ids.push(
+            h.core
+                .ticket_create(&p.id, draft(title, &[], 5))
+                .await
+                .unwrap()
+                .id,
+        );
+    }
+    // The first two come from Jira with the same key and title: the second's names are taken.
+    for id in &ids[..2] {
+        h.core
+            .edit_ticket(id, |x| {
+                x.external = Some(ExternalRef {
+                    service: Service::Jira,
+                    id: "PROJ-123".into(),
+                    key: "PROJ-123".into(),
+                    ..Default::default()
+                });
+                Ok(())
+            })
+            .unwrap();
+    }
+    for id in &ids {
+        h.core.ticket_start(id).unwrap();
+        h.core.schedule_now().await;
+        h.wait_ticket(id, "ticket with an agent", |t| t.agent_id.is_some())
+            .await;
+    }
+    let names: Vec<(String, String)> = ids
+        .iter()
+        .map(|id| {
+            let a = h.agent_of(id);
+            (a.name, a.worktree.unwrap().branch)
+        })
+        .collect();
+    assert_eq!(
+        names[0],
+        (
+            "proj-123-corriger-la-connexion".into(),
+            "ticket/proj-123-corriger-la-connexion".into()
+        )
+    );
+    assert_eq!(
+        names[1],
+        (
+            "proj-123-corriger-la-connexion-2".into(),
+            "ticket/proj-123-corriger-la-connexion-2".into()
+        )
+    );
+    // A ticket of Escouade's own keeps its key; a ticket already launched keeps its names when
+    // its source key changes.
+    assert_eq!(
+        names[2],
+        ("dem-3-autre-chose".into(), "ticket/dem-3".into())
+    );
+    h.core
+        .edit_ticket(&ids[0], |x| {
+            x.external.as_mut().unwrap().key = "PROJ-999".into();
+            Ok(())
+        })
+        .unwrap();
+    let a = h.agent_of(&ids[0]);
+    assert_eq!(a.name, "proj-123-corriger-la-connexion");
+}
+
 /// A ticket imported from Azure Boards's work item 42.
 fn from_azure_boards(h: &Harness, id: &str) {
     h.core

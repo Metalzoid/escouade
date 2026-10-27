@@ -75,6 +75,39 @@ pub fn branch_of(prefix: &str, key: &str) -> String {
     format!("{prefix}{}", key.to_lowercase())
 }
 
+/// The key of the ticket in its source (`PROJ-123`, `#45`) when it came from one, else its own.
+pub fn shown_key(t: &Ticket) -> &str {
+    t.external
+        .as_ref()
+        .map(|e| e.key.trim())
+        .filter(|k| !k.is_empty())
+        .unwrap_or(&t.key)
+}
+
+/// The slug of an imported ticket's source key and title (`proj-123-corriger-la-connexion`,
+/// `45-corriger-la-connexion`); the title alone when the key has no letter or digit. None for a
+/// ticket of Escouade's own, or when nothing is left of the slug.
+fn external_slug(t: &Ticket) -> Option<String> {
+    let e = t.external.as_ref()?;
+    let slug = slugify(&format!("{} {}", e.key, t.title));
+    (!slug.is_empty()).then_some(slug)
+}
+
+/// The name of a ticket's agent: from its source's key and its title when it was imported
+/// (`proj-123-corriger-la-connexion`), else from its own key (`agent_name`).
+pub fn ticket_agent_name(t: &Ticket) -> String {
+    external_slug(t).unwrap_or_else(|| agent_name(&t.key, &t.title))
+}
+
+/// The branch of a ticket's agent: `<prefix><slug of its source's key and title>` when it was
+/// imported, else `branch_of`.
+pub fn ticket_branch(prefix: &str, t: &Ticket) -> String {
+    match external_slug(t) {
+        Some(slug) => format!("{prefix}{slug}"),
+        None => branch_of(prefix, &t.key),
+    }
+}
+
 /// Whether the branch of a validated ticket stays when its worktree goes (« Supprimer le worktree »):
 /// always when it was there before the ticket (`existing`), the user's own, whatever the Kanban's
 /// setting and whatever became of the ticket; the ticket's own branch stays when it was pushed or
@@ -1152,7 +1185,7 @@ pub fn commit_prompt(lang: Lang, t: &Ticket, stat: &str) -> String {
         "Write the commit message of the changes below, in the Conventional Commits format: \
          one line “type(optional scope): short lowercase description” followed by “[{key}]”. Write it in English. \
          Answer with this line only.\n\n<ticket>\n{key} · {title}\n{desc}\n{progress}</ticket>\n\n<diffstat>\n{stat}\n</diffstat>",
-        key = t.key,
+        key = shown_key(t),
         title = t.title.trim(),
         desc = truncate(t.description.trim(), 2000),
         stat = truncate(stat.trim(), 4000),
@@ -1235,12 +1268,12 @@ pub fn copied_refusal(lang: Lang, in_tree: &[String], in_history: &[String]) -> 
 
 /// When Haiku gave nothing usable.
 pub fn fallback_commit(t: &Ticket) -> String {
-    format!("feat: {} [{}]", t.title.trim(), t.key)
+    format!("feat: {} [{}]", t.title.trim(), shown_key(t))
 }
 
 /// Without "Message de commit généré".
 pub fn plain_commit(t: &Ticket) -> String {
-    format!("{} {}", t.key, t.title.trim())
+    format!("{} {}", shown_key(t), t.title.trim())
 }
 
 // ---------- outcomes ----------
@@ -3937,6 +3970,93 @@ mod tests {
         ] {
             assert_eq!(ok(bad), None, "{bad}");
         }
+    }
+
+    fn imported(service: Service, key: &str, title: &str) -> Ticket {
+        Ticket {
+            key: "DEM-12".into(),
+            title: title.into(),
+            external: Some(ExternalRef {
+                service,
+                key: key.into(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn an_imported_ticket_is_named_after_its_source_key_and_its_title() {
+        let name = |s, k: &str| ticket_agent_name(&imported(s, k, "Corriger la connexion"));
+        assert_eq!(
+            name(Service::Jira, "PROJ-123"),
+            "proj-123-corriger-la-connexion"
+        );
+        assert_eq!(
+            name(Service::Linear, "ENG-42"),
+            "eng-42-corriger-la-connexion"
+        );
+        assert_eq!(name(Service::Github, "#45"), "45-corriger-la-connexion");
+        assert_eq!(name(Service::Gitlab, "#7"), "7-corriger-la-connexion");
+        assert_eq!(name(Service::Azure, "#678"), "678-corriger-la-connexion");
+        assert_eq!(name(Service::Trello, "#12"), "12-corriger-la-connexion");
+        // A key with nothing readable: the title alone.
+        assert_eq!(name(Service::Clickup, ""), "corriger-la-connexion");
+        assert_eq!(name(Service::Clickup, "#"), "corriger-la-connexion");
+        // The branch is the same slug behind the project's prefix, in lower case and ASCII.
+        let t = imported(Service::Jira, "PROJ-123", "Corriger la connexion");
+        assert_eq!(
+            ticket_branch("ticket/", &t),
+            "ticket/proj-123-corriger-la-connexion"
+        );
+        assert_eq!(
+            ticket_branch("gg/", &t),
+            "gg/proj-123-corriger-la-connexion"
+        );
+        // Special characters fold or go; a long title is cut at a word, within 40 characters.
+        let t = imported(
+            Service::Jira,
+            "PROJ-1",
+            "Réparer l'écran d'accueil !? (urgent) & co",
+        );
+        assert_eq!(
+            ticket_agent_name(&t),
+            "proj-1-reparer-l-ecran-d-accueil-urgent"
+        );
+        let t = imported(Service::Github, "#45", &"mot ".repeat(30));
+        let (n, b) = (ticket_agent_name(&t), ticket_branch("ticket/", &t));
+        assert!(n.len() <= 40 && n.starts_with("45-mot-mot"), "{n}");
+        assert_eq!(b, format!("ticket/{n}"));
+    }
+
+    #[test]
+    fn a_ticket_of_escouade_is_named_after_its_own_key() {
+        let t = Ticket {
+            key: "ATL-42".into(),
+            title: "Limiter les tentatives".into(),
+            ..Default::default()
+        };
+        assert_eq!(ticket_agent_name(&t), "atl-42-limiter-les-tentatives");
+        assert_eq!(ticket_branch("ticket/", &t), "ticket/atl-42");
+        assert_eq!(shown_key(&t), "ATL-42");
+    }
+
+    #[test]
+    fn the_commit_and_so_the_pr_carry_the_source_key() {
+        let t = imported(Service::Jira, "PROJ-123", "Corriger la connexion");
+        assert_eq!(shown_key(&t), "PROJ-123");
+        assert_eq!(
+            fallback_commit(&t),
+            "feat: Corriger la connexion [PROJ-123]"
+        );
+        assert_eq!(plain_commit(&t), "PROJ-123 Corriger la connexion");
+        let p = commit_prompt(Lang::En, &t, "");
+        assert!(p.contains("[PROJ-123]") && !p.contains("DEM-12"), "{p}");
+        let t = imported(Service::Github, "#45", "Corriger");
+        assert_eq!(fallback_commit(&t), "feat: Corriger [#45]");
+        // A source without a key keeps the ticket's own.
+        let t = imported(Service::Clickup, " ", "Corriger");
+        assert_eq!(shown_key(&t), "DEM-12");
     }
 
     #[test]

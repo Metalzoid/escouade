@@ -1261,7 +1261,7 @@ impl<R: Runtime> Core<R> {
                     .project(&t.project_id)
                     .map(|p| p.ticket_branch_prefix)
                     .unwrap_or_else(|_| crate::model::default_ticket_branch_prefix());
-                board::branch_of(&prefix, &t.key)
+                board::ticket_branch(&prefix, t)
             })
     }
 }

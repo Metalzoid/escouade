@@ -40,7 +40,7 @@ Quand un ticket démarre, Escouade :
 
 1. le passe dans « En cours », à la boucle 1 ;
 2. crée un agent, nommé d’après la clé et le titre du ticket (`dem-5-export-csv-des-factures`) ;
-3. lui prépare un worktree sur la branche du ticket, `ticket/dem-5` (le préfixe est le « Préfixe des branches des tickets » du projet), créée à partir de la branche cible. Si le ticket reprend une branche existante, l’agent travaille sur celle-ci ;
+3. lui prépare un worktree sur la branche du ticket, `ticket/dem-5` (le préfixe est le « Préfixe des branches des tickets » du projet), créée à partir de la branche cible. Pour un ticket importé d’une source, la branche et l’agent portent la clé du ticket d’origine et son titre (`ticket/proj-123-corriger-la-connexion`). Si le ticket reprend une branche existante, l’agent travaille sur celle-ci ;
 4. attend la préparation du worktree : fichiers `.env*` copiés, commandes de préparation du projet (la carte dit « Prépare le worktree · … »). Si une commande échoue, l’agent en est informé avec son premier message, pour y remédier ;
 5. envoie à l’agent son premier message : la clé et le titre, la description, les critères numérotés, et la consigne de travailler jusqu’à les atteindre puis de terminer par le bilan.
 

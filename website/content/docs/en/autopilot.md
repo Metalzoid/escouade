@@ -40,7 +40,7 @@ When a ticket starts, Escouade:
 
 1. moves it to “In progress”, at loop 1;
 2. creates an agent, named after the ticket’s key and title (`dem-5-export-csv-des-factures`);
-3. prepares a worktree for it on the ticket’s branch, `ticket/dem-5` (the prefix is the project’s “Tickets’ branch prefix”), made from the target branch. If the ticket takes up an existing branch, the agent works on that one;
+3. prepares a worktree for it on the ticket’s branch, `ticket/dem-5` (the prefix is the project’s “Tickets’ branch prefix”), made from the target branch. For a ticket imported from a source, the branch and the agent carry the original ticket’s key and its title (`ticket/proj-123-fix-the-login`). If the ticket takes up an existing branch, the agent works on that one;
 4. waits for the worktree setup: copied `.env*` files, the project’s setup commands (the card says “Setting up the worktree · …”). If a command fails, the agent is told with its first message, so that it can sort it out;
 5. sends the agent its first message: the key and title, the description, the numbered criteria, and the instruction to work until it meets them, then end with the report.
 
