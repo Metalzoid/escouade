@@ -1,5 +1,5 @@
 // The Workflow tab (ESC-194) compared to the preview (design/app-redesign/index.html, `#loops`, `#loops-history`,
-// `#loops-simple`, `#loops-empty`) in both themes at 1440 × 900 and at CI's 1028 × 779 (a panel narrower than 420 px:
+// `#loops-simple`, `#loops-empty`, and `#loops-next` with the steps done and « Ensuite » of ESC-244) in both themes at 1440 × 900 and at CI's 1028 × 779 (a panel narrower than 420 px:
 // the pills under their step, the tabs closer, the count of the tab gone); then at the runner's 1024 × 728, nothing of the
 // tab sticks out, in both themes and in English. The app is driven to the preview's state by the fake agent's facts
 // (`faits-workflow`): a GSD project whose open agent went back from Verify to Plan, two more agents, a project of one
@@ -246,6 +246,20 @@ test('the Workflow tab looks as the preview draws it, in both themes, at both si
           ['the open agent’s pill', tab.locator('.who[aria-current="true"]'), pv.locator('.who[aria-current="true"]'), ['width']],
           ['another pill', tab.locator('.who:not([aria-current])').first(), pv.locator('.who:not([aria-current])').first(), ['width']],
           ['the end', tab.locator('.wf-end'), pv.locator('.wf-end'), ['width', 'height']],
+          // Where the agent read is in its pass (ESC-244): the steps done ticked, the exit next, the way back « ou retour ».
+          [
+            'a step done',
+            tab.locator('.wf-step.done:not(.busy)').first(),
+            pv.locator('.wf-step.done:not(.busy)').first(),
+            ['width', 'height'],
+          ],
+          ['its node ticked', tab.locator('.wf-step.done .wf-node').first(), pv.locator('.wf-step.done .wf-node').first(), []],
+          ['its tick', tab.locator('.wf-step.done .wf-node svg').first(), pv.locator('.wf-step.done .wf-node svg').first(), []],
+          ['its name', tab.locator('.wf-step.done .wf-name').first(), pv.locator('.wf-step.done .wf-name').first(), ['width']],
+          ['the other end of the choice', tab.locator('.wf-step.alt .wf-name'), pv.locator('.wf-step.alt .wf-name'), ['width']],
+          ['« ou retour »', tab.locator('.wf-next.alt'), pv.locator('.wf-next.alt'), ['width']],
+          ['« Ensuite » on the end', tab.locator('.wf-end.next .wf-next'), pv.locator('.wf-end.next .wf-next'), ['width']],
+          ['an agent’s next', tab.locator('.wf-ag .nx').first(), pv.locator('.wf-ag .nx').first(), ['width']],
           // The agents in the workflow.
           ['a heading', tab.locator('.wf-h').first(), pv.locator('.wf-h').first(), ['width', 'height']],
           ['its count', tab.locator('.wf-h .n').first(), pv.locator('.wf-h .n').first(), ['width']],
@@ -294,6 +308,27 @@ test('the Workflow tab looks as the preview draws it, in both themes, at both si
         const [, pgy] = await place(pv.locator('.wf-graph'));
         expect.soft(gy, `the rail's top, ${where}`).toBe(pgy);
 
+        // ---------- #loops-next: the agent on Execute chosen in the list, Verify next (ESC-244) ----------
+        await tab
+          .locator('.wf-ag')
+          .filter({ has: page.locator('.where b', { hasText: 'Execute phase' }) })
+          .click();
+        await expect(tab.locator('.wf-step.here .wf-name')).toHaveText('Execute phase');
+        await page.mouse.move(size.width / 2, 20);
+        await previewAt(preview, 'loops-next', t);
+        await shot('loops-next');
+        for (const [what, a, p, but] of [
+          ['the next step', tab.locator('.wf-step.next'), pv.locator('.wf-step.next'), ['width', 'height']],
+          ['its name underlined', tab.locator('.wf-step.next .wf-name'), pv.locator('.wf-step.next .wf-name'), ['width']],
+          ['its node', tab.locator('.wf-step.next .wf-node'), pv.locator('.wf-step.next .wf-node'), []],
+          ['« Ensuite »', tab.locator('.wf-step.next .wf-next'), pv.locator('.wf-step.next .wf-next'), ['width']],
+          ['the end, not next', tab.locator('.wf-end'), pv.locator('.wf-end'), ['width', 'height']],
+        ] as [string, Locator, Locator, string[]][])
+          await same(`${what}, ${where}`, a, p, but);
+        expect.soft(await tab.locator('.wf-step.next .wf-name').textContent(), `the step next, ${where}`).toBe('Verify work');
+        await tab.locator('.wf-ag').filter({ hasText: a1 }).click();
+        await expect(tab.locator('.wf-end.next')).toHaveCount(1);
+
         // ---------- #loops-history: folded ----------
         await tab.getByRole('button', { name: 'Replier les étapes' }).click();
         await previewAt(preview, 'loops-history', t);
@@ -317,7 +352,13 @@ test('the Workflow tab looks as the preview draws it, in both themes, at both si
           ['the ring', tab.locator('.wf-ring'), pv.locator('.wf-ring'), ['width', 'height']],
           ['its text', tab.locator('.wf-ring .txt b'), pv.locator('.wf-ring .txt b'), ['width']],
           ['a turn now', tab.locator('.wf-turns i.on'), pv.locator('.wf-turns i.on'), ['width']],
-          ['a turn to come', tab.locator('.wf-turns i.todo').first(), pv.locator('.wf-turns i.todo').first(), ['width']],
+          ['the next turn', tab.locator('.wf-turns i.next'), pv.locator('.wf-turns i.next'), ['width']],
+          [
+            'a turn to come',
+            tab.locator('.wf-turns i.todo:not(.next)').first(),
+            pv.locator('.wf-turns i.todo:not(.next)').first(),
+            ['width'],
+          ],
           ['a turn done', tab.locator('.wf-turns i.ok').first(), pv.locator('.wf-turns i.ok').first(), ['width']],
         ] as [string, Locator, Locator, string[]][])
           await same(`${what}, ${where}`, a, p, but);

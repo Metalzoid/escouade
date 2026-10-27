@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { GSD_ID, gsd, paginationUsers, passage, ralph, scanOf, track } from '../test/workflows';
 import {
   backArcs,
+  cardNext,
   cardStep,
   checkedOf,
   currentPhase,
   didOf,
+  doneSteps,
+  nextOf,
+  nextSays,
   doorsOf,
   historyRows,
   labelIn,
@@ -162,6 +166,114 @@ describe('the Workflow tab, worked out', () => {
     expect(turnsGrid(tr, 5).map((u) => u.cls)).toEqual(['ok', 'bad', 'on', 'todo', 'todo']);
     expect(checkedOf(ralph(), tr)).toEqual({ done: 4, total: 6 });
     expect(checkedOf(ralph(), null)).toEqual({ done: 3, total: 6 });
+    // The turn after the one running is the next (ESC-244), the rest to come.
+    expect(turnsGrid(tr, 5).map((u) => u.next)).toEqual([false, false, false, true, false]);
+    expect(turnsGrid(track('a1', { turns: [turn(1, true)] }), 1).some((u) => u.next)).toBe(false);
+  });
+});
+
+describe('where an agent is in its pass: the steps done, the next (ESC-244)', () => {
+  const w = gsd();
+  const later = (w2: typeof w) => ({
+    ...w2,
+    steps: [...w2.steps, { ...w2.steps[3], name: 'Livrer', command: '/gsd:ship', order: 4, named: true }],
+    transitions: [...w2.transitions, { from: 'gsd:verify-work', to: 'Livrer', back: false, condition: null, max: null }],
+  });
+
+  it('ticks the steps the agent went through in this pass, not the one it is on', () => {
+    const tr = track('a1', {
+      step: 'gsd:execute-phase',
+      passages: [
+        passage(1, 'gsd:discuss-phase', 0, 1),
+        passage(2, 'gsd:plan-phase', 1, 1),
+        passage(3, 'gsd:execute-phase', 2, 1, { outcome: 'running' }),
+      ],
+    });
+    expect(doneSteps(w, tr)).toEqual(['gsd:discuss-phase', 'gsd:plan-phase']);
+    expect(nextOf(w, tr)).toEqual({ to: 'gsd:verify-work', exit: null, backs: [] });
+    expect(nextSays(w, nextOf(w, tr))).toBe('Ensuite : Verify work');
+  });
+
+  it('after a way back, the steps from the one it went back to are to do again; those before stay done', () => {
+    // Back from Verify to Plan, then Plan again: Plan is on, Execute and Verify to do again, Discuss stays done.
+    const tr = track('a1', {
+      step: 'gsd:plan-phase',
+      passages: [...paginationUsers().passages.slice(0, 4), passage(5, 'gsd:plan-phase', 37, 4, { pass: 2, outcome: 'running' })],
+    });
+    expect(doneSteps(w, tr)).toEqual(['gsd:discuss-phase']);
+    expect(pipsOf(w, tr)).toEqual(['done', 'on', '', '']);
+    // Back on Verify (paginationUsers): Discuss, Plan and Execute done again.
+    expect(doneSteps(w, paginationUsers())).toEqual(['gsd:discuss-phase', 'gsd:plan-phase', 'gsd:execute-phase']);
+    // Between two steps just after the way back: Plan is next.
+    const between = track('a1', { step: null, passages: paginationUsers().passages.slice(0, 4) });
+    expect(nextOf(w, between)).toEqual({ to: 'gsd:plan-phase', exit: null, backs: [] });
+  });
+
+  it('says the two ends of a choice: the next step, or the way back, its condition when short', () => {
+    const tr = { ...paginationUsers(), step: 'gsd:verify-work' };
+    const n = nextOf(later(w), tr)!;
+    expect(n.to).toBe('Livrer');
+    expect(n.backs.map((b) => b.to)).toEqual(['gsd:plan-phase']);
+    // The condition of GSD is a sentence: in the tooltip, not in the line.
+    expect(nextSays(later(w), n)).toBe('Ensuite : Livrer, ou retour à Plan phase');
+    const short = {
+      ...later(w),
+      transitions: later(w).transitions.map((x) => (x.back && x.to !== x.from ? { ...x, condition: 'écarts' } : x)),
+    };
+    expect(nextSays(short, nextOf(short, tr))).toBe('Ensuite : Livrer, ou retour à Plan phase si écarts');
+  });
+
+  it('at the end of the cycle, the exit of the workflow is next', () => {
+    const n = nextOf(w, paginationUsers())!;
+    expect(n).toEqual({
+      to: null,
+      exit: 'The milestone is complete when all phases are complete.',
+      backs: [{ to: 'gsd:plan-phase', condition: 'If gaps are found, run /gsd:plan-phase --gaps' }],
+    });
+    expect(nextSays(w, n)).toBe('Ensuite : la sortie, ou retour à Plan phase');
+    // A new round by the first step: nothing done of the one before.
+    const again = track('a1', {
+      step: 'gsd:discuss-phase',
+      passages: [
+        ...paginationUsers().passages.map((p) => ({ ...p, outcome: 'done' as const })),
+        passage(8, 'gsd:discuss-phase', 49, 1, { outcome: 'running' }),
+      ],
+    });
+    expect(doneSteps(w, again)).toEqual([]);
+  });
+
+  it('says nothing next for an agent outside the workflow, nor in another', () => {
+    const out = track('a1', {
+      step: 'gsd:execute-phase',
+      outside: 'lance la suite e2e',
+      passages: [passage(1, 'gsd:discuss-phase', 0, 1), passage(2, null, 1, 1, { outcome: 'running' })],
+    });
+    expect(nextOf(w, out)).toBeNull();
+    expect(doneSteps(w, out)).toEqual(['gsd:discuss-phase']);
+    expect(nextOf(w, track('a1', { workflow: 'other', step: 'gsd:plan-phase' }))).toBeNull();
+    expect(nextSays(w, null)).toBe('');
+  });
+
+  it('works out « Tickets » from the column: En cours, then À tester; À tester, then Terminé or sent back', () => {
+    const tickets = [
+      ticket({ id: 't1', projectId: 'p1', column: 'doing', agentId: 'a1' }),
+      ticket({ id: 't2', projectId: 'p1', column: 'review', agentId: 'a2' }),
+      ticket({ id: 't3', projectId: 'p1', column: 'done', agentId: 'a3' }),
+    ];
+    const tw = ticketsWorkflow(tickets)!;
+    const [doing, review, done] = ticketTracks('p1', tickets, Object.fromEntries(['a1', 'a2', 'a3'].map((id) => [id, agent({ id })])), NOW);
+    expect(doneSteps(tw, doing)).toEqual(['À faire']);
+    expect(nextSays(tw, nextOf(tw, doing))).toBe('Ensuite : À tester');
+    expect(doneSteps(tw, review)).toEqual(['À faire', 'En cours']);
+    expect(nextSays(tw, nextOf(tw, review))).toBe('Ensuite : Terminé, ou retour à En cours');
+    expect(nextOf(tw, done)).toBeNull();
+  });
+
+  it('gives the card its next step, never for « Tickets » nor outside', () => {
+    expect(cardNext([w], paginationUsers())).toBe('Ensuite : la sortie, ou retour à Plan phase');
+    expect(cardNext([w], track('a1', { step: 'gsd:plan-phase' }))).toBe('Ensuite : Execute phase');
+    expect(cardNext([w], track('a1', { step: 'gsd:plan-phase', outside: 'x' }))).toBeNull();
+    expect(cardNext([], track('a1', { step: 'gsd:plan-phase' }))).toBeNull();
   });
 });
 

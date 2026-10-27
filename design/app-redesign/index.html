@@ -7564,6 +7564,78 @@
           0 0 0 3px oklch(from var(--run) l c h / 0.18),
           inset 0 0 0 1.5px var(--run);
       }
+      /* Where the chosen agent is in its pass (ESC-244, choices 190 to 192): done steps dimmed and ticked, the next underlined. */
+      .wf-node {
+        display: grid;
+        place-items: center;
+      }
+      .wf-node .i {
+        width: 10px;
+        height: 10px;
+      }
+      .wf-step.done .wf-node {
+        background: rgba(var(--fg-rgb), 0.14);
+        box-shadow: none;
+        color: var(--soft);
+      }
+      .wf-step.done .wf-name {
+        color: var(--muted);
+        font-weight: 550;
+      }
+      .wf-step.done .wf-line .gate,
+      .wf-step.done .wf-detail {
+        opacity: 0.75;
+      }
+      .wf-step.next .wf-name,
+      .wf-step.alt .wf-name {
+        text-decoration: underline;
+        text-decoration-color: oklch(from var(--run) l c h / 0.75);
+        text-decoration-thickness: 1.5px;
+        text-underline-offset: 4px;
+      }
+      .wf-step.alt .wf-name {
+        text-decoration-style: dotted;
+        text-decoration-color: var(--line-3);
+      }
+      .wf-step.next .wf-node {
+        box-shadow: inset 0 0 0 1.5px oklch(from var(--run) l c h / 0.75);
+      }
+      .wf-next {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        height: 18px;
+        padding: 0 6px;
+        border-radius: 5px;
+        background: oklch(from var(--run) l c h / 0.12);
+        color: var(--text);
+        font-size: 11px;
+        font-weight: 550;
+        white-space: nowrap;
+      }
+      .wf-next.alt {
+        background: rgba(var(--fg-rgb), 0.05);
+        box-shadow: inset 0 0 0 1px var(--line);
+        color: var(--muted);
+      }
+      .wf-end.next {
+        color: var(--soft);
+      }
+      .wf-end .wf-next {
+        margin-right: 6px;
+      }
+      .wf-ag .nx {
+        grid-column: 2 / -1;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 11.5px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .wf-turns i.todo.next {
+        box-shadow: inset 0 0 0 1px oklch(from var(--run) l c h / 0.75);
+        color: var(--soft);
+      }
       .wf-step.guess .wf-node {
         background: var(--panel);
         box-shadow: none;
@@ -10965,6 +11037,11 @@ If your browser did not open, navigate to this URL to authenticate:
       <span>ouverte · CI verte · 1 approbation · changements demandés · 2 fils ouverts</span>
     </div>
 
+    <!-- ESC-244: the tooltip of the step on an agent's card, what comes after it. -->
+    <div class="ptip" id="tip-next" role="tooltip" hidden>
+      <span>Ensuite : Vérifier</span>
+    </div>
+
     <!-- The first start's question: the anonymous usage statistics. -->
     <div class="scrim" id="tele-modal" hidden>
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tele-title" style="width: min(520px, 100vw - 48px)">
@@ -13593,13 +13670,18 @@ Chaque PR cite l’autre : à merger ensemble.</div>
       // ---------- The loops of a project (ESC-191) ----------
       // #loops (the workflow tab: GSD, three agents, pagination-users's history), #loops-history (folded, the whole
       // history), #loops-settings (Réglages › Projets › Workflow), #loops-simple (a loop of one prompt, studio-web),
-      // #loops-empty (infra: nothing found), #loops-edge (a workflow changed, a guessed step, an agent outside, partial follow).
+      // #loops-empty (infra: nothing found), #loops-edge (a workflow changed, a guessed step, an agent outside, partial follow),
+      // #loops-next (ESC-244: refacto-auth chosen in the list, Vérifier next, the tooltip of its card).
       const FLOW = '<svg class="i s14"><use href="#i-flow" /></svg>';
       const gate = (g) => `<span class="gate">${g}</span>`;
       const who = (name, cls = '', cur = false) => `<span class="who ${cls}"${cur ? ' aria-current="true"' : ''}><i></i><span>${name}</span></span>`;
       /** A step of the rail: its name, its entry, what it runs, who is on it. */
-      const step = ({ name, g = '', detail = '', whos = '', cls = '' }) =>
-        `<div class="wf-step ${cls}"><i class="wf-node"></i><div class="wf-main"><div class="wf-line"><span class="wf-name">${name}</span>${g ? gate(g) : ''}</div>${detail ? `<div class="wf-detail">${detail}</div>` : ''}</div><div class="wf-who">${whos}</div></div>`;
+      // ESC-244: a step done in the chosen agent's pass is ticked; the next has « Ensuite », the other end of a choice « ou retour ».
+      const CHECK = '<svg class="i"><use href="#i-check" /></svg>';
+      const NEXT = '<span class="wf-next">Ensuite</span>';
+      const OR_BACK = '<span class="wf-next alt" title="écarts">ou retour</span>';
+      const step = ({ name, g = '', detail = '', whos = '', cls = '', tag = '' }) =>
+        `<div class="wf-step ${cls}"><i class="wf-node">${cls.split(' ').includes('done') ? CHECK : ''}</i><div class="wf-main"><div class="wf-line"><span class="wf-name">${name}</span>${tag}${g ? gate(g) : ''}</div>${detail ? `<div class="wf-detail">${detail}</div>` : ''}</div><div class="wf-who">${whos}</div></div>`;
       const sa = (n) => `<span class="sa">${n}</span>`;
       const ARROW = '<svg class="i"><use href="#i-right" /></svg>';
       const BACK = '<svg class="i"><use href="#i-restart" /></svg>';
@@ -13620,27 +13702,33 @@ Chaque PR cite l’autre : à merger ensemble.</div>
         <div class="caption wf-cap">4 étapes · phase 3 sur 6 d’après <span class="mono">.planning/STATE.md</span> · lu à 10:12</div>`;
       const GSD_GATES = `<div class="wf-gates"><span class="lbl">Portes d’entrée</span>${gate('/gsd:autonomous')}${gate('/gsd:next')}${gate('/gsd:quick')}<span class="gate more">+38</span></div>`;
       /** The rail of GSD; `on` is the selected agent's step, `extra` a guessed step after the last. */
-      function gsdGraph({ fold = false, edge = false } = {}) {
+      function gsdGraph({ fold = false, edge = false, reader = 'pag' } = {}) {
         const pag = who('pagination-users', '', true);
+        // Where the chosen agent is: pagination-users on Vérifier after a way back, or refacto-auth on Exécuter.
+        const pagR = reader === 'pag';
+        const st = (pagR ? ['done', 'done alt', 'done', 'here'] : ['done', 'done', 'here', 'next']);
+        const tags = pagR ? ['', OR_BACK, '', ''] : ['', '', '', NEXT];
+        const endNext = pagR && !edge;
         return `<div class="wf-graph${fold ? ' folded' : ''}" data-back="3,1" data-outer="1">
           <svg class="wf-edges" aria-hidden="true"><path class="inner" /><path class="outer" /></svg>
-          ${step({ name: 'Discuter', g: '/gsd:discuss-phase', detail: `écrit ${'<span class="fl">CONTEXT.md</span>'} de la phase` })}
-          ${step({ name: 'Planifier', g: '/gsd:plan-phase', cls: 'busy', detail: `${sa('gsd-phase-researcher')}${ARROW}${sa('gsd-planner')}<svg class="i"><use href="#i-swap" /></svg>${sa('gsd-plan-checker')}<span>jusqu’à 3 tours</span>`, whos: who('dem-5-export-csv-des-factures') })}
-          ${step({ name: 'Exécuter', g: '/gsd:execute-phase', cls: 'busy', detail: `${sa('gsd-executor')}<span>par vagues, en parallèle · un commit par tâche</span>`, whos: who('refacto-auth') + (edge ? who('tests-e2e', 'off') : '') })}
-          ${step({ name: 'Vérifier', g: '/gsd:verify-work', cls: 'busy here', detail: `${sa('gsd-verifier')}<span class="back">${BACK}écarts : retour à Planifier</span>`, whos: pag + (edge ? who('dem-6-limiter-les-tentatives') : '') })}
-          ${edge ? step({ name: 'Livrer ?', g: '/gsd:ship', cls: 'guess', detail: '<span>deviné : nommé par <span class="fl">verify-work.md</span>, jamais vu en cours</span>' }) : ''}
-          <div class="wf-end"><svg class="i"><use href="#i-restart" /></svg><span>Phase finie : <span class="mono">STATE.md</span> passe à la suivante, retour à Discuter</span></div>
+          ${step({ name: 'Discuter', g: '/gsd:discuss-phase', cls: st[0], tag: tags[0], detail: `écrit ${'<span class="fl">CONTEXT.md</span>'} de la phase` })}
+          ${step({ name: 'Planifier', g: '/gsd:plan-phase', cls: `busy ${st[1]}`, tag: tags[1], detail: `${sa('gsd-phase-researcher')}${ARROW}${sa('gsd-planner')}<svg class="i"><use href="#i-swap" /></svg>${sa('gsd-plan-checker')}<span>jusqu’à 3 tours</span>`, whos: who('dem-5-export-csv-des-factures') })}
+          ${step({ name: 'Exécuter', g: '/gsd:execute-phase', cls: `busy ${st[2]}`, tag: tags[2], detail: `${sa('gsd-executor')}<span>par vagues, en parallèle · un commit par tâche</span>`, whos: who('refacto-auth') + (edge ? who('tests-e2e', 'off') : '') })}
+          ${step({ name: 'Vérifier', g: '/gsd:verify-work', cls: `busy ${st[3]}`, tag: tags[3], detail: `${sa('gsd-verifier')}<span class="back">${BACK}écarts : retour à Planifier</span>`, whos: pag + (edge ? who('dem-6-limiter-les-tentatives') : '') })}
+          ${edge ? step({ name: 'Livrer ?', g: '/gsd:ship', cls: 'guess next', tag: NEXT, detail: '<span>deviné : nommé par <span class="fl">verify-work.md</span>, jamais vu en cours</span>' }) : ''}
+          <div class="wf-end${endNext ? ' next' : ''}"><svg class="i"><use href="#i-restart" /></svg><span>${endNext ? NEXT : ''}Phase finie : <span class="mono">STATE.md</span> passe à la suivante, retour à Discuter</span></div>
         </div>`;
       }
-      const GSD_AGENTS = (edge = false) => `
+      const nx = (t) => `<span class="nx">Ensuite : ${t}</span>`;
+      const GSD_AGENTS = (edge = false, reader = 'pag') => `
         <div class="wf-h">Agents dans GSD <span class="n">${edge ? '4 en cours · 1 sorti' : '3 en cours'}</span></div>
         <div class="wf-list">
-          ${wfAgent({ name: 'pagination-users', cur: true, p: ['done', 'done', 'done', 'on'], where: '<b>Vérifier</b> · <span class="mono">gsd-verifier</span> · 2ᵉ passage', nums: '48m · 3,91 $' })}
-          ${wfAgent({ name: 'refacto-auth', p: ['done', 'done', 'on', ''], where: '<b>Exécuter</b> · 2 <span class="mono">gsd-executor</span> · vague 2 sur 3', nums: '28m · 2,41 $' })}
-          ${wfAgent({ name: 'dem-5-export-csv-des-factures', chips: '<span class="ticket-chip">DEM-5</span>', p: ['done', 'on', '', ''], where: '<b>Planifier</b> · <span class="mono">gsd-plan-checker</span> · tour 2 sur 3 · boucle 1/5 du ticket', nums: '9m · 0,41 $' })}
+          ${wfAgent({ name: 'pagination-users', cur: reader === 'pag', p: ['done', 'done', 'done', 'on'], where: '<b>Vérifier</b> · <span class="mono">gsd-verifier</span> · 2ᵉ passage', nums: '48m · 3,91 $', extra: nx(edge ? 'Livrer ?, ou retour à Planifier si écarts' : 'la sortie, ou retour à Planifier si écarts') })}
+          ${wfAgent({ name: 'refacto-auth', cur: reader === 'refacto', extra: nx('Vérifier'), p: ['done', 'done', 'on', ''], where: '<b>Exécuter</b> · 2 <span class="mono">gsd-executor</span> · vague 2 sur 3', nums: '28m · 2,41 $' })}
+          ${wfAgent({ name: 'dem-5-export-csv-des-factures', chips: '<span class="ticket-chip">DEM-5</span>', p: ['done', 'on', '', ''], where: '<b>Planifier</b> · <span class="mono">gsd-plan-checker</span> · tour 2 sur 3 · boucle 1/5 du ticket', nums: '9m · 0,41 $', extra: nx('Exécuter') })}
           ${
             edge
-              ? wfAgent({ name: 'dem-6-limiter-les-tentatives', chips: '<span class="emark">Codex</span><span class="smark">Suivi partiel</span>', p: ['done', 'done', 'done', 'on'], where: '<b>Vérifier</b> · d’après <span class="mono">/prompts:verify-work</span>', nums: '31m · ≈ 0,52 $', extra: '<span class="wf-partial"><svg class="i"><use href="#i-info" /></svg><span>Codex : l’étape vient de ses prompts et de <span class="mono">STATE.md</span>. Il n’a pas de sous-agents à suivre, ni de coût par étape.</span></span>' }) +
+              ? wfAgent({ name: 'dem-6-limiter-les-tentatives', chips: '<span class="emark">Codex</span><span class="smark">Suivi partiel</span>', p: ['done', 'done', 'done', 'on'], where: '<b>Vérifier</b> · d’après <span class="mono">/prompts:verify-work</span>', nums: '31m · ≈ 0,52 $', extra: nx('Livrer ?, ou retour à Planifier si écarts') + '<span class="wf-partial"><svg class="i"><use href="#i-info" /></svg><span>Codex : l’étape vient de ses prompts et de <span class="mono">STATE.md</span>. Il n’a pas de sous-agents à suivre, ni de coût par étape.</span></span>' }) +
                 wfAgent({ name: 'tests-e2e', cls: 'off', where: '<b>Hors du workflow</b> depuis 8 min · a quitté Exécuter pour lancer la suite e2e à ta demande', nums: '14m · 0,62 $' })
               : ''
           }
@@ -13707,6 +13795,12 @@ Chaque PR cite l’autre : à merger ensemble.</div>
       }
       if (route === 'loops') (loopsCards(), loopPane(GSD_TOP() + GSD_GATES + gsdGraph() + GSD_AGENTS() + PAG_HIST()));
       if (route === 'loops-history') (loopsCards(), loopPane(GSD_TOP(true) + gsdGraph({ fold: true }) + PAG_HIST(true)));
+      // ESC-244: refacto-auth chosen in the list: its rail (Discuter and Planifier done, Vérifier next), its card's tooltip.
+      if (route === 'loops-next') {
+        loopsCards();
+        loopPane(GSD_TOP() + GSD_GATES + gsdGraph({ reader: 'refacto' }) + GSD_AGENTS(false, 'refacto'));
+        tipAt('tip-next', '#ag-refacto .wf-mini', 0, 0);
+      }
       if (route === 'loops-edge') {
         loopsCards();
         loopPane(
@@ -13731,7 +13825,7 @@ Chaque PR cite l’autre : à merger ensemble.</div>
         $('#plan').hidden = true;
         $('#th-main').insertAdjacentHTML('afterbegin', `<div class="wf-div"><button>${FLOW}Tour 7</button><span class="mono">PROMPT.md</span><span>12:20</span></div>`);
         $('#th-main .msg-user').innerHTML = 'Relis <span class="mono">PROMPT.md</span> et fais la prochaine tâche de <span class="mono">fix_plan.md</span>.';
-        const turns = ['ok', 'ok', 'bad', 'ok', 'bad', 'ok', 'on'].map((c, i) => `<i class="${c}">${i + 1}</i>`).join('') + Array.from({ length: 11 }, (_, i) => `<i class="todo">${i + 8}</i>`).join('');
+        const turns = ['ok', 'ok', 'bad', 'ok', 'bad', 'ok', 'on'].map((c, i) => `<i class="${c}">${i + 1}</i>`).join('') + Array.from({ length: 11 }, (_, i) => `<i class="todo${i ? '' : ' next'}">${i + 8}</i>`).join('');
         loopPane(
           `<div class="wf-top">
             <button class="select" aria-haspopup="menu" aria-label="Workflow">${FLOW}<b>Boucle PROMPT.md</b><svg class="i s14"><use href="#i-down" /></svg></button>
@@ -13742,7 +13836,7 @@ Chaque PR cite l’autre : à merger ensemble.</div>
           <div class="wf-gates"><span class="lbl">Portes d’entrée</span>${gate('PROMPT.md')}${gate('/loop')}</div>
           <div class="wf-ring">
             <svg class="ring" viewBox="0 0 58 58" role="img" aria-label="12 cases cochées sur 20"><circle class="bg" cx="29" cy="29" r="25" /><circle class="fg" cx="29" cy="29" r="25" stroke-dasharray="94.2 157" transform="rotate(-90 29 29)" /><text x="29" y="30" text-anchor="middle">12/20</text><text class="sub" x="29" y="42" text-anchor="middle">cochées</text></svg>
-            <div class="txt"><b>Tour 7 · en cours</b><span>Chaque tour relit <span class="mono">PROMPT.md</span>, prend la première case vide de <span class="mono">fix_plan.md</span>, la fait, lance les tests, la coche et commite.</span><span>Sortie : plus de case vide, ou 18 tours.</span></div>
+            <div class="txt"><b>Tour 7 · en cours</b><span>Chaque tour relit <span class="mono">PROMPT.md</span>, prend la première case vide de <span class="mono">fix_plan.md</span>, la fait, lance les tests, la coche et commite.</span><span>Sortie : plus de case vide, ou 18 tours.</span><span>Ensuite : tour 8</span></div>
           </div>
           <div class="wf-turns" role="img" aria-label="Tours 1 à 7 faits ou en cours, 8 à 18 à venir">${turns}</div>
           <div class="caption wf-cap" style="padding-top: 6px">Un tour, d’après les étapes de <span class="mono">PROMPT.md</span></div>

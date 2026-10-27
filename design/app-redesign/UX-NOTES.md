@@ -597,3 +597,28 @@ Demandé par l'utilisateur le 2026-10-26 : « pouvoir redimensionner la sidebar 
 
 - `tests/e2e/side-width.spec.ts` : le bord tiré jusqu'à sa borne, gardé après un redémarrage, les flèches, `Début` à 220 px sans rien de cassé ni de coupé dans la barre, le double clic, la barre des projets élargie qui prend sur celle des agents, le panneau fermé puis rouvert dans les deux dispositions, la disposition retenue après un redémarrage ; à 1024 × 728 et 1440 × 900.
 - `tests/e2e/narrow-columns.spec.ts`, `shell.spec.ts`, `rail-labels.spec.ts`, `conversation-look.spec.ts`, `git-look.spec.ts`, `board-look.spec.ts`, `sidebar.spec.ts` : verts après la fusion de main (les échecs d'un premier passage, la création du projet trop lente sous la charge, repassent seuls).
+
+# Où en est chaque agent dans son workflow : les étapes faites, l'étape en cours, « Ensuite » (ESC-244, 2026-10-27)
+
+Demandé par l'utilisateur le 2026-10-27 (« tu me confirmes que l'onglet workflows affiche bien les prochaines étapes ? ») : l'onglet Workflow montrait les étapes et le point de chaque agent, rien des étapes faites ni de la suivante. **Les choix 190 à 195 sont à valider par le chef d'escouade.**
+
+## Adresses
+
+- `#loops` : pagination-users, sur Vérifier après un retour à Planifier : Discuter, Planifier et Exécuter faites, la sortie ensuite, ou retour à Planifier ; « Ensuite : … » sous chaque agent.
+- `#loops-next` : refacto-auth choisi dans la liste : Discuter et Planifier faites, Exécuter en cours, Vérifier « Ensuite » ; l'infobulle de l'étape sur sa carte.
+- `#loops-edge` (une étape devinée après Vérifier est « Ensuite »), `#loops-history` (replié), `#loops-simple` (le tour suivant).
+- Captures : `loops.png`, `loops-next.png`, `loops-edge.png`, `loops-history.png`, `loops-simple.png` à 1440×900, leurs `-small` à 1028×779, et leurs jumelles `-light`.
+
+## Choix
+
+190. **Le rail dit où en est l'agent choisi dans la liste** (l'agent ouvert par défaut, choix 146), pas seulement l'agent ouvert : son étape est surlignée, ses étapes faites et sa prochaine marquées. Choisir un autre agent dans la liste change le rail avec son historique. La pastille verte reste celle de l'agent ouvert. Raison : le rail et l'historique parlent du même agent.
+191. **Les étapes faites de ce passage sont atténuées et cochées** : le nom en gris, le détail et la porte un peu effacés, une coche dans le nœud ; « (fait) » pour un lecteur d'écran. Ce sont les étapes que l'historique a franchies depuis son entrée par la première étape (la phase en cours) ; un retour en arrière rouvre l'étape où il revient et celles d'après, celles d'avant restent faites. Celles d'un tour précédent ne comptent pas. Sans historique (« Tickets », un agent tout juste lu), les étapes avant la sienne. Les barrettes de sa ligne suivent la même règle.
+192. **La prochaine étape est soulignée, avec « Ensuite »** : un trait vert sous son nom, son nœud cerclé de vert, une petite étiquette « Ensuite ». C'est la transition ordinaire depuis l'étape en cours, sinon l'étape d'après sur le rail (une étape devinée compte) ; en fin de cycle, la ligne de sortie porte « Ensuite ». Entre deux étapes, la suivante de la dernière, ou l'étape où un retour l'a renvoyé.
+193. **Un choix dit ses deux issues** : l'étape d'un retour possible porte « ou retour », son nom souligné en pointillé, la condition dans l'infobulle. La phrase dit les deux : « Ensuite : Livrer, ou retour à Planifier si écarts » ; la condition entre dans la phrase quand elle tient en quelques mots (24 signes), sinon elle reste dans l'infobulle (« If gaps are found, run /gsd:plan-phase --gaps »). Un retour sur soi-même (« jusqu'à 3 tours ») n'est pas une issue : la ligne le dit déjà.
+194. **La ligne de chaque agent dit son « Ensuite : … »**, sous son étape ; rien pour un agent hors du workflow. **Sur sa carte**, la place manque : « Ensuite : … » est dans l'infobulle de « GSD · Vérifier » ; sur la carte d'un ticket, l'infobulle de sa boucle dit l'étape puis la suite (« Ensuite : À tester » sans workflow). « Tickets » suit la même règle : En cours → À tester ; À tester → Terminé, ou retour à En cours (Renvoyer).
+195. **La boucle d'un prompt** garde ses tours : le premier à venir est cerclé de vert, et « Ensuite : tour 8 » s'ajoute sous la sortie ; rien quand le dernier tour est atteint.
+
+## Vérifié sur l'aperçu
+
+- Les états : la sortie et un retour (`#loops`), une étape ordinaire et l'infobulle de la carte (`#loops-next`), une étape devinée ensuite (`#loops-edge`), replié (`#loops-history`), le tour suivant (`#loops-simple`), dans les deux thèmes, à 1440 et 1028 px.
+- `node design/app-redesign/contrast.mjs` : 0 paire sous le seuil, dans les deux thèmes.

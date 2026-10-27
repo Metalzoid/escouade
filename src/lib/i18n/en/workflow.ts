@@ -80,4 +80,13 @@ export default defineZone('workflow', {
   ticketsEscouade: 'Escouade’s workflow of the tickets, from the Kanban',
   divider: 'See the step in the Workflow tab',
   cardStep: 'Step: {step}',
+  // Where an agent is in its pass (ESC-244, choices 190 to 195): the steps done, the next.
+  next: 'Next: {what}',
+  orElse: ', or {what}',
+  backIf: 'back to {step} if {condition}',
+  theExit: 'the exit',
+  nextTag: 'Next',
+  orBackTag: 'or back',
+  doneStep: 'done',
+  nextTurn: 'Next: turn {n}',
 });

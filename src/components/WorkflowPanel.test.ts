@@ -86,6 +86,38 @@ describe('the Workflow tab', () => {
     expect(tab.querySelector('.wf-end')).toHaveTextContent('The milestone is complete');
   });
 
+  it('says where the chosen agent is in its pass: the steps done ticked, its own, and « Ensuite » (ESC-244)', async () => {
+    await open(scanOf(gsd()), gsdTracks());
+    const tab = await screen.findByTestId('workflow');
+    await within(tab).findByText('Agents dans GSD');
+    const steps = () => [...tab.querySelectorAll('.wf-step')];
+    const cls = (cl: string) => steps().map((s) => s.classList.contains(cl));
+    // pagination-users, on Verify after a way back: Discuss, Plan and Execute done in this pass, the exit next or back to Plan.
+    expect(cls('done')).toEqual([true, true, true, false]);
+    expect(steps()[0].querySelector('.wf-node [data-icon="check"]')).not.toBeNull();
+    expect(steps()[0]).toHaveTextContent('(fait)');
+    expect(steps()[3]).toHaveClass('here');
+    expect(tab.querySelector('.wf-end')).toHaveClass('next');
+    expect(tab.querySelector('.wf-end .wf-next')).toHaveTextContent('Ensuite');
+    expect(cls('alt')).toEqual([false, true, false, false]);
+    expect(getByTip(steps()[1] as HTMLElement, 'If gaps are found, run /gsd:plan-phase --gaps')).toHaveTextContent('ou retour');
+    // Each agent's line says its next.
+    const rows = [...tab.querySelectorAll('.wf-ag')];
+    expect(rows.map((r) => r.querySelector('.nx')?.textContent)).toEqual([
+      'Ensuite : la sortie, ou retour à Plan phase',
+      'Ensuite : Verify work',
+      'Ensuite : Execute phase',
+    ]);
+    expect(rows[0].querySelector('.nx')).toHaveAttribute('data-tip', 'If gaps are found, run /gsd:plan-phase --gaps');
+    // Another agent chosen in the list: the rail says where it is.
+    await userEvent.click(rows[1] as HTMLElement);
+    await waitFor(() => expect(steps()[2]).toHaveClass('here'));
+    expect(cls('done')).toEqual([false, false, false, false]);
+    expect(cls('next')).toEqual([false, false, false, true]);
+    expect(steps()[3].querySelector('.wf-next')).toHaveTextContent('Ensuite');
+    expect(tab.querySelector('.wf-end')).not.toHaveClass('next');
+  });
+
   it('opens an agent from its pill', async () => {
     await open(scanOf(gsd()), gsdTracks());
     await userEvent.click(await screen.findByRole('button', { name: 'refacto-auth' }));
@@ -238,6 +270,9 @@ describe('the Workflow tab', () => {
     expect([...tab.querySelectorAll('.wf-turns i')].map((i) => i.classList[0])).toEqual(['ok', 'bad', 'on', ...Array(17).fill('todo')]);
     expect(within(tab).getByText('Tour 3 · en cours', { selector: '.txt b' })).toBeInTheDocument();
     expect(within(tab).getByText('Sortie : plus de case vide, ou 20 tours.')).toBeInTheDocument();
+    // The turn after the one running is the next (ESC-244).
+    expect([...tab.querySelectorAll('.wf-turns i.next')].map((i) => i.textContent)).toEqual(['4']);
+    expect(within(tab).getByText('Ensuite : tour 4')).toBeInTheDocument();
     expect([...tab.querySelectorAll('.wf-step .wf-name')].map((n) => n.textContent)).toHaveLength(4);
     expect(tab.querySelectorAll('.wf-step')[2]).toHaveTextContent('retour à Implement it, and only it.');
     expect([...tab.querySelectorAll('.wf-hist .what b')].map((b) => b.textContent)).toEqual([
@@ -399,6 +434,13 @@ describe('the workflow « Tickets » of Escouade, in the same tab (ESC-197, choi
     expect(tab.querySelector('.wf-step[data-step="En cours"] .who')).toHaveTextContent('dem-5-export');
     expect(within(tab).getByText('Agents dans Tickets')).toBeInTheDocument();
     expect(within(tab).getByText('boucle 1/5 du ticket', { exact: false })).toBeInTheDocument();
+    // À faire done, En cours its own, À tester next (ESC-244).
+    expect(
+      [...tab.querySelectorAll('.wf-step')].map((s) =>
+        s.classList.contains('done') ? 'done' : s.classList.contains('here') ? 'here' : s.classList.contains('next') ? 'next' : '',
+      ),
+    ).toEqual(['done', 'here', 'next', '']);
+    expect(tab.querySelector('.wf-ag .nx')).toHaveTextContent('Ensuite : À tester');
     // No history of its own.
     expect(within(tab).queryByText(/^Historique de/)).toBeNull();
   });

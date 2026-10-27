@@ -86,4 +86,13 @@ export default {
   ticketsEscouade: 'Le workflow des tickets d’Escouade, d’après le Kanban',
   divider: 'Voir l’étape dans l’onglet Workflow',
   cardStep: 'Étape : {step}',
+  // Where an agent is in its pass (ESC-244, choices 190 to 195): the steps done, the next.
+  next: 'Ensuite : {what}',
+  orElse: ', ou {what}',
+  backIf: 'retour à {step} si {condition}',
+  theExit: 'la sortie',
+  nextTag: 'Ensuite',
+  orBackTag: 'ou retour',
+  doneStep: 'fait',
+  nextTurn: 'Ensuite : tour {n}',
 } as const satisfies Tree;

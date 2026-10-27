@@ -52,7 +52,7 @@
   import { menu, type MenuItem } from '../lib/menu.svelte';
   import { modelLabel, MODES } from '../lib/models';
   import { planView } from '../lib/plan';
-  import { cardStep } from '../lib/workflow-view';
+  import { cardNext, cardStep } from '../lib/workflow-view';
   import { workflows } from '../lib/workflows.svelte';
   import { sidebarSubs, type SubRow } from '../lib/subagents';
   import { BG_FINISHED_SHOWN, BG_RUNNING_SHOWN, bgCount, bgDuration, rowLine, rowTitle, sidebarBg, type BgRow } from '../lib/bgtasks';
@@ -787,6 +787,7 @@
       {@const ticket = app.ticketOf(a.id)}
       {@const plan = planView(a)?.mini}
       {@const wfStep = cardStep(workflows.scans[project.id]?.workflows ?? [], workflows.tracks[project.id]?.[a.id])}
+      {@const wfNext = cardNext(workflows.scans[project.id]?.workflows ?? [], workflows.tracks[project.id]?.[a.id])}
       {@const inBg = can(a, 'backgroundTasks') ? bgCount(a.plan) : 0}
       {@const subsRunning = (a.plan?.agents ?? []).filter((x) => x.status === 'running').length}
       {@const remote = remoteStateOf(a)}
@@ -887,7 +888,11 @@
             <span class="ticket-chip">{ticket.key}</span>
             {#if ticket.column === 'doing'}
               <!-- The ticket's loop keeps its place; the step of its workflow, if it follows one, is in the tooltip (choice 145). -->
-              <span class="loop" use:tip={wfStep && t('workflow.cardStep', { step: wfStep })}
+              <span
+                class="loop"
+                use:tip={wfStep
+                  ? [t('workflow.cardStep', { step: wfStep }), wfNext].filter(Boolean).join('\n')
+                  : t('workflow.next', { what: t('board.columns.review') })}
                 ><span>{t('nav.sidebar.loop', { iteration: ticket.iteration, max: ticket.maxLoops })}</span>
                 <span class="loops" aria-hidden="true"
                   >{#each { length: Math.min(ticket.maxLoops, 10) } as _, i (i)}<i class:on={i < ticket.iteration}></i>{/each}</span
@@ -905,7 +910,7 @@
             {/if}
             {#if wfStep}
               <!-- Where it is in its workflow takes the place of its plan, which stays in its banner (choice 145). -->
-              <span class="sep">·</span><span class="wf-mini"><Icon name="flow" size={14} /><span>{wfStep}</span></span>
+              <span class="sep">·</span><span class="wf-mini" use:tip={wfNext}><Icon name="flow" size={14} /><span>{wfStep}</span></span>
             {:else if plan}
               <!-- How far the agent is through its plan: the bar says it at a glance, the words are read. -->
               <span class="sep">·</span><span class="plan-mini"

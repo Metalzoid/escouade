@@ -13,8 +13,11 @@
     currentPhase,
     doorsOf,
     DOORS_SHOWN,
+    doneSteps,
     historyRows,
     labelIn,
+    nextOf,
+    nextSays,
     phaseOf,
     pickWorkflow,
     pipsOf,
@@ -66,7 +69,6 @@
   const folded = $derived(workflows.isFolded(pid));
   const phase = $derived(wf ? phaseOf(wf) : null);
   const mine = $derived(inWf.find((tr) => tr.agentId === agent?.id) ?? null);
-  const hereStep = $derived(mine && !mine.outside ? mine.step : null);
   const doors = $derived(wf ? doorsOf(wf, inWf) : []);
   let allDoors = $state(false);
   let allHistory = $state(false);
@@ -85,6 +87,16 @@
 
   /** The agent whose history is read: the one chosen in the list, else the open agent, else the first. */
   const reader = $derived(inWf.find((tr) => tr.agentId === workflows.reader[pid]) ?? mine ?? inWf[0] ?? null);
+  // The rail says where that agent is in its pass (ESC-244): the steps done ticked, its own lit, the next underlined.
+  const hereStep = $derived(reader && !reader.outside ? reader.step : null);
+  const doneSet = $derived(new Set(wf && reader ? doneSteps(wf, reader) : []));
+  const next = $derived(wf && reader ? nextOf(wf, reader) : null);
+  /** The conditions of the ways back of a next, for the tooltip of its line. */
+  const nextTip = (n: ReturnType<typeof nextOf>) =>
+    (n?.backs ?? [])
+      .map((b) => b.condition)
+      .filter(Boolean)
+      .join('\n') || null;
   const readerPassages = $derived(wf && reader ? reader.passages.filter((p) => p.workflow === wf.id) : []);
   const phasePassages = $derived(wf && reader ? currentPhase(wf, reader.passages) : []);
   const shown = $derived(allHistory ? readerPassages : phasePassages);
@@ -322,11 +334,12 @@
           {#if wf.exit}<span>{t('workflow.exit', { exit: plainLine(wf.exit) })}</span>{:else if loop.maxTurns}<span
               >{t('workflow.exitTurns', { count: loop.maxTurns })}</span
             >{/if}
+          {#if grid.find((u) => u.next)}<span class="nx">{t('workflow.nextTurn', { n: grid.find((u) => u.next)!.n })}</span>{/if}
         </div>
       </div>
       {#if grid.length}
         <div class="wf-turns" role="img" aria-label={t('workflow.turns')}>
-          {#each grid as u (u.n)}<i class={u.cls}>{u.n}</i>{/each}
+          {#each grid as u (u.n)}<i class={u.cls} class:next={u.next}>{u.n}</i>{/each}
         </div>
       {/if}
       {#if loopSteps.length}
@@ -389,13 +402,28 @@
         {#each steps as s (s.name)}
           {@const d = stepDetail(wf, s)}
           {@const here = on(s.name)}
-          <div class="wf-step" class:busy={here.length > 0} class:here={hereStep === s.name} class:guess={s.guessed} data-step={s.name}>
-            <i class="wf-node"></i>
+          {@const isDone = doneSet.has(s.name)}
+          {@const back = next?.backs.find((b) => b.to === s.name)}
+          <div
+            class="wf-step"
+            class:busy={here.length > 0}
+            class:here={hereStep === s.name}
+            class:done={isDone}
+            class:next={next?.to === s.name}
+            class:alt={!!back}
+            class:guess={s.guessed}
+            data-step={s.name}
+          >
+            <i class="wf-node"
+              >{#if isDone}<Icon name="check" size={10} />{/if}</i
+            >
             <div class="wf-main">
               <div class="wf-line">
-                <span class="wf-name">{labelIn(wf, s.name)}</span>{#if s.command}<span class="gate" class:plain={isTickets}
-                    >{s.command}</span
-                  >{/if}
+                <span class="wf-name">{labelIn(wf, s.name)}</span>{#if isDone}<span class="sr">{' '}({t('workflow.doneStep')})</span
+                  >{/if}{#if next?.to === s.name}<span class="wf-next">{t('workflow.nextTag')}</span>{:else if back}<span
+                    class="wf-next alt"
+                    use:tip={back.condition ?? back.say ?? ''}>{t('workflow.orBackTag')}</span
+                  >{/if}{#if s.command}<span class="gate" class:plain={isTickets}>{s.command}</span>{/if}
               </div>
               {#if s.guessed}
                 <div class="wf-detail">
@@ -428,7 +456,11 @@
           </div>
         {/each}
         {#if wf.exit}
-          <div class="wf-end"><Icon name="restart" size={12} /><span>{plainLine(wf.exit)}</span></div>
+          <div class="wf-end" class:next={!!next?.exit}>
+            <Icon name="restart" size={12} /><span
+              >{#if next?.exit}<span class="wf-next">{t('workflow.nextTag')}</span>{/if}{plainLine(wf.exit)}</span
+            >
+          </div>
         {/if}
       </div>
 
@@ -443,6 +475,7 @@
           {#each inWf as tr (tr.agentId)}
             {@const w = whereOf(tr)}
             {@const a = app.agents[tr.agentId]}
+            {@const nx = nextOf(wf, tr)}
             <button
               class="wf-ag"
               class:off={!!tr.outside}
@@ -473,6 +506,9 @@
                   {/if}
                 </span>
               </span>
+              {#if nx}
+                <span class="nx" use:tip={nextTip(nx)}>{nextSays(wf, nx)}</span>
+              {/if}
               {#if tr.support.partial && tr.support.missing.length}
                 <span class="wf-partial"><Icon name="info" size={12} /><span>{partialSays(tr)}</span></span>
               {/if}
@@ -751,6 +787,70 @@
     box-shadow:
       0 0 0 3px oklch(from var(--run) l c h / 0.18),
       inset 0 0 0 1.5px var(--run);
+  }
+  /* Where the chosen agent is in its pass (ESC-244, choices 190 to 192): done steps dimmed and ticked, the next underlined. */
+  .wf-node {
+    display: grid;
+    place-items: center;
+  }
+  .wf-step.done .wf-node {
+    background: rgba(var(--fg-rgb), 0.14);
+    box-shadow: none;
+    color: var(--soft);
+  }
+  .wf-step.done .wf-name {
+    color: var(--muted);
+    font-weight: 550;
+  }
+  .wf-step.done .wf-line .gate,
+  .wf-step.done .wf-detail {
+    opacity: 0.75;
+  }
+  .wf-step.next .wf-name,
+  .wf-step.alt .wf-name {
+    text-decoration: underline;
+    text-decoration-color: oklch(from var(--run) l c h / 0.75);
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 4px;
+  }
+  .wf-step.alt .wf-name {
+    text-decoration-style: dotted;
+    text-decoration-color: var(--line-3);
+  }
+  .wf-step.next .wf-node {
+    box-shadow: inset 0 0 0 1.5px oklch(from var(--run) l c h / 0.75);
+  }
+  .wf-next {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 5px;
+    background: oklch(from var(--run) l c h / 0.12);
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 550;
+    white-space: nowrap;
+  }
+  .wf-next.alt {
+    background: rgba(var(--fg-rgb), 0.05);
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--muted);
+  }
+  .wf-end.next {
+    color: var(--soft);
+  }
+  .wf-end .wf-next {
+    margin-right: 6px;
+  }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
   .wf-step.guess .wf-node {
     background: var(--panel);
@@ -1046,6 +1146,14 @@
   .wf-ag .wf-partial {
     grid-column: 2 / -1;
   }
+  .wf-ag .nx {
+    grid-column: 2 / -1;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .pips {
     display: inline-flex;
     flex: none;
@@ -1299,6 +1407,10 @@
     background: transparent;
     box-shadow: inset 0 0 0 1px var(--line);
     color: var(--dim);
+  }
+  .wf-turns i.todo.next {
+    box-shadow: inset 0 0 0 1px oklch(from var(--run) l c h / 0.75);
+    color: var(--soft);
   }
   .wf-empty {
     display: grid;

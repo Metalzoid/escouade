@@ -10,13 +10,11 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 - Azure DevOps becomes a code host, on dev.azure.com as on Azure DevOps Server: connect your organization with a token or through `az`, then open an agent’s pull request, follow its builds and reviews on its card, and hand it a failed build or the feedback to fix.
 - Azure Boards becomes a Kanban source, on the same Azure DevOps account: import a project’s work items with their acceptance criteria; their state and comments follow their ticket, and its agent’s pull request is linked to them.
+- The Workflow tab shows where each agent is: its steps done ticked, the one it is on, and the next marked “Next”, with both ends of a choice; its line and its card’s tooltip say “Next: …” too.
 
 ### Fixes
 
 - In the widened projects rail, a click on a project’s name opens it, as a click on its tile does.
-
-### Fixes
-
 - The name on your shared tickets is taken from git when you gave none: “Share” no longer asks for it, and Settings › Application shows it filled in.
 
 ## [2.0.3] — 2026-10-27

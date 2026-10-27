@@ -136,16 +136,82 @@ export function currentPhase(w: Workflow, passages: WorkflowPassage[]): Workflow
   return mine.slice(start);
 }
 
-/** The barrettes of an agent's row: one per step, done before its own, on for its own. */
-export function pipsOf(w: Workflow, tr: WorkflowTrack): ('done' | 'on' | '')[] {
+/**
+ * The steps an agent has done in its pass (ESC-244), in their order: those its history went through since it came in by
+ * the first step, a way back undoing the steps from the one it goes back to; never the one it is on. Without a history
+ * (« Tickets », a track just read), the steps before its own.
+ */
+export function doneSteps(w: Workflow, tr: WorkflowTrack): string[] {
+  if (tr.workflow !== w.id) return [];
   const steps = stepsOf(w);
-  const passed = new Set(
-    currentPhase(w, tr.passages)
-      .filter((p) => p.outcome !== 'running')
-      .map((p) => p.step),
-  );
-  const at = steps.findIndex((s) => s.name === tr.step);
-  return steps.map((s, i) => (i === at && !tr.outside ? 'on' : (at >= 0 ? i < at : passed.has(s.name)) ? 'done' : ''));
+  const idx = (name: string | null) => steps.findIndex((s) => s.name === name);
+  const phase = currentPhase(w, tr.passages);
+  if (!phase.some((p) => p.step)) return steps.slice(0, Math.max(idx(tr.step), 0)).map((s) => s.name);
+  const done = new Set<string>();
+  for (const p of phase) {
+    const i = idx(p.step);
+    if (i < 0) continue;
+    for (const s of steps.slice(i)) done.delete(s.name);
+    if (p.outcome === 'done') done.add(p.step!);
+  }
+  if (!tr.outside && tr.step) done.delete(tr.step);
+  return steps.filter((s) => done.has(s.name)).map((s) => s.name);
+}
+
+/** What comes after an agent's step: the next step (or the exit, at the end of the cycle), and its ways back, if any. */
+export interface NextStep {
+  to: string | null;
+  exit: string | null;
+  backs: { to: string; condition: string | null; say?: string }[];
+}
+
+/**
+ * The next of an agent in `w` (ESC-244): the ordinary way on from its step, else the step after it, else the exit; and
+ * the ways back from its step, the other end of a choice. Between two steps, from the last one (the step it was sent
+ * back to, after a way back). Null outside the workflow, in a loop of one prompt (its turns say it), at the very end.
+ */
+export function nextOf(w: Workflow, tr: WorkflowTrack): NextStep | null {
+  if (tr.workflow !== w.id || tr.outside || w.kind === 'prompt') return null;
+  const steps = stepsOf(w);
+  let from = tr.step;
+  if (!from) {
+    const last = [...currentPhase(w, tr.passages)].reverse().find((p) => p.step);
+    if (!last) return null;
+    if (last.outcome === 'back' && last.backTo) return { to: last.backTo, exit: null, backs: [] };
+    from = last.step;
+  }
+  const i = steps.findIndex((s) => s.name === from);
+  if (i < 0) return null;
+  const to = w.transitions.find((x) => !x.back && x.from === from && x.to !== from)?.to ?? steps[i + 1]?.name ?? null;
+  const backs = stepDetail(w, steps[i]).back;
+  const exit = to ? null : w.exit;
+  return to || exit || backs.length ? { to, exit, backs } : null;
+}
+
+/** « Ensuite : Livrer, ou retour à Planifier si écarts »: a condition said in the line when it is a few words, else in the tooltip. */
+export function nextSays(w: Workflow, n: NextStep | null): string {
+  if (!n) return '';
+  const short = (c: string | null) => !!c && c.length <= 24 && !/[\n`]/.test(c);
+  const back = (b: NextStep['backs'][number]) =>
+    short(b.condition)
+      ? t('workflow.backIf', { step: labelIn(w, b.to), condition: b.condition! })
+      : t('workflow.backTo', { step: labelIn(w, b.to) });
+  const first = n.to ? labelIn(w, n.to) : n.exit ? t('workflow.theExit') : null;
+  const all = [...(first ? [first] : []), ...n.backs.map(back)];
+  return t('workflow.next', {
+    what:
+      all[0] +
+      all
+        .slice(1)
+        .map((x) => t('workflow.orElse', { what: x }))
+        .join(''),
+  });
+}
+
+/** The barrettes of an agent's row: one per step, done in its pass, on for its own. */
+export function pipsOf(w: Workflow, tr: WorkflowTrack): ('done' | 'on' | '')[] {
+  const done = new Set(doneSteps(w, tr));
+  return stepsOf(w).map((s) => (s.name === tr.step && !tr.outside ? 'on' : done.has(s.name) ? 'done' : ''));
 }
 
 /** How long a passage took, or has taken so far. */
@@ -244,13 +310,15 @@ export function historyRows(w: Workflow, passages: WorkflowPassage[], now: numbe
 }
 
 /** The turns of a prompt loop, for its grid: done (ticked or not), now, and to come up to its maximum. */
-export function turnsGrid(tr: WorkflowTrack | null, max: number | null): { n: number; cls: 'ok' | 'bad' | 'on' | 'todo' }[] {
+export function turnsGrid(tr: WorkflowTrack | null, max: number | null): { n: number; cls: 'ok' | 'bad' | 'on' | 'todo'; next: boolean }[] {
   const done = (tr?.turns ?? []).map((u) => ({
     n: u.n,
     cls: u.outcome === 'running' ? ('on' as const) : u.ticked === false || u.outcome === 'failed' ? ('bad' as const) : ('ok' as const),
+    next: false,
   }));
   const last = done.length ? done[done.length - 1].n : 0;
-  const todo = Array.from({ length: Math.max(0, (max ?? 0) - last) }, (_, i) => ({ n: last + i + 1, cls: 'todo' as const }));
+  // The first turn to come is the next (ESC-244), as « Ensuite » says it of a step.
+  const todo = Array.from({ length: Math.max(0, (max ?? 0) - last) }, (_, i) => ({ n: last + i + 1, cls: 'todo' as const, next: i === 0 }));
   return [...done, ...todo];
 }
 
@@ -371,6 +439,12 @@ export function stepTitle(all: Workflow[], workflow: string | null, step: string
 /** The step an agent's card shows in the place of its plan: its workflow's (never « Tickets », the card has its loop). */
 export const cardStep = (all: Workflow[], tr: WorkflowTrack | undefined | null) =>
   tr && !tr.outside && tr.workflow !== TICKETS ? stepTitle(all, tr.workflow, tr.step) : null;
+
+/** « Ensuite : Exécuter »: what comes after the step on the card (ESC-244), in its tooltip; as `cardStep`, never « Tickets ». */
+export function cardNext(all: Workflow[], tr: WorkflowTrack | undefined | null): string | null {
+  const w = tr && tr.workflow !== TICKETS ? all.find((x) => x.id === tr.workflow) : undefined;
+  return (w && nextSays(w, nextOf(w, tr!))) || null;
+}
 
 /** A divider of the conversation: the agent entering a step, by its door, at its time. */
 export interface StepDivider {

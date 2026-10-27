@@ -57,7 +57,8 @@ const L = {
     doing: 'En cours',
     columns: ['À faire', 'En cours', 'À tester', 'Terminé'],
     loop: 'boucle 1/5',
-    step: 'Étape : GSD · Plan phase',
+    // The step, then what comes after it (ESC-244).
+    step: 'Étape : GSD · Plan phase\nEnsuite : Execute phase',
     ticketLoop: 'boucle 1/5 du ticket',
     sendBack: 'Renvoyer : retour à En cours',
     agentsIn: 'Agents dans Tickets',
@@ -70,7 +71,7 @@ const L = {
     doing: 'In progress',
     columns: ['To do', 'In progress', 'To review', 'Done'],
     loop: 'loop 1/5',
-    step: 'Step: GSD · Plan phase',
+    step: 'Step: GSD · Plan phase\nNext: Execute phase',
     ticketLoop: 'ticket loop 1/5',
     sendBack: 'Send back: back to In progress',
     agentsIn: 'Agents in Tickets',

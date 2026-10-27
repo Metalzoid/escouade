@@ -600,7 +600,9 @@ describe('Sidebar agent card plan line', () => {
     expect(mini(/refacto-auth/)).toBeNull();
     // The ticket's loop keeps its place, the step in its tooltip.
     expect(card(/dem-5/).querySelector('.wf-mini')).toBeNull();
-    expect(getByTip(card(/dem-5/), 'Étape : GSD · Plan phase')).toHaveTextContent('boucle 1/5');
+    expect(getByTip(card(/dem-5/), 'Étape : GSD · Plan phase\nEnsuite : Execute phase')).toHaveTextContent('boucle 1/5');
+    // What comes after, in the tooltip of the step (ESC-244).
+    expect(card(/refacto-auth/).querySelector('.wf-mini')).toHaveAttribute('data-tip', 'Ensuite : la sortie');
     // Outside its workflow: nothing.
     expect(card(/tests-e2e/).querySelector('.wf-mini')).toBeNull();
   });
