@@ -1,0 +1,19 @@
+flowchart TD
+  %% GSD : généré par Escouade
+  in1(["/gsd:autonomous"]) --> s1
+  in2(["/gsd:next"]) --> s1
+  in3(["/gsd:quick"]) --> s3
+  s1["Discuter<br>/gsd:discuss-phase"]
+  s2["Planifier<br>/gsd:plan-phase"]
+  s3["Exécuter<br>/gsd:execute-phase"]
+  s4["Vérifier<br>/gsd:verify-work"]
+  s1 --> s2
+  s2 --> s3
+  s3 --> s4
+  s2 -.->|"plan refusé par gsd-plan-checker · 3 tours max"| s2
+  s4 -.->|"écarts"| s2
+  s4 -->|"phase validée"| out((("Phase finie")))
+  out -.->|"phase suivante"| s1
+  classDef door stroke-dasharray: 3 3
+  class in1,in2,in3 door
+  linkStyle 6,7 stroke-dasharray: 4 3

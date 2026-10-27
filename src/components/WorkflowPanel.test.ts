@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from '../lib/i18n';
+import { readPref, removePref, writePref } from '../lib/prefs';
 import { app } from '../lib/state.svelte';
 import type { WorkflowScan, WorkflowTrack } from '../lib/types';
 import { workflows } from '../lib/workflows.svelte';
@@ -455,5 +456,109 @@ describe('the workflow « Tickets » of Escouade, in the same tab (ESC-197, choi
     expect([...tab.querySelectorAll('.wf-step .wf-name')].map((n) => n.textContent)).toEqual(['To do', 'In progress', 'To review', 'Done']);
     expect(within(tab).getByText('Send back: back to In progress')).toBeInTheDocument();
     setLang('fr');
+  });
+});
+
+describe('the Diagram view of the tab (ESC-245)', () => {
+  let copied: string[];
+  beforeEach(() => {
+    resetApp({ projects: [project()], agents: AGENTS, tickets: [ticket({ id: 't1', key: 'DEM-5', column: 'doing' })] });
+    removePref('workflowView');
+    copied = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: async (text: string) => void copied.push(text) },
+      configurable: true,
+    });
+  });
+
+  it('switches from the column to the diagram, and keeps the choice for the whole app', async () => {
+    await open(scanOf(gsd()), gsdTracks());
+    const tab = await screen.findByTestId('workflow');
+    // The column first.
+    await within(tab).findByText('Verify work', { selector: '.wf-name' });
+    expect(within(tab).getByRole('tab', { name: 'Colonne' })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.click(within(tab).getByRole('tab', { name: 'Diagramme' }));
+    const dg = await within(tab).findByTestId('workflow-diagram');
+    expect(tab.querySelector('.wf-step')).toBeNull();
+    expect(within(tab).getByRole('tab', { name: 'Diagramme' })).toHaveAttribute('aria-selected', 'true');
+    expect(readPref('workflowView')).toBe('diagram');
+    // The agents and the history stay under it.
+    expect(within(tab).getByText('Agents dans GSD', { exact: false })).toBeInTheDocument();
+    expect(dg.querySelectorAll('.dg-node')).toHaveLength(4);
+    // After a restart (the choice of this run forgotten, the kept one read), the diagram again; back to the column, kept too.
+    workflows.view = null;
+    expect(workflows.viewOf()).toBe('diagram');
+    await userEvent.click(within(tab).getByRole('tab', { name: 'Colonne' }));
+    await within(tab).findByText('Verify work', { selector: '.wf-name' });
+    expect(readPref('workflowView')).toBe('column');
+  });
+
+  it('draws the steps, where the open agent is, the loop, the way back it took, the exit', async () => {
+    writePref('workflowView', 'diagram');
+    await open(scanOf(gsd()), gsdTracks());
+    const dg = await screen.findByTestId('workflow-diagram');
+    await waitFor(() => expect(dg.querySelectorAll('.dg-node')).toHaveLength(4));
+    const nodes = [...dg.querySelectorAll('.dg-node')];
+    expect(nodes.map((n) => n.getAttribute('aria-label'))).toEqual([
+      'Discuss phase, faite',
+      'Plan phase, faite',
+      'Execute phase, faite',
+      'Verify work, en cours',
+    ]);
+    // The loop on Plan, ×3; the way back from Verify, taken by pagination-users.
+    expect(nodes[1].querySelector('.dg-self')).toHaveTextContent('×3');
+    expect(dg.querySelectorAll('path.e.took:not(.head)')).toHaveLength(1);
+    expect(dg.querySelector('.dg-chip.ret.took title')).toHaveTextContent('If gaps are found');
+    // Each agent a dot on its step, the open one current.
+    expect(nodes[3].querySelector('circle.ag.cur title')).toHaveTextContent('pagination-users');
+    expect(nodes[2].querySelector('circle.ag.wait title')).toHaveTextContent('refacto-auth');
+    expect(dg.querySelector('.dg-exit')).toHaveTextContent('Sortie');
+    expect([...dg.querySelectorAll('.dg-door')].map((d) => d.textContent)).toContain('/gsd:autonomous');
+  });
+
+  it('copies the workflow in Mermaid, without its agents', async () => {
+    await open(scanOf(gsd()), gsdTracks());
+    const tab = await screen.findByTestId('workflow');
+    await userEvent.click(await within(tab).findByRole('button', { name: 'Copier en Mermaid' }));
+    await waitFor(() => expect(copied).toHaveLength(1));
+    expect(copied[0].split('\n').slice(0, 3)).toEqual(['flowchart TD', '  %% GSD', '  in1(["/gsd:autonomous"]) --> s1']);
+    expect(copied[0]).not.toContain('pagination-users');
+    expect(app.toasts.at(-1)).toMatchObject({
+      kind: 'ok',
+      text: `Code Mermaid copié : ${copied[0].split('\n').length} lignes, sans les agents`,
+    });
+  });
+
+  it('keeps a trapped step name of the repository a text: nothing runs, the diagram holds, the copy is escaped', async () => {
+    writePref('workflowView', 'diagram');
+    const trap = '<img src=x onerror="window.__pwned=1">"]-->x click s1';
+    const w = gsd();
+    w.steps[0] = { ...w.steps[0], name: trap, named: true };
+    w.transitions[0] = { ...w.transitions[0], from: trap };
+    await open(scanOf(w), gsdTracks());
+    const dg = await screen.findByTestId('workflow-diagram');
+    await waitFor(() => expect(dg.querySelectorAll('.dg-node')).toHaveLength(4));
+    expect(document.querySelector('img')).toBeNull();
+    expect((window as unknown as { __pwned?: number }).__pwned).toBeUndefined();
+    expect(dg.querySelector('.dg-node title')).toHaveTextContent(trap);
+    await userEvent.click(screen.getByRole('button', { name: 'Copier en Mermaid' }));
+    await waitFor(() => expect(copied).toHaveLength(1));
+    expect(copied[0]).toContain(
+      's1["#lt;img src=x onerror=#quot;window.__pwned=1#quot;#gt;#quot;]--#gt;x click s1<br>/gsd:discuss-phase"]',
+    );
+  });
+
+  it('enlarges over the work panel, zooms, and closes by Échap', async () => {
+    writePref('workflowView', 'diagram');
+    await open(scanOf(gsd()), gsdTracks());
+    await screen.findByTestId('workflow-diagram');
+    await userEvent.click(screen.getByRole('button', { name: 'Agrandir le diagramme' }));
+    const big = await screen.findByTestId('workflow-diagram-big');
+    expect(within(big).getByTestId('workflow-zoom')).toHaveTextContent('100 %');
+    await userEvent.click(within(big).getByRole('button', { name: 'Zoom avant (Ctrl +)' }));
+    expect(within(big).getByTestId('workflow-zoom')).toHaveTextContent('110 %');
+    within(big).getByRole('region').focus();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByTestId('workflow-diagram-big')).toBeNull());
   });
 });

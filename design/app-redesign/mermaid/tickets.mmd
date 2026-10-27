@@ -1,0 +1,13 @@
+flowchart TD
+  %% Tickets : généré par Escouade
+  s1["À faire<br>pilote auto ou Lancer"]
+  s2["En cours<br>travail, puis critères"]
+  s3["À tester<br>Tester le ticket"]
+  s4["Terminé<br>merge, PR ou push"]
+  s1 --> s2
+  s2 -->|"critères atteints"| s3
+  s3 -->|"Valider"| s4
+  s2 -.->|"critères non atteints · 5 tours max"| s2
+  s3 -.->|"Renvoyer"| s2
+  classDef door stroke-dasharray: 3 3
+  linkStyle 3,4 stroke-dasharray: 4 3

@@ -88,6 +88,12 @@ export const ICONS = {
   gift: '<path d="M8 3.5v10M3 6.75h10v2.5H3zM4 9.25v4h8v-4M8 6.75C6.75 4.5 4.5 4 4.5 5.4 4.5 6.4 6.25 6.75 8 6.75 9.75 6.75 11.5 6.4 11.5 5.4 11.5 4 9.25 4.5 8 6.75z" />',
   // A workflow (ESC-191): its steps in a cycle.
   flow: '<circle cx="4.5" cy="3.5" r="1.75" /><circle cx="4.5" cy="12.5" r="1.75" /><path d="M4.5 5.25v5.5M6.25 12.5h3.5a2.5 2.5 0 0 0 2.5-2.5V6a2.5 2.5 0 0 0-2.5-2.5h-1.5M9.5 1.75 7.75 3.5l1.75 1.75" />',
+  // The two views of the Workflow tab (ESC-245): the steps on a rail, the diagram; then enlarge and copy.
+  rail: '<circle cx="4" cy="3.5" r="1.5" /><circle cx="4" cy="12.5" r="1.5" /><path d="M4 5v6M7.5 3.5h6M7.5 12.5h6M7.5 8h4" />',
+  diagram:
+    '<rect x="5.25" y="1.75" width="5.5" height="3.5" rx="1" /><rect x="1.75" y="10.75" width="5" height="3.5" rx="1" /><rect x="9.25" y="10.75" width="5" height="3.5" rx="1" /><path d="M8 5.25v2.5M4.25 10.75V9.5c0-.7.55-1.25 1.25-1.25h5c.7 0 1.25.55 1.25 1.25v1.25" />',
+  expand: '<path d="M9.5 2.75h3.75V6.5M6.5 13.25H2.75V9.5M13.25 2.75 9 7M2.75 13.25 7 9" />',
+  copy: '<rect x="5.25" y="5.25" width="8" height="8" rx="1.5" /><path d="M10.75 5.25V3.5c0-.7-.55-1.25-1.25-1.25h-6c-.7 0-1.25.55-1.25 1.25v6c0 .7.55 1.25 1.25 1.25h1.75" />',
 } as const;
 
 export type IconName = keyof typeof ICONS;

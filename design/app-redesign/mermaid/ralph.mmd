@@ -1,0 +1,17 @@
+flowchart TD
+  %% Boucle PROMPT.md : généré par Escouade
+  in1(["PROMPT.md"]) --> s1
+  in2(["/loop"]) --> s1
+  s1["Choisir<br>fix_plan.md"]
+  s2["Faire"]
+  s3["Tester<br>npm test"]
+  s4["Cocher et commiter<br>fix_plan.md"]
+  s1 --> s2
+  s2 --> s3
+  s3 -->|"vert"| s4
+  s3 -.->|"rouge"| s2
+  s4 -->|"plus de case vide, ou 18 tours"| out((("Sortie")))
+  out -.->|"tour suivant"| s1
+  classDef door stroke-dasharray: 3 3
+  class in1,in2 door
+  linkStyle 5 stroke-dasharray: 4 3

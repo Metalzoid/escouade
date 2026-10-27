@@ -8578,6 +8578,503 @@
         color: var(--muted);
         font-style: italic;
       }
+
+      /*
+       * ---------- The Diagram view of a workflow (ESC-245): beside the rail, in the same tab ----------
+       * Drawn by Escouade (diagram.js, a layered layout): the flow down the column of 340 px, across when enlarged. The
+       * ways back and the loops in the red of a failure, since they come back on one (écarts, rouges, refusé); the next
+       * round dashed and neutral; a choice is a diamond under its step and a condition on each branch.
+       */
+      .wf-view {
+        grid-template-columns: 1fr 1fr;
+        width: 58px;
+        padding: 2px;
+        border-radius: 7px;
+      }
+      .wf-view button {
+        height: 22px;
+        border-radius: 5px;
+      }
+      .dg-wrap {
+        position: relative;
+        margin: 2px 14px 4px;
+      }
+      .dg {
+        display: block;
+        overflow: visible;
+        font-family: var(--font);
+      }
+      .dg text {
+        fill: var(--text);
+        font-size: 12.5px;
+      }
+      .dg .dg-e,
+      .dg .dg-b {
+        fill: none;
+        stroke: var(--line-3);
+        stroke-width: 1.4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .dg .dg-e.walked {
+        stroke: var(--muted);
+      }
+      .dg .dg-e.door {
+        stroke-dasharray: 2 3;
+      }
+      .dg .dg-b {
+        stroke: oklch(from var(--del) l c h / 0.6);
+      }
+      .dg .dg-b.took {
+        stroke: var(--del);
+        stroke-width: 1.8;
+      }
+      .dg .dg-b.again {
+        stroke: var(--line-3);
+        stroke-dasharray: 3 4;
+      }
+      .dg .head {
+        stroke-dasharray: none !important;
+      }
+      .dg-node rect {
+        fill: var(--raise);
+        stroke: var(--line-2);
+      }
+      .dg-node .nm {
+        font-weight: 600;
+        letter-spacing: -0.005em;
+      }
+      .dg-node .cmd {
+        fill: var(--muted);
+        font: 500 10.5px var(--mono);
+      }
+      .dg-node.done rect {
+        fill: var(--panel);
+      }
+      .dg-node.done .nm {
+        fill: var(--soft);
+      }
+      .dg-node .ck {
+        color: var(--muted);
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.6;
+      }
+      .dg-node.on rect {
+        fill: color-mix(in oklch, var(--run) 8%, var(--raise));
+        stroke: var(--run);
+        stroke-width: 1.5;
+      }
+      .dg-node.next rect {
+        stroke: var(--line-3);
+        stroke-dasharray: 4 3;
+      }
+      .dg-node .tag {
+        fill: var(--muted);
+        font-size: 10.5px;
+        font-weight: 550;
+      }
+      .dg-node .ag {
+        fill: var(--panel);
+        stroke: var(--muted);
+        stroke-width: 1.5;
+      }
+      .dg-node .ag.cur {
+        fill: var(--run);
+        stroke: var(--run);
+      }
+      .dg-node .ag.wait {
+        stroke: var(--wait);
+      }
+      .dg-node .more {
+        fill: var(--muted);
+        font-size: 10.5px;
+      }
+      .dg-node {
+        cursor: pointer;
+        outline: none;
+      }
+      .dg-node:hover rect {
+        stroke: var(--line-3);
+      }
+      .dg-node:focus-visible rect {
+        stroke: var(--text);
+        stroke-width: 2;
+      }
+      .dg-fork {
+        fill: var(--panel);
+        stroke: var(--muted);
+        stroke-width: 1.2;
+      }
+      .dg use {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .dg-self rect {
+        fill: color-mix(in oklch, var(--del) 10%, var(--raise));
+        stroke: oklch(from var(--del) l c h / 0.45);
+      }
+      .dg-self use {
+        color: var(--del);
+      }
+      .dg-self text {
+        fill: var(--del);
+        font-size: 10.5px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .dg-self.took rect {
+        stroke: var(--del);
+      }
+      .dg-door rect {
+        fill: var(--panel);
+        stroke: var(--line-3);
+        stroke-dasharray: 2 2.5;
+      }
+      .dg-door text {
+        fill: var(--soft);
+        font: 500 11px var(--mono);
+      }
+      .dg-exit rect {
+        fill: var(--panel);
+        stroke: var(--line-2);
+      }
+      .dg-exit circle {
+        fill: none;
+        stroke: var(--soft);
+        stroke-width: 1.3;
+      }
+      .dg-exit circle.in {
+        fill: var(--soft);
+        stroke: none;
+      }
+      .dg-exit text {
+        fill: var(--soft);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .dg-chip rect {
+        fill: var(--panel);
+        stroke: var(--line-2);
+      }
+      .dg-chip text {
+        fill: var(--soft);
+        font-size: 10.5px;
+        font-weight: 500;
+      }
+      .dg-chip.ret rect {
+        fill: color-mix(in oklch, var(--del) 9%, var(--panel));
+        stroke: oklch(from var(--del) l c h / 0.45);
+      }
+      .dg-chip.ret text {
+        fill: var(--del);
+      }
+      .dg-chip.ret use {
+        color: var(--del);
+      }
+      .dg-chip.ret.took rect {
+        stroke: var(--del);
+      }
+      .dg-chip.again rect {
+        stroke: var(--line-3);
+        stroke-dasharray: 3 3;
+      }
+      .dg-chip.again text {
+        fill: var(--muted);
+      }
+      .dg-who rect {
+        fill: var(--panel);
+        stroke: var(--line-2);
+      }
+      .dg-who circle {
+        fill: var(--muted);
+      }
+      .dg-who.cur rect {
+        stroke: oklch(from var(--run) l c h / 0.55);
+      }
+      .dg-who.cur circle {
+        fill: var(--run);
+      }
+      .dg-who.wait circle {
+        fill: var(--wait);
+      }
+      .dg-who text {
+        fill: var(--soft);
+        font-size: 10.5px;
+        font-weight: 500;
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .dg-node.on rect {
+          animation: dg-breathe 2.4s var(--ease) infinite;
+        }
+      }
+      @keyframes dg-breathe {
+        50% {
+          stroke: oklch(from var(--run) l c h / 0.5);
+        }
+      }
+      /* The legend, under the drawing: what the strokes say, once. */
+      .dg-key {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 12px;
+        padding: 6px 14px 12px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .dg-key span {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .dg-key svg {
+        width: 18px;
+        height: 10px;
+        overflow: visible;
+      }
+      .dg-key path {
+        fill: none;
+        stroke-width: 1.5;
+        stroke-linecap: round;
+      }
+      .dg-key .k-ret {
+        stroke: var(--del);
+      }
+      .dg-key .k-again {
+        stroke: var(--line-3);
+        stroke-dasharray: 3 3;
+      }
+      .dg-key .k-door {
+        stroke: var(--line-3);
+        stroke-dasharray: 2 3;
+      }
+      .dg-key .k-fork {
+        fill: var(--panel);
+        stroke: var(--muted);
+        stroke-width: 1.2;
+      }
+      .dg-key .k-on {
+        fill: color-mix(in oklch, var(--run) 8%, var(--raise));
+        stroke: var(--run);
+      }
+      .dg-key .k-next {
+        fill: none;
+        stroke: var(--line-3);
+        stroke-dasharray: 3 2;
+      }
+
+      /* Enlarged: the whole work panel, the flow across, zoom and scroll. */
+      .dg-big {
+        position: absolute;
+        inset: 0;
+        z-index: 30;
+        display: flex;
+        flex-direction: column;
+        background: var(--panel);
+      }
+      .dg-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 48px;
+        padding: 0 12px 0 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      .dg-bar .caption {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .dg-bar .grow {
+        flex: 1;
+      }
+      .dg-zoom {
+        display: inline-flex;
+        align-items: center;
+        height: 28px;
+        padding: 0 2px;
+        border-radius: 7px;
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .dg-zoom .v {
+        min-width: 44px;
+        color: var(--soft);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        text-align: center;
+      }
+      .dg-canvas {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        background:
+          radial-gradient(circle at 1px 1px, rgba(var(--fg-rgb), 0.07) 1px, transparent 1.5px) 0 0 / 18px 18px,
+          var(--well);
+        cursor: grab;
+        scrollbar-width: thin;
+      }
+      .dg-canvas .dg {
+        margin: 36px 44px;
+        transform-origin: 0 0;
+      }
+      .dg-side {
+        position: absolute;
+        right: 14px;
+        bottom: 52px;
+        display: grid;
+        gap: 7px;
+        width: 284px;
+        padding: 12px 14px;
+        border-radius: 11px;
+        background: var(--raise);
+        box-shadow:
+          0 8px 24px rgba(0, 0, 0, calc(0.35 * var(--shade))),
+          inset 0 0 0 1px var(--line-2);
+      }
+      .dg-side h4 {
+        margin: 0 0 2px;
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .dg-side .r {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        color: var(--soft);
+        font-size: 12px;
+      }
+      .dg-side .r i {
+        flex: none;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--muted);
+      }
+      .dg-side .r.cur i {
+        background: var(--run);
+      }
+      .dg-side .r span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .dg-side .r .w {
+        flex: none;
+        margin-left: auto;
+        color: var(--muted);
+      }
+      .dg-big .dg-key {
+        padding: 10px 16px;
+        border-top: 1px solid var(--line);
+      }
+      /* The code « Copier en Mermaid » gives, as it is. */
+      .dg-code {
+        margin: 0;
+        padding: 12px 14px;
+        overflow: auto;
+        border-radius: 9px;
+        background: var(--well);
+        box-shadow: inset 0 0 0 1px var(--line);
+        color: var(--soft);
+        font: 500 10.5px/1.6 var(--mono);
+        /* The code as it is pasted: `-->` stays three characters. */
+        font-variant-ligatures: none;
+        white-space: pre;
+      }
+
+      /* The comparison (design only): the same workflows drawn by Escouade and by Mermaid, at the width of the panel. */
+      .cmp {
+        position: fixed;
+        inset: 0;
+        z-index: 400;
+        overflow: auto;
+        padding: 26px 30px 40px;
+        background: var(--frame);
+      }
+      .cmp h2 {
+        margin: 0 0 4px;
+        font-size: 17px;
+        letter-spacing: -0.01em;
+      }
+      .cmp > p {
+        max-width: 110ch;
+        margin: 0 0 18px;
+        color: var(--muted);
+      }
+      .cmp-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 340px) minmax(300px, 1fr);
+        gap: 18px;
+        align-items: start;
+      }
+      .cmp-col h3 {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin: 0 0 8px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .cmp-col h3 .caption {
+        font-weight: 400;
+      }
+      .cmp-frame {
+        width: 340px;
+        height: 520px;
+        overflow: hidden;
+        border-radius: 11px;
+        background: var(--panel);
+        box-shadow: inset 0 0 0 1px var(--line-2);
+      }
+      .cmp-frame img {
+        display: block;
+        width: 312px;
+        margin: 14px;
+      }
+      .cmp-frame .dg-wrap {
+        margin-top: 14px;
+      }
+      .cmp-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      .cmp-table th,
+      .cmp-table td {
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+      .cmp-table th {
+        color: var(--muted);
+        font-weight: 550;
+      }
+      .cmp-table td {
+        color: var(--soft);
+      }
+      .cmp-table td b {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .cmp-rec {
+        margin: 14px 0;
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: var(--raise);
+        box-shadow: inset 0 0 0 1px var(--line-2);
+        color: var(--soft);
+        font-size: 12.5px;
+      }
+      .cmp-rec b {
+        color: var(--text);
+      }
     </style>
     <style>
       /*
@@ -9212,6 +9709,10 @@
         <symbol id="i-star" viewBox="0 0 16 16"><path d="M8 2.6l1.6 3.4 3.7.4-2.8 2.5.8 3.7L8 10.7l-3.3 1.9.8-3.7-2.8-2.5 3.7-.4z" /></symbol>
         <symbol id="i-gift" viewBox="0 0 16 16"><path d="M8 3.5v10M3 6.75h10v2.5H3zM4 9.25v4h8v-4M8 6.75C6.75 4.5 4.5 4 4.5 5.4 4.5 6.4 6.25 6.75 8 6.75 9.75 6.75 11.5 6.4 11.5 5.4 11.5 4 9.25 4.5 8 6.75z" /></symbol>
         <symbol id="i-team" viewBox="0 0 16 16"><circle cx="6" cy="5.75" r="2.25" /><path d="M2 13c.5-2 2-3.25 4-3.25S9.5 11 10 13M10.5 3.6a2.25 2.25 0 0 1 0 4.3M11.6 9.9c1.3.45 2.1 1.5 2.4 3.1" /></symbol>
+        <symbol id="i-rail" viewBox="0 0 16 16"><circle cx="4" cy="3.5" r="1.5" /><circle cx="4" cy="12.5" r="1.5" /><path d="M4 5v6M7.5 3.5h6M7.5 12.5h6M7.5 8h4" /></symbol>
+        <symbol id="i-diagram" viewBox="0 0 16 16"><rect x="5.25" y="1.75" width="5.5" height="3.5" rx="1" /><rect x="1.75" y="10.75" width="5" height="3.5" rx="1" /><rect x="9.25" y="10.75" width="5" height="3.5" rx="1" /><path d="M8 5.25v2.5M4.25 10.75V9.5c0-.7.55-1.25 1.25-1.25h5c.7 0 1.25.55 1.25 1.25v1.25" /></symbol>
+        <symbol id="i-expand" viewBox="0 0 16 16"><path d="M9.5 2.75h3.75V6.5M6.5 13.25H2.75V9.5M13.25 2.75 9 7M2.75 13.25 7 9" /></symbol>
+        <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.25" y="5.25" width="8" height="8" rx="1.5" /><path d="M10.75 5.25V3.5c0-.7-.55-1.25-1.25-1.25h-6c-.7 0-1.25.55-1.25 1.25v6c0 .7.55 1.25 1.25 1.25h1.75" /></symbol>
       </defs>
     </svg>
 
@@ -12376,6 +12877,7 @@ Chaque PR cite l’autre : à merger ensemble.</div>
         ["Confiance du dossier : réponds dans son terminal", "Folder trust: answer in its terminal"],
       );
     </script>
+    <script src="diagram.js"></script>
     <script>
       // Données fictives : just enough behaviour to feel the window. The address (#run, #git…) opens a screen directly.
       const $ = (s) => document.querySelector(s);
@@ -13926,6 +14428,205 @@ Chaque PR cite l’autre : à merger ensemble.</div>
           </section>`,
         );
         settingsAt('projects', route === 'loops-settings' ? 'sg-workflow' : 'sh-wf-found');
+      }
+
+      // ---------- The Diagram view of a workflow (ESC-245) ----------
+      // #loops-diagram (GSD in the column, three agents), #loops-diagram-choice (a workflow with choices), #loops-diagram-simple
+      // (a loop of one prompt), #loops-diagram-tickets (« Tickets »), #loops-diagram-big (enlarged over the work panel),
+      // #loops-diagram-copied (« Copier en Mermaid » and what it gives), #loops-diagram-compare (Escouade's drawing beside Mermaid's).
+      if (route.startsWith('loops-diagram')) {
+        const D = window.Diagram;
+        const light = document.documentElement.dataset.theme === 'light';
+        /** The head of the tab: the workflow, the switch Colonne / Diagramme, then Agrandir and Copier en Mermaid. */
+        const dgTop = (name, cap) => `
+          <div class="wf-top">
+            <button class="select" aria-haspopup="menu" aria-label="Workflow">${FLOW}<b>${name}</b><svg class="i s14"><use href="#i-down" /></svg></button>
+            <span class="grow"></span>
+            <div class="seg wf-view" role="tablist" aria-label="Vue du workflow">
+              <button role="tab" aria-selected="false" title="Colonne : les étapes en rail, le détail de chacune"><svg class="i s14"><use href="#i-rail" /></svg></button>
+              <button role="tab" aria-selected="true" title="Diagramme : les boucles, les retours et les choix"><svg class="i s14"><use href="#i-diagram" /></svg></button>
+            </div>
+            <button class="icon-btn" aria-label="Agrandir le diagramme" title="Agrandir (F11 dans l’onglet)"><svg class="i s14"><use href="#i-expand" /></svg></button>
+            <button class="icon-btn" aria-label="Copier en Mermaid" title="Copier en Mermaid : le workflow, sans ses agents, pour une doc ou une PR"><svg class="i s14"><use href="#i-copy" /></svg></button>
+            <button class="icon-btn" aria-label="Réglages du workflow"><svg class="i s14"><use href="#i-sliders" /></svg></button>
+          </div>
+          <div class="caption wf-cap">${cap}</div>`;
+        const KEY = `<div class="dg-key" aria-label="Légende">
+          <span><svg viewBox="0 0 18 10"><path class="k-ret" d="M1 5h16" /></svg>retour, sa condition</span>
+          <span><svg viewBox="0 0 18 10"><path class="k-fork" d="M9 0.5l4.5 4.5L9 9.5 4.5 5z" /></svg>choix</span>
+          <span><svg viewBox="0 0 18 10"><path class="k-again" d="M1 5h16" /></svg>tour suivant</span>
+          <span><svg viewBox="0 0 18 10"><rect class="k-next" x="1" y="1" width="16" height="8" rx="2.5" /></svg>prochaine</span>
+        </div>`;
+        // Drawn once in place, at the width of its column (340 px beside the classic layout, 44 % side by side).
+        const DG = [];
+        const dg = (key, opts) => (DG.push([key, opts]), `<div class="dg-wrap" data-dg="${DG.length - 1}"></div>`);
+        const fillDg = () =>
+          $$('.dg-wrap[data-dg]').forEach((el) => {
+            const [key, opts] = DG[+el.dataset.dg];
+            el.innerHTML = D.draw(D.WF[key], { width: el.clientWidth, ...opts }).svg;
+          });
+        const GSD_STATE = { done: ['discuss', 'plan', 'exec'], on: 'verify', took: ['verify>plan', 'plan>plan'] };
+        const GSD_ON = {
+          plan: [{ name: 'dem-5-export-csv-des-factures' }],
+          exec: [{ name: 'refacto-auth' }],
+          verify: [{ name: 'pagination-users', cur: true }],
+        };
+        const SHIP_STATE = { done: ['build'], on: 'test', next: ['fix', 'review'] };
+        const SHIP_ON = {
+          test: [{ name: 'export-pdf', cur: true }],
+          fix: [{ name: 'hotfix-login', wait: true }],
+          review: [{ name: 'release-2-1' }],
+        };
+        const SHIP_AGENTS = `
+          <div class="wf-h">Agents dans Livraison <span class="n">3 en cours</span></div>
+          <div class="wf-list">
+            ${wfAgent({ name: 'export-pdf', cur: true, p: ['done', 'on', '', '', ''], where: '<b>Tester</b> · <span class="mono">npm test</span> · puis Relire si verts, Corriger si rouges', nums: '22m · 1,12 $' })}
+            ${wfAgent({ name: 'hotfix-login', cls: 'wait', p: ['done', 'done', 'on', '', ''], where: '<b>Corriger</b> · 2ᵉ tour sur 3 · attend ta réponse', nums: '14m · 0,58 $' })}
+            ${wfAgent({ name: 'release-2-1', p: ['done', 'done', '', 'on', ''], where: '<b>Relire</b> · <span class="mono">/review</span> · revenu une fois de Relire à Construire', nums: '1h 04m · 3,40 $' })}
+          </div>`;
+        /** The column of the Workflow tab, drawn as a diagram. */
+        const narrow = (top, body) => {
+          loopsCards();
+          loopPane(top + body);
+          fillDg();
+        };
+        if (route === 'loops-diagram') narrow(dgTop('GSD', '4 étapes · phase 3 sur 6 d’après <span class="mono">.planning/STATE.md</span> · lu à 10:12'), dg('gsd', { state: GSD_STATE, agents: GSD_ON }) + KEY + GSD_AGENTS() + PAG_HIST());
+        if (route === 'loops-diagram-choice') {
+          narrow(dgTop('Livraison', '5 étapes · 2 choix · lu dans <span class="mono">.escouade/workflows/livraison.yml</span>'), dg('ship', { state: SHIP_STATE, agents: SHIP_ON }) + KEY + SHIP_AGENTS);
+        }
+        if (route === 'loops-diagram-simple') {
+          $('.tile[data-hue="300"]').click();
+          $('#ag-pag .a-name').textContent = 'ralph-studio';
+          $('#h-name').textContent = 'ralph-studio';
+          $('#ag-pag .a-meta').innerHTML = `<span class="emark">Claude</span><span>Sonnet 5.5</span><span class="sep">·</span><span class="num">1h 52m</span><span class="sep">·</span><span class="wf-mini">${FLOW}<span>Tour 7 · Tester</span></span>`;
+          $('#plan').hidden = true;
+          $('#th-main .msg-user').innerHTML = 'Relis <span class="mono">PROMPT.md</span> et fais la prochaine tâche de <span class="mono">fix_plan.md</span>.';
+          const turns = ['ok', 'ok', 'bad', 'ok', 'bad', 'ok', 'on'].map((c, i) => `<i class="${c}">${i + 1}</i>`).join('') + Array.from({ length: 11 }, (_, i) => `<i class="todo">${i + 8}</i>`).join('');
+          loopPane(
+            dgTop('Boucle PROMPT.md', 'Un prompt relancé à chaque tour · tour 7 · 12/20 cochées') +
+              dg('ralph', { state: { done: ['pick', 'do'], on: 'test', next: 'tick', took: ['test>do'] }, agents: { test: [{ name: 'ralph-studio', cur: true }] } }) +
+              KEY +
+              `<div class="wf-h">Tours de ralph-studio <span class="n">7 sur 18 au plus · 1h 52m · 4,10 $</span></div><div class="wf-turns" role="img" aria-label="Tours 1 à 7 faits ou en cours, 8 à 18 à venir">${turns}</div>` +
+              `<div class="wf-hist">${ev({ at: '12:20', cls: 'on', what: 'Tour 7 · Tester', sub: '« Export PNG du tableau de bord » · <span class="mono">npm test</span> tourne', num: '6 min · 0,21 $' })}${ev({ at: '12:14', cls: 'back', icon: '<svg class="i s14"><use href="#i-restart" /></svg>', what: 'Retour à Faire', sub: 'rouge : 2 tests de <span class="mono">export.spec.ts</span>' })}${ev({ at: '12:03', what: 'Tour 6 · coché', sub: '« Mode sombre du header » · tests verts · 1 commit', num: '17 min · 0,58 $' })}</div>`,
+            '1',
+          );
+          fillDg();
+        }
+        if (route === 'loops-diagram-tickets') {
+          loopsCards();
+          loopPane(
+            dgTop('Tickets', 'La boucle des tickets du Kanban · 3 tickets en cours ou à tester') +
+              dg('tickets', {
+                state: { done: ['todo'], on: 'doing', next: 'review', took: ['doing>doing'] },
+                agents: { doing: [{ name: 'dem-6-limiter-les-tentatives', cur: true }, { name: 'dem-5-export-csv-des-factures' }], review: [{ name: 'dem-3-pagination', wait: true }] },
+              }) +
+              KEY +
+              `<div class="wf-h">Agents dans Tickets <span class="n">3</span></div><div class="wf-list">
+                ${wfAgent({ name: 'dem-6-limiter-les-tentatives', cur: true, chips: '<span class="ticket-chip">DEM-6</span>', p: ['done', 'on', '', ''], where: '<b>En cours</b> · boucle 2/5 · 1 critère sur 3 atteint', nums: '31m · 1,74 $' })}
+                ${wfAgent({ name: 'dem-5-export-csv-des-factures', chips: '<span class="ticket-chip">DEM-5</span>', p: ['done', 'on', '', ''], where: '<b>En cours</b> · boucle 1/5 · aussi dans GSD, sur Planifier', nums: '9m · 0,41 $' })}
+                ${wfAgent({ name: 'dem-3-pagination', cls: 'wait', chips: '<span class="ticket-chip">DEM-3</span>', p: ['done', 'done', 'on', ''], where: '<b>À tester</b> · renvoyé une fois · attend ta validation', nums: '52m · 2,88 $' })}
+              </div>`,
+            '3',
+          );
+          fillDg();
+        }
+        // Enlarged: over the whole work panel (the conversation and the panel), the flow across; Échap closes it.
+        const big = (key, name, cap, opts, side = '') => {
+          loopsCards();
+          loopPane(dgTop(name, cap) + dg(key, opts) + KEY);
+          fillDg();
+          const view = $('#view-agents');
+          view.style.position = 'relative';
+          let drawn = D.draw(D.WF[key], { dir: 'LR', names: true, ...opts });
+          view.insertAdjacentHTML(
+            'beforeend',
+            `<section class="dg-big" aria-label="${name} en diagramme, agrandi">
+              <div class="dg-bar">
+                <button class="select" aria-haspopup="menu" aria-label="Workflow">${FLOW}<b>${name}</b><svg class="i s14"><use href="#i-down" /></svg></button>
+                <span class="caption">${cap}</span>
+                <span class="grow"></span>
+                <div class="dg-zoom" role="group" aria-label="Zoom">
+                  <button class="icon-btn" id="dg-out" aria-label="Zoom arrière (Ctrl −)"><svg class="i s14"><use href="#i-min" /></svg></button>
+                  <span class="v" id="dg-v">100 %</span>
+                  <button class="icon-btn" id="dg-in" aria-label="Zoom avant (Ctrl +)"><svg class="i s14"><use href="#i-plus" /></svg></button>
+                </div>
+                <button class="btn" id="dg-fit">Ajuster</button>
+                <button class="btn" id="dg-copy"><svg class="i s14"><use href="#i-copy" /></svg>Copier en Mermaid</button>
+                <button class="icon-btn" aria-label="Fermer (Échap)" title="Fermer (Échap)"><svg class="i s14"><use href="#i-close" /></svg></button>
+              </div>
+              <div class="dg-canvas" id="dg-canvas">${drawn.svg}</div>${side}
+              ${KEY}
+            </section>`,
+          );
+          // Across when it holds at 85 % or more; else down, as in the column but wider, which a tall panel holds better.
+          const canvas = $('#dg-canvas');
+          const room = (d) => Math.min((canvas.clientWidth - 88) / d.width, (canvas.clientHeight - 72) / d.height);
+          if (room(drawn) < 0.85) {
+            const down = D.draw(D.WF[key], { width: Math.min(canvas.clientWidth - 88, 560), ...opts });
+            if (room(down) > room(drawn)) (drawn = down), (canvas.innerHTML = down.svg);
+          }
+          // Zoom from 50 to 200 %, by the buttons, Ctrl and the wheel, « Ajuster » to the room; the canvas scrolls and drags.
+          const svg = $('#dg-canvas .dg');
+          let z = 1;
+          const setZ = (v) => {
+            z = Math.min(2, Math.max(0.5, Math.round(v * 10) / 10));
+            svg.setAttribute('width', drawn.width * z);
+            svg.setAttribute('height', drawn.height * z);
+            $('#dg-v').textContent = `${Math.round(z * 100)} %`;
+          };
+          $('#dg-in').addEventListener('click', () => setZ(z + 0.1));
+          $('#dg-out').addEventListener('click', () => setZ(z - 0.1));
+          const fitZ = () => room(drawn);
+          $('#dg-fit').addEventListener('click', () => setZ(fitZ()));
+          // Opened at 100 %, or at the size that shows it all when it would not fit (never under 50 %).
+          setZ(Math.min(1, fitZ()));
+          $('#dg-canvas').addEventListener('wheel', (e) => e.ctrlKey && (e.preventDefault(), setZ(z - Math.sign(e.deltaY) * 0.1)), { passive: false });
+          return { setZ };
+        };
+        const AG_SIDE = (rows) => `<div class="dg-side"><h4>Agents</h4>${rows.map(([n, w, cur]) => `<div class="r${cur ? ' cur' : ''}"><i></i><span>${n}</span><span class="w">${w}</span></div>`).join('')}</div>`;
+        if (route === 'loops-diagram-big')
+          big('gsd', 'GSD', '4 étapes · phase 3 sur 6 · 3 agents', { state: GSD_STATE, agents: GSD_ON }, AG_SIDE([['pagination-users', 'Vérifier · 2ᵉ passage', true], ['refacto-auth', 'Exécuter · vague 2/3'], ['dem-5-export-csv-des-factures', 'Planifier · tour 2/3']]));
+        if (route === 'loops-diagram-copied') {
+          big('ship', 'Livraison', '5 étapes · 2 choix · 3 agents', { state: SHIP_STATE, agents: SHIP_ON });
+          const code = D.toMermaid(D.WF.ship);
+          $('.dg-big').insertAdjacentHTML(
+            'beforeend',
+            `<div class="dg-side" style="width: 380px"><h4>Le code copié</h4><span class="caption">Le workflow, sans ses agents : il se colle dans un fichier Markdown, une PR ou une issue, que GitHub et GitLab dessinent.</span><pre class="dg-code">${code.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre></div>`,
+          );
+          toast(`Code Mermaid copié : ${code.split('\n').length} lignes, sans les agents`, { link: 'Voir le code' });
+        }
+        if (route === 'loops-diagram-compare') {
+          const img = (k) => `<img src="mermaid/${k}-${light ? 'light' : 'dark'}.svg" alt="${k} rendu par Mermaid" />`;
+          document.body.insertAdjacentHTML(
+            'beforeend',
+            `<section class="cmp" aria-label="Mermaid comparé au dessin d’Escouade">
+              <h2>Le diagramme dans la colonne de 340 px : dessiné par Escouade, ou par Mermaid</h2>
+              <p>Les mêmes workflows, le même code Mermaid que donne « Copier en Mermaid », rendu par Mermaid 12.2 avec le thème <span class="mono">base</span> aux jetons du design, <span class="mono">securityLevel: 'strict'</span> et sans HTML dans les libellés. Mesuré le 2026-10-27 (<span class="mono">design/app-redesign/mermaid.mjs</span>).</p>
+              <div class="cmp-grid">
+                <div class="cmp-col"><h3>Dessiné par Escouade <span class="caption">GSD, l’agent ouvert sur Vérifier</span></h3><div class="cmp-frame">${dg('gsd', { state: GSD_STATE, agents: GSD_ON })}</div></div>
+                <div class="cmp-col"><h3>Mermaid <span class="caption">le même GSD, mis à la largeur</span></h3><div class="cmp-frame">${img('gsd')}</div></div>
+                <div class="cmp-col">
+                  <table class="cmp-table">
+                    <tr><th></th><th>Escouade</th><th>Mermaid</th></tr>
+                    <tr><td>À 340 px</td><td><b>Texte à 12,5 px</b>, mise en page faite pour la colonne</td><td>GSD fait 772 px de large : <b>réduit à 40 %</b>, le texte à 5 px ; Livraison 587 px, à 53 %</td></tr>
+                    <tr><td>Retours, boucles</td><td>Dans une gouttière, en rouge, leur condition sur le trait ; une boucle sur place, « ×3 » dans l’étape</td><td>Courbes qui se croisent au milieu ; la boucle sur place, une petite anse au bord du nœud</td></tr>
+                    <tr><td>Agents, progression</td><td>Faites, en cours, prochaine ; un point par agent, le chemin parcouru, le retour pris</td><td>Par des <span class="mono">classDef</span>, sans retour pris ni point par agent</td></tr>
+                    <tr><td>Thème</td><td>Les jetons en <span class="mono">var()</span>, sombre, clair et la teinte du projet à chaud</td><td>Couleurs fixes passées à l’initialisation : à redessiner à chaque changement de thème</td></tr>
+                    <tr><td>Clic, clavier</td><td>Une étape s’ouvre, se parcourt au clavier, porte son <span class="mono">aria-label</span></td><td>Par du DOM rajouté après coup (<span class="mono">click</span> refusé en strict)</td></tr>
+                    <tr><td>Poids</td><td><b>≈ 8 ko</b> de code à nous</td><td><b>5,3 Mo</b> de plus dans l’app (107 morceaux) ; à l’ouverture, <b>2,3 Mo, 670 ko gzip</b>, 30 morceaux</td></tr>
+                    <tr><td>Premier dessin</td><td>Immédiat</td><td>240 ms la première fois (chargement), puis 20 à 40 ms</td></tr>
+                    <tr><td>Sécurité</td><td>Texte échappé par Svelte, jamais de HTML</td><td>Strict tient le nom piégé ; un paquet de plus à suivre</td></tr>
+                  </table>
+                  <div class="cmp-rec"><b>Recommandé : le dessin d’Escouade</b>, et Mermaid seulement comme texte. Il est lisible à 340 px, suit les jetons et le thème sans redessiner, montre les agents et le chemin parcouru, et ne pèse rien. « Copier en Mermaid » donne le même workflow à coller dans une doc ou une PR, sans que l’app embarque Mermaid.</div>
+                  <pre class="dg-code">${D.toMermaid(D.WF.gsd).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>
+                </div>
+                <div class="cmp-col"><h3>Dessiné par Escouade <span class="caption">Livraison : deux choix</span></h3><div class="cmp-frame">${dg('ship', { state: SHIP_STATE, agents: SHIP_ON })}</div></div>
+                <div class="cmp-col"><h3>Mermaid <span class="caption">Livraison</span></h3><div class="cmp-frame">${img('ship')}</div></div>
+              </div>
+            </section>`,
+          );
+          fillDg();
+        }
       }
 
       // Réglages › Plugins › « Parcourir le store » (ESC-202, docs/STORE.md §5): the catalogue of store.escouade.dev, read on

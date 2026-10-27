@@ -1,0 +1,19 @@
+flowchart TD
+  %% Livraison : généré par Escouade
+  in1(["/ship-feature"]) --> s1
+  in2(["/hotfix"]) --> s3
+  s1["Construire<br>/build"]
+  s2["Tester<br>npm test"]
+  s3["Corriger<br>/fix"]
+  s4["Relire<br>/review"]
+  s5["Merger<br>/ship"]
+  s1 --> s2
+  s2 -->|"rouges"| s3
+  s2 -->|"verts"| s4
+  s4 -->|"approuvée"| s5
+  s3 -.->|"à retester · 3 tours max"| s2
+  s4 -.->|"changements demandés"| s1
+  s5 --> out((("PR mergée")))
+  classDef door stroke-dasharray: 3 3
+  class in1,in2 door
+  linkStyle 6,7 stroke-dasharray: 4 3

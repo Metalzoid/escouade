@@ -9,6 +9,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Nouveautés
 
 - Azure DevOps devient un hébergeur de code, sur dev.azure.com comme sur Azure DevOps Server : connecte ton organisation par un jeton ou par `az`, puis ouvre la PR d’un agent, suis ses builds et ses relectures sur sa carte, et donne-lui à corriger un build en échec ou les retours.
+- L’onglet Workflow se lit aussi en diagramme, qui met en évidence les boucles, les retours et les choix, et où en est chaque agent ; il s’agrandit sur tout l’espace de travail, et « Copier en Mermaid » donne le workflow à coller dans une doc ou une PR.
 - Azure Boards devient une source du Kanban, sur le même compte Azure DevOps : importe les éléments de travail d’un projet avec leurs critères d’acceptation ; leur état et des commentaires suivent leur ticket, et la PR de son agent leur est liée.
 - L’onglet Workflow montre où en est chaque agent : ses étapes faites cochées, celle en cours, et la suivante marquée « Ensuite », avec les deux issues d’un choix ; sa ligne et l’infobulle de sa carte disent aussi « Ensuite : … ».
 

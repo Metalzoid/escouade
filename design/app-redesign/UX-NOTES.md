@@ -622,3 +622,68 @@ Demandé par l'utilisateur le 2026-10-27 (« tu me confirmes que l'onglet workfl
 
 - Les états : la sortie et un retour (`#loops`), une étape ordinaire et l'infobulle de la carte (`#loops-next`), une étape devinée ensuite (`#loops-edge`), replié (`#loops-history`), le tour suivant (`#loops-simple`), dans les deux thèmes, à 1440 et 1028 px.
 - `node design/app-redesign/contrast.mjs` : 0 paire sous le seuil, dans les deux thèmes.
+
+# Le workflow en diagramme (ESC-245, 2026-10-27)
+
+Demandé par l'utilisateur le 2026-10-27 : « sur l'affichage, peut-être la possibilité d'afficher ça sous la forme d'un mermaid qui mettrait mieux en évidence les différentes boucles, retours, et différents choix ? ». Le rail de l'onglet Workflow (choix 141) se lit mal dès qu'un workflow a des choix et plusieurs retours. Conception seule, avec impeccable : une vue Diagramme à côté du rail, sa version agrandie, « Copier en Mermaid », et Mermaid comparé à un dessin d'Escouade. Le dessin de l'aperçu est dans `design/app-redesign/diagram.js` (mise en page en couches, la même que l'app reprendra), les rendus de Mermaid dans `mermaid/` (`node design/app-redesign/mermaid.mjs <mermaid.min.js>`, Mermaid 12.2 installé hors du dépôt). **Les choix 196 à 212 sont à valider par l'utilisateur.**
+
+## Adresses
+
+- `#loops-diagram` : GSD dans l'onglet, en diagramme ; trois agents, l'agent ouvert sur Vérifier après un retour à Planifier, une porte qui entre à Exécuter (`/gsd:quick`).
+- `#loops-diagram-choice` : « Livraison », un workflow à deux choix (Tester → Relire si verts, Corriger si rouges ; Relire → Merger si approuvée, retour à Construire sinon), une boucle de correction de 3 tours, une porte `/hotfix` qui entre à Corriger.
+- `#loops-diagram-simple` : la boucle d'un prompt (`PROMPT.md`, studio-web) ; `#loops-diagram-tickets` : « Tickets », la boucle n/5 et « Renvoyer ».
+- `#loops-diagram-big` : la version agrandie (GSD en travers à 1440, en colonne élargie à 1028) ; `#loops-diagram-copied` : « Copier en Mermaid » et le code qu'il donne.
+- `#loops-diagram-compare` : le même GSD et la même Livraison dessinés par Escouade et par Mermaid dans 340 px, les mesures, la recommandation, le code Mermaid.
+- Captures : `loops-diagram*.png` à 1440×900 (le panneau côte à côte, ≈ 490 px), `loops-diagram*-small.png` à 1028×779 (≈ 340 px), et leurs jumelles `-light`.
+
+## Choix
+
+### La vue et la bascule
+
+196. **Une vue « Diagramme » à côté de la colonne, dans le même onglet** : en tête, une bascule de deux icônes (colonne d'étapes, diagramme), avec leur nom et ce qu'elles montrent dans l'infobulle. La vue choisie est retenue pour toute l'app, après un redémarrage (réglage de l'app, pas par projet : qui lit mieux en diagramme le lit partout). La colonne reste la vue par défaut ; la liste des agents et l'historique (choix 146, 147) restent sous l'une comme sous l'autre. (`#loops-diagram`)
+197. **Dessiné par Escouade, pas par Mermaid** ; Mermaid seulement comme texte, par « Copier en Mermaid ». Mesuré sur les mêmes workflows (`#loops-diagram-compare`) : Mermaid dessine GSD sur 772 px, réduit à 40 % dans la colonne (le texte à 5 px) ; il ajoute 5,3 Mo à l'app (107 morceaux) et en charge 2,3 Mo (670 ko gzip, 30 morceaux) à la première ouverture, 240 ms ; ses couleurs sont fixées à l'initialisation (à redessiner à chaque changement de thème ou de teinte du projet) ; il n'a ni point par agent ni chemin parcouru, et son `click` est refusé en strict. Le dessin d'Escouade tient en ≈ 8 ko, suit les jetons en `var()` (sombre, clair, la teinte du projet) sans redessiner, se lit à 12,5 px dans 340 px, et chaque étape est un bouton. Mermaid a tenu le nom piégé (`securityLevel: 'strict'`, `htmlLabels: false`) : rien d'exécuté, aucun `<img>`, le schéma entier.
+198. **Une mise en page en couches** : le rang d'une étape est le plus long chemin en avant jusqu'à elle ; les étapes d'un même rang (les branches d'un choix) côte à côte, dans leur ordre. De haut en bas dans l'onglet ; les retours ne comptent pas pour le rang.
+
+### Ce qu'il met en évidence
+
+199. **Les retours** passent par une gouttière, à droite (à gauche quand l'étape qui revient a une voisine à sa droite), et entrent par le côté de l'étape où ils reviennent. Ils sont dans le rouge des échecs, plus pâle, puisqu'ils reviennent sur un échec (écarts, tests rouges, changements demandés) ; leur condition est écrite sur le trait, dans une pastille avec l'icône de retour, « 3 tours max » quand il y en a. Dans l'onglet, la pastille prend le haut de l'intervalle entre deux rangs, les conditions d'un choix le bas : jamais l'une sur l'autre. (`#loops-diagram-choice`)
+200. **Une boucle sur place** (une étape qui se relance, `max` tours : Planifier ⇄ plan-checker, la boucle n/5 des tickets) est une pastille « ×3 » dans l'étape, sa condition dans l'infobulle ; pas d'anse au bord, qui ne tient pas dans 340 px. (`#loops-diagram`, `#loops-diagram-tickets`)
+201. **Un choix** : un losange sous l'étape d'où partent deux transitions, ses branches côte à côte, chacune avec sa condition (« verts », « rouges »). (`#loops-diagram-choice`)
+202. **Les portes d'entrée** sont en pointillé et en mono, en tête, et mènent à la première étape ; une porte qui entre plus loin (`/gsd:quick`, `/hotfix`) est juste au-dessus de son étape, et le trait qui y arrive s'écarte pour elle. Un clic met sa commande dans la saisie de l'agent ouvert, sans l'envoyer (choix 144).
+203. **La sortie** est une pastille au bout (« Phase finie », « PR mergée », « Sortie »), avec sa condition sur le trait (« phase validée », « plus de case vide, ou 18 tours ») ; le tour suivant revient à la première étape en pointillé neutre, par la gouttière de gauche (choix 141 : plein pour un retour, pointillé pour le tour suivant). « Tickets » finit sur Terminé, sans pastille.
+204. **Une légende d'une ligne** sous le diagramme (deux à 340 px) : retour et sa condition, choix, tour suivant, prochaine.
+
+### Les agents et leur progression
+
+205. **Pour l'agent ouvert** (ou celui qu'on choisit dans la liste dessous, comme dans la colonne) : les étapes faites portent une coche et un fond plus calme, celle en cours un bord vert qui respire (immobile avec `prefers-reduced-motion`), la prochaine un bord en pointillé et « prochaine » quand la place le permet ; à un choix, les deux branches sont prochaines. Les traits déjà parcourus sont plus marqués, et un retour qu'il a pris est plein et plus épais. Le même vocabulaire que la carte et la ligne de l'agent (faites, en cours, prochaine).
+206. **Les autres agents** : un point par agent en haut à droite de son étape, vert pour l'agent ouvert, ambre pour celui qui attend, « +2 » au-delà de trois ; son nom au survol. Un clic sur une étape ouvre son détail dans une bulle, non dessinée dans l’aperçu (ce que dit la colonne : porte, sous-agents, fichiers, retours, et ses agents, qui s'ouvrent d'un clic) ; chaque étape se prend au clavier et dit son état (« Vérifier, en cours »).
+
+### La version agrandie
+
+207. **« Agrandir » couvre tout le panneau de travail** (la conversation et le panneau), pas une fenêtre à part : la barre dit le workflow et son résumé, puis le zoom, « Ajuster », « Copier en Mermaid » et × (Échap). Le zoom va de 50 à 200 % (−, +, `Ctrl` + molette, `Ctrl −` / `Ctrl +`), le fond défile et se tire à la main. Il s'ouvre à 100 %, ou à la taille qui montre tout. Raison : une fenêtre de plus serait à placer et à retrouver ; le panneau de travail suffit, et Échap rend la conversation. (`#loops-diagram-big`)
+208. **Le sens suit la place** : en travers si le diagramme y tient à 85 % ou plus (GSD à 1440 px), sinon de haut en bas comme dans l'onglet, élargi jusqu'à 560 px (GSD à 1028 px). En travers, chaque étape a le nom de son agent dessous (l'agent ouvert d'abord, « +1 » pour les autres) et une carte « Agents » dit où en est chacun. (`#loops-diagram-big`, `-small`)
+
+### Copier en Mermaid
+
+209. **« Copier en Mermaid »** : une icône en tête de l'onglet, dans les deux vues, et un bouton nommé dans la version agrandie. Il copie le workflow sans ses agents, qui bougent (une doc ou une PR garde le workflow) : `flowchart TD`, une ligne de commentaire avec son nom, les portes en stade pointillé, chaque étape avec sa commande, les transitions et leur condition, les retours en pointillé, la sortie en double cercle et le tour suivant. Le toast dit « Code Mermaid copié : 19 lignes, sans les agents » et « Voir le code » montre ce qui a été copié. (`#loops-diagram-copied`)
+210. **Le code copié est sans danger** : les noms, commandes et conditions viennent des fichiers du dépôt (`.escouade/workflows/`, un clone) ; chacun est entre guillemets, ses caractères qui fermeraient les guillemets, ouvriraient du HTML, une chaîne Markdown ou une entité sont écrits en entités Mermaid (`#quot;`, `#lt;`, `#gt;`, `#amp;`, `#35;`, `#96;`), un retour à la ligne devient une espace. Les identifiants sont les nôtres (`s1`, `in1`, `out`), jamais un nom du dépôt ; aucun `click`, lien ni style ne vient du dépôt. Essayé : `<img src=x onerror=…>"]-->x click s1 call alert(1) %%` reste un libellé.
+211. **Mermaid n'entre pas dans l'app** : rien à charger à l'ouverture de la vue. Si l'on voulait un jour un aperçu du code copié rendu par Mermaid, il se chargerait à la demande, en `securityLevel: 'strict'` et `htmlLabels: false`.
+
+### Les cas limites
+
+212. **Un long workflow** défile dans l'onglet ; un nom trop long se coupe par une ellipse et se lit entier au survol et dans la version agrandie ; une étape devinée (choix 152) a un bord en pointillé fin et « deviné » à la place de sa commande ; un agent hors du workflow (choix 153) n'a pas de point sur le diagramme, il reste dans la liste. Plus de trois branches à un choix se resserrent sur leur rang, la version agrandie les montre en entier. La boucle d'un prompt garde ses tours sous le diagramme (choix 151). (`#loops-diagram-simple`)
+
+## Vérifié sur l'aperçu
+
+- Les quatre cas (GSD, un workflow à choix, la boucle d'un prompt, « Tickets »), l'agrandi en travers et en colonne, le code copié, la comparaison ; à 1440 et 1028 px, dans les deux thèmes.
+- `node design/app-redesign/contrast.mjs` : 0 paire sous le seuil, dans les deux thèmes.
+- `node design/app-redesign/mermaid.mjs` : les rendus de Mermaid, leur temps, et le nom piégé (rien d'exécuté, aucun `<img>`, 8 nœuds).
+
+## Construit dans l'app (ESC-245)
+
+Validé tel quel le 2026-10-27 (réponse reçue par Escouade) : le dessin d'Escouade, Mermaid seulement pour « Copier en Mermaid ».
+
+- Fait comme dessiné : la bascule Colonne / Diagramme retenue pour toute l'app (196), le dessin en couches dans `src/lib/workflow-diagram.ts` (197, 198), les retours, la boucle sur place, les choix, les portes, la sortie et le tour suivant (199 à 203), la légende (204), l'agent lu, ses étapes faites, en cours et prochaines, le retour pris, les points des agents (205, 206), l'agrandi sur tout le panneau de travail, son zoom, « Ajuster », Échap, le sens qui suit la place et la carte « Agents » (207, 208), « Copier en Mermaid » dans les deux vues, échappé (209, 210). Mermaid n'est pas une dépendance (211) ; le composant du diagramme (`WorkflowDiagram.svelte`) n'est chargé qu'à la première ouverture de la vue.
+- Avec ESC-244 (fusionné pendant la construction) : mes choix, numérotés 190 à 206 sur l'aperçu, deviennent 196 à 212, ESC-244 ayant pris 190 à 195. Le diagramme prend ses états au lieu de les recalculer : les étapes faites du passage (`doneSteps`) et la suivante (`nextOf`), à laquelle il ajoute les autres branches d'un choix ; la sortie est « Ensuite » en fin de cycle. « prochaine » de l'aperçu devient « Ensuite », le mot de la colonne.
+- Écarts : un clic sur une étape n'ouvre pas encore de bulle de détail (206) : son nom entier et sa commande sont dans son infobulle, et ses agents s'ouvrent depuis la liste dessous ou la carte « Agents » de l'agrandi ; les étapes ne se prennent pas une à une au clavier (le diagramme se parcourt par la liste des agents et l'agrandi se zoome au clavier). Le toast de la copie n'a pas de « Voir le code » (209). « Tickets » boucle sur « En cours » jusqu'au plus grand nombre de boucles de ses tickets.
+- Vérifié : `src/lib/workflow-diagram.test.ts` (GSD, un workflow à choix, la boucle d'un prompt, « Tickets » ; le code Mermaid, le nom piégé ; la progression ; la mise en page en colonne et en travers), `src/components/WorkflowPanel.test.ts` (la bascule retenue, le diagramme dans l'onglet, la copie, le nom piégé qui reste du texte, l'agrandi), `tests/e2e/workflow-diagram.spec.ts` à 1024 × 728.

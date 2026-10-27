@@ -12,6 +12,7 @@ const url = pathToFileURL(join(dir, 'index.html')).href;
 const BIG = { width: 1440, height: 900 };
 const SMALL = { width: 1028, height: 779 };
 const EN = { lang: 'en' };
+const DIAGRAM = ['loops-diagram', 'loops-diagram-choice', 'loops-diagram-simple', 'loops-diagram-tickets', 'loops-diagram-big', 'loops-diagram-copied', 'loops-diagram-compare'];
 const SHARE = ['share', 'share-theirs', 'share-ticket', 'share-name', 'share-settings', 'share-settings-project', 'share-git', 'share-file', 'share-edge'];
 const shots = [
   { name: 'agents', ...BIG },
@@ -177,6 +178,12 @@ const shots = [
     { name: h + '-small', ...SMALL, hash: h },
   ]),
   { name: 'loops-settings-steps', ...BIG, hash: 'loops-settings-steps' },
+  // The Diagram view of a workflow (ESC-245): GSD, a workflow with choices, a loop of one prompt, « Tickets », enlarged,
+  // « Copier en Mermaid », and the comparison with Mermaid; each at 1440 and 1028 px, dark and light.
+  ...DIAGRAM.flatMap((h) => [
+    { name: h, ...BIG, hash: h },
+    { name: h + '-small', ...SMALL, hash: h },
+  ]),
   // The plugins' store in the app (ESC-202): Réglages › Plugins › « Parcourir le store », a plugin's page, the install window
   // (verified, then not), the installed plugins with an update not yet verified and one withdrawn; each at 1440 and 1028 px.
   ...['store', 'store-plugin', 'store-install', 'store-unverified', 'store-installed'].flatMap((h) => [
@@ -186,7 +193,7 @@ const shots = [
   // The theme selector, on Système (its default): the window follows the emulated system theme.
   { name: 'settings-app', ...BIG, hash: 'settings-app', system: true },
 ];
-const LIGHT_SMALL = ['kanban-small', 'pr-small-en', 'models-small-en', 'waiting-small-en', 'private-small-en', 'agents-small', 'git-small', 'overview-small', 'settings-small', 'agents-small-en', 'quota-small-en', 'terminal-view-small-en', 'settings-harness-small-en', 'rail-small', 'rail-small-en', 'tile-small', 'tile-settings-small-en', 'labels-small', 'labels-wide-small-en', 'labels-settings-small-en', 'repos-small', 'repos-two-small', 'repos-board-small', 'repos-merge-small', 'repos-branch-small', ...['loops', 'loops-history', 'loops-settings', 'loops-simple', 'loops-empty', 'loops-edge', 'loops-next'].map((h) => h + '-small'), ...SHARE.map((h) => h + '-small'), ...['store', 'store-plugin', 'store-install', 'store-unverified', 'store-installed'].map((h) => h + '-small'), 'side-wide-small', 'side-narrow-small'];
+const LIGHT_SMALL = ['kanban-small', 'pr-small-en', 'models-small-en', 'waiting-small-en', 'private-small-en', 'agents-small', 'git-small', 'overview-small', 'settings-small', 'agents-small-en', 'quota-small-en', 'terminal-view-small-en', 'settings-harness-small-en', 'rail-small', 'rail-small-en', 'tile-small', 'tile-settings-small-en', 'labels-small', 'labels-wide-small-en', 'labels-settings-small-en', 'repos-small', 'repos-two-small', 'repos-board-small', 'repos-merge-small', 'repos-branch-small', ...['loops', 'loops-history', 'loops-settings', 'loops-simple', 'loops-empty', 'loops-edge', 'loops-next'].map((h) => h + '-small'), ...SHARE.map((h) => h + '-small'), ...DIAGRAM.map((h) => h + '-small'), ...['store', 'store-plugin', 'store-install', 'store-unverified', 'store-installed'].map((h) => h + '-small'), 'side-wide-small', 'side-narrow-small'];
 shots.push(
   ...shots
     .filter((s) => (s.width === BIG.width && !s.lang) || LIGHT_SMALL.includes(s.name))

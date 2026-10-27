@@ -5,6 +5,8 @@ import { api } from './ipc';
 import { readPref, writePref } from './prefs';
 import type { Workflow, WorkflowScan, WorkflowTrack } from './types';
 
+export type WorkflowView = 'column' | 'diagram';
+
 const NONE: WorkflowScan = { readAt: 0, workflows: [], alone: [], untraced: [], sources: [], searched: [] };
 
 /** The corrected workflows, each step the user named marked so: its name is shown as is, the others as commands. */
@@ -24,6 +26,8 @@ class Workflows {
   chosen = $state<Record<string, string>>({});
   /** The agent whose history the tab shows, by project (absent: the open agent). */
   reader = $state<Record<string, string>>({});
+  /** The view of the tab, Colonne or Diagramme (ESC-245, choice 196): one for the whole app, kept; absent until chosen. */
+  view = $state<WorkflowView | null>(null);
   /** The rail folded, by project (kept). */
   folded = $state<Record<string, boolean>>({});
   /** The projects whose tracks were asked once. */
@@ -98,6 +102,16 @@ class Workflows {
     writePref(`workflowFolded.${projectId}`, on ? '1' : '0');
   }
 
+  /** The view of the tab: the one chosen, else the column. */
+  viewOf(): WorkflowView {
+    return this.view ?? (readPref('workflowView') === 'diagram' ? 'diagram' : 'column');
+  }
+
+  setView(view: WorkflowView) {
+    this.view = view;
+    writePref('workflowView', view);
+  }
+
   /** For the tests. */
   reset() {
     this.scans = {};
@@ -105,6 +119,7 @@ class Workflows {
     this.chosen = {};
     this.reader = {};
     this.folded = {};
+    this.view = null;
     this.asked.clear();
     this.reading.clear();
   }

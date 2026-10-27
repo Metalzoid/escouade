@@ -33,8 +33,13 @@
     withTickets,
     workflowTitle,
   } from '../lib/workflow-view';
+  import { diagramOf, progressOf, toMermaid, type DgAgent } from '../lib/workflow-diagram';
   import { workflows } from '../lib/workflows.svelte';
   import Icon from './Icon.svelte';
+
+  // The Diagram view (ESC-245), loaded the first time it shows.
+  let diagramModule: Promise<typeof import('./WorkflowDiagram.svelte')> | null = null;
+  const loadDiagram = () => (diagramModule ??= import('./WorkflowDiagram.svelte'));
 
   // The Workflow tab of the side panel (ESC-194, choices 141 to 154; `#loops*` of the preview): the rail of the
   // project's workflow, its ways back in the gutter, the agents on its steps; the agents in it, then one agent's history.
@@ -66,7 +71,8 @@
   const isTickets = $derived(wf?.id === TICKETS);
   const steps = $derived(wf ? stepsOf(wf) : []);
   const inWf = $derived(wf ? tracksIn(wf, tracks) : []);
-  const folded = $derived(workflows.isFolded(pid));
+  // Folded is the column's: the diagram shows the agents and the history under it.
+  const folded = $derived(workflows.isFolded(pid) && workflows.viewOf() === 'column');
   const phase = $derived(wf ? phaseOf(wf) : null);
   const mine = $derived(inWf.find((tr) => tr.agentId === agent?.id) ?? null);
   const doors = $derived(wf ? doorsOf(wf, inWf) : []);
@@ -179,12 +185,53 @@
         .map((m) => (m === 'cost' || m === 'timing' || m === 'subagents' ? t(`workflow.missing.${m}`) : m))
         .join(', '),
     });
+  // ---------- the Diagram view (ESC-245, choices 196 to 212) ----------
+  const view = $derived(workflows.viewOf());
+  let big = $state(false);
+  const model = $derived(wf ? diagramOf(wf, Math.max(0, ...tickets.map((tk) => tk.maxLoops))) : null);
+  const progress = $derived(wf && model ? progressOf(wf, model, reader) : null);
+  /** Who is on each step of the diagram: the agent read first. */
+  const dgAgents = $derived.by(() => {
+    const out: Record<string, DgAgent[]> = {};
+    for (const tr of inWf) {
+      const step = railStep(tr);
+      if (!step || tr.outside) continue;
+      const a = { id: tr.agentId, name: nameOf(tr.agentId), cur: tr.agentId === reader?.agentId, wait: waits(tr.agentId) };
+      (out[step] ??= [])[a.cur ? 'unshift' : 'push'](a);
+    }
+    return out;
+  });
+  /** « Copier en Mermaid »: the workflow without its agents, for a doc or a PR (choice 209). */
+  async function copyMermaid() {
+    if (!model) return;
+    const code = toMermaid(model);
+    try {
+      await navigator.clipboard.writeText(code);
+      app.toast(t('workflow.dg.copied', { count: code.split('\n').length }), 'ok');
+    } catch {
+      app.toast(t('workflow.dg.cantCopy'), 'error');
+    }
+  }
+  $effect(() => {
+    // Back to the column, or another workflow: the enlarged view closes.
+    void [view, wf?.id];
+    untrack(() => (big = false));
+  });
+
   const turnNow = $derived(reader?.turns.length ? reader.turns[reader.turns.length - 1] : null);
   const checked = $derived(wf ? checkedOf(wf, reader) : null);
 </script>
 
 {#snippet bits(list: { text: string; mono?: boolean }[])}
   {#each list as b, i (i)}{#if i > 0}{' · '}{/if}{#if b.mono}<span class="mono">{b.text}</span>{:else}{b.text}{/if}{/each}
+{/snippet}
+
+{#snippet diagram()}
+  {#if model && progress}
+    {#await loadDiagram() then { default: Diagram }}
+      <Diagram {model} {progress} agents={dgAgents} {big} onclose={() => (big = false)} oncopy={copyMermaid} />
+    {/await}
+  {/if}
 {/snippet}
 
 {#snippet who(tr: WorkflowTrack)}
@@ -244,7 +291,31 @@
         {/if}
       </div>
       <span class="grow"></span>
-      {#if wf.kind === 'cycle'}
+      <div class="wf-view" role="tablist" aria-label={t('workflow.dg.viewTabs')}>
+        <button
+          role="tab"
+          aria-selected={view === 'column'}
+          aria-label={t('workflow.dg.column')}
+          use:tip={t('workflow.dg.columnTip')}
+          onclick={() => workflows.setView('column')}><Icon name="rail" size={14} /></button
+        >
+        <button
+          role="tab"
+          aria-selected={view === 'diagram'}
+          aria-label={t('workflow.dg.diagram')}
+          use:tip={t('workflow.dg.diagramTip')}
+          onclick={() => workflows.setView('diagram')}><Icon name="diagram" size={14} /></button
+        >
+      </div>
+      {#if view === 'diagram'}
+        <button class="icon-btn" aria-label={t('workflow.dg.expand')} use:tip={t('workflow.dg.expand')} onclick={() => (big = true)}
+          ><Icon name="expand" size={14} /></button
+        >
+      {/if}
+      <button class="icon-btn" aria-label={t('workflow.dg.copy')} use:tip={t('workflow.dg.copyTip')} onclick={copyMermaid}
+        ><Icon name="copy" size={14} /></button
+      >
+      {#if wf.kind === 'cycle' && view === 'column'}
         <button
           class="icon-btn"
           aria-label={folded ? t('workflow.unfold') : t('workflow.fold')}
@@ -342,7 +413,9 @@
           {#each grid as u (u.n)}<i class={u.cls} class:next={u.next}>{u.n}</i>{/each}
         </div>
       {/if}
-      {#if loopSteps.length}
+      {#if view === 'diagram'}
+        {@render diagram()}
+      {:else if loopSteps.length}
         <div class="caption wf-cap sub">
           <Rich k="workflow.oneTurn">{#snippet file()}<span class="mono">{loop.prompt}</span>{/snippet}</Rich>
         </div>
@@ -395,74 +468,80 @@
         </div>
       {/if}
     {:else}
-      <div class="wf-graph" class:folded bind:this={graph}>
-        <svg class="wf-edges" aria-hidden="true">
-          {#each arcs as a, i (i)}<path class:outer={a.outer} d={a.d} />{/each}
-        </svg>
-        {#each steps as s (s.name)}
-          {@const d = stepDetail(wf, s)}
-          {@const here = on(s.name)}
-          {@const isDone = doneSet.has(s.name)}
-          {@const back = next?.backs.find((b) => b.to === s.name)}
-          <div
-            class="wf-step"
-            class:busy={here.length > 0}
-            class:here={hereStep === s.name}
-            class:done={isDone}
-            class:next={next?.to === s.name}
-            class:alt={!!back}
-            class:guess={s.guessed}
-            data-step={s.name}
-          >
-            <i class="wf-node"
-              >{#if isDone}<Icon name="check" size={10} />{/if}</i
+      {#if view === 'diagram'}
+        {@render diagram()}
+      {:else}
+        <div class="wf-graph" class:folded bind:this={graph}>
+          <svg class="wf-edges" aria-hidden="true">
+            {#each arcs as a, i (i)}<path class:outer={a.outer} d={a.d} />{/each}
+          </svg>
+          {#each steps as s (s.name)}
+            {@const d = stepDetail(wf, s)}
+            {@const here = on(s.name)}
+            {@const isDone = doneSet.has(s.name)}
+            {@const back = next?.backs.find((b) => b.to === s.name)}
+            <div
+              class="wf-step"
+              class:busy={here.length > 0}
+              class:here={hereStep === s.name}
+              class:done={isDone}
+              class:next={next?.to === s.name}
+              class:alt={!!back}
+              class:guess={s.guessed}
+              data-step={s.name}
             >
-            <div class="wf-main">
-              <div class="wf-line">
-                <span class="wf-name">{labelIn(wf, s.name)}</span>{#if isDone}<span class="sr">{' '}({t('workflow.doneStep')})</span
-                  >{/if}{#if next?.to === s.name}<span class="wf-next">{t('workflow.nextTag')}</span>{:else if back}<span
-                    class="wf-next alt"
-                    use:tip={back.condition ?? back.say ?? ''}>{t('workflow.orBackTag')}</span
-                  >{/if}{#if s.command}<span class="gate" class:plain={isTickets}>{s.command}</span>{/if}
+              <i class="wf-node"
+                >{#if isDone}<Icon name="check" size={10} />{/if}</i
+              >
+              <div class="wf-main">
+                <div class="wf-line">
+                  <span class="wf-name">{labelIn(wf, s.name)}</span>{#if isDone}<span class="sr">{' '}({t('workflow.doneStep')})</span
+                    >{/if}{#if next?.to === s.name}<span class="wf-next">{t('workflow.nextTag')}</span>{:else if back}<span
+                      class="wf-next alt"
+                      use:tip={back.condition ?? back.say ?? ''}>{t('workflow.orBackTag')}</span
+                    >{/if}{#if s.command}<span class="gate" class:plain={isTickets}>{s.command}</span>{/if}
+                </div>
+                {#if s.guessed}
+                  <div class="wf-detail">
+                    <span
+                      ><Rich k="workflow.guessed">{#snippet file()}<span class="fl">{s.path.split('/').pop()}</span>{/snippet}</Rich></span
+                    >
+                  </div>
+                {:else if d.agents.length || d.writes.length || d.back.length || s.note}
+                  <div class="wf-detail">
+                    {#each d.agents as a, i (a)}
+                      {#if i > 0}<Icon name={i === d.agents.length - 1 && d.rounds ? 'swap' : 'right'} size={12} />{/if}<span class="sa"
+                        >{a}</span
+                      >
+                    {/each}
+                    {#if d.rounds}<span>{t('workflow.upTo', { count: d.rounds })}</span>{/if}
+                    {#if s.note}<span>{s.note}</span>{/if}
+                    {#if d.writes.length}
+                      <span><Rich k="workflow.writes">{#snippet files()}<span class="fl">{d.writes.join(', ')}</span>{/snippet}</Rich></span
+                      >
+                    {/if}
+                    {#each d.back as b (b.to)}
+                      <span class="back" use:tip={b.condition ?? ''}
+                        ><Icon name="restart" size={12} />{b.say ?? t('workflow.backTo', { step: labelIn(wf, b.to) })}</span
+                      >
+                    {/each}
+                  </div>
+                {/if}
               </div>
-              {#if s.guessed}
-                <div class="wf-detail">
-                  <span><Rich k="workflow.guessed">{#snippet file()}<span class="fl">{s.path.split('/').pop()}</span>{/snippet}</Rich></span
-                  >
-                </div>
-              {:else if d.agents.length || d.writes.length || d.back.length || s.note}
-                <div class="wf-detail">
-                  {#each d.agents as a, i (a)}
-                    {#if i > 0}<Icon name={i === d.agents.length - 1 && d.rounds ? 'swap' : 'right'} size={12} />{/if}<span class="sa"
-                      >{a}</span
-                    >
-                  {/each}
-                  {#if d.rounds}<span>{t('workflow.upTo', { count: d.rounds })}</span>{/if}
-                  {#if s.note}<span>{s.note}</span>{/if}
-                  {#if d.writes.length}
-                    <span><Rich k="workflow.writes">{#snippet files()}<span class="fl">{d.writes.join(', ')}</span>{/snippet}</Rich></span>
-                  {/if}
-                  {#each d.back as b (b.to)}
-                    <span class="back" use:tip={b.condition ?? ''}
-                      ><Icon name="restart" size={12} />{b.say ?? t('workflow.backTo', { step: labelIn(wf, b.to) })}</span
-                    >
-                  {/each}
-                </div>
-              {/if}
+              <div class="wf-who">
+                {#each here as tr (tr.agentId)}{@render who(tr)}{/each}
+              </div>
             </div>
-            <div class="wf-who">
-              {#each here as tr (tr.agentId)}{@render who(tr)}{/each}
+          {/each}
+          {#if wf.exit}
+            <div class="wf-end" class:next={!!next?.exit}>
+              <Icon name="restart" size={12} /><span
+                >{#if next?.exit}<span class="wf-next">{t('workflow.nextTag')}</span>{/if}{plainLine(wf.exit)}</span
+              >
             </div>
-          </div>
-        {/each}
-        {#if wf.exit}
-          <div class="wf-end" class:next={!!next?.exit}>
-            <Icon name="restart" size={12} /><span
-              >{#if next?.exit}<span class="wf-next">{t('workflow.nextTag')}</span>{/if}{plainLine(wf.exit)}</span
-            >
-          </div>
-        {/if}
-      </div>
+          {/if}
+        </div>
+      {/if}
 
       {#if !folded && inWf.length}
         <div class="wf-h">
@@ -598,6 +677,41 @@
     align-items: center;
     gap: 8px;
     padding: 12px 14px 4px;
+  }
+  /* Colonne / Diagramme (ESC-245, choice 196): the preview's `.seg.wf-view`. */
+  .wf-view {
+    flex: none;
+    display: inline-grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 2px;
+    border-radius: 7px;
+    background: rgba(var(--fg-rgb), 0.035);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .wf-view button {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 22px;
+    border-radius: 5px;
+    color: var(--muted);
+    transition:
+      background-color 0.2s,
+      color 0.2s;
+  }
+  .wf-view button:hover,
+  .wf-view button[aria-selected='true'] {
+    color: var(--text);
+  }
+  .wf-view button[aria-selected='true'] {
+    background: var(--raise-2);
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, calc(0.4 * var(--shade, 1))),
+      inset 0 0 0 1px var(--line-2);
+  }
+  .wf-view button:focus-visible {
+    outline: 2px solid var(--focus, var(--text));
+    outline-offset: 1px;
   }
   .menu-at {
     position: relative;
