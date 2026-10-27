@@ -17,10 +17,10 @@
   import { accountName, accountsOf, newAgentAccount, serves } from '../lib/accounts';
   import { applyCompletion, detectTrigger, filterCommands, type Trigger } from '../lib/complete';
   import { conversationOf } from '../lib/conversations.svelte';
-  import { getDraft, setDraft } from '../lib/drafts';
+  import { getDraft, giveBack, setDraft } from '../lib/drafts';
   import { injectedSource } from '../lib/events';
   import { parseLocalCommand } from '../lib/localcmd';
-  import { errorText, missingAccountOf } from '../lib/refusal';
+  import { reportRefusal, sendDraft } from '../lib/send.svelte';
   import { fileOrigins } from '../lib/file-origin';
   import { basename, dirname, fSize } from '../lib/format';
   import { t } from '../lib/i18n';
@@ -216,6 +216,18 @@
 
   $effect(() => {
     queueMicrotask(autosize);
+  });
+
+  // A message given back to this draft from elsewhere (refused, or taken back before it went: `giveBack`): read again.
+  $effect(() => {
+    const back = app.draftReturned;
+    if (!back || back.agentId !== agentId) return;
+    untrack(() => {
+      const d = getDraft(draftFor);
+      text = d.text;
+      files = d.files;
+      queueMicrotask(autosize);
+    });
   });
 
   // A door of the Workflow tab (ESC-194): its command at the head of the message, in place of a command already there;
@@ -543,12 +555,7 @@
       } else if (answering?.kind === 'permission') {
         await api.answerPermission(id, answering.id, 'deny', body);
       } else {
-        await api.sendMessage(
-          id,
-          body,
-          prevFiles.filter((f) => f.kind !== 'file').map(({ name, mediaType, data }) => ({ name, mediaType, data })),
-          prevFiles.filter((f) => f.file).map((f) => $state.snapshot(f.file!)),
-        );
+        await sendDraft(id, body, prevFiles);
       }
       if (answering && prevFiles.length) {
         app.toast(t('composer.send.filesKept'));
@@ -558,27 +565,12 @@
       // The files of an answer never left the field.
       giveBack(owner, prevText, answering ? [] : prevFiles);
       // For want of an account of its harness: said in the conversation, with the way out (choice 19).
-      const missing = missingAccountOf(e);
-      if (missing) conversationOf(owner).noAccount = { engine: missing, text: errorText(e) };
-      else app.toast(errorText(e), 'error');
+      reportRefusal(owner, e);
     }
     // Recorded by now, or given back to the field above.
     unhold?.();
     heldFor = null;
     sending = false;
-  }
-
-  /**
-   * A message refused given back to the draft it was sent from (another agent's may be on screen by now), before what
-   * was typed and attached there since: a send held for minutes by a worktree's setup leaves time to write the next one.
-   */
-  function giveBack(owner: string, back: string, backFiles: DraftAttachment[]) {
-    const here = owner === draftFor;
-    const since = here ? { text, files } : getDraft(owner);
-    const draft = { text: since.text.trim() ? `${back}\n\n${since.text}` : back, files: [...backFiles, ...since.files] };
-    if (!here) return setDraft(owner, draft);
-    text = draft.text;
-    files = draft.files;
   }
 
   function stop() {

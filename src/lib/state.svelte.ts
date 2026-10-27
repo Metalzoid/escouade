@@ -292,6 +292,8 @@ class AppState {
   panelTab = $state<'files' | 'history' | 'workflow' | 'hosts'>('files');
   /** A text to put in an agent's composer without sending it (a door of the Workflow tab): taken by its composer, which then clears it. */
   composerPut = $state<{ agentId: string; text: string } | null>(null);
+  /** A message given back to an agent's draft from outside its composer (`giveBack`): its composer, if shown, reads the draft again. `n` tells one from the next. */
+  draftReturned = $state<{ agentId: string; n: number } | null>(null);
   /** Side-by-side diffs (else unified), shared by the diff dialog and the split layout. */
   diffSplit = $state(readPref('diffSplit') === '1');
   showArchived = $state(false);

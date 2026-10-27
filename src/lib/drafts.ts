@@ -45,6 +45,20 @@ export function setDraft(agentId: string, draft: Draft) {
   );
 }
 
+/** The messages given back so far: what tells a composer each one apart. */
+let returned = 0;
+
+/**
+ * A message given back to the draft of `owner` (refused, or taken back before it went), before what was typed and
+ * attached there since: a message held for a while leaves time to write the next one. The composer of `owner`, if one
+ * is shown, reads the draft again (`app.draftReturned`).
+ */
+export function giveBack(owner: string, back: string, backFiles: DraftAttachment[]) {
+  const since = getDraft(owner);
+  setDraft(owner, { text: since.text.trim() ? `${back}\n\n${since.text}` : back, files: [...backFiles, ...since.files] });
+  app.draftReturned = { agentId: owner, n: ++returned };
+}
+
 /** Drops the draft of an agent that is gone, and the write it was waiting for. */
 export function forgetDraft(agentId: string) {
   live.delete(agentId);
