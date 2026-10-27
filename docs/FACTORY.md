@@ -1,0 +1,161 @@
+# La fabrique de produit : index local, mémoire partagée, onglet Docs
+
+Conception du 2026-10-27, faite avec l'utilisateur, pour une 2.x. Les maquettes validées en chemin sont dans `design/factory/` (version 3 : brainstorm en cours, spécification, « Nouvelle discussion », décisions, documents). Ce document dit ce qui a été décidé par l'utilisateur, ce que le chef d'escouade a tranché (marqué **« choix du chef »**) et ce qui reste au constructeur.
+
+## L'intention
+
+Escouade devient une vraie **product factory** : de l'idée au produit livré, avec la documentation du produit comme source de vérité. Trois constats de l'utilisateur :
+
+- **La spec ment sans que personne le sache.** Le dernier raté : une information était juste dans le code et fausse dans `SPEC.md`, et l'agent a cru la spec. Exigence de l'utilisateur : « la spec doit **toujours** être à jour ».
+- **La MOA doit pouvoir s'en servir.** Une MOA (maîtrise d'ouvrage, non développeuse) ouvre Escouade pour brainstormer et enrichir la spec au fil du projet, et y déposer ses documents (cahiers des charges, comptes rendus, maquettes).
+- **Les agents cherchent le code trop cher.** Ils lisent à coups de grep et de fichiers entiers ; ils doivent trouver le code plus vite et pour moins de tokens.
+- **La réflexion se perd quand on change de harness.** Claude Code tient sa propre mémoire ; un agent qui passe sur Codex, pour une revue ou parce que le quota de Claude est épuisé, doit garder la même base de réflexion.
+
+## Objectifs
+
+1. Une spec toujours à jour avec le code, rangée par sujet, que tout le monde lit et enrichit dans Escouade.
+2. Un espace pour brainstormer et discuter de la spec avec des agents spécialisés, d'où sort ce qui va dans la spec.
+3. Un registre précis des décisions sur le produit.
+4. Un drive des documents du projet, lus et cités par les agents.
+5. Une mémoire de travail des agents, commune à tous les harness et à l'équipe.
+6. Un index du code qui fait trouver le code aux agents plus vite et pour moins de tokens.
+
+## Ce qui n'en fait pas partie
+
+- **Pas de vue à part pour la MOA** : la même app, les mêmes écrans pour tout le monde (décidé).
+- **Pas tokensave embarqué** : Escouade construit son propre index, en reprenant ses idées (décidé, voir plus bas).
+- **Pas de service en ligne par défaut** pour analyser ou indexer : tout se fait sur la machine (décidé).
+- **Pas de synchronisation avec Confluence, Google Drive ou Notion** dans cette version (choix du chef : le dépôt git est la seule source ; une source externe pourra venir par les plugins).
+
+## Ce qui serait un échec, même si tout marche
+
+- Une spec qui dit autre chose que le code sans que l'écran le montre.
+- Escouade qui commite ou pousse seul, sans geste de l'utilisateur.
+- Un document, un extrait de code ou une mémoire qui quitte la machine sans que ce soit dit (seuls les agents en reçoivent des extraits, comme ils reçoivent déjà du code).
+- Un index qui emballe la machine (tokensave a retiré son guetteur de fichiers pour cette raison : processeur et mémoire en emballement sur de gros dépôts).
+- Un projet privé (ESC-140, `fence.rs`) dont un fichier interdit serait indexé, ou montré à un agent d'un autre projet.
+
+## Contraintes
+
+- **Tout vit dans le dépôt git, sous `.escouade/`** : la spec, les décisions, les documents déposés (même lourds) et la mémoire (décidé). Ce qui se recalcule (l'index, les vecteurs, le texte extrait des documents) vit dans le dossier système d'Escouade, à côté des historiques (choix du chef : rien de dérivé dans le dépôt).
+- **La branche des docs** se règle par projet : la branche courante, ou une branche fixe (décidé). La MOA fait du git **à travers Escouade** : elle ne voit jamais git, seulement « N changements à partager » et « Partager » (commit et push, au geste de l'utilisateur).
+  - **Choix du chef** : une branche fixe a son propre worktree, tenu par Escouade ; Escouade ne la fusionne jamais ailleurs (c'est à l'équipe de le faire, ou c'est `main` elle-même).
+  - **Choix du chef** : « Partager » récupère d'abord la branche distante ; si deux personnes ont touché la même page, le conflit va à l'agent rédacteur, comme un conflit de ticket (« L'agent résout » / « Annuler »), jamais à la MOA en lignes de git.
+  - **Choix du chef** : une MOA qui n'a pas le dépôt l'obtient par « Nouveau projet », en le clonant depuis son hébergeur ; si l'assistant ne sait pas encore cloner, c'est un ticket du chantier.
+  - **Choix du chef** : les documents lourds suivent les règles LFS du dépôt s'il en a ; sinon, au-delà de 50 Mo, la fenêtre prévient avant d'ajouter le fichier.
+- **Tous les harness** (Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode) passent par le serveur MCP d'Escouade pour l'index, la mémoire et les docs.
+- **Les règles existantes tiennent** : `.escouade/` n'est jamais lu ni écrit à travers un lien symbolique ni hors du projet (`workflowfiles::unsafe_dir`, `sharing.rs`) ; Escouade ne commite jamais seul les fichiers partagés ; les projets privés gardent leurs fichiers interdits hors de tout index.
+- **Ce qui existe déjà** : ONNX Runtime est embarqué (`ort` 2.0.0-rc.13, chargé à l'exécution, pour les voix) ; SQLite aussi (`rusqlite`, bundled) ; les hooks d'Escouade sont posés dans les quatre harness à hooks ; le protocole des tickets passe par `board::protocol_prompt_for`.
+
+## L'ordre de construction (décidé)
+
+1. **Le socle d'index local** : la structure du code, puis les vecteurs.
+2. **La mémoire partagée**, petite et utile tout de suite.
+3. **L'onglet Docs**, le plus gros, qui s'appuie sur les deux.
+
+## 1. Le socle d'index local
+
+### Le code : la structure d'abord (décidé)
+
+Escouade construit son propre index, à la manière de tokensave (Rust, MIT, regardé le 2026-10-27) :
+
+- **tree-sitter** découpe le code en symboles et en liens : fonctions, classes, méthodes, champs, imports, appels, héritage, docstrings. Les titres Markdown deviennent des nœuds.
+- Le tout dans une base SQLite par projet, avec recherche plein texte (FTS5).
+- Le gain vient de la structure, pas des vecteurs : en **un appel**, l'agent obtient le contexte d'une tâche (points d'entrée, symboles liés, extraits), les appelants et appelés d'une fonction, ou ce qu'un changement toucherait, au lieu de lire 20 à 50 fichiers. tokensave annonce 88 % de tokens en moins en moyenne sur 10 requêtes de son dépôt (ses chiffres, face à des lectures de fichiers entiers).
+- Les vecteurs du code ne viennent qu'en complément, pour une recherche « par le sens » quand les mots ne suffisent pas.
+
+Ce qu'en voient les agents : quelques outils MCP (les noms au constructeur), sur le modèle des outils de base de tokensave : chercher un symbole ou une notion, le contexte d'une tâche, appelants et appelés, l'impact d'un changement. **Choix du chef** : moins d'une dizaine d'outils, chacun qui dit dans sa réponse combien il a fait économiser (avant / après, comme `tokensave_metrics`), pour que le gain se mesure et se montre (statistiques d'Escouade).
+
+**Les orienter vers l'index** : les hooks d'Escouade renvoient vers l'index les recherches qui visent un symbole (grep, rg) là où le harness le permet ; ailleurs, une règle dans la consigne de l'agent. Le constructeur choisit le dosage, sans jamais bloquer une recherche de texte légitime.
+
+**Rester à jour** : pas de guetteur de fichiers du système. **Choix du chef**, repris de tokensave : une vérification de fraîcheur à chaque appel (avec un délai minimal entre deux), et une mise à jour sur les événements git qu'Escouade voit déjà (commit, changement de branche, fin de tour d'un agent).
+
+**Les worktrees** : un projet en a souvent beaucoup (un par agent). **Choix du chef** : un index de la branche de base, et pour chaque worktree seulement ce qui diffère ; le constructeur peut faire autrement s'il le mesure.
+
+**Proposé d'office, en option** (décidé) : Escouade propose d'indexer un projet (à l'ajout, et dans les réglages du projet) ; on peut refuser ou couper. Un projet privé indexe seulement ce que sa clôture autorise.
+
+### Les vecteurs : calculés par Escouade, en local (décidé)
+
+Aucun harness ne fournit d'embeddings (Anthropic n'a pas de modèle d'embeddings ; l'API d'OpenAI en a, mais pas la connexion ChatGPT de Codex ; Copilot et Cursor indexent pour eux seuls ; OpenCode passerait par Ollama). Escouade les calcule donc lui-même :
+
+- par ONNX Runtime, déjà embarqué ;
+- avec un petit modèle **multilingue** (les docs sont souvent en français), téléchargé à la première activation, comme une voix (de 100 à 500 Mo selon le modèle : choix au constructeur, sur un essai en français et en anglais) ;
+- rien ne sort de la machine ; un service en ligne pourra être une option plus tard, jamais par défaut.
+
+Les vecteurs servent d'abord aux docs : la spec, les décisions, les documents déposés, la mémoire. La recherche par le sens dans les docs (RAG) est le cas de départ ; une recherche en arbre de résumés (RAPTOR) se compare plus tard sur une vraie doc de projet, si le RAG simple ne suffit pas.
+
+## 2. La mémoire partagée
+
+**Ce que c'est** (décidé) : le carnet de travail des agents. Ils y notent eux-mêmes leurs façons de travailler et les écueils à éviter (« lancer les e2e après un build de debug », « ce test est instable sous charge »). **Pas le produit** : la spec et les décisions parlent du produit, la mémoire parle du travail.
+
+- Une mémoire par projet, dans le dépôt, sous `.escouade/` (décidé) : l'équipe la partage par git. Escouade ne la commite jamais seul.
+- **Choix du chef** : un fichier par souvenir, en Markdown avec un en-tête (nom, description, sorte), et un index court, comme la mémoire de Claude Code, pour que les agents qui la connaissent s'y retrouvent.
+- **Choix du chef** : elle vit dans le dossier du projet (comme les tickets partagés), pas dans le worktree de chaque agent : tous les agents du projet lisent et écrivent la même, quelle que soit leur branche.
+- Tous les harness la lisent et l'écrivent par le MCP : chercher, lire, écrire, oublier. La consigne de chaque agent lui dit de la consulter au départ et d'y noter ce qu'il a appris ; un agent qui change de harness la retrouve telle quelle.
+- **Choix du chef** : Escouade propose de reprendre ce que Claude Code a déjà retenu pour ce projet (sa mémoire de projet), une fois, avec l'accord de l'utilisateur, souvenir par souvenir.
+- Elle est indexée (vecteurs) pour que la recherche trouve un souvenir par le sens.
+
+## 3. L'onglet Docs
+
+Un troisième onglet de la barre latérale : **Agents · Kanban · Docs** (décidé). Les mêmes écrans pour tout le monde.
+
+### La barre latérale de l'onglet
+
+- « Nouvelle discussion » en tête, puis **les discussions** en cartes, comme les agents, chacune marquée « Brainstorm » ou « Discussion », avec son état (question, répond, versé, brouillon).
+- Dessous, **trois espaces** : Spécification (avec ses écarts), Décisions, Documents.
+
+### « Nouvelle discussion » (décidé)
+
+Une fenêtre fait choisir entre deux agents spécialisés :
+
+- **Discussion** : un agent rédacteur de spec, pour interroger la spec ou la mettre à jour simplement (« Que dit la spec sur le paiement en plusieurs fois ? », « Ajoute que le reçu fiscal part par e-mail »).
+- **Brainstorm** : un agent produit, à la manière de BMAD, qui parle produit, conformité, RGPD, découverte, usages et parallèles avec d'autres secteurs, pour faire gagner le produit en fonctionnalités et en maturité. Il propose des pages de spec, des décisions et des tickets.
+
+On donne un sujet. **On ne choisit pas de documents** : l'agent a accès à tous ceux du projet par l'index. On peut **joindre de nouveaux fichiers**, dans la fenêtre comme dans la conversation : ils sont rangés seuls dans les Documents et indexés.
+
+**Choix du chef** : ces agents partent sur le harness, le compte et le modèle par défaut du projet, que le pied de la fenêtre montre et laisse changer ; ce sont des agents d'Escouade comme les autres (même conversation, mêmes réponses depuis la liste), avec une consigne propre à leur rôle. Ils travaillent dans le worktree de la branche des docs, lisent le code par l'index sans jamais le modifier, et n'écrivent que les docs, par les outils MCP de docs.
+
+### Une discussion ouverte (piste B, retenue)
+
+- À gauche, la conversation avec l'agent (questions à choix comme partout).
+- À droite, **« Ce qui ira dans la spec »** : les changements proposés, page par page (sections ajoutées, phrases changées), et les décisions proposées.
+- **« Verser dans la spec »** les écrit sur la branche des docs. Ce n'est pas encore partagé : la barre d'état dit « N changements à partager ».
+
+### La spécification (piste C, retenue pour cet espace)
+
+- On arrive sur **la carte des sujets** : chaque sujet en carte, avec son état face au code (à jour, écart, brouillon), ses pages, ses tickets, ses décisions, et ce qui a bougé.
+- À gauche, **l'arbre des pages, comme un Confluence**, rangé automatiquement sujet par sujet : une page nouvelle trouve seule sa place (c'est l'agent rédacteur qui range).
+- Une page s'ouvre avec, en haut, **ses écarts avec le code** et de quoi les régler : « Mettre la spec à jour », « Ouvrir un ticket pour le code », « Voir le code ». Elle cite ses sources (documents, tickets, décisions).
+
+### Les décisions : un registre, pas un document (décidé)
+
+- Une liste numérotée et datée : la décision, son état (proposée, acceptée, remplacée), d'où elle vient (brainstorm, discussion, ticket, document), et **ce qu'elle a changé dans la spec** (pages, lignes ajoutées et retirées).
+- Le détail : contexte, décision, conséquences, liens.
+- Une décision acceptée ne se réécrit pas : une nouvelle la remplace, et l'ancienne dit par laquelle.
+- **Choix du chef** : un agent propose, un humain accepte (un clic dans le registre) ; la décision laissée par l'agent d'un ticket est acceptée quand le ticket est validé. Un fichier par décision dans le dépôt, avec son en-tête.
+
+### Les documents : un drive (décidé)
+
+- Des dossiers, le glisser-déposer, une recherche ; chaque fichier dit s'il a été lu par les agents et combien de fois il est cité.
+- Un fichier déposé (ici, dans une discussion ou dans « Nouvelle discussion ») est **analysé et indexé en local, puis rangé seul** dans le bon dossier (décidé). Le texte extrait reste dans le dossier système ; le fichier va dans le dépôt, sur la branche des docs.
+- Formats de départ : PDF, Word, Markdown, texte, images (choix au constructeur pour les autres).
+
+### La spec toujours à jour
+
+- **Les agents des tickets la tiennent à jour eux-mêmes** (décidé) : avant de rendre un ticket qui change le comportement du produit, l'agent met à jour les pages touchées et laisse une décision. Rien ne bloque la validation : c'est la consigne du ticket (`protocol_prompt_for`) qui le demande, et la revue qui le voit.
+- **Choix du chef** : tous les écrits de spec et de décisions passent par les outils MCP de docs d'Escouade, qui écrivent là où vivent les docs. Avec la branche courante, c'est la branche du ticket (la spec suit le code dans la même fusion) ; avec une branche fixe, les changements de spec d'un ticket sont versés sur la branche des docs **quand le ticket est validé**, pour que la spec ne décrive jamais un comportement pas encore fusionné.
+- **L'écran montre les écarts** : « comparée au code il y a 2 h », « 1 écart ». La comparaison tourne **après chaque ticket validé**, sur les pages qu'il touche, et à la demande (voir les réponses de l'utilisateur, plus bas).
+
+## Ce qui reste au constructeur
+
+- Les noms et le nombre exact des outils MCP (index, mémoire, docs), et leurs réponses.
+- Le modèle d'embeddings (multilingue, petit), la taille des morceaux, le stockage des vecteurs (dans SQLite ou à côté).
+- Les grammaires tree-sitter embarquées au départ (au moins Rust, TypeScript, JavaScript, Svelte, Python, Go, Java, C#, PHP, Markdown).
+- Le dosage du renvoi des grep vers l'index, harness par harness.
+- La forme exacte des fichiers de spec, de décisions et de mémoire dans le dépôt (Markdown avec en-tête, un fichier par page, par décision, par souvenir).
+- Le découpage en tickets, dans l'ordre décidé (socle, mémoire, Docs).
+
+## Réponses de l'utilisateur à la relecture (2026-10-27)
+
+1. **La spec vit sous `.escouade/`** (décidé), comme la mémoire, les décisions et les documents. **Une spec existante détectée** (`docs/SPEC.md`, `SPEC.md`, un dossier `docs/`…) : Escouade **propose de l'importer**, découpée par sujet ; rien sans accord (décidé). **Choix du chef** : un projet sans spec part d'un espace vide, avec la proposition de faire écrire une première version par l'agent rédacteur depuis le code (un geste de l'utilisateur, parce que ça coûte des tokens).
+2. **La spec est comparée au code après chaque ticket validé** (décidé), sur les pages que le ticket touche : celles liées au code qu'il a changé (par l'index) et celles qu'il a modifiées. **Choix du chef** : « Comparer au code » reste aussi possible à la demande, page par page ou sur toute la spec.

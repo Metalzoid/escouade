@@ -328,11 +328,11 @@ Et ailleurs : **ESC-165** fait dans le cœur pour la 2.0.3 (GitLab Issues sur le
 ## Idées pour une 2.x (notées le 2026-10-26)
 
 Notées par l'utilisateur pour plus tard, sans ticket ni étude pour l'instant :
-- [ ] **Gestion documentaire.**
+- [ ] **Gestion documentaire.** Devenue l’onglet Docs, conçu le 2026-10-27 avec les deux autres : voir docs/FACTORY.md.
   - Centraliser de façon standardisée la documentation du projet dans le dépôt : la spec, le design, l'architecture, les ADR…
   - Pouvoir interagir simplement avec cette spec, voir les ADR, et tout interroger facilement, aussi par le serveur MCP.
   - Une base vectorielle qui tourne dans Escouade, pour du RAG automatique sur cette documentation, ou du RAPTOR (résumés en arbre) selon ce qui marche le mieux : à comparer sur une vraie doc de projet (noté le 2026-10-27).
-- [ ] **Un index du code pour les agents** (noté le 2026-10-27).
+- [ ] **Un index du code pour les agents** (noté le 2026-10-27). Conçu le 2026-10-27 avec les deux autres : voir docs/FACTORY.md.
   - Proposer d'office, et en option, un système comme tokensave qui indexe le code du projet.
   - Les agents y trouvent le code par le serveur MCP d'Escouade, plutôt qu'en lisant à coups de grep : moins de tokens, des réponses plus justes.
   - À penser :
@@ -351,7 +351,7 @@ Notées par l'utilisateur pour plus tard, sans ticket ni étude pour l'instant :
   - Planifier des tâches qu'Escouade lance seule : à une heure, à intervalle (tous les matins, chaque lundi…), ou à un événement.
   - Exemples : une revue de dépendances, un ticket à reprendre, un rapport.
   - À penser avec le pilote auto du Kanban, les comptes et leurs quotas, et le mode serveur (`docs/REMOTE.md`), pour que ça tourne même quand la fenêtre est fermée.
-- [ ] **Mémoire partagée entre tous les harness** (notée le 2026-10-27).
+- [ ] **Mémoire partagée entre tous les harness** (notée le 2026-10-27). Conçue le 2026-10-27 avec les deux autres : voir docs/FACTORY.md.
   - Une seule mémoire, que Claude Code, Codex, Copilot CLI, Cursor CLI et OpenCode lisent et écrivent tous, au lieu de la mémoire propre à chacun.
   - Accessible par le serveur MCP d'Escouade : lire, chercher, écrire, oublier.
   - À penser :
