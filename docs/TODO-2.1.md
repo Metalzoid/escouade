@@ -331,6 +331,14 @@ Notées par l'utilisateur pour plus tard, sans ticket ni étude pour l'instant :
 - [ ] **Gestion documentaire.**
   - Centraliser de façon standardisée la documentation du projet dans le dépôt : la spec, le design, l'architecture, les ADR…
   - Pouvoir interagir simplement avec cette spec, voir les ADR, et tout interroger facilement, aussi par le serveur MCP.
+  - Une base vectorielle qui tourne dans Escouade, pour du RAG automatique sur cette documentation, ou du RAPTOR (résumés en arbre) selon ce qui marche le mieux : à comparer sur une vraie doc de projet (noté le 2026-10-27).
+- [ ] **Un index du code pour les agents** (noté le 2026-10-27).
+  - Proposer d'office, et en option, un système comme tokensave qui indexe le code du projet.
+  - Les agents y trouvent le code par le serveur MCP d'Escouade, plutôt qu'en lisant à coups de grep : moins de tokens, des réponses plus justes.
+  - À penser :
+    - l'index tenu à jour quand le code change (worktrees des agents compris) ;
+    - les projets privés (ESC-140) et les fichiers interdits (`fence.rs`) ;
+    - le lien avec la base vectorielle de la gestion documentaire ci-dessus.
 - [ ] **Overseer.**
   - Un agent qu'on lance en dehors de tout projet, à la voix ou non.
   - Il a accès à tous les projets publics, pour les piloter.
