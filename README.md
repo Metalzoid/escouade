@@ -13,7 +13,7 @@ Ce qui change d'une version à l'autre est dans le [journal des versions](CHANGE
 ### Planifier
 
 - **Kanban** : des tickets avec leurs critères d'acceptation, que des agents prennent seuls (pilote auto, de 1 à 6 en parallèle), chacun dans son worktree, en bouclant jusqu'à les atteindre ; un ticket peut en attendre d'autres, reprendre une branche existante, s'écrire dans une grande fenêtre (`Ctrl+Entrée` pour l'ajouter), et le pilote auto se met en pause près de la limite de tes quotas. « ▶ Tester » lance la fonctionnalité sur des ports à part, après t'avoir montré la recette écrite par l'agent ; la validation commite, merge, ouvre une pull request ou pousse.
-- **Intégrations** : importe tes tickets Jira, Trello, GitHub Issues, Linear, ClickUp ou GitLab Issues (gitlab.com et auto-hébergé) dans le Kanban, avec leurs critères ; leur statut et des commentaires suivent, et une synchro ratée est retentée. Les jetons restent dans le trousseau du système.
+- **Intégrations** : importe tes tickets Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues (gitlab.com et auto-hébergé) ou Azure Boards (dev.azure.com et Azure DevOps Server) dans le Kanban, avec leurs critères ; leur statut et des commentaires suivent, et une synchro ratée est retentée. Les jetons restent dans le trousseau du système.
 - **Images et fichiers des tickets** : une capture ou une maquette se colle (`Ctrl+V`) ou se glisse dans la fenêtre d'un ticket, et « Joindre un fichier » y ajoute n'importe quel fichier (20 au plus) ; l'agent du ticket les reçoit avec son premier message, et la carte du Kanban montre un trombone et leur nombre.
 
 ### Coder
@@ -56,7 +56,7 @@ Ce qui change d'une version à l'autre est dans le [journal des versions](CHANGE
 
 ### Et aussi
 
-- **Français et anglais** : l'interface existe dans les deux langues, celle du système par défaut, au choix dans Réglages › Application, sans redémarrer ; nombres, montants, dates et pluriels suivent la langue. Une langue à part pour les textes que Claude rédige (messages de commit, descriptions de pull request, commentaires publiés dans Jira, Trello, GitHub, Linear, ClickUp et GitLab, consignes aux agents), car beaucoup d'équipes commitent en anglais avec une interface en français. Le site existe aussi en deux langues.
+- **Français et anglais** : l'interface existe dans les deux langues, celle du système par défaut, au choix dans Réglages › Application, sans redémarrer ; nombres, montants, dates et pluriels suivent la langue. Une langue à part pour les textes que Claude rédige (messages de commit, descriptions de pull request, commentaires publiés dans Jira, Trello, GitHub, Linear, ClickUp, GitLab et Azure Boards, consignes aux agents), car beaucoup d'équipes commitent en anglais avec une interface en français. Le site existe aussi en deux langues.
 - **Affichage** : « Zoom de l'interface » de 80 à 200 % (`Ctrl+=`, `Ctrl+-`, `Ctrl+0`), sans redémarrer, et la taille du texte des terminaux et de l'éditeur à part.
 - **Fermer un projet garde son historique** : l'ajouter de nouveau dans le même dossier retrouve ses agents, leurs conversations, ses tickets et ses réglages ; Réglages › Projets › « Projets fermés » les liste, pour les rouvrir ou les effacer.
 - **Fermer la fenêtre ne coupe pas les agents** : l'app reste dans la zone de notification. Au redémarrage, chaque agent reprend sa session. Les processus inactifs sont arrêtés après un délai réglable et reprennent automatiquement à la prochaine action.
@@ -105,8 +105,8 @@ Tout est stocké dans `~/.escouade/` (anciennement `~/.claude-code-manager/`, d�
 |---|---|
 | `settings.json` | réglages |
 | `state.json` | projets, agents, état de l'interface |
-| `integrations.json` | comptes Jira, Trello, GitHub, Linear et ClickUp, et ceux des hébergeurs de code (celui de GitLab sert aussi à GitLab Issues), sans leurs jetons (dans le trousseau du système) |
-| `sync-queue.json` | synchros avec Jira, Trello, GitHub, Linear, ClickUp ou GitLab qui attendent d'être retentées |
+| `integrations.json` | comptes Jira, Trello, GitHub, Linear et ClickUp, et ceux des hébergeurs de code (celui de GitLab sert aussi à GitLab Issues, celui d'Azure DevOps à Azure Boards), sans leurs jetons (dans le trousseau du système) |
+| `sync-queue.json` | synchros avec Jira, Trello, GitHub, Linear, ClickUp, GitLab ou Azure Boards qui attendent d'être retentées |
 | `conversations/<agent>.jsonl` | journal de chaque conversation |
 | `tickets/<ticket>/` | images collées dans la fenêtre d'un ticket ou jointes par le serveur MCP, effacées avec lui |
 | `claude/<compte>/` | dossier de configuration de Claude Code de chaque compte ajouté (sa connexion, ses conversations) |

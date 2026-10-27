@@ -397,7 +397,7 @@ export interface IntegrationSettings {
 }
 
 /** An external ticket system. */
-export type Service = 'jira' | 'trello' | 'github' | 'linear' | 'clickup' | 'gitlab';
+export type Service = 'jira' | 'trello' | 'github' | 'linear' | 'clickup' | 'gitlab' | 'azure';
 
 /** A Jira status, a Trello list, or for GitHub "open", "closed" or "label:<name>". */
 export interface ExternalState {

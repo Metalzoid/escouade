@@ -444,6 +444,23 @@ impl Azure {
         Self::json(&reply)
     }
 
+    /// A call of Azure Boards (`integrations::azure`), on this account and its pace: `url` with
+    /// its API version, `body` sent as its content type (`application/json-patch+json` for a
+    /// work item's fields). Its answer's JSON (null when empty), and its headers.
+    pub(crate) async fn call(
+        &self,
+        method: reqwest::Method,
+        url: &str,
+        body: Option<(&Value, &str)>,
+    ) -> Result<(Value, HeaderMap)> {
+        let mut rb = self.request(method, url);
+        if let Some((b, content_type)) = body {
+            rb = rb.header("Content-Type", content_type).body(b.to_string());
+        }
+        let reply = self.send(rb).await?;
+        Ok((Self::json(&reply)?, reply.headers))
+    }
+
     /// The token's identity in `org`: its id and its name.
     async fn identity(&self, org: &str) -> Result<(String, Value)> {
         let data = self

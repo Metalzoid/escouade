@@ -145,7 +145,7 @@ Escouade has no account or server of its own for your projects, conversations or
 
 - **Claude Code**, which it runs on your machine, sends its requests to Anthropic as it would in a terminal. Escouade also queries Anthropic’s usage service to show your quotas ([quotas](usage)).
 - **Updates**: Escouade reads the `latest.json` file of the latest release on GitHub, then downloads the new version ([updates](updates)).
-- **The integrations** you connect (Jira, Trello, GitHub, Linear, ClickUp, GitLab): Escouade talks to those services with your token ([integrations](integrations)).
+- **The integrations** you connect (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards): Escouade talks to those services with your token ([integrations](integrations)).
 - **Online dictation**, if you turn it on: see just below.
 
 ## Online dictation, if you turn it on

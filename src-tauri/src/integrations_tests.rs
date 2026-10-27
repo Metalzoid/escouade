@@ -2330,3 +2330,197 @@ async fn gitlab_issues_take_the_code_hosts_account_and_follow_their_ticket() {
     h.core.forge_disconnect(&host).await.unwrap();
     assert!(!h.core.integration_accounts()[5].connected);
 }
+
+#[tokio::test]
+async fn azure_boards_take_the_code_hosts_account_and_follow_their_work_item() {
+    let h = harness("ig-azure");
+    // An Azure DevOps Server's collection (the fake server, on this machine).
+    let server = FakeServer::start().await;
+    let org = "/tfs/acme";
+    let project = format!("{org}/Web%20Shop/_apis");
+    server.on(
+        "GET",
+        &format!("{org}/_apis/connectionData"),
+        200,
+        json!({ "authenticatedUser": { "id": "u-ada", "descriptor": "Microsoft.IdentityModel.Claims.ClaimsIdentity;ada", "providerDisplayName": "Ada Lovelace", "properties": { "Account": { "$value": "ada@acme.dev" } } } }),
+    );
+    server.on(
+        "GET",
+        &format!("{org}/_apis/projects"),
+        200,
+        json!({ "count": 2, "value": [{ "id": "p1", "name": "Mobile" }, { "id": "p2", "name": "Web Shop" }] }),
+    );
+    server.on(
+        "GET",
+        &format!("{project}/wit/workitemtypes"),
+        200,
+        json!({ "value": [{ "name": "User Story", "isDisabled": false, "states": [
+            { "name": "New", "category": "Proposed" }, { "name": "Active", "category": "InProgress" },
+            { "name": "Resolved", "category": "Resolved" }, { "name": "Closed", "category": "Completed" }
+        ] }] }),
+    );
+    server.on(
+        "GET",
+        &format!("{project}/wit/tags"),
+        200,
+        json!({ "value": [] }),
+    );
+    server.on(
+        "POST",
+        &format!("{project}/wit/wiql"),
+        200,
+        json!({ "workItems": [{ "id": 42 }] }),
+    );
+    server.on(
+        "GET",
+        &format!("{project}/wit/workitems"),
+        200,
+        json!({ "count": 1, "value": [{ "id": 42, "fields": {
+            "System.WorkItemType": "User Story", "System.State": "New", "System.Title": "Crash au paiement",
+            "System.Description": "<div>Le paiement plante.</div>",
+            "Microsoft.VSTS.Common.AcceptanceCriteria": "<ul><li>Plus de crash</li><li>Un test e2e</li></ul>"
+        } }] }),
+    );
+    server.on(
+        "GET",
+        &format!("{project}/wit/workitems/42"),
+        200,
+        json!({ "id": 42, "fields": { "System.State": "New", "System.WorkItemType": "User Story" } }),
+    );
+    server.on(
+        "PATCH",
+        &format!("{project}/wit/workitems/42"),
+        200,
+        json!({ "id": 42 }),
+    );
+    server.on(
+        "POST",
+        &format!("{project}/wit/workitems/42/comments"),
+        200,
+        json!({ "commentId": 1 }),
+    );
+    // Without an Azure DevOps code host, the source says where to connect it.
+    assert_eq!(h.core.integration_accounts()[6].service, Service::Azure);
+    assert!(!h.core.integration_accounts()[6].connected);
+    let e = h
+        .core
+        .integration_containers(Service::Azure, None)
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("Hébergeurs de code"), "{e}");
+    let e = h
+        .core
+        .integration_connect(Service::Azure, Account::default())
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("Azure DevOps"), "{e}");
+    h.core
+        .forge_connect(crate::forge::connect::ForgeForm {
+            kind: "azure".into(),
+            url: format!("{}{org}", server.url),
+            token: "pat-secret".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let host = crate::forge::host_of(&server.url);
+    let view = h.core.integration_accounts()[6].clone();
+    assert_eq!(
+        (view.connected, view.label.clone()),
+        (true, format!("ada@acme.dev · {host}"))
+    );
+    assert!(!serde_json::to_string(&h.core.integration_accounts())
+        .unwrap()
+        .contains("pat-secret"));
+    // A project whose remote is on the collection: its Azure DevOps project first.
+    let (p, r) = h.project(false).await;
+    h.set_autopilot(&p.id, false);
+    git(
+        &r,
+        &[
+            "remote",
+            "add",
+            "origin",
+            &format!("{}{org}/Web%20Shop/_git/web", server.url),
+        ],
+    );
+    let list = h
+        .core
+        .integration_containers(Service::Azure, Some(&p.id))
+        .await
+        .unwrap();
+    let container = "acme/Web Shop".to_string();
+    assert_eq!(list[0].id, container);
+    assert_eq!(list[0].name, "Web Shop (dépôt du projet)");
+    assert!(list[0].own && !list[1].own);
+    assert_eq!(list.len(), 2, "{list:?}");
+    let states = h
+        .core
+        .integration_states(Service::Azure, &container)
+        .await
+        .unwrap();
+    let ids: Vec<&str> = states.states.iter().map(|s| s.id.as_str()).collect();
+    assert_eq!(ids, ["New", "Active", "Resolved", "Closed"]);
+    assert_eq!(states.defaults[&Column::Doing].id, "Active");
+    h.link(
+        &p.id,
+        SourceLink {
+            service: Service::Azure,
+            container: container.clone(),
+            name: "Web Shop".into(),
+            states: states.defaults.clone(),
+        },
+        &[Column::Review],
+    );
+    let page = h
+        .core
+        .integration_issues(&p.id, Service::Azure, Query::default())
+        .await
+        .unwrap();
+    assert_eq!(page.total, Some(1));
+    let t = h
+        .core
+        .integration_import(&p.id, page.issues, 5)
+        .await
+        .unwrap()
+        .remove(0);
+    let criteria: Vec<&str> = t.criteria.iter().map(|c| c.text.as_str()).collect();
+    assert_eq!(criteria, ["Plus de crash", "Un test e2e"]);
+    assert!(t.description.contains("Le paiement plante."));
+    let ext = t.external.clone().unwrap();
+    assert_eq!(
+        (ext.service, ext.id.as_str(), ext.key.as_str()),
+        (Service::Azure, "42", "#42")
+    );
+    h.move_to(&t.id, Column::Doing);
+    h.move_to(&t.id, Column::Review);
+    h.wait_synced().await;
+    // The query is a POST that writes nothing.
+    let writes: Vec<(String, Value)> = server
+        .writes()
+        .iter()
+        .filter(|w| !w.path().ends_with("/wiql"))
+        .map(|w| (format!("{} {}", w.method, w.path()), w.json()))
+        .collect();
+    // « En cours » then « À tester » both give Active: the fake server says New again.
+    assert_eq!(writes.len(), 3, "{writes:?}");
+    let active = (
+        format!("PATCH {project}/wit/workitems/42"),
+        json!([{ "op": "add", "path": "/fields/System.State", "value": "Active" }]),
+    );
+    assert_eq!(writes[0], active);
+    assert_eq!(writes[1], active);
+    assert_eq!(
+        writes[2].0,
+        format!("POST {project}/wit/workitems/42/comments")
+    );
+    assert!(writes[2].1["text"]
+        .as_str()
+        .unwrap()
+        .contains("est prêt à tester"));
+    assert_eq!(h.sync_error(&t.id), None);
+    // Its source cannot be disconnected apart: the code host's « Déconnecter » does it.
+    assert!(h.core.integration_disconnect(Service::Azure).is_err());
+    h.core.forge_disconnect(&host).await.unwrap();
+    assert!(!h.core.integration_accounts()[6].connected);
+}

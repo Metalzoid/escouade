@@ -874,16 +874,19 @@ pub enum Service {
     Clickup,
     /// GitLab Issues: its account is the GitLab code host's (`forge::accounts`).
     Gitlab,
+    /// Azure Boards: its account is the Azure DevOps code host's (`forge::accounts`).
+    Azure,
 }
 
 impl Service {
-    pub const ALL: [Service; 6] = [
+    pub const ALL: [Service; 7] = [
         Service::Jira,
         Service::Trello,
         Service::Github,
         Service::Linear,
         Service::Clickup,
         Service::Gitlab,
+        Service::Azure,
     ];
 
     /// Its name, as the window and the comments say it.
@@ -895,6 +898,7 @@ impl Service {
             Service::Linear => "Linear",
             Service::Clickup => "ClickUp",
             Service::Gitlab => "GitLab",
+            Service::Azure => "Azure Boards",
         }
     }
 }

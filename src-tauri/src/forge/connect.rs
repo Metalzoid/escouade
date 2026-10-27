@@ -362,8 +362,8 @@ impl<R: Runtime> Core<R> {
                     label: a.label.clone(),
                     via_cli: a.via_cli,
                     in_file: a.in_file,
-                    // GitLab Issues takes every GitLab account.
-                    issues: host == GITHUB_COM || a.kind == "gitlab",
+                    // GitLab Issues takes every GitLab account, Azure Boards every Azure DevOps one.
+                    issues: host == GITHUB_COM || a.kind == "gitlab" || a.kind == "azure",
                     status,
                     projects: by_host.remove(&host).map(|(_, _, p)| p).unwrap_or_default(),
                     host,

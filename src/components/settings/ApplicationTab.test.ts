@@ -36,7 +36,7 @@ describe('the « Application » tab', () => {
     expect(choices(UI)).toEqual(['Système (Français)', 'English', 'Français']);
     expect(choices(CLAUDE)).toEqual(['Comme l’interface (par défaut)', 'English', 'Français']);
     expect(panel()).toHaveTextContent(
-      'Messages de commit et descriptions de pull request proposés, commentaires publiés dans Jira, Trello, GitHub, Linear, ClickUp et GitLab, consignes données aux agents (par défaut, le message de commit proposé reprend la langue des derniers commits du dépôt).',
+      'Messages de commit et descriptions de pull request proposés, commentaires publiés dans Jira, Trello, GitHub, Linear, ClickUp, GitLab et Azure Boards, consignes données aux agents (par défaut, le message de commit proposé reprend la langue des derniers commits du dépôt).',
     );
     // By default: the system's, and the interface's for Claude.
     expect(choice(UI, 'Système (Français)')).toHaveAttribute('aria-pressed', 'true');

@@ -245,12 +245,14 @@ test('GitLab Issues takes the GitLab code host’s account, its project offered 
   execFileSync('git', ['remote', 'add', 'origin', `${trackers.url}/acme/api.git`], { cwd: app.repo, stdio: 'pipe' });
   await addProject(page, app.repo, { firstAgent: false });
 
-  // No source yet: the import names the six, and leads to the sources of the Kanban.
+  // No source yet: the import names the seven, and leads to the sources of the Kanban.
   await page.getByRole('button', { name: /^Kanban/ }).click();
   await page.getByRole('button', { name: 'Importer' }).click();
   const imp = page.getByRole('dialog', { name: 'Importer des tickets' });
   await expect(imp.getByText('Aucune source liée à ce projet')).toBeVisible();
-  await expect(imp.getByText(/^Connecte Jira, Trello, GitHub Issues, Linear, ClickUp ou GitLab Issues, puis choisis/)).toBeVisible();
+  await expect(
+    imp.getByText(/^Connecte Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues ou Azure Boards, puis choisis/),
+  ).toBeVisible();
   await imp.getByRole('button', { name: 'Lier une source' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
   await expect(settings.getByRole('heading', { name: 'Sources du Kanban' })).toBeInViewport();

@@ -3008,16 +3008,29 @@ impl<R: Runtime> Core<R> {
             None => self.commit_message(t, s, &wt.path, target).await,
         };
         let lang = self.lang().claude;
-        let body = board::pr_body(lang, t);
+        let mut body = board::pr_body(lang, t);
+        let item = crate::agentprs::work_item_of(t);
         let github = git::remote_url(&wt.path, &remote)
             .await
             .as_deref()
             .and_then(board::github_repo);
         let Some((owner, repo)) = github else {
+            if let Some(outcome) = self
+                .open_azure_pr(t, s, wt, target, &title, &body, item)
+                .await
+            {
+                return Ok(outcome);
+            }
             return Ok(board::Outcome::of(lang, |l| {
                 board::pushed_elsewhere_outcome(l, &wt.branch)
             }));
         };
+        let mut draft = crate::forge::PullRequestDraft {
+            body,
+            ..Default::default()
+        };
+        crate::agentprs::link_work_item(item, "github", &mut draft);
+        body = draft.body;
         if let Some(gh) = self.gh_cli() {
             let pr = PullRequest {
                 repo: &format!("{owner}/{repo}"),
@@ -3042,6 +3055,55 @@ impl<R: Runtime> Core<R> {
         self.hub.emit(UiEvent::OpenUrl { url: url.clone() });
         let outcome = board::Outcome::of(lang, |l| board::pushed_for_pr_outcome(l, &wt.branch));
         Ok(outcome.with_url(url))
+    }
+
+    /// The ticket's PR on Azure Repos, opened with the Azure DevOps account (`open_pr` asks it of
+    /// a remote not on GitHub), its Azure Boards work item linked (`workItemRefs`). None on
+    /// another host, without an account, or when Azure refuses: the branch is pushed only.
+    #[allow(clippy::too_many_arguments)]
+    async fn open_azure_pr(
+        &self,
+        t: &Ticket,
+        s: &BoardSettings,
+        wt: &Worktree,
+        target: &str,
+        title: &str,
+        body: &str,
+        item: Option<u64>,
+    ) -> Option<board::Outcome> {
+        let remote = self.remote_of(&wt.path, target).await?;
+        if remote.kind.as_deref() != Some("azure") {
+            return None;
+        }
+        let (client, account) = match self.forge_client(&remote.host).await {
+            Ok(c) => c,
+            Err(e) => {
+                log::warn!("ticket {}: no Azure DevOps client: {e:#}", t.key);
+                return None;
+            }
+        };
+        let mut draft = crate::forge::PullRequestDraft {
+            title: title.to_string(),
+            body: body.to_string(),
+            head: wt.branch.clone(),
+            base: target.to_string(),
+            draft: s.draft,
+            ..Default::default()
+        };
+        crate::agentprs::link_work_item(item, &account.kind, &mut draft);
+        match client.create_pr(&remote.repo, &draft).await {
+            Ok(pr) => {
+                let n = pr.number as u32;
+                Some(
+                    board::Outcome::of(self.lang().claude, |_| board::pr_outcome(n, target))
+                        .with_url(pr.url),
+                )
+            }
+            Err(e) => {
+                log::warn!("ticket {}: Azure DevOps pull request failed: {e:#}", t.key);
+                None
+            }
+        }
     }
 
     /// A merge stopped on conflicts (undone): blocked with "L'agent résout" / "Annuler" ("ask"),

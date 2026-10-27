@@ -18,7 +18,7 @@ The left column lists the tabs, with Escouade’s version at the bottom. The nam
 | [“Notifications”](settings-notifications) | Visual and sound alerts |
 | [“Projects”](settings-projects) | Settings specific to each project |
 | [“Kanban”](settings-board) | Autopilot and approved tickets |
-| [“Integrations”](settings-integrations) | Jira, Trello, GitHub Issues, Linear, ClickUp, and GitLab Issues |
+| [“Integrations”](settings-integrations) | Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, and Azure Boards |
 | [“Terminals”](settings-terminals) | Shells available in the built-in terminals |
 | [“Network”](settings-network) | HTTP(S) proxy and TLS certificates for Claude Code, integrations, and updates |
 | [“About”](settings-about) | Version and local data |
@@ -83,7 +83,7 @@ The change also reaches the app’s native menus and the tooltip of the taskbar 
 This choice decides which language Escouade asks Claude to use for what leaves the app:
 
 - the proposed commit messages and pull request descriptions, see [Git](git);
-- the comments posted to Jira, Trello, GitHub, Linear, ClickUp, and GitLab, see [the integrations](integrations);
+- the comments posted to Jira, Trello, GitHub, Linear, ClickUp, GitLab, and Azure Boards, see [the integrations](integrations);
 - the instructions Escouade gives to agents.
 
 The three choices are “Same as the interface (default)”, “English”, and “Français”. With “Same as the interface”, the proposed commit message follows the language of the repository’s latest commits, to blend in. With “English” or “Français”, that language is the one asked for.

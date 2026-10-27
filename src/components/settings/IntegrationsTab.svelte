@@ -3,7 +3,7 @@
   import { COLUMNS } from '../../lib/board';
   import { t } from '../../lib/i18n';
   import Rich from '../../lib/i18n/Rich.svelte';
-  import { linkSource, SERVICE_IDS, SERVICES, setColumnState, toggleComment, trelloTokenPage } from '../../lib/integrations';
+  import { BY_FORGE, linkSource, SERVICE_IDS, SERVICES, setColumnState, toggleComment, trelloTokenPage } from '../../lib/integrations';
   import { api } from '../../lib/ipc';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
@@ -164,6 +164,8 @@
 
   const every = $derived([5, 15, 60].map((n) => ({ value: n, label: t('integrations.autoImport.minutes', { n }) })));
   const blank = (): AccountForm => ({ site: '', email: '', key: '', token: '' });
+  /** The code host a source without an account of its own is connected as. */
+  const forgeName = (id: Service) => (id === 'azure' ? 'Azure DevOps' : 'GitLab');
 
   /** The code hosts' part: GitLab Issues' « Connecter GitLab… » opens its form there (one account for both uses). */
   let forges = $state<ReturnType<typeof ForgesSection>>();
@@ -203,11 +205,14 @@
         {#if a?.connected && a.unread}
           <span class="d warn">{t('integrations.accounts.keychainUnreadable')}</span>
         {/if}
-        {#if id === 'gitlab'}<span class="d">{t('integrations.accounts.byForge')}</span>{/if}
+        {#if BY_FORGE[id]}<span class="d">{t('integrations.accounts.byForge', { forge: forgeName(id) })}</span>{/if}
+        {#if id === 'azure'}<span class="d">{t('integrations.accounts.workItems')}</span>{/if}
       </div>
-      {#if id === 'gitlab'}
+      {#if BY_FORGE[id]}
         {#if !a?.connected}
-          <button class="btn" onclick={() => forges?.connectKind('gitlab')}>{t('integrations.accounts.connectForge')}</button>
+          <button class="btn" onclick={() => forges?.connectKind(BY_FORGE[id]!)}
+            >{t('integrations.accounts.connectForge', { forge: forgeName(id) })}</button
+          >
         {/if}
       {:else if a?.connected}
         <button class="btn" onclick={() => disconnect(id)}>{t('integrations.accounts.disconnect')}</button>

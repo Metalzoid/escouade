@@ -105,7 +105,7 @@
 
   /**
    * Without a source: the project's own repository on a code host whose source is connected (its GitHub repository, its
-   * GitLab project), to link in one click.
+   * GitLab project, its Azure DevOps project), to link in one click.
    */
   let offers = $state<{ service: Service; container: Container }[]>([]);
   let linkingOwn = $state(false);
@@ -135,9 +135,9 @@
     };
   });
 
-  /** Its path as the service names it: `owner/repo`, a GitLab project's without its instance. */
+  /** Its path as the service names it: `owner/repo`, a GitLab project's without its instance, an Azure DevOps project's without its organization. */
   const ownName = (o: { service: Service; container: Container }) =>
-    o.service === 'gitlab' ? o.container.id.split('/').slice(1).join('/') : o.container.id;
+    o.service === 'gitlab' || o.service === 'azure' ? o.container.id.split('/').slice(1).join('/') : o.container.id;
 
   /** Linked with the states its columns give by default (none when they cannot be read: set in the settings). */
   async function linkOwn(o: { service: Service; container: Container }) {

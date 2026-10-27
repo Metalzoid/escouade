@@ -64,6 +64,44 @@ fn a_forks_pull_request_is_the_agents_when_its_branch_is_in_the_agents_repositor
 }
 
 #[test]
+fn an_azure_boards_work_item_is_linked_on_azure_repos_and_named_on_github() {
+    use crate::forge::PullRequestDraft;
+    let draft = |body: &str| PullRequestDraft {
+        body: body.into(),
+        ..Default::default()
+    };
+    let mut d = draft("Corps");
+    link_work_item(Some(42), "azure", &mut d);
+    assert_eq!((d.closes, d.body.as_str()), (Some(42), "Corps"));
+    let mut d = draft("Corps");
+    link_work_item(Some(42), "github", &mut d);
+    assert_eq!((d.closes, d.body.as_str()), (None, "Corps\n\nFixes AB#42"));
+    // Named already: not twice.
+    let mut d = draft("Fixes AB#42");
+    link_work_item(Some(42), "github", &mut d);
+    assert_eq!(d.body, "Fixes AB#42");
+    let mut d = draft("");
+    link_work_item(Some(7), "github", &mut d);
+    assert_eq!(d.body, "Fixes AB#7");
+    // Another host, or no work item: nothing.
+    let mut d = draft("Corps");
+    link_work_item(Some(42), "gitlab", &mut d);
+    link_work_item(None, "azure", &mut d);
+    assert_eq!((d.closes, d.body.as_str()), (None, "Corps"));
+    // Only a ticket from Azure Boards has one.
+    let mut t = crate::model::Ticket::default();
+    assert_eq!(work_item_of(&t), None);
+    t.external = Some(crate::model::ExternalRef {
+        service: crate::model::Service::Gitlab,
+        id: "42".into(),
+        ..Default::default()
+    });
+    assert_eq!(work_item_of(&t), None);
+    t.external.as_mut().unwrap().service = crate::model::Service::Azure;
+    assert_eq!(work_item_of(&t), Some(42));
+}
+
+#[test]
 fn the_trunks_pull_requests_are_no_agents() {
     let none: Vec<String> = Vec::new();
     assert!(is_trunk("dev", "dev", &none), "the board's target");

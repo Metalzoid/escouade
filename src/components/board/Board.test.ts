@@ -374,7 +374,7 @@ describe('Board in English', () => {
     expect(screen.getByText('No harness found — no tickets will start')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Import' })).toHaveAttribute(
       'data-tip',
-      'Import tickets from Jira, Trello, GitHub Issues, Linear, ClickUp, or GitLab Issues',
+      'Import tickets from Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, or Azure Boards',
     );
     expect(screen.getByRole('switch', { name: 'Autopilot' })).toBeChecked();
     expect(screen.getByText('After approval:')).toBeInTheDocument();

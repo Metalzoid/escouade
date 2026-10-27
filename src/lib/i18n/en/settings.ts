@@ -12,7 +12,7 @@ export default defineZone('settings', {
     board: { label: 'Kanban', desc: 'Autopilot and approved tickets' },
     integrations: {
       label: 'Integrations',
-      desc: 'Kanban sources (Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues) and code hosts',
+      desc: 'Kanban sources (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards) and code hosts',
     },
     terminals: { label: 'Terminals', desc: 'Shells available in the built-in terminals' },
     network: {

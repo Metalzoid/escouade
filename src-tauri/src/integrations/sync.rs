@@ -9,6 +9,7 @@ use super::text::{column_comment, loop_comment};
 use super::*;
 use crate::core::Core;
 use crate::forge::accounts::{self as forge_accounts, ForgeAccount};
+use crate::forge::Provider as _;
 use crate::i18n::{self, Lang};
 use crate::paths;
 use crate::tickets::TicketDraft;
@@ -395,8 +396,14 @@ fn sources(lang: Lang, tickets: &[Ticket]) -> String {
     }
 }
 
-/// GitLab Issues has no account of its own: the GitLab code host's serves.
-fn gitlab_by_its_host() -> String {
+/// GitLab Issues and Azure Boards have no account of their own: their code host's serves.
+fn by_its_host(service: Service) -> String {
+    if service == Service::Azure {
+        return tr!(
+            "Azure Boards se connecte avec Azure DevOps dans Réglages › Intégrations › Hébergeurs de code : un seul compte pour les PR et les éléments de travail.",
+            "Azure Boards is connected with Azure DevOps in Settings › Integrations › Code hosts: one account for the PRs and the work items."
+        );
+    }
     tr!(
         "GitLab se connecte dans Réglages › Intégrations › Hébergeurs de code : un seul compte pour les MR et les tickets.",
         "GitLab is connected in Settings › Integrations › Code hosts: one account for the MRs and the tickets."
@@ -452,6 +459,9 @@ impl<R: Runtime> Core<R> {
     async fn client(&self, service: Service) -> Result<Client> {
         if service == Service::Gitlab {
             return self.gitlab_client().await;
+        }
+        if service == Service::Azure {
+            return self.azure_client().await;
         }
         let account = self.accounts.read().get(service).cloned().ok_or_else(|| {
             let name = service.label();
@@ -520,6 +530,59 @@ impl<R: Runtime> Core<R> {
         Ok(Client::Gitlab(gitlab::Gitlab::new(http, instances)))
     }
 
+    /// Azure Boards' client: every Azure DevOps code host's account (an organization's), its
+    /// token (its own from the keychain, or `az`'s) as the code host uses it. An organization
+    /// whose token cannot be had is left out while another one can.
+    async fn azure_client(&self) -> Result<Client> {
+        let list: Vec<ForgeAccount> = self
+            .accounts
+            .read()
+            .hosted_accounts(Service::Azure)
+            .into_iter()
+            .cloned()
+            .collect();
+        if list.is_empty() {
+            bail!(tr!(
+                "Aucun compte Azure DevOps connecté : connecte-le dans Réglages › Intégrations › Hébergeurs de code.",
+                "No Azure DevOps account connected: connect it in Settings › Integrations › Code hosts."
+            ));
+        }
+        let http = crate::usage::http_client(&self.settings.read())?;
+        let mut instances = Vec::new();
+        let mut failed = None;
+        for a in list {
+            let host = a.host();
+            if a.unread {
+                failed = Some(anyhow!(tr!(
+                    "Trousseau du système illisible : relance Escouade ou reconnecte le compte de {host}.",
+                    "The system keychain can’t be read: restart Escouade or connect the {host} account again."
+                )));
+                continue;
+            }
+            match self.credentials(&a).await {
+                Ok(c) => {
+                    let url = c.url.trim_end_matches('/').to_string();
+                    let api = c.api.or_else(|| crate::forge::azure::api_override(&url));
+                    instances.push(azure::Instance {
+                        org: crate::forge::azure::decode(url.rsplit('/').next().unwrap_or("")),
+                        token_page: crate::forge::azure::AzureProvider.token_page(&url),
+                        client: crate::forge::azure_api::Azure::new(
+                            http.clone(),
+                            url,
+                            api,
+                            c.token,
+                        ),
+                    });
+                }
+                Err(e) => failed = Some(e),
+            }
+        }
+        if instances.is_empty() {
+            return Err(failed.unwrap_or_else(|| anyhow!("Azure DevOps")));
+        }
+        Ok(Client::Azure(azure::Boards::new(instances)))
+    }
+
     /// The GitHub CLI's token (`gh auth token`), asked once.
     pub(crate) async fn gh_token(&self) -> Result<String> {
         if let Some(t) = self.gh_token.lock().clone() {
@@ -560,9 +623,9 @@ impl<R: Runtime> Core<R> {
         service: Service,
         form: Account,
     ) -> Result<AccountView> {
-        if service == Service::Gitlab {
+        if hosted_kind(service).is_some() {
             // One account for both uses: the code host's form.
-            bail!(gitlab_by_its_host());
+            bail!(by_its_host(service));
         }
         let mut account = Account {
             site: if service == Service::Jira {
@@ -617,8 +680,8 @@ impl<R: Runtime> Core<R> {
     /// unused until one is connected again). An entry the keychain keeps goes at the next start
     /// (`Accounts::to_forget`); the window is told when it held the account's token.
     pub fn integration_disconnect(&self, service: Service) -> Result<Vec<AccountView>> {
-        if service == Service::Gitlab {
-            bail!(gitlab_by_its_host());
+        if hosted_kind(service).is_some() {
+            bail!(by_its_host(service));
         }
         // Not for GitHub through the CLI (no token of its own), nor a token the keychain refused
         // (in the file, which is written again without it).
@@ -661,13 +724,14 @@ impl<R: Runtime> Core<R> {
         let own = match (service, project_id) {
             (Service::Github, Some(id)) => self.project_repo(id).await,
             (Service::Gitlab, Some(id)) => self.project_gitlab(id).await,
+            (Service::Azure, Some(id)) => self.project_azure(id).await,
             _ => None,
         };
         if let Some(repo) = own {
             list.retain(|c| c.id != repo);
             let name = repo
                 .split_once('/')
-                .filter(|_| service == Service::Gitlab)
+                .filter(|_| hosted_kind(service).is_some())
                 .map_or(repo.as_str(), |(_, p)| p)
                 .to_string();
             list.insert(
@@ -693,6 +757,19 @@ impl<R: Runtime> Core<R> {
         let list = forge_accounts::all(&self.accounts.read());
         let a = forge_accounts::for_host(&list, &remote.host).filter(|a| a.kind == "gitlab")?;
         Some(format!("{}/{}", a.host(), remote.repo.full()))
+    }
+
+    /// `<org>/<project>` of the project's remote, when it is on Azure DevOps and an account is
+    /// connected for its organization.
+    async fn project_azure(&self, project_id: &str) -> Option<String> {
+        let remote = self.project_forge(project_id).await?;
+        let list = forge_accounts::all(&self.accounts.read());
+        let a = forge_accounts::for_host(&list, &remote.host).filter(|a| a.kind == "azure")?;
+        let (org, _) = crate::forge::azure::parts(&remote.repo);
+        let own = a.url.trim_end_matches('/').rsplit('/').next().unwrap_or("");
+        let own = crate::forge::azure::decode(own);
+        own.eq_ignore_ascii_case(org)
+            .then(|| remote.repo.namespace.clone())
     }
 
     /// `owner/repo` of the project's GitHub remote (origin, else the only one), if it has one.

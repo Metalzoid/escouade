@@ -20,7 +20,7 @@ export default {
       other: '{count} tickets · {looping} en boucle',
     },
     noEngine: 'Aucun harness trouvé — aucun ticket ne démarre',
-    importTitle: 'Importer des tickets de Jira, Trello, GitHub Issues, Linear, ClickUp ou GitLab Issues',
+    importTitle: 'Importer des tickets de Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues ou Azure Boards',
     settingsTitle: 'Réglages du Kanban — {summary}',
     afterApproval: 'Après validation :',
     autopilotTitle: "Les tickets « À faire » partent seuls dès qu'une place se libère",

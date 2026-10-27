@@ -113,6 +113,32 @@ struct Target {
     client: Box<dyn Forge>,
 }
 
+/// The Azure Boards work item a ticket was imported from.
+pub(crate) fn work_item_of(t: &crate::model::Ticket) -> Option<u64> {
+    t.external
+        .as_ref()
+        .filter(|e| e.service == crate::model::Service::Azure)
+        .and_then(|e| e.id.parse().ok())
+}
+
+/// The work item `item` linked to a pull request on a host of `kind`: on Azure Repos by the pull
+/// request's `workItemRefs` (`closes`: completing it resolves the work item as the project's
+/// settings say), on GitHub by « Fixes AB#n » ending its description, which Azure Boards' app
+/// for GitHub reads when the project has it. Nothing on the other hosts.
+pub(crate) fn link_work_item(item: Option<u64>, kind: &str, draft: &mut PullRequestDraft) {
+    let Some(n) = item else { return };
+    match kind {
+        "azure" => draft.closes = Some(n),
+        "github" if !draft.body.contains(&format!("AB#{n}")) => {
+            if !draft.body.is_empty() {
+                draft.body.push_str("\n\n");
+            }
+            draft.body.push_str(&format!("Fixes AB#{n}"));
+        }
+        _ => {}
+    }
+}
+
 /// The order of an agent's pull requests: the open ones first (ready before drafts), then the
 /// merged, then the closed, the newest first in each.
 pub fn sort_prs(prs: &mut [PullRequest]) {
@@ -768,6 +794,16 @@ impl<R: Runtime> Core<R> {
         })
     }
 
+    /// `link_work_item` for the agent's ticket, if it has one.
+    fn link_work_item(&self, meta: &AgentMeta, kind: &str, draft: &mut PullRequestDraft) {
+        let item = meta
+            .ticket_id
+            .as_deref()
+            .and_then(|id| self.ticket(id).ok())
+            .and_then(|t| work_item_of(&t));
+        link_work_item(item, kind, draft);
+    }
+
     /// Pushes the agent's branch, then opens its pull request as the user validated it: kept on
     /// the agent, its card shows it.
     pub async fn agent_pr_open(self: &Arc<Self>, id: &str, form: PrForm) -> Result<PullRequest> {
@@ -786,7 +822,7 @@ impl<R: Runtime> Core<R> {
         };
         let cwd = t.path.clone();
         git::push_branch(&cwd, &t.branch).await?;
-        let draft = PullRequestDraft {
+        let mut draft = PullRequestDraft {
             title,
             body: form.body.trim().to_string(),
             head: t.branch.clone(),
@@ -794,6 +830,7 @@ impl<R: Runtime> Core<R> {
             draft: form.draft && t.provider.capabilities().draft,
             ..Default::default()
         };
+        self.link_work_item(&t.meta, t.provider.kind(), &mut draft);
         let pr = t.client.create_pr(&t.remote.repo, &draft).await?;
         let word = t.provider.request_word().to_string();
         let h = self.agent(id)?;
@@ -1229,7 +1266,7 @@ impl<R: Runtime> Core<R> {
             }
             let step = async {
                 git::push_branch(&t.path, &t.branch).await?;
-                let draft = PullRequestDraft {
+                let mut draft = PullRequestDraft {
                     title: title.clone(),
                     body,
                     head: t.branch.clone(),
@@ -1237,6 +1274,7 @@ impl<R: Runtime> Core<R> {
                     draft: form.draft && t.provider.capabilities().draft,
                     ..Default::default()
                 };
+                self.link_work_item(&t.meta, t.provider.kind(), &mut draft);
                 t.client.create_pr(&t.remote.repo, &draft).await
             };
             match step.await {

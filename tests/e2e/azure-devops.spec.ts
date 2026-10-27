@@ -171,3 +171,76 @@ test('an agent opens its pull request on Azure DevOps, and its card follows its 
       .first(),
   ).toBeVisible();
 });
+
+// Azure Boards (ESC-242): the Kanban's source on the same Azure DevOps account, its project offered by the import,
+// a work item imported with its Acceptance Criteria, then its state pushed and a comment written as its ticket moves.
+test('Azure Boards takes the Azure DevOps account, its project offered by the import, and its work item follows its ticket (1024 × 728)', async ({
+  app,
+}) => {
+  const { page } = app;
+  await page.setViewportSize({ width: 1024, height: 728 });
+  git(app.repo, 'remote', 'add', 'origin', 'https://dev.azure.com/acme/demo/_git/demo');
+  await addProject(page, app.repo, { firstAgent: false });
+
+  // No source yet: the import names the seven, and leads to the sources of the Kanban.
+  await page.getByRole('button', { name: /^Kanban/ }).click();
+  await page.getByRole('button', { name: 'Importer' }).click();
+  const imp = page.getByRole('dialog', { name: 'Importer des tickets' });
+  await expect(imp.getByText(/^Connecte Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues ou Azure Boards, puis/)).toBeVisible();
+  await imp.getByRole('button', { name: 'Lier une source' }).click();
+  const settings = page.getByRole('dialog', { name: 'Réglages' });
+  await expect(settings.getByRole('heading', { name: 'Sources du Kanban' })).toBeInViewport();
+
+  // Azure Boards is connected through the code host's own form: one account for the PRs and the work items.
+  const row = settings.locator('.acct').filter({ hasText: 'droit Work Items' });
+  await expect(row).toContainText('Son jeton doit avoir le droit Work Items (lecture et écriture).');
+  await row.getByRole('button', { name: 'Connecter Azure DevOps…' }).click();
+  const form = settings.getByRole('form', { name: 'Connexion à un hébergeur' });
+  await expect(form.getByLabel('Hébergeur')).toHaveValue('azure');
+  await form.getByLabel('Adresse').fill('dev.azure.com/acme');
+  await form.getByLabel(/^Jeton/).fill('pat-azure');
+  await form.getByRole('button', { name: 'Connecter' }).click();
+  await expect(settings.getByRole('group', { name: 'dev.azure.com' })).toContainText('Sert aussi à Azure Boards');
+  await expect(row).toContainText('Connecté · ada@acme.dev · acme');
+  await settings.getByRole('button', { name: 'Annuler' }).click();
+  await expect(settings).toHaveCount(0);
+
+  // The import offers the project's own Azure DevOps project, linked in one click.
+  await page.getByRole('button', { name: 'Importer' }).click();
+  await imp.getByRole('button', { name: 'Lier demo (Azure Boards)' }).click();
+  await expect(imp.getByRole('tab', { name: /Azure Boards/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(imp.getByRole('checkbox', { name: /#101/ })).toContainText('✓ 2 critères détectés');
+  await expect(imp.getByRole('checkbox', { name: /#102/ })).toBeVisible();
+  // The closed one is not offered; « Assignés à moi » keeps Ada's, a type's chip its type's.
+  await expect(imp.getByRole('checkbox', { name: /#103/ })).toHaveCount(0);
+  await imp.getByRole('button', { name: 'Assignés à moi' }).click();
+  await expect(imp.getByRole('checkbox', { name: /#102/ })).toHaveCount(0);
+  await imp.getByRole('button', { name: 'Assignés à moi' }).click();
+  await imp.getByRole('button', { name: 'Bug', exact: true }).click();
+  await expect(imp.getByRole('checkbox', { name: /#101/ })).toHaveCount(0);
+  await expect(imp.getByRole('checkbox', { name: /#102/ })).toBeVisible();
+  await imp.getByRole('button', { name: 'Bug', exact: true }).click();
+  await imp.getByRole('textbox', { name: 'Rechercher' }).fill('factures');
+  await imp.getByRole('checkbox', { name: /#101/ }).click();
+  await imp.getByRole('button', { name: '3', exact: true }).click();
+  await imp.getByRole('button', { name: 'Importer 1 ticket' }).click();
+  await expect(imp).toHaveCount(0);
+  await expect(page.getByText('1 ticket importé depuis Azure Boards')).toBeVisible();
+
+  // The fake claude meets criterion n at loop n: « À tester » after its second loop.
+  const review = page.getByRole('region', { name: 'À tester' });
+  await expect(review.getByRole('button', { name: /Ouvrir #101/ })).toBeVisible({ timeout: 60_000 });
+  const item = '/azure/acme/demo/_apis/wit/workitems/101';
+  await expect.poll(async () => (await writes()).filter((w) => w.path === `${item}/comments`).length).toBe(1);
+  const all = await writes();
+  // « Active » when it starts (in JSON Patch); already so when it goes to test.
+  expect(all.filter((w) => w.method === 'PATCH' && w.path === item).map((w) => w.body)).toEqual([
+    [{ op: 'add', path: '/fields/System.State', value: 'Active' }],
+  ]);
+  const comment = all.find((w) => w.path === `${item}/comments`)!;
+  expect(comment.body.text).toContain('est prêt à tester.');
+  expect(comment.body.text).toContain('✓ 50 factures par page');
+  // The work item is Active on Azure Boards.
+  const now = await (await fetch(`${fake.url}${item}`)).json();
+  expect(now.fields['System.State']).toBe('Active');
+});

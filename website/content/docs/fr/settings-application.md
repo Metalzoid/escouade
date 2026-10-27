@@ -18,7 +18,7 @@ La colonne de gauche liste les onglets, avec la version d’Escouade en bas. Le 
 | [« Notifications »](settings-notifications) | Alertes visuelles et sonores |
 | [« Projets »](settings-projects) | Réglages propres à chaque projet |
 | [« Kanban »](settings-board) | Pilote auto et tickets validés |
-| [« Intégrations »](settings-integrations) | Jira, Trello, GitHub Issues, Linear, ClickUp et GitLab Issues |
+| [« Intégrations »](settings-integrations) | Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues et Azure Boards |
 | [« Terminaux »](settings-terminals) | Shells disponibles dans les terminaux intégrés |
 | [« Réseau »](settings-network) | Proxy HTTP(S) et certificats TLS pour Claude Code, les intégrations et les mises à jour |
 | [« À propos »](settings-about) | Version et données locales |
@@ -83,7 +83,7 @@ Le changement touche aussi les menus natifs de l’app et l’info-bulle de l’
 Ce choix décide dans quelle langue Escouade demande à Claude d’écrire ce qui sort de l’app :
 
 - les messages de commit et les descriptions de pull request proposés, voir [Git](git) ;
-- les commentaires publiés dans Jira, Trello, GitHub, Linear, ClickUp et GitLab, voir [les intégrations](integrations) ;
+- les commentaires publiés dans Jira, Trello, GitHub, Linear, ClickUp, GitLab et Azure Boards, voir [les intégrations](integrations) ;
 - les consignes qu’Escouade donne aux agents.
 
 Les trois choix sont « Comme l’interface (par défaut) », « English » et « Français ». Avec « Comme l’interface », le message de commit proposé reprend la langue des derniers commits du dépôt, pour s’y fondre. Avec « English » ou « Français », c’est cette langue qui est demandée.

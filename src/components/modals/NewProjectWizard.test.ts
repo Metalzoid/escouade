@@ -124,7 +124,7 @@ describe('the new project’s assistant', () => {
     const kanban = screen.getByRole('region', { name: 'Kanban' });
     expect(within(kanban).getByText(/branche introuvable : main à la place/)).toBeInTheDocument();
     expect(
-      screen.getByText('Pas copiés : les sources liées (Jira, Trello, GitHub, Linear, ClickUp, GitLab) et les tickets.'),
+      screen.getByText('Pas copiés : les sources liées (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards) et les tickets.'),
     ).toBeInTheDocument();
     // The account and commits: the commit mode left out by hand.
     await userEvent.click(within(screen.getByRole('region', { name: 'Git et compte' })).getByRole('checkbox', { name: 'Commit' }));
@@ -435,6 +435,30 @@ describe('the new project’s assistant', () => {
     ]);
     app.accounts = [];
   });
+
+  it('links an Azure Boards project with the states its process gives by default', async () => {
+    app.accounts = [{ service: 'azure', connected: true, label: 'ada@acme.dev · acme' }];
+    const doing = { id: 'Active', name: 'Active' };
+    const be = backend({
+      integration_containers: (a: any) => (a.service === 'azure' ? [{ id: 'acme/Web Shop', name: 'Web Shop', group: 'acme' }] : []),
+      integration_states: () => ({ states: [doing], defaults: { doing, review: doing } }),
+    });
+    render(NewProjectModal);
+    await typePath();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: /Intégrations/ }));
+    const source = screen.getByRole('combobox', { name: 'Source Azure Boards' });
+    await waitFor(() => expect(source).toBeEnabled());
+    await userEvent.selectOptions(source, 'acme/Web Shop');
+    expect(be.called('integration_states')[0].args).toEqual({ service: 'azure', container: 'acme/Web Shop' });
+    await userEvent.click(screen.getByRole('button', { name: 'Suivant' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Créer le projet' }));
+    await waitFor(() => expect(app.modal).toBeNull());
+    expect(be.called('update_project')[0].args.project.integrations.links).toEqual([
+      { service: 'azure', container: 'acme/Web Shop', name: 'Web Shop', states: { doing, review: doing } },
+    ]);
+    app.accounts = [];
+  });
 });
 
 describe('the assistant’s private project and Kanban (ESC-163)', () => {
@@ -664,7 +688,7 @@ describe('the assistant in English', () => {
     expect(screen.getByText(/folder “web” not found here/)).toBeInTheDocument();
     expect(screen.getByText(/branch not found: the current branch instead/)).toBeInTheDocument();
     expect(
-      screen.getByText('Not copied: the linked sources (Jira, Trello, GitHub, Linear, ClickUp, GitLab) and the tickets.'),
+      screen.getByText('Not copied: the linked sources (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards) and the tickets.'),
     ).toBeInTheDocument();
   });
 });

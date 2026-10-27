@@ -53,7 +53,7 @@
     form = { kind, url, email: '', token: '' };
   }
 
-  /** The form of a code host of `kind`, opened from elsewhere (GitLab Issues' « Connecter GitLab… »): shown, its address field focused. */
+  /** The form of a code host of `kind`, opened from elsewhere (GitLab Issues' « Connecter GitLab… », Azure Boards' « Connecter Azure DevOps… »): shown, its address field focused. */
   export async function connectKind(kind: string) {
     if (!form) open(kind);
     else form.kind = kind;
@@ -157,7 +157,11 @@
         {#if a.inFile}<span class="d warn">{t('integrations.accounts.keychainUnavailable')}</span>{/if}
         {#if a.viaCli}<span class="d">{t('integrations.forges.viaCli', { cli: provider(a.kind)?.cli ?? 'gh' })}</span>{/if}
         {#if a.issues}
-          <span class="d">{t('integrations.forges.issues', { source: a.kind === 'gitlab' ? 'GitLab Issues' : 'GitHub Issues' })}</span>
+          <span class="d"
+            >{t('integrations.forges.issues', {
+              source: a.kind === 'gitlab' ? 'GitLab Issues' : a.kind === 'azure' ? 'Azure Boards' : 'GitHub Issues',
+            })}</span
+          >
         {:else}
           <span class="d">{t('integrations.forges.noTickets')}</span>
         {/if}

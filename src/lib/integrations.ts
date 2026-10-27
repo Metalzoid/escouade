@@ -4,10 +4,16 @@ import { fList } from './format';
 import { t } from './i18n';
 import type { Column, Container, ExternalIssue, ExternalState, ProjectIntegrations, Service } from './types';
 
-export const SERVICE_IDS: Service[] = ['jira', 'trello', 'github', 'linear', 'clickup', 'gitlab'];
+export const SERVICE_IDS: Service[] = ['jira', 'trello', 'github', 'linear', 'clickup', 'gitlab', 'azure'];
 
-/** The sources whose account is a code host's (GitHub Issues: github.com's; GitLab Issues: every GitLab instance's). */
-export const HOSTED: Service[] = ['github', 'gitlab'];
+/**
+ * The sources whose account is a code host's (GitHub Issues: github.com's; GitLab Issues: every GitLab instance's;
+ * Azure Boards: every Azure DevOps organization's).
+ */
+export const HOSTED: Service[] = ['github', 'gitlab', 'azure'];
+
+/** The sources that have no account of their own: connected and disconnected as their code host, of this kind. */
+export const BY_FORGE: Partial<Record<Service, string>> = { gitlab: 'gitlab', azure: 'azure' };
 
 /**
  * How the window shows each service. `container` (what the service calls the place its tickets are in) and
@@ -89,6 +95,18 @@ export const SERVICES: Record<
       return t('integrations.searchHint.gitlab');
     },
   },
+  azure: {
+    name: 'Azure Boards',
+    letter: 'AB',
+    color: 'oklch(0.6 0.15 245)',
+    ink: '#fff',
+    get container() {
+      return t('integrations.container.azure');
+    },
+    get placeholder() {
+      return t('integrations.searchHint.azure');
+    },
+  },
 };
 
 /** How a service names itself in a sentence (« depuis GitHub »). */
@@ -99,6 +117,7 @@ const SHORT: Record<Service, string> = {
   linear: 'Linear',
   clickup: 'ClickUp',
   gitlab: 'GitLab',
+  azure: 'Azure Boards',
 };
 
 export const shortName = (service: Service) => SHORT[service];

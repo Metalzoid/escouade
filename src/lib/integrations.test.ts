@@ -1,6 +1,16 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from './i18n';
-import { HOSTED, importedLabel, linkSource, SERVICE_IDS, SERVICES, setColumnState, toggleComment, trelloTokenPage } from './integrations';
+import {
+  BY_FORGE,
+  HOSTED,
+  importedLabel,
+  linkSource,
+  SERVICE_IDS,
+  SERVICES,
+  setColumnState,
+  toggleComment,
+  trelloTokenPage,
+} from './integrations';
 import type { ExternalIssue, ProjectIntegrations } from './types';
 
 const none = (): ProjectIntegrations => ({ links: [], comments: ['review', 'done'] });
@@ -25,13 +35,16 @@ function issue(over: Partial<ExternalIssue> = {}): ExternalIssue {
 
 describe('integrations', () => {
   it('knows each service by its letter, color and container', () => {
-    expect(SERVICE_IDS).toEqual(['jira', 'trello', 'github', 'linear', 'clickup', 'gitlab']);
+    expect(SERVICE_IDS).toEqual(['jira', 'trello', 'github', 'linear', 'clickup', 'gitlab', 'azure']);
     expect(SERVICES.jira).toMatchObject({ name: 'Jira', letter: 'J', container: 'Projet' });
     expect(SERVICES.trello).toMatchObject({ name: 'Trello', letter: 'T', container: 'Tableau' });
     expect(SERVICES.github).toMatchObject({ name: 'GitHub Issues', letter: 'GH', container: 'Dépôt' });
     expect(SERVICES.gitlab).toMatchObject({ name: 'GitLab Issues', letter: 'GL', container: 'Projet' });
-    expect(HOSTED).toEqual(['github', 'gitlab']);
+    expect(SERVICES.azure).toMatchObject({ name: 'Azure Boards', letter: 'AB', container: 'Projet' });
+    expect(HOSTED).toEqual(['github', 'gitlab', 'azure']);
+    expect(BY_FORGE).toEqual({ gitlab: 'gitlab', azure: 'azure' });
     expect(importedLabel([issue({ service: 'gitlab' })])).toBe('1 ticket importé depuis GitLab');
+    expect(importedLabel([issue({ service: 'azure' })])).toBe('1 ticket importé depuis Azure Boards');
   });
 
   it('opens Trello’s token page for the key typed', () => {

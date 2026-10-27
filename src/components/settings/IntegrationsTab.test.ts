@@ -59,7 +59,7 @@ describe('IntegrationsTab', () => {
     app.accounts = [off('jira'), off('trello'), off('github')];
     render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
     expect(screen.getByRole('tab', { name: 'Intégrations' })).toHaveAttribute('aria-selected', 'true');
-    expect(within(panel()).getAllByText('Non connecté')).toHaveLength(6);
+    expect(within(panel()).getAllByText('Non connecté')).toHaveLength(7);
     expect(within(panel()).getByText('Connecte un compte ci-dessus pour lier une source à ce projet.')).toBeInTheDocument();
     expect(within(panel()).queryByText('Correspondance des statuts')).not.toBeInTheDocument();
   });
@@ -118,7 +118,7 @@ describe('IntegrationsTab', () => {
     render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
     await userEvent.click(within(panel()).getByRole('button', { name: 'Déconnecter' }));
     expect(b.called('integration_disconnect')[0].args).toEqual({ service: 'jira' });
-    await waitFor(() => expect(within(panel()).getAllByText('Non connecté')).toHaveLength(6));
+    await waitFor(() => expect(within(panel()).getAllByText('Non connecté')).toHaveLength(7));
   });
 
   it('names its two parts apart, the code hosts and the sources of the Kanban, and opens on the sources when asked', async () => {
@@ -192,6 +192,74 @@ describe('IntegrationsTab', () => {
     expect(within(source).getByRole('group', { name: 'git.acme.dev' })).toHaveTextContent('infra/deploy');
     await userEvent.selectOptions(source, 'gitlab.com/acme/back/api');
     expect(b.called('integration_states').at(-1)!.args).toEqual({ service: 'gitlab', container: 'gitlab.com/acme/back/api' });
+  });
+
+  it('connects Azure Boards through the Azure DevOps code host, the Work Items right asked', async () => {
+    const azure = {
+      kind: 'azure',
+      name: 'Azure DevOps',
+      requestWord: 'PR',
+      defaultHost: 'dev.azure.com',
+      addressHint: 'dev.azure.com/acme',
+      needsEmail: false,
+      cli: 'az',
+      scopes: ['vso.code_write', 'vso.build_execute', 'vso.work_write'],
+      capabilities: {},
+    };
+    const github = { ...azure, kind: 'github', name: 'GitHub', defaultHost: 'github.com', cli: 'gh' };
+    const b = backend({ forges: () => ({ providers: [github, azure], accounts: [], unknown: [], issues: app.accounts }) });
+    render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
+    const p = within(panel());
+    const row = p.getAllByText('Azure Boards')[0].closest('.acct') as HTMLElement;
+    expect(row).toHaveTextContent('Non connecté');
+    expect(row).toHaveTextContent('Compte de l’hébergeur Azure DevOps : il se connecte et se déconnecte dans Hébergeurs de code.');
+    expect(row).toHaveTextContent('Son jeton doit avoir le droit Work Items (lecture et écriture).');
+    await waitFor(() => expect(b.called('forges').length).toBeGreaterThan(0));
+    // The same form as the code host: one Azure DevOps account for the PRs and the work items.
+    await userEvent.click(within(row).getByRole('button', { name: 'Connecter Azure DevOps…' }));
+    const form = await p.findByRole('form', { name: 'Connexion à un hébergeur' });
+    expect(within(form).getByLabelText('Hébergeur')).toHaveValue('azure');
+    expect(within(form).getByLabelText('Adresse')).toHaveFocus();
+    expect(b.called('integration_connect')).toHaveLength(0);
+  });
+
+  it('lists the projects of the Azure DevOps organization, the remote’s first, and links one with its states', async () => {
+    const b = backend({
+      integration_containers: (a: any) =>
+        a.service === 'azure'
+          ? [
+              { id: 'acme/Web Shop', name: 'Web Shop (dépôt du projet)', own: true },
+              { id: 'acme/Mobile', name: 'Mobile', group: 'acme' },
+            ]
+          : [],
+      integration_states: () => ({
+        states: [
+          { id: 'New', name: 'New' },
+          { id: 'Active', name: 'Active' },
+          { id: 'Resolved', name: 'Resolved' },
+          { id: 'Closed', name: 'Closed' },
+        ],
+        defaults: {
+          doing: { id: 'Active', name: 'Active' },
+          review: { id: 'Active', name: 'Active' },
+          done: { id: 'Resolved', name: 'Resolved' },
+        },
+      }),
+    });
+    app.accounts = [off('jira'), off('trello'), off('github'), { service: 'azure', connected: true, label: 'ada@acme.dev · acme' }];
+    render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
+    const p = within(panel());
+    const row = p.getAllByText('Azure Boards')[0].closest('.acct') as HTMLElement;
+    expect(row).toHaveTextContent('Connecté · ada@acme.dev · acme');
+    // Disconnected with its code host only.
+    expect(within(row).queryByRole('button')).toBeNull();
+    const source = p.getByRole('combobox', { name: 'Projet Azure Boards' });
+    await waitFor(() => expect(within(source).getByRole('option', { name: 'Web Shop (dépôt du projet)' })).toBeInTheDocument());
+    expect(within(source).getByRole('group', { name: 'acme' })).toHaveTextContent('Mobile');
+    await userEvent.selectOptions(source, 'acme/Web Shop');
+    expect(b.called('integration_states').at(-1)!.args).toEqual({ service: 'azure', container: 'acme/Web Shop' });
+    expect(await p.findByRole('combobox', { name: 'Azure Boards — En cours' })).toHaveValue('Active');
+    expect(p.getByRole('combobox', { name: 'Azure Boards — Terminé' })).toHaveValue('Resolved');
   });
 
   it('links a source with its default states, sets them by column, and saves them with the project', async () => {
@@ -368,7 +436,7 @@ describe('IntegrationsTab in English', () => {
     expect(p.getByText('The GitLab code host’s account: it is connected and disconnected in Code hosts.')).toBeInTheDocument();
     expect(p.getByRole('button', { name: 'Connect GitLab…' })).toBeInTheDocument();
     expect(p.getByText('Connected · ada@atlas.dev · atlas.atlassian.net')).toBeInTheDocument();
-    expect(p.getAllByText('Not connected')).toHaveLength(4);
+    expect(p.getAllByText('Not connected')).toHaveLength(5);
     expect(p.getByText('System keychain unavailable: the token stays in ~/.escouade/integrations.json.')).toBeInTheDocument();
     expect(p.getByText('System keychain unreadable: restart Escouade or reconnect the account.')).toBeInTheDocument();
     expect(p.getAllByRole('button', { name: 'Disconnect' })).toHaveLength(2);

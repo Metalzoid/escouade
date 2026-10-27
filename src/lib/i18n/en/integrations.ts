@@ -1,8 +1,16 @@
 import { defineZone } from '../types';
 
-// Jira, Trello, GitHub, Linear, ClickUp and GitLab: the integrations tab and the import of tickets.
+// Jira, Trello, GitHub, Linear, ClickUp, GitLab and Azure Boards: the integrations tab and the import of tickets.
 export default defineZone('integrations', {
-  container: { jira: 'Project', trello: 'Board', github: 'Repository', linear: 'Team', clickup: 'List', gitlab: 'Project' },
+  container: {
+    jira: 'Project',
+    trello: 'Board',
+    github: 'Repository',
+    linear: 'Team',
+    clickup: 'List',
+    gitlab: 'Project',
+    azure: 'Project',
+  },
   searchHint: {
     jira: 'Search by key or text…',
     trello: 'Search for a card…',
@@ -10,6 +18,7 @@ export default defineZone('integrations', {
     linear: 'Search by identifier (ENG-42) or title…',
     clickup: 'Search by id (#86abx3, ABC-12) or title…',
     gitlab: 'Search for an issue (#12) or by text…',
+    azure: 'Search for a work item (#12) or by title…',
   },
   imported: { one: '{count} ticket imported from {from}', other: '{count} tickets imported from {from}' },
 
@@ -50,13 +59,14 @@ export default defineZone('integrations', {
     createLinearKey: 'Create a Linear API key',
     clickupKeyHint: 'pk_…',
     createClickupKey: 'Create a ClickUp API key',
-    byForge: 'The GitLab code host’s account: it is connected and disconnected in Code hosts.',
-    connectForge: 'Connect GitLab…',
+    byForge: 'The {forge} code host’s account: it is connected and disconnected in Code hosts.',
+    workItems: 'Its token needs the Work Items right (read and write).',
+    connectForge: 'Connect {forge}…',
   },
 
   forges: {
     title: 'Connected instances',
-    note: "One per address (github.com, your company's…). The github.com account is GitHub Issues' too, the GitLab ones GitLab Issues'.",
+    note: "One per address (github.com, your company's…). The github.com account is GitHub Issues' too, the GitLab ones GitLab Issues', the Azure DevOps ones Azure Boards'.",
     empty: 'No code host connected.',
     connected: 'Connected · {label}',
     unchecked: '{label} · not checked yet',
@@ -97,6 +107,7 @@ export default defineZone('integrations', {
       linear: 'Linear team',
       clickup: 'ClickUp list',
       gitlab: 'GitLab Issues project',
+      azure: 'Azure Boards project',
     },
   },
 
@@ -116,7 +127,8 @@ export default defineZone('integrations', {
     loopSummary: 'Post a summary on every loop',
     loopSummaryDesc: 'Criteria met and the agent’s notes, on the external ticket',
     extractCriteria: 'Extract the acceptance criteria',
-    extractCriteriaDesc: 'From the description (Jira, GitHub, Linear, GitLab) or the checklist (Trello, ClickUp) of the imported ticket',
+    extractCriteriaDesc:
+      'From the description (Jira, GitHub, Linear, GitLab), the checklist (Trello, ClickUp) or the Acceptance Criteria field (Azure Boards) of the imported ticket',
   },
 
   autoImport: {
@@ -125,7 +137,7 @@ export default defineZone('integrations', {
     enableDesc: 'Open tickets from linked sources that carry the label arrive in “To do”',
     label: 'Label',
     labelState: 'Label “{name}”',
-    labelHint: 'Jira, Trello, GitHub, Linear, ClickUp or GitLab label',
+    labelHint: 'Jira, Trello, GitHub, Linear, ClickUp or GitLab label, Azure Boards tag',
     every: 'Check every',
     minutes: '{n} min',
   },
@@ -135,7 +147,7 @@ export default defineZone('integrations', {
     sub: 'Into “To do” on the Kanban of {project}',
     noSource: 'No source linked to this project',
     noSourceBody:
-      'Connect Jira, Trello, GitHub Issues, Linear, ClickUp, or GitLab Issues, then choose the project, board, repository, team, or list to link to {project}.',
+      'Connect Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, or Azure Boards, then choose the project, board, repository, team, or list to link to {project}.',
     thisProject: 'this project',
     linkSource: 'Link a source',
     linkOwn: 'Link {name} ({service})',

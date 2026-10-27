@@ -79,7 +79,7 @@ The card’s button carries the name of what the approval does. It is set in the
 
 A “To review” ticket can be approved even if it is in “Partial goal”.
 
-Once the ticket is approved (except with “Leave as is”), its agent is archived. If “Delete the worktree once approved” is on (the default), the worktree is deleted after the project’s teardown commands. The ticket’s branch goes with it after a merge, or when the ticket brought no change; it stays when it was pushed or proposed as a PR. An existing branch that the ticket took up is never deleted. The ticket moves to “Done”, with its outcome, its cost, and its number of loops. An imported ticket updates its status and may leave a comment (see [Jira, Trello, GitHub, Linear, ClickUp, and GitLab](integrations)).
+Once the ticket is approved (except with “Leave as is”), its agent is archived. If “Delete the worktree once approved” is on (the default), the worktree is deleted after the project’s teardown commands. The ticket’s branch goes with it after a merge, or when the ticket brought no change; it stays when it was pushed or proposed as a PR. An existing branch that the ticket took up is never deleted. The ticket moves to “Done”, with its outcome, its cost, and its number of loops. An imported ticket updates its status and may leave a comment (see [Jira, Trello, GitHub, Linear, ClickUp, GitLab, and Azure Boards](integrations)).
 
 If the ticket’s branch brings no change, the ticket is done all the same: “∅ No changes”.
 

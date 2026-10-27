@@ -1,6 +1,7 @@
-//! External ticket systems (Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues): their accounts, the tickets a project
+//! External ticket systems (Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, Azure Boards): their accounts, the tickets a project
 //! imports from them, and the sync of their states with the Kanban's columns.
 
+pub mod azure;
 pub mod clickup;
 #[cfg(test)]
 pub(crate) mod fake;
@@ -55,8 +56,8 @@ impl Accounts {
             Service::Github => self.github.as_ref(),
             Service::Linear => self.linear.as_ref(),
             Service::Clickup => self.clickup.as_ref(),
-            // The GitLab code host's accounts (`gitlab_accounts`).
-            Service::Gitlab => None,
+            // The GitLab and Azure DevOps code hosts' accounts (`hosted_accounts`).
+            Service::Gitlab | Service::Azure => None,
         }
     }
 
@@ -67,7 +68,7 @@ impl Accounts {
             Service::Github => self.github.as_mut(),
             Service::Linear => self.linear.as_mut(),
             Service::Clickup => self.clickup.as_mut(),
-            Service::Gitlab => None,
+            Service::Gitlab | Service::Azure => None,
         }
     }
 
@@ -79,20 +80,29 @@ impl Accounts {
             Service::Linear => self.linear = a,
             Service::Clickup => self.clickup = a,
             // Connected and disconnected as a code host.
-            Service::Gitlab => {}
+            Service::Gitlab | Service::Azure => {}
         }
     }
 
     /// The GitLab code host's accounts, one per instance: GitLab Issues' too.
     pub fn gitlab_accounts(&self) -> Vec<&crate::forge::accounts::ForgeAccount> {
-        self.forges.iter().filter(|a| a.kind == "gitlab").collect()
+        self.hosted_accounts(Service::Gitlab)
     }
 
-    /// An account of `s` is connected (for GitLab, a code host's one).
+    /// The code host's accounts a source has as its own (GitLab Issues: GitLab's; Azure Boards:
+    /// Azure DevOps', one per organization); none for the others.
+    pub fn hosted_accounts(&self, s: Service) -> Vec<&crate::forge::accounts::ForgeAccount> {
+        let Some(kind) = hosted_kind(s) else {
+            return Vec::new();
+        };
+        self.forges.iter().filter(|a| a.kind == kind).collect()
+    }
+
+    /// An account of `s` is connected (for GitLab and Azure Boards, a code host's one).
     pub fn connected(&self, s: Service) -> bool {
-        match s {
-            Service::Gitlab => !self.gitlab_accounts().is_empty(),
-            _ => self.get(s).is_some(),
+        match hosted_kind(s) {
+            Some(_) => !self.hosted_accounts(s).is_empty(),
+            None => self.get(s).is_some(),
         }
     }
 
@@ -101,7 +111,7 @@ impl Accounts {
         Service::ALL
             .iter()
             .map(|&service| match service {
-                Service::Gitlab => self.gitlab_view(),
+                Service::Gitlab | Service::Azure => self.hosted_view(service),
                 _ => AccountView {
                     service,
                     connected: self.get(service).is_some(),
@@ -116,24 +126,39 @@ impl Accounts {
             .collect()
     }
 
-    /// GitLab Issues' view: its code host's accounts, their instance named but gitlab.com's.
-    fn gitlab_view(&self) -> AccountView {
-        let list = self.gitlab_accounts();
+    /// GitLab Issues' and Azure Boards' view: their code host's accounts, their instance named
+    /// but gitlab.com's (an Azure DevOps organization, by its address's end).
+    fn hosted_view(&self, service: Service) -> AccountView {
+        let list = self.hosted_accounts(service);
         let label = list
             .iter()
             .map(|a| match a.host().as_str() {
                 "gitlab.com" => a.label.clone(),
+                crate::forge::azure::CLOUD => format!(
+                    "{} · {}",
+                    a.label,
+                    a.url.trim_end_matches('/').rsplit('/').next().unwrap_or("")
+                ),
                 host => format!("{} · {host}", a.label),
             })
             .collect::<Vec<_>>()
             .join(", ");
         AccountView {
-            service: Service::Gitlab,
+            service,
             connected: !list.is_empty(),
             label,
             in_file: list.iter().any(|a| a.in_file),
             unread: !list.is_empty() && list.iter().all(|a| a.unread),
         }
+    }
+}
+
+/// The code host whose accounts are a source's own: GitLab Issues', Azure Boards'.
+pub fn hosted_kind(s: Service) -> Option<&'static str> {
+    match s {
+        Service::Gitlab => Some("gitlab"),
+        Service::Azure => Some("azure"),
+        _ => None,
     }
 }
 
@@ -317,6 +342,7 @@ pub enum Client {
     Linear(linear::Linear),
     Clickup(clickup::Clickup),
     Gitlab(gitlab::Gitlab),
+    Azure(azure::Boards),
 }
 
 impl Client {
@@ -342,6 +368,21 @@ impl Client {
                     label: account.label.clone(),
                 }],
             )),
+            // One organization: the account's address and token (`Core::azure_client` gives
+            // every one).
+            Service::Azure => {
+                let url = account.site.trim_end_matches('/').to_string();
+                Client::Azure(azure::Boards::new(vec![azure::Instance {
+                    org: url.rsplit('/').next().unwrap_or("").to_string(),
+                    client: crate::forge::azure_api::Azure::new(
+                        http,
+                        url.clone(),
+                        crate::forge::azure::api_override(&url),
+                        account.token.clone(),
+                    ),
+                    token_page: format!("{url}/_usersSettings/tokens"),
+                }]))
+            }
         }
     }
 
@@ -354,6 +395,7 @@ impl Client {
             Client::Linear(c) => c.me().await,
             Client::Clickup(c) => c.me().await,
             Client::Gitlab(c) => c.me().await,
+            Client::Azure(c) => c.me().await,
         }
     }
 
@@ -365,6 +407,7 @@ impl Client {
             Client::Linear(c) => c.containers().await,
             Client::Clickup(c) => c.containers().await,
             Client::Gitlab(c) => c.containers().await,
+            Client::Azure(c) => c.containers().await,
         }
     }
 
@@ -376,6 +419,7 @@ impl Client {
             Client::Linear(c) => c.states(container).await,
             Client::Clickup(c) => c.states(container).await,
             Client::Gitlab(c) => c.states(container).await,
+            Client::Azure(c) => c.states(container).await,
         }
     }
 
@@ -383,6 +427,9 @@ impl Client {
     /// names, and for ClickUp by their types too.
     pub async fn states_view(&self, container: &str) -> Result<StatesView> {
         if let Client::Clickup(c) = self {
+            return c.states_view(container).await;
+        }
+        if let Client::Azure(c) = self {
             return c.states_view(container).await;
         }
         let states = self.states(container).await?;
@@ -400,6 +447,7 @@ impl Client {
             Client::Linear(c) => c.issues(container, q).await,
             Client::Clickup(c) => c.issues(container, q).await,
             Client::Gitlab(c) => c.issues(container, q).await,
+            Client::Azure(c) => c.issues(container, q).await,
         }
     }
 
@@ -418,6 +466,7 @@ impl Client {
             Client::Linear(c) => c.set_state(r, state).await,
             Client::Clickup(c) => c.set_state(r, state).await,
             Client::Gitlab(c) => c.set_state(r, state, mapped).await,
+            Client::Azure(c) => c.set_state(r, state).await,
         }
     }
 
@@ -429,6 +478,7 @@ impl Client {
             Client::Linear(c) => c.comment(r, text).await,
             Client::Clickup(c) => c.comment(r, text).await,
             Client::Gitlab(c) => c.comment(r, text).await,
+            Client::Azure(c) => c.comment(r, text).await,
         }
     }
 }
@@ -766,7 +816,7 @@ mod tests {
         let v = serde_json::to_string(&a.views()).unwrap();
         assert!(!v.contains("secret"));
         let views = a.views();
-        assert_eq!(views.len(), 6);
+        assert_eq!(views.len(), 7);
         assert!(!views[0].connected);
         assert_eq!(
             (views[1].connected, views[1].label.as_str()),

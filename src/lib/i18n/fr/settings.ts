@@ -16,7 +16,7 @@ export default {
     board: { label: 'Kanban', desc: 'Pilote auto et tickets validés' },
     integrations: {
       label: 'Intégrations',
-      desc: 'Sources du Kanban (Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues) et hébergeurs de code',
+      desc: 'Sources du Kanban (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards) et hébergeurs de code',
     },
     terminals: { label: 'Terminaux', desc: 'Shells disponibles dans les terminaux intégrés' },
     network: {
@@ -103,7 +103,7 @@ export default {
     claudeLanguage: 'Langue des textes rédigés par les agents',
     sameAsUi: 'Comme l’interface (par défaut)',
     claudeLanguageHelp:
-      'Messages de commit et descriptions de pull request proposés, commentaires publiés dans Jira, Trello, GitHub, Linear, ClickUp et GitLab, consignes données aux agents (par défaut, le message de commit proposé reprend la langue des derniers commits du dépôt).',
+      'Messages de commit et descriptions de pull request proposés, commentaires publiés dans Jira, Trello, GitHub, Linear, ClickUp, GitLab et Azure Boards, consignes données aux agents (par défaut, le message de commit proposé reprend la langue des derniers commits du dépôt).',
     /** A language named in the interface's (the choices name each in itself: `LANG_NAMES`). */
     langName: { fr: 'Français', en: 'Anglais' },
     /** « Modèle des textes rédigés »: the harness the texts written by a model go to, among those found. */

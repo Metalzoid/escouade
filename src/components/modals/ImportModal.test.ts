@@ -85,7 +85,7 @@ describe('ImportModal', () => {
     // The six sources, each named.
     expect(
       within(dialog()).getByText(
-        'Connecte Jira, Trello, GitHub Issues, Linear, ClickUp ou GitLab Issues, puis choisis le projet, le tableau, le dépôt, l’équipe ou la liste à associer à demo-api.',
+        'Connecte Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues ou Azure Boards, puis choisis le projet, le tableau, le dépôt, l’équipe ou la liste à associer à demo-api.',
       ),
     ).toBeInTheDocument();
     await userEvent.click(within(dialog()).getByRole('button', { name: 'Lier une source' }));
@@ -125,6 +125,65 @@ describe('ImportModal', () => {
     await waitFor(() => expect(d.getAllByRole('tab')).toHaveLength(1));
     expect(d.getByRole('tab')).toHaveTextContent('GitLab Issuesacme/back/api');
     await waitFor(() => expect(backend.called('integration_issues').at(-1)?.args.service).toBe('gitlab'));
+  });
+
+  it('offers the project’s own Azure DevOps project for Azure Boards, links it in one click and lists its work items', async () => {
+    resetApp({ projects: [project()] });
+    app.accounts = [...ACCOUNTS, { service: 'azure', connected: true, label: 'ada@acme.dev · acme' }];
+    const doing = { id: 'Active', name: 'Active' };
+    const done = { id: 'Resolved', name: 'Resolved' };
+    const item = {
+      service: 'azure',
+      id: '42',
+      key: '#42',
+      title: 'Crash au paiement',
+      kind: 'User Story',
+      kindCode: 'story',
+      meta: ['Active', 'paiement', 'Ada Lovelace'],
+      url: 'https://dev.azure.com/acme/Web%20Shop/_workitems/edit/42',
+      description: 'Le paiement plante.',
+      criteria: ['Plus de crash', 'Un test e2e'],
+      container: 'acme/Web Shop',
+      imported: false,
+    };
+    const backend = fakeBackend({
+      integration_containers: (a: any) =>
+        a.service === 'azure'
+          ? [
+              { id: 'acme/Web Shop', name: 'Web Shop (dépôt du projet)', own: true },
+              { id: 'acme/Mobile', name: 'Mobile', group: 'acme' },
+            ]
+          : [],
+      integration_states: () => ({ states: [doing, done], defaults: { doing, review: doing, done } }),
+      update_project: () => undefined,
+      integration_issues: () => ({
+        issues: [item],
+        filters: [
+          { id: 'mine', label: 'Assignés à moi' },
+          { id: 'type:User Story', label: 'User Story' },
+          { id: 'type:Bug', label: 'Bug' },
+        ],
+        next: '50',
+        total: 60,
+      }),
+    });
+    render(ImportModal, { projectId: 'p1' });
+    const d = within(dialog());
+    const own = await d.findByRole('button', { name: 'Lier Web Shop (Azure Boards)' });
+    expect(backend.called('integration_containers').map((c) => c.args)).toEqual([{ service: 'azure', projectId: 'p1' }]);
+    await userEvent.click(own);
+    await waitFor(() => expect(backend.called('update_project')).toHaveLength(1));
+    const sent = backend.called('update_project')[0].args.project;
+    expect(sent.integrations.links).toEqual([
+      { service: 'azure', container: 'acme/Web Shop', name: 'Web Shop', states: { doing, review: doing, done } },
+    ]);
+    await waitFor(() => expect(d.getByRole('tab')).toHaveTextContent('Azure BoardsWeb Shop'));
+    expect(await d.findByText('Crash au paiement')).toBeInTheDocument();
+    expect(d.getByText('✓ 2 critères détectés')).toBeInTheDocument();
+    expect(d.getByPlaceholderText('Rechercher un élément de travail (#12) ou par titre…')).toBeInTheDocument();
+    // A type's chip asks again with it.
+    await userEvent.click(d.getByRole('button', { name: 'Bug' }));
+    await waitFor(() => expect(backend.called('integration_issues').at(-1)?.args.filters).toEqual(['type:Bug']));
   });
 
   it('lists the first source’s tickets, with their kind, meta and criteria, those already there greyed', async () => {
@@ -386,7 +445,7 @@ describe('ImportModal in English', () => {
     expect(d.getByText('No source linked to this project')).toBeInTheDocument();
     expect(
       d.getByText(
-        'Connect Jira, Trello, GitHub Issues, Linear, ClickUp, or GitLab Issues, then choose the project, board, repository, team, or list to link to demo-api.',
+        'Connect Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, or Azure Boards, then choose the project, board, repository, team, or list to link to demo-api.',
       ),
     ).toBeInTheDocument();
     await userEvent.click(d.getByRole('button', { name: 'Link a source' }));

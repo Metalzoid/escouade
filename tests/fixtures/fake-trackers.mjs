@@ -114,7 +114,32 @@ function seed() {
     },
     // Azure DevOps (ESC-241): the pull requests opened by the app on acme/demo/demo, from #101, until POST
     // /__azure/pulls/<n> sets what a test wants of them ({ checks: 'FAILURE', changesRequested: true, … }).
-    azure: { pulls: [] },
+    // Azure Boards (ESC-242): the work items of the project demo (process Agile), their states changed by PATCH.
+    azure: {
+      pulls: [],
+      items: [
+        {
+          id: 101,
+          type: 'User Story',
+          title: 'Factures en PDF',
+          state: 'New',
+          tags: 'facturation',
+          assigned: 'Ada Lovelace',
+          description: '<div>Exporter les factures du mois.</div>',
+          acceptance: '<ul><li>50 factures par page</li><li>Un PDF par facture</li></ul>',
+        },
+        {
+          id: 102,
+          type: 'Bug',
+          title: 'Le panier se vide',
+          state: 'Active',
+          tags: '',
+          assigned: null,
+          reproSteps: '<p>Ajouter un article, recharger la page.</p>',
+        },
+        { id: 103, type: 'Task', title: 'Ancienne tâche', state: 'Closed', tags: '', assigned: 'Ada Lovelace' },
+      ],
+    },
     // ClickUp: the workspace Atlas, its space Produit, the list « Sprint 12 » in the folder Sprints
     // (its own statuses) and the list « Backlog » outside any folder.
     clickup: {
@@ -578,6 +603,80 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       if (a === '/acme/demo/_apis/build/builds/77/timeline')
         return send(200, { records: [{ type: 'Task', name: 'npm test', result: 'failed', log: { id: 5 } }] });
       if (a === '/acme/demo/_apis/build/builds/77/logs/5') return send.text(200, 'npm test\nFAIL src/app.test.ts\n  expected 2, got 1\n');
+
+      // ---------- Azure Boards (ESC-242): the projects of acme, the work items of demo ----------
+      if (a === '/acme/_apis/projects')
+        return send(200, {
+          count: 2,
+          value: [
+            { id: 'project-demo', name: 'demo', state: 'wellFormed' },
+            { id: 'project-mobile', name: 'Mobile', state: 'wellFormed' },
+          ],
+        });
+      const st = (name, category) => ({ name, color: '007acc', category });
+      const agile = [
+        st('New', 'Proposed'),
+        st('Active', 'InProgress'),
+        st('Resolved', 'Resolved'),
+        st('Closed', 'Completed'),
+        st('Removed', 'Removed'),
+      ];
+      if (a === '/acme/demo/_apis/wit/workitemtypes')
+        return send(200, {
+          count: 3,
+          value: ['User Story', 'Bug', 'Task'].map((name) => ({ name, isDisabled: false, states: agile })),
+        });
+      if (a === '/acme/demo/_apis/wit/tags') return send(200, { value: [{ id: 't1', name: 'facturation' }] });
+      const person = (name) => (name ? { displayName: name, uniqueName: 'ada@acme.dev' } : undefined);
+      const azItem = (i) => ({
+        id: i.id,
+        rev: 1,
+        fields: {
+          'System.Id': i.id,
+          'System.WorkItemType': i.type,
+          'System.State': i.state,
+          'System.Title': i.title,
+          'System.Tags': i.tags,
+          'System.AssignedTo': person(i.assigned),
+          'System.CreatedBy': person('Grace Hopper'),
+          'System.Description': i.description,
+          'Microsoft.VSTS.TCM.ReproSteps': i.reproSteps,
+          'Microsoft.VSTS.Common.AcceptanceCriteria': i.acceptance,
+        },
+      });
+      if (a === '/acme/demo/_apis/wit/wiql' && method === 'POST') {
+        const q = json()?.query ?? '';
+        const closed = (q.match(/NOT IN \(([^)]*)\)/)?.[1] ?? '').split(', ');
+        const types = q.match(/\[System\.WorkItemType\] IN \(([^)]*)\)/)?.[1].split(', ');
+        const id = q.match(/\[System\.Id\] = (\d+)/)?.[1];
+        const title = q
+          .match(/\[System\.Title\] CONTAINS '((?:[^']|'')*)'/)?.[1]
+          .replaceAll("''", "'")
+          .toLowerCase();
+        const found = az.items.filter(
+          (i) =>
+            !closed.includes(`'${i.state}'`) &&
+            (!types || types.includes(`'${i.type}'`)) &&
+            (!q.includes('@Me') || i.assigned === 'Ada Lovelace') &&
+            (!id || i.id === Number(id)) &&
+            (!title || i.title.toLowerCase().includes(title)),
+        );
+        return send(200, { queryType: 'flat', workItems: found.map((i) => ({ id: i.id })) });
+      }
+      if (a === '/acme/demo/_apis/wit/workitems') {
+        const ids = (url.searchParams.get('ids') ?? '').split(',').map(Number);
+        return send(200, { value: az.items.filter((i) => ids.includes(i.id)).map(azItem) });
+      }
+      m = a.match(/^\/acme\/demo\/_apis\/wit\/workitems\/(\d+)(\/comments)?$/);
+      if (m) {
+        const item = az.items.find((i) => i.id === Number(m[1]));
+        if (!item) return send(404, { message: `TF401232: Work item ${m[1]} does not exist.` });
+        if (m[2]) return send(200, { workItemId: item.id, commentId: db.writes.length, text: json()?.text });
+        if (method === 'PATCH') {
+          for (const op of json() ?? []) if (op.path === '/fields/System.State') item.state = op.value;
+        }
+        return send(200, azItem(item));
+      }
       return send(404, { message: `Not Found: ${method} ${p}` });
     }
 

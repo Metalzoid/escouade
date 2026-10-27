@@ -1,9 +1,9 @@
 import type { Tree } from '../types';
 
-// Jira, Trello, GitHub, Linear, ClickUp and GitLab: the integrations tab and the import of tickets.
+// Jira, Trello, GitHub, Linear, ClickUp, GitLab and Azure Boards: the integrations tab and the import of tickets.
 export default {
   // What each service calls the place its tickets are in (the project, the board, the repository).
-  container: { jira: 'Projet', trello: 'Tableau', github: 'Dépôt', linear: 'Équipe', clickup: 'Liste', gitlab: 'Projet' },
+  container: { jira: 'Projet', trello: 'Tableau', github: 'Dépôt', linear: 'Équipe', clickup: 'Liste', gitlab: 'Projet', azure: 'Projet' },
   // The search field of the import, by service.
   searchHint: {
     jira: 'Rechercher par clé ou par texte…',
@@ -12,6 +12,7 @@ export default {
     linear: 'Rechercher par identifiant (ENG-42) ou par titre…',
     clickup: 'Rechercher par id (#86abx3, ABC-12) ou par titre…',
     gitlab: 'Rechercher une issue (#12) ou par texte…',
+    azure: 'Rechercher un élément de travail (#12) ou par titre…',
   },
   // The toast after an import: « 3 tickets importés depuis Jira et Trello ».
   imported: { one: '{count} ticket importé depuis {from}', other: '{count} tickets importés depuis {from}' },
@@ -55,15 +56,17 @@ export default {
     createLinearKey: "Créer une clé d'API Linear",
     clickupKeyHint: 'pk_…',
     createClickupKey: "Créer une clé d'API ClickUp",
-    // GitLab Issues has no account of its own: the GitLab code host's serves.
-    byForge: 'Compte de l’hébergeur GitLab : il se connecte et se déconnecte dans Hébergeurs de code.',
-    connectForge: 'Connecter GitLab…',
+    // GitLab Issues and Azure Boards have no account of their own: their code host's serves.
+    byForge: 'Compte de l’hébergeur {forge} : il se connecte et se déconnecte dans Hébergeurs de code.',
+    // Azure Boards needs the right Work Items on the Azure DevOps token.
+    workItems: 'Son jeton doit avoir le droit Work Items (lecture et écriture).',
+    connectForge: 'Connecter {forge}…',
   },
 
   // The code hosts' accounts: one per instance, with what each check found.
   forges: {
     title: 'Instances connectées',
-    note: "Une par adresse (github.com, celle de l'entreprise…). Le compte de github.com sert aussi à GitHub Issues, ceux de GitLab à GitLab Issues.",
+    note: "Une par adresse (github.com, celle de l'entreprise…). Le compte de github.com sert aussi à GitHub Issues, ceux de GitLab à GitLab Issues, ceux d’Azure DevOps à Azure Boards.",
     empty: 'Aucun hébergeur connecté.',
     connected: 'Connecté · {label}',
     unchecked: '{label} · pas encore vérifié',
@@ -106,6 +109,7 @@ export default {
       linear: 'Équipe Linear',
       clickup: 'Liste ClickUp',
       gitlab: 'Projet GitLab Issues',
+      azure: 'Projet Azure Boards',
     },
   },
 
@@ -126,7 +130,8 @@ export default {
     loopSummary: 'Publier un résumé à chaque boucle',
     loopSummaryDesc: "Critères atteints et notes de l'agent, sur le ticket externe",
     extractCriteria: "Extraire les critères d'acceptation",
-    extractCriteriaDesc: 'Depuis la description (Jira, GitHub, Linear, GitLab) ou la checklist (Trello, ClickUp) du ticket importé',
+    extractCriteriaDesc:
+      'Depuis la description (Jira, GitHub, Linear, GitLab), la checklist (Trello, ClickUp) ou le champ Acceptance Criteria (Azure Boards) du ticket importé',
   },
 
   autoImport: {
@@ -136,7 +141,7 @@ export default {
     label: 'Étiquette',
     /** A column mapped to a label of the service rather than to one of its states. */
     labelState: 'Étiquette « {name} »',
-    labelHint: 'label Jira, étiquette Trello, GitHub, Linear, ClickUp ou GitLab',
+    labelHint: 'label Jira, étiquette Trello, GitHub, Linear, ClickUp ou GitLab, tag Azure Boards',
     every: 'Vérifier toutes les',
     minutes: '{n} min',
   },
@@ -147,7 +152,7 @@ export default {
     sub: 'Dans « À faire » du Kanban de {project}',
     noSource: 'Aucune source liée à ce projet',
     noSourceBody:
-      'Connecte Jira, Trello, GitHub Issues, Linear, ClickUp ou GitLab Issues, puis choisis le projet, le tableau, le dépôt, l’équipe ou la liste à associer à {project}.',
+      'Connecte Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues ou Azure Boards, puis choisis le projet, le tableau, le dépôt, l’équipe ou la liste à associer à {project}.',
     thisProject: 'ce projet',
     linkSource: 'Lier une source',
     // The project's own repository, on a code host whose source is connected.

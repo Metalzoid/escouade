@@ -4800,6 +4800,141 @@ async fn a_gh_installed_while_the_app_runs_opens_the_pull_request() {
     assert_eq!(h.core.gh.read().clone(), Some(fake_gh()));
 }
 
+/// A ticket imported from Azure Boards's work item 42.
+fn from_azure_boards(h: &Harness, id: &str) {
+    h.core
+        .edit_ticket(id, |x| {
+            x.external = Some(ExternalRef {
+                service: Service::Azure,
+                id: "42".into(),
+                key: "#42".into(),
+                container: "acme/Web Shop".into(),
+                ..Default::default()
+            });
+            Ok(())
+        })
+        .unwrap();
+}
+
+#[tokio::test]
+async fn a_github_pull_request_names_the_azure_boards_work_item_it_fixes() {
+    let h = harness("tk-pr-gh-ab");
+    let (p, r) = h.project(false).await;
+    github_remote(&h, &r);
+    *h.core.gh.write() = Some(fake_gh());
+    h.set_board(&p.id, |s| s.action = "pr".into());
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    from_azure_boards(&h, &t.id);
+    h.core.ticket_approve(&t.id).await.unwrap();
+    assert_eq!(h.ticket(&t.id).outcome.as_deref(), Some("⇡ PR #12 → main"));
+    let call = gh_calls(&wt).pop().expect("gh called in the worktree");
+    let body = call["body"].as_str().unwrap();
+    assert!(body.ends_with("- [x] Tests verts\n\nFixes AB#42"), "{body}");
+}
+
+/// On Azure Repos, the board opens the pull request with the Azure DevOps account, its work item
+/// linked; Azure refusing it, the branch is pushed only.
+#[tokio::test]
+async fn an_azure_repos_pull_request_is_opened_with_its_work_item() {
+    let h = harness("tk-pr-azure");
+    let server = crate::integrations::fake::FakeServer::start().await;
+    let org = "/tfs/acme";
+    server.on(
+        "GET",
+        &format!("{org}/_apis/connectionData"),
+        200,
+        json!({ "authenticatedUser": { "id": "u-ada", "descriptor": "Microsoft.IdentityModel.Claims.ClaimsIdentity;ada", "providerDisplayName": "Ada Lovelace" } }),
+    );
+    h.core
+        .forge_connect(crate::forge::connect::ForgeForm {
+            kind: "azure".into(),
+            url: format!("{}{org}", server.url),
+            token: "pat".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let (p, r) = h.project(false).await;
+    let bare = h.dir.join("remote.git");
+    git(
+        &h.dir,
+        &[
+            "init",
+            "-q",
+            "--bare",
+            "-b",
+            "main",
+            &bare.to_string_lossy(),
+        ],
+    );
+    let url = format!("{}{org}/Web%20Shop/_git/web", server.url);
+    git(&r, &["remote", "add", "origin", &url]);
+    let rule = format!(
+        "url.{}.insteadOf",
+        bare.to_string_lossy().replace('\\', "/")
+    );
+    git(&r, &["config", &rule, &url]);
+    git(&r, &["push", "-qu", "origin", "main"]);
+    *h.core.gh.write() = Some(fake_gh());
+    h.set_board(&p.id, |s| {
+        s.action = "pr".into();
+        s.draft = true;
+    });
+    let at = format!("{org}/Web%20Shop/_apis/git/repositories/web/pullrequests");
+    let mut made: Value = serde_json::from_str(include_str!(
+        "../../tests/fixtures/forges/azure/pull-request.json"
+    ))
+    .unwrap();
+    made["pullRequestId"] = json!(31);
+    made["sourceRefName"] = json!("refs/heads/ticket/dem-1");
+    server.on("POST", &at, 201, made);
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    from_azure_boards(&h, &t.id);
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let done = h.ticket(&t.id);
+    assert_eq!(
+        done.outcome.as_deref(),
+        Some("⇡ PR #31 → main"),
+        "{:?}",
+        done.blocked
+    );
+    assert!(
+        done.outcome_url.as_deref().unwrap_or("").contains("31"),
+        "{:?}",
+        done.outcome_url
+    );
+    let sent = server
+        .writes()
+        .into_iter()
+        .find(|w| w.path() == at)
+        .expect("the pull request asked of Azure")
+        .json();
+    assert_eq!(sent["workItemRefs"], json!([{ "id": "42" }]));
+    assert_eq!(sent["isDraft"], true);
+    assert_eq!(sent["sourceRefName"], "refs/heads/ticket/dem-1");
+    assert_eq!(sent["targetRefName"], "refs/heads/main");
+    assert!(sent["description"]
+        .as_str()
+        .unwrap()
+        .contains("- [x] Tests verts"));
+    assert!(gh_calls(&wt).is_empty());
+    assert_eq!(git(&bare, &["show", "ticket/dem-1:dem-1.txt"]), "Boucle 1");
+
+    // Refused: pushed only, as on another host.
+    server.on(
+        "POST",
+        &at,
+        400,
+        json!({ "message": "TF401179: An active pull request already exists." }),
+    );
+    let (u, _) = reviewed(&h, &p.id, "Autre [ok]").await;
+    h.core.ticket_approve(&u.id).await.unwrap();
+    assert_eq!(
+        h.ticket(&u.id).outcome.as_deref(),
+        Some("⇡ ticket/dem-2 poussée · PR à ouvrir sur ton hébergeur")
+    );
+}
+
 #[tokio::test]
 async fn a_pull_request_to_another_host_than_github_is_left_to_open_there() {
     let h = harness("tk-pr-other");

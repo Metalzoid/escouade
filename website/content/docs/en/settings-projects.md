@@ -208,7 +208,7 @@ The project comes back as it was:
 - its settings, its Kanban, and its commands;
 - its agents, with their conversations. No process runs yet: they pick up again at your next message, as after a restart of Escouade. An agent whose worktree has disappeared in the meantime is treated the same way;
 - its tickets. A ticket that was “In progress” when you closed the project comes back blocked, with the reason “Project closed during the ticket”: “Resume” restarts it;
-- what was waiting in the sync queue with Jira, Trello, GitHub Issues, Linear, ClickUp, or GitLab Issues: the queue of its tickets is kept while it is closed and goes out again when it is reopened (it is forgotten if the history is erased);
+- what was waiting in the sync queue with Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, or Azure Boards: the queue of its tickets is kept while it is closed and goes out again when it is reopened (it is forgotten if the history is erased);
 - its [statistics](stats), which get its name back.
 
 The accounts that were reserved to it (“Reserved to projects”) didn’t move while it was closed: see [the Claude accounts](accounts#reserved-to-projects). The project’s “Preferred account” goes back to “Automatic” if its account no longer exists.
@@ -224,4 +224,4 @@ The “Start from a blank project” switch (“The history stays in Settings �
 
 ## The project’s other settings
 
-A project’s links to Jira, Trello, GitHub Issues, Linear, ClickUp, and GitLab Issues are set in the [“Integrations”](settings-integrations) tab. Its Kanban (autopilot, agents, approval) is set in the [“Kanban”](settings-board) tab.
+A project’s links to Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, and Azure Boards are set in the [“Integrations”](settings-integrations) tab. Its Kanban (autopilot, agents, approval) is set in the [“Kanban”](settings-board) tab.

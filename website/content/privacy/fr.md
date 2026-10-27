@@ -145,7 +145,7 @@ Escouade n’a pas de compte ni de serveur à elle pour tes projets, tes convers
 
 - **Claude Code**, qu’elle lance sur ta machine, envoie ses requêtes à Anthropic comme il le ferait dans un terminal. Escouade interroge aussi le service d’usage d’Anthropic pour afficher tes quotas ([les quotas](usage)).
 - **Les mises à jour** : Escouade lit le fichier `latest.json` de la dernière release sur GitHub, puis télécharge la nouvelle version ([les mises à jour](updates)).
-- **Les intégrations** que tu connectes (Jira, Trello, GitHub, Linear, ClickUp, GitLab) : Escouade s’adresse à ces services avec ton jeton ([les intégrations](integrations)).
+- **Les intégrations** que tu connectes (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards) : Escouade s’adresse à ces services avec ton jeton ([les intégrations](integrations)).
 - **La dictée en ligne**, si tu l’allumes : voir juste en dessous.
 
 ## La dictée en ligne, si tu l’allumes

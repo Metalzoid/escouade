@@ -16,7 +16,7 @@ Cliquer une notification de ticket (« prêt à tester » ou « bloqué ») 
 |---|---|
 | « Kanban » et la ligne dessous | Le nom du projet, le nombre de tickets et combien sont « En cours » (« demo-api · 5 tickets · 2 en boucle »). |
 | Les places | « 1 place libre » ou « Toutes les places sont prises », ou bien pourquoi rien ne démarre : « Quota atteint — reprise à 14:30 », « Claude Code introuvable — aucun ticket ne démarre », une branche cible sans commit ou introuvable. |
-| « Importer » | Ouvre la fenêtre d’import des tickets de Jira, Trello, GitHub Issues, Linear, ClickUp ou GitLab Issues (voir [Jira, Trello, GitHub, Linear, ClickUp et GitLab](integrations)). |
+| « Importer » | Ouvre la fenêtre d’import des tickets de Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues ou Azure Boards (voir [Jira, Trello, GitHub, Linear, ClickUp, GitLab et Azure Boards](integrations)). |
 | « Après validation : … » | Résume ce que fait « Valider » (« merge squash → main », « PR → main », « push ticket/* », « laisser en l’état »). Un clic ouvre Réglages › Kanban (voir [Réglages du Kanban](settings-board)). |
 | « Pilote auto » | L’interrupteur du [pilote auto](autopilot) de ce projet. |
 
@@ -87,13 +87,13 @@ Clic droit sur une carte › « Supprimer ».
 
 Avec « Supprimer le worktree d’un ticket terminé ou supprimé » (onglet [« Kanban »](settings-board), activé par défaut), les worktrees des agents du ticket sont supprimés aussi, sauf ceux qui gardent des changements non commités ou des commits ni mergés ni poussés : la carte de leur agent archivé le dit. Un ticket « Terminé » laissé en l’état voit alors son agent archivé.
 
-Supprimer un ticket du Kanban ne le supprime pas chez Jira, Trello, GitHub, Linear, ClickUp ou GitLab.
+Supprimer un ticket du Kanban ne le supprime pas chez Jira, Trello, GitHub, Linear, ClickUp, GitLab ou Azure Boards.
 
 Archiver ou supprimer l’agent d’un ticket « En cours » ou « À tester » renvoie ce ticket dans « À faire », à zéro (Escouade le demande avant d’archiver : « Son ticket DEM-5 repartira « À faire ». »).
 
 ## Ce que montre une carte
 
-Toutes les cartes ont leur clé, leur titre et, pour un ticket importé, la pastille de son service avec sa clé chez lui (un clic l’ouvre dans le service). Un ⚠ signale une synchronisation qui a échoué (voir [Jira, Trello, GitHub, Linear, ClickUp et GitLab](integrations#synchronisations-qui-echouent)). Un ticket fixé sur un compte montre son nom à côté de sa clé (« Pro »). Un ticket qui a son propre modèle ou son propre effort, choisis dans sa fenêtre ou donnés par le [serveur MCP](mcp), les montre dans une étiquette à côté de sa clé (« Opus · Max ») : ils passent avant ceux du Kanban pour son agent. Avec Haiku (celui du ticket, sinon du Kanban, sinon de l’app), qui ne gère pas l’effort, l’étiquette n’en affiche pas. Un trombone suivi d’un nombre dit combien d’images et de fichiers le ticket a (« 2 images jointes » au survol, ou « 1 image jointe, 2 fichiers joints » s’il a aussi des fichiers).
+Toutes les cartes ont leur clé, leur titre et, pour un ticket importé, la pastille de son service avec sa clé chez lui (un clic l’ouvre dans le service). Un ⚠ signale une synchronisation qui a échoué (voir [Jira, Trello, GitHub, Linear, ClickUp, GitLab et Azure Boards](integrations#synchronisations-qui-echouent)). Un ticket fixé sur un compte montre son nom à côté de sa clé (« Pro »). Un ticket qui a son propre modèle ou son propre effort, choisis dans sa fenêtre ou donnés par le [serveur MCP](mcp), les montre dans une étiquette à côté de sa clé (« Opus · Max ») : ils passent avant ceux du Kanban pour son agent. Avec Haiku (celui du ticket, sinon du Kanban, sinon de l’app), qui ne gère pas l’effort, l’étiquette n’en affiche pas. Un trombone suivi d’un nombre dit combien d’images et de fichiers le ticket a (« 2 images jointes » au survol, ou « 1 image jointe, 2 fichiers joints » s’il a aussi des fichiers).
 
 | Colonne | La carte montre |
 |---|---|
@@ -129,6 +129,6 @@ Si une réponse arrive sans bilan, l’agent est relancé une fois. Sans bilan u
 
 - [Le pilote auto](autopilot) : comment les tickets sont pris, bouclés et mis en pause.
 - [Tester et valider un ticket](testing) : « ▶ Tester », « Valider », « Renvoyer ».
-- [Jira, Trello, GitHub, Linear, ClickUp et GitLab](integrations) : importer des tickets et tenir leur statut à jour.
+- [Jira, Trello, GitHub, Linear, ClickUp, GitLab et Azure Boards](integrations) : importer des tickets et tenir leur statut à jour.
 - [Le serveur MCP](mcp) : créer et lancer des tickets depuis Claude.
 - [Réglages du Kanban](settings-board) : tous les réglages du tableau.
