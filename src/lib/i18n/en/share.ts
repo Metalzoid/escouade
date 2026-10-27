@@ -67,6 +67,9 @@ export default defineZone('share', {
     projectGroup: 'Shared Kanban',
     projectName: 'Your name in this project',
     projectNameDesc: 'Empty: the one of Settings › Application ({name}). Kept on this machine, never in .escouade.yml.',
+    projectNameGit:
+      'Empty: {name}, taken from git (git config user.name of this repository). Kept on this machine, never in .escouade.yml.',
+    fromGit: 'Taken from git',
     noName: 'no name yet',
     files: 'Shared tickets',
     filesNone: 'None yet: they will go in {dir}, read again when they change (a pull, another branch, an edit).',

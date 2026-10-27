@@ -665,7 +665,18 @@ async fn sharing_without_a_name_is_refused_and_the_name_of_the_project_comes_fir
         s.user_name.clear();
         s.user_id = "5d0e77b1".into();
     }
+    // A machine where git has no name either.
+    h.core
+        .git_names
+        .lock()
+        .insert(p.path.clone(), String::new());
     assert!(h.core.ticket_share(&t.id, true).is_err());
+    h.core
+        .git_names
+        .lock()
+        .insert(p.path.clone(), "Bobby (git)".into());
+    let project = h.core.project(&p.id).unwrap();
+    assert_eq!(h.core.me_in(&project).name, "Bobby (git)");
     h.core.settings.write().user_name = "Bob Durand".into();
     let project = Project {
         user_name: "Robert".into(),
@@ -678,6 +689,72 @@ async fn sharing_without_a_name_is_refused_and_the_name_of_the_project_comes_fir
     );
     let shared = h.core.ticket_share(&t.id, true).unwrap();
     assert_eq!(shared.shared.unwrap().author.name, "Bob Durand");
+}
+
+/// Without a name given (« Plus tard », ESC-243), sharing takes the name git knows in the project's
+/// folder — a repository's own identity before the global one — and writes it in the ticket's file
+/// alone, never in `.escouade.yml`.
+#[tokio::test]
+async fn without_a_name_sharing_takes_the_name_git_knows_in_the_projects_folder() {
+    let h = harness("share-git-name");
+    let (p, r) = h.project(false).await;
+    let git = |args: &[&str]| {
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&r)
+            .args(args)
+            .status()
+            .unwrap()
+            .success())
+    };
+    // The test repository has its own identity, whatever the machine's global one.
+    git(&["config", "user.name", "Alice du dépôt"]);
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            crate::tickets::TicketDraft {
+                title: "Un ticket".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    {
+        let mut s = h.core.settings.write();
+        s.user_name.clear();
+        s.user_id = "a91f03c2".into();
+    }
+    assert_eq!(
+        h.core.git_user_name(Some(p.id.clone())).await,
+        "Alice du dépôt"
+    );
+    let shared = h.core.ticket_share(&t.id, true).unwrap();
+    assert_eq!(
+        shared.shared.as_ref().unwrap().author.name,
+        "Alice du dépôt"
+    );
+    let file = r
+        .join(".escouade/tickets")
+        .join(format!("{}.yml", shared.shared.unwrap().id));
+    assert!(std::fs::read_to_string(file)
+        .unwrap()
+        .contains("Alice du dépôt"));
+    // Never in the project's shared settings, nor in the project or the app's settings.
+    let yml = std::fs::read_to_string(r.join(".escouade.yml")).unwrap_or_default();
+    assert!(!yml.contains("Alice"), "{yml}");
+    assert!(h.core.project(&p.id).unwrap().user_name.is_empty());
+    assert!(h.core.settings.read().user_name.is_empty());
+    // Read again when the window asks: a name changed in git is the new one.
+    git(&["config", "user.name", "Alice Martin"]);
+    assert_eq!(
+        h.core.git_user_name(Some(p.id.clone())).await,
+        "Alice Martin"
+    );
+    assert_eq!(
+        h.core.me_in(&h.core.project(&p.id).unwrap()).name,
+        "Alice Martin"
+    );
 }
 
 /// The shared tickets' files block no merge (choice 121): `git status` lines about them are left out.

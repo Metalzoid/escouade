@@ -15,6 +15,10 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 - In the widened projects rail, a click on a project’s name opens it, as a click on its tile does.
 
+### Fixes
+
+- The name on your shared tickets is taken from git when you gave none: “Share” no longer asks for it, and Settings › Application shows it filled in.
+
 ## [2.0.3] — 2026-10-27
 
 ### New

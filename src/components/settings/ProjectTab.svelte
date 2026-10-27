@@ -28,11 +28,14 @@
   import { tip } from '../../lib/tip';
   import { repoLabel } from '../../lib/repos';
   import { SHARED_DIR } from '../../lib/sharing';
+  import { gitNameOf } from '../../lib/share-actions';
   import { DEFAULT_WORKTREES, worktreesRoot, type WorktreesProblem } from '../../lib/worktrees';
 
   // A project's own settings: who it is, its worktrees and what runs in them, its launch commands (its draft: the
   // modal's project).
   let { project }: { project: Project } = $props();
+  // The name git knows in its folder (ESC-243): what « Ton nom dans ce projet » falls back on after the app's.
+  $effect(() => void gitNameOf(project.id));
 
   const draft = $derived(settingsForm.project!);
   /** Its shared tickets (ESC-190): all of them, and those of this machine's user. */
@@ -637,13 +640,15 @@
 <Group title={t('share.settings.projectGroup')} anchor="share">
   <Row
     label={t('share.settings.projectName')}
-    desc={t('share.settings.projectNameDesc', { name: settingsForm.settings.userName?.trim() || t('share.settings.noName') })}
+    desc={settingsForm.ownName || !app.gitNames[project.id]
+      ? t('share.settings.projectNameDesc', { name: settingsForm.ownName || t('share.settings.noName') })
+      : t('share.settings.projectNameGit', { name: app.gitNames[project.id] })}
   >
     <input
       class="field input"
       aria-label={t('share.settings.projectName')}
       spellcheck="false"
-      placeholder={settingsForm.settings.userName?.trim() || ''}
+      placeholder={settingsForm.ownName || app.gitNames[project.id] || ''}
       bind:value={draft.userName}
     />
   </Row>

@@ -254,6 +254,8 @@ class AppState {
   usage = $state<Usage>({ todayCost: 0, accounts: [], current: {} });
   resources = $state<Resources>({ instances: 0, memory: 0, cpu: 0, agents: [] });
   git = $state<Record<string, GitInfo>>({});
+  /** `git config user.name` in each project's folder, by project, once asked (ESC-243). */
+  gitNames = $state<Record<string, string>>({});
   shells = $state<ShellInfo[]>([]);
   terminals = $state<TermInfo[]>([]);
   exitedTerms = $state<Record<string, number | null>>({});

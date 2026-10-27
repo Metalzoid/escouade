@@ -119,6 +119,24 @@ describe('a shared ticket on the board (ESC-190)', () => {
     expect(app.tickets.t1.shared?.id).toBe('q4w7c2na');
   });
 
+  it('shares under the name git knows in the project’s folder when none was given, without asking (ESC-243)', async () => {
+    const t = ticket();
+    app.settings = { ...app.settings, userName: '', nameAsked: true };
+    const backend = fakeBackend({
+      git_user_name: ({ projectId }: { projectId: string | null }) => (projectId === 'p1' ? 'Bob (dépôt)' : 'Bob (global)'),
+      ticket_share: () => ({ ...t, shared: shared({ mine: true, author: { ...bob, name: 'Bob (dépôt)' }, id: 'q4w7c2na' }) }),
+    });
+    show(t);
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-1/ }));
+    menu.open!.items.find((i) => i.label === 'Partager avec l’équipe')!.onClick!();
+    await waitFor(() => expect(backend.called('ticket_share')).toEqual([{ cmd: 'ticket_share', args: { id: 't1', on: true } }]));
+    expect(app.modal).toBeNull();
+    expect(app.gitNames.p1).toBe('Bob (dépôt)');
+    // Nothing kept in the settings: git's name stands in while none is given.
+    expect(backend.called('save_settings')).toHaveLength(0);
+    expect(app.tickets.t1.shared?.author.name).toBe('Bob (dépôt)');
+  });
+
   it('asks the user’s name first when none was given, then shares', async () => {
     const t = ticket();
     app.settings = { ...app.settings, userName: '' };
@@ -126,7 +144,9 @@ describe('a shared ticket on the board (ESC-190)', () => {
     show(t);
     await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-1/ }));
     menu.open!.items.find((i) => i.label === 'Partager avec l’équipe')!.onClick!();
-    expect(app.modal).toMatchObject({ kind: 'teamName', projectId: 'p1' });
+    // Git has no name either.
+    await waitFor(() => expect(app.modal).toMatchObject({ kind: 'teamName', projectId: 'p1' }));
+    expect(backend.called('git_user_name')).toEqual([{ cmd: 'git_user_name', args: { projectId: 'p1' } }]);
     expect(backend.called('ticket_share')).toHaveLength(0);
     // The name given, the share goes on.
     app.settings = { ...app.settings, userName: 'Bob Durand' };

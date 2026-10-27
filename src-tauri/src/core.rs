@@ -871,6 +871,9 @@ pub struct Core<R: Runtime = Wry> {
     conv_flush: tokio::sync::Notify,
     /// Where the agents are in their projects' workflows (ESC-193).
     pub(crate) wf_tracks: Mutex<crate::workflow_track::Store>,
+    /// `git config user.name` read in each project's folder (ESC-243), by path: the name of the shared
+    /// tickets when none was given (`me_in`).
+    pub(crate) git_names: Mutex<HashMap<String, String>>,
     /// When the usage endpoint was last asked, by account.
     pub(crate) last_oauth_call: Mutex<HashMap<String, i64>>,
     /// Where the usage endpoint is (`usage::api_from_env`; a fake one in tests).
@@ -1800,6 +1803,7 @@ impl<R: Runtime> Core<R> {
             conv_buffer: Mutex::default(),
             conv_flush: tokio::sync::Notify::new(),
             wf_tracks: Mutex::default(),
+            git_names: Mutex::default(),
             last_oauth_call: Mutex::default(),
             usage_api: RwLock::new(usage::api_from_env()),
             resources: Mutex::default(),

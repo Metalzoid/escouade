@@ -69,6 +69,8 @@ export default {
     projectGroup: 'Kanban partagé',
     projectName: 'Ton nom dans ce projet',
     projectNameDesc: 'Vide : celui de Réglages › Application ({name}). Gardé sur ce poste, jamais dans .escouade.yml.',
+    projectNameGit: 'Vide : {name}, repris de git (git config user.name de ce dépôt). Gardé sur ce poste, jamais dans .escouade.yml.',
+    fromGit: 'Repris de git',
     noName: 'pas encore de nom',
     files: 'Tickets partagés',
     filesNone:

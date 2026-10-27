@@ -84,7 +84,7 @@ export const SETTINGS_TABS: TabInfo[] = [
 
 /** The app's settings each tab sets. */
 const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
-  app: ['language', 'claudeLanguage', 'writerEngine', 'writerModel', 'userName'],
+  app: ['language', 'claudeLanguage', 'writerEngine', 'writerModel', 'userName', 'userNameCleared'],
   claude: [
     'claudePath',
     'autoResume',
@@ -392,6 +392,16 @@ class SettingsForm {
   proposal = $state<Record<string, WorktreeSuggestion>>({});
   /** Claude's suggestion of launch commands, shown the same way, by project. */
   launchProposal = $state<Record<string, RunCommand[]>>({});
+  /**
+   * The name git knows (ESC-243), put in « Ton nom » while none was given and it was not emptied on purpose: in the
+   * draft and in what it is measured against, so that it is neither a change nor saved as is (git's name stands in).
+   */
+  gitName = $state('');
+  /** « Ton nom » as given, the name taken from git left out: what the projects' fields fall back on before their git. */
+  ownName = $derived.by(() => {
+    const n = this.settings.userName?.trim() ?? '';
+    return n === this.gitName ? '' : n;
+  });
   /** As last opened or saved: what a change is measured against. */
   #base = $state.raw<{ settings: Settings; projects: Record<string, ProjectDraft> }>({ settings: {} as Settings, projects: {} });
 
@@ -418,10 +428,27 @@ class SettingsForm {
     const projects = Object.fromEntries(app.projects.map((p) => [p.id, draftOf(p)]));
     this.#base = { settings, projects };
     this.settings = structuredClone(settings);
+    this.gitName = '';
     this.projects = structuredClone(projects);
     // What was proposed to the draft dropped goes with it.
     this.proposal = {};
     this.launchProposal = {};
+  }
+
+  /** « Ton nom » filled with git's name (ESC-243) when it has none and was not emptied on purpose. */
+  prefillName(git: string | null) {
+    const base = this.#base.settings;
+    if (!git?.trim() || base.userName?.trim() || base.userNameCleared || this.settings.userName?.trim()) return;
+    this.gitName = git!.trim();
+    this.#base = { ...this.#base, settings: { ...base, userName: this.gitName } };
+    this.settings.userName = this.gitName;
+  }
+
+  /** « Ton nom » typed: emptied, it is a choice that its field is not filled from git again. */
+  setUserName(v: string) {
+    this.settings.userName = v;
+    if (!v.trim()) this.settings.userNameCleared = true;
+    else if (this.settings.userNameCleared) this.settings.userNameCleared = false;
   }
 
   /** The draft as it is, on `tab` and the project given (else the one on screen). */

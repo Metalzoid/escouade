@@ -104,6 +104,8 @@ export interface Settings {
   userId?: string;
   /** The first launch’s window asking the name was shown. */
   nameAsked?: boolean;
+  /** « Ton nom » emptied on purpose in the settings (ESC-243): its field is no longer filled from git. */
+  userNameCleared?: boolean;
   /** « Voix »: the dictation. */
   voice: VoiceSettings;
 }

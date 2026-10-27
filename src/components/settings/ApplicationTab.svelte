@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { THEMES, themeChoice } from '../../lib/appearance';
   import { DEFAULT_FONT_SIZE, FONT_SIZE_MAX, FONT_SIZE_MIN, fontSize, setDisplay, ZOOM_LEVELS, zoomState } from '../../lib/display.svelte';
   import { writerOf, writerOptions } from '../../lib/engines';
   import { LANG_NAMES, t, type Lang } from '../../lib/i18n';
   import { keyLabel } from '../../lib/platform';
   import { settingsForm } from '../../lib/settings.svelte';
+  import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
@@ -15,6 +17,16 @@
   // the font sizes of the terminals and of the editor) and the theme, applied and saved as it changes, apart from the draft: its
   // shortcuts change it too, the modal open or not.
   const s = $derived(settingsForm.settings);
+  // « Ton nom » left empty is filled with git's (ESC-243), unless emptied on purpose.
+  onMount(
+    () =>
+      void api.gitUserName().then(
+        (git) => settingsForm.prefillName(git),
+        () => {},
+      ),
+  );
+  /** The field shows the name taken from git: its help says so. */
+  const fromGit = $derived(!!settingsForm.gitName && s.userName?.trim() === settingsForm.gitName);
   /** Each language named in itself, whatever the interface's: who does not read it still finds their own. */
   const own = (['en', 'fr'] as const).map((l: Lang) => ({ value: l, label: LANG_NAMES[l], lang: l }));
   /** The system's language is named in the interface's: « Système (Anglais) », « System (English) ». */
@@ -152,12 +164,15 @@
 <!-- The user's name for the shared tickets (ESC-190, choice 113), and the id that tells a namesake apart. -->
 <Group title={t('share.settings.group')}>
   <Row label={t('share.settings.name')} desc={t('share.settings.nameDesc')}>
+    {#snippet extra()}
+      {#if fromGit}<span class="git">{t('share.settings.fromGit')}</span>{/if}
+    {/snippet}
     <input
       class="field input"
       aria-label={t('share.settings.name')}
       spellcheck="false"
       placeholder={t('share.settings.noName')}
-      bind:value={() => s.userName ?? '', (v) => (s.userName = v)}
+      bind:value={() => s.userName ?? '', (v) => settingsForm.setUserName(v)}
     />
   </Row>
   {#if s.userId}
@@ -168,6 +183,10 @@
 </Group>
 
 <style>
+  .git {
+    color: var(--accent);
+    font-size: 11.5px;
+  }
   .chip {
     display: inline-flex;
     align-items: center;

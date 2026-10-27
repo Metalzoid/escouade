@@ -15,6 +15,10 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 - Dans la barre des projets élargie, un clic sur le nom d’un projet l’ouvre, comme un clic sur sa tuile.
 
+### Corrections
+
+- Le nom de tes tickets partagés est repris de git quand tu n’en as pas donné : « Partager » ne le redemande plus, et Réglages › Application le montre pré-rempli.
+
 ## [2.0.3] — 2026-10-27
 
 ### Nouveautés

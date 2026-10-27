@@ -16,6 +16,32 @@ describe('ProjectTab', () => {
     app.modal = { kind: 'settings' };
   });
 
+  it('shows in « Ton nom dans ce projet » the name git knows in its folder when none was given (ESC-243)', async () => {
+    app.settings = { ...app.settings, userName: '' };
+    fakeBackend({ git_user_name: ({ projectId }: { projectId: string | null }) => (projectId === 'p1' ? 'Bob (dépôt)' : 'Bob (global)') });
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const field = screen.getByRole('textbox', { name: 'Ton nom dans ce projet' });
+    await vi.waitFor(() => expect(field).toHaveAttribute('placeholder', 'Bob (dépôt)'));
+    expect(field).toHaveValue('');
+    expect(
+      screen.getByText(
+        'Vide : Bob (dépôt), repris de git (git config user.name de ce dépôt). Gardé sur ce poste, jamais dans .escouade.yml.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the app’s name before git’s in « Ton nom dans ce projet » (ESC-243)', async () => {
+    app.settings = { ...app.settings, userName: 'Robert' };
+    fakeBackend({ git_user_name: () => 'Bob (dépôt)' });
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const field = screen.getByRole('textbox', { name: 'Ton nom dans ce projet' });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(field).toHaveAttribute('placeholder', 'Robert');
+    expect(
+      screen.getByText('Vide : celui de Réglages › Application (Robert). Gardé sur ce poste, jamais dans .escouade.yml.'),
+    ).toBeInTheDocument();
+  });
+
   it('has no switch of its own for Escouade’s tools: the app’s one gives them to every agent (ESC-91)', async () => {
     const backend = fakeBackend();
     render(SettingsModal, { tab: 'projects', projectId: 'p1' });

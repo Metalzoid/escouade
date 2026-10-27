@@ -164,8 +164,10 @@ pub struct Settings {
     pub voice: VoiceSettings,
     /// « Ton nom » (Réglages › Application › Équipe, ESC-190): written in the tickets shared with
     /// the team and in those this machine moves on; a project may have its own
-    /// (`Project::user_name`). Empty until given (`git config user.name` is offered).
+    /// (`Project::user_name`). Empty until given: the name git knows stands in (ESC-243).
     pub user_name: String,
+    /// « Ton nom » emptied on purpose in the settings (ESC-243): its field is no longer filled from git.
+    pub user_name_cleared: bool,
     /// The id beside the name (`sharing::person_id`): from the git e-mail, else drawn once.
     pub user_id: String,
     /// The first launch's window asking the name was shown (answered or put off).
@@ -618,6 +620,7 @@ impl Default for Settings {
             user_name: String::new(),
             user_id: String::new(),
             name_asked: false,
+            user_name_cleared: false,
         }
     }
 }

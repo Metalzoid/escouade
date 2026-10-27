@@ -1274,19 +1274,55 @@ fn read_dir(dir: &Path) -> BTreeMap<String, String> {
     out
 }
 
+/// `git config user.name` in `path`, empty when git has none (or no git): `Core::me_in` is called
+/// where nothing awaits, and git answers it at once.
+fn git_name_now(path: &str) -> String {
+    let mut cmd = std::process::Command::new("git");
+    cmd.args(["-C", path, "config", "--get", "user.name"])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
+    }
+    cmd.output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default()
+}
+
 impl<R: Runtime> Core<R> {
-    /// This machine's user in `project` (choices 113 and 114): the project's name, else the app's;
+    /// This machine's user in `project` (choices 113 and 114): the project's name, else the app's,
+    /// else the name git knows in the project's folder (ESC-243, never written in `.escouade.yml`);
     /// the id of the settings.
     pub(crate) fn me_in(&self, project: &Project) -> Person {
-        let s = self.settings.read();
-        let name = Some(project.user_name.trim())
-            .filter(|n| !n.is_empty())
-            .unwrap_or(s.user_name.trim())
-            .to_string();
-        Person {
-            name,
-            id: s.user_id.clone(),
+        let (own, id) = {
+            let s = self.settings.read();
+            let own = Some(project.user_name.trim())
+                .filter(|n| !n.is_empty())
+                .unwrap_or(s.user_name.trim())
+                .to_string();
+            (own, s.user_id.clone())
+        };
+        let name = if own.is_empty() {
+            self.git_name_in(&project.path)
+        } else {
+            own
+        };
+        Person { name, id }
+    }
+
+    /// `git config user.name` in `path` (its repository's own, else the global one), read once and
+    /// kept: `git_user_name` reads it again when the window asks.
+    fn git_name_in(&self, path: &str) -> String {
+        if let Some(name) = self.git_names.lock().get(path) {
+            return name.clone();
         }
+        let name = git_name_now(path);
+        self.git_names.lock().insert(path.to_string(), name.clone());
+        name
     }
 
     /// The id of this machine's user, made once (from the git e-mail, else drawn) and kept in the
@@ -1318,17 +1354,25 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// The name git knows the user by (`git config user.name`), offered by the first launch's window.
+    /// The name git knows the user by (`git config user.name`): in the project's folder (a repository
+    /// may have its own), else the global one. Offered by the first launch's window and the settings,
+    /// and kept for the project's shared tickets.
     pub async fn git_user_name(&self, project_id: Option<String>) -> String {
-        let cwd = project_id
+        let project = project_id
             .and_then(|id| self.project(&id).ok())
-            .map(|p| p.path)
+            .map(|p| p.path);
+        let cwd = project
+            .clone()
             .or_else(|| dirs::home_dir().map(|h| h.to_string_lossy().to_string()))
             .unwrap_or_else(|| ".".into());
-        crate::git::run(&cwd, &["config", "--get", "user.name"])
+        let name = crate::git::run(&cwd, &["config", "--get", "user.name"])
             .await
             .map(|o| String::from_utf8_lossy(&o).trim().to_string())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        if let Some(path) = project {
+            self.git_names.lock().insert(path, name.clone());
+        }
+        name
     }
 
     /// Every project that has shared tickets, or a folder of them, brought in step with its files.

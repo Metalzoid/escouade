@@ -4,6 +4,7 @@ import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SAVE_DELAY_MS, zoomState } from '../../lib/display.svelte';
 import { setLang } from '../../lib/i18n';
+import { settingsForm } from '../../lib/settings.svelte';
 import { app } from '../../lib/state.svelte';
 import { BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
@@ -277,6 +278,55 @@ describe('the « Application » tab', () => {
       expect(within(panel()).getByRole('heading', { name: 'Written texts' })).toBeInTheDocument();
       expect(choices('Model for written texts')).toEqual(['Claude Haiku']);
       expect(panel()).toHaveTextContent('Only the installed harnesses are offered.');
+    });
+  });
+
+  describe('« Ton nom » (ESC-243)', () => {
+    const NAME = 'Ton nom';
+    const field = () => within(panel()).getByRole('textbox', { name: NAME });
+    const saveButton = () => screen.getByRole('button', { name: 'Enregistrer' });
+
+    it('is filled with git’s name when none was given, says so, and saves nothing until changed', async () => {
+      app.settings = { ...app.settings, userName: '', nameAsked: true };
+      const backend = fakeBackend({ git_user_name: () => 'Bob Durand', save_settings: () => [] });
+      render(SettingsModal, { tab: 'app' });
+      await vi.waitFor(() => expect(field()).toHaveValue('Bob Durand'));
+      expect(backend.called('git_user_name')).toEqual([{ cmd: 'git_user_name', args: { projectId: null } }]);
+      expect(panel()).toHaveTextContent('Repris de git');
+      // Git's name stands in by itself: nothing to save.
+      expect(settingsForm.changed('app')).toBe(false);
+      await userEvent.type(field(), ' Jr');
+      expect(panel()).not.toHaveTextContent('Repris de git');
+      await userEvent.click(saveButton());
+      expect(backend.called('save_settings')[0].args.settings).toMatchObject({ userName: 'Bob Durand Jr' });
+    });
+
+    it('stays empty once emptied on purpose, saved and opened again', async () => {
+      app.settings = { ...app.settings, userName: '', nameAsked: true };
+      const backend = fakeBackend({ git_user_name: () => 'Bob Durand', save_settings: () => [] });
+      const view = render(SettingsModal, { tab: 'app' });
+      await vi.waitFor(() => expect(field()).toHaveValue('Bob Durand'));
+      await userEvent.clear(field());
+      expect(panel()).not.toHaveTextContent('Repris de git');
+      await userEvent.click(saveButton());
+      await vi.waitFor(() => expect(backend.called('save_settings')).toHaveLength(1));
+      expect(backend.called('save_settings')[0].args.settings).toMatchObject({ userName: '', userNameCleared: true });
+      expect(field()).toHaveValue('');
+      view.unmount();
+      render(SettingsModal, { tab: 'app' });
+      await vi.waitFor(() => expect(backend.called('git_user_name')).toHaveLength(2));
+      await new Promise((r) => setTimeout(r, 20));
+      expect(field()).toHaveValue('');
+      expect(panel()).not.toHaveTextContent('Repris de git');
+    });
+
+    it('keeps the name given, git’s aside', async () => {
+      app.settings = { ...app.settings, userName: 'Robert' };
+      fakeBackend({ git_user_name: () => 'Bob Durand' });
+      render(SettingsModal, { tab: 'app' });
+      await new Promise((r) => setTimeout(r, 20));
+      expect(field()).toHaveValue('Robert');
+      expect(panel()).not.toHaveTextContent('Repris de git');
     });
   });
 });
