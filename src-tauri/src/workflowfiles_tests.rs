@@ -486,3 +486,128 @@ fn copy_dir(from: &Path, to: &Path) {
         }
     }
 }
+
+// ---------- `.escouade/` of a cloned repository is not to be trusted (ESC-199) ----------
+
+#[test]
+fn every_device_name_of_windows_is_kept_away_even_with_an_extension() {
+    for n in 0..=9 {
+        assert_eq!(
+            wf::safe_name(&format!("com{n}")),
+            format!("com{n}-workflow")
+        );
+        assert_eq!(
+            wf::safe_name(&format!("LPT{n}")),
+            format!("lpt{n}-workflow")
+        );
+    }
+    for name in ["con", "prn", "aux", "nul", "conin", "conout"] {
+        assert_eq!(wf::safe_name(name), format!("{name}-workflow"));
+    }
+    // `con.v2.yml` is the device too, for Windows: the stem before the first dot counts.
+    assert_eq!(wf::safe_name("con.v2"), "con-workflow.v2");
+    // What only looks like one stays.
+    assert_eq!(wf::safe_name("com10"), "com10");
+    assert_eq!(wf::safe_name("console"), "console");
+}
+
+/// A link to `target` at `link`, when the system allows one (Windows may not without a privilege).
+fn link(target: &Path, link: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(target, link).is_ok()
+    }
+    #[cfg(windows)]
+    {
+        if target.is_dir() {
+            // A symbolic link needs a privilege; a junction (what `mklink /J` makes) none, and it leaves
+            // the folder all the same.
+            std::os::windows::fs::symlink_dir(target, link).is_ok()
+                || std::process::Command::new("cmd")
+                    .args(["/C", "mklink", "/J"])
+                    .arg(link.to_string_lossy().replace('/', "\\"))
+                    .arg(target.to_string_lossy().replace('/', "\\"))
+                    .output()
+                    .is_ok_and(|o| o.status.success())
+        } else {
+            std::os::windows::fs::symlink_file(target, link).is_ok()
+        }
+    }
+}
+
+#[test]
+fn a_file_that_is_a_link_is_refused_not_read() {
+    let root = test_dir("wf-files-link-file");
+    let dir = root.join(".escouade/workflows");
+    std::fs::create_dir_all(&dir).unwrap();
+    let w = gsd();
+    wf::merge_reading(&dir, &wf::load(&dir), std::slice::from_ref(&w));
+    let real = wf::load(&dir);
+    assert_eq!(real.docs.len(), 1);
+    let (path, _) = &real.docs[0];
+    let secret = root.join("elsewhere.yml");
+    std::fs::rename(path, &secret).unwrap();
+    if !link(&secret, path) {
+        eprintln!("no symbolic link allowed here: skipped");
+        return;
+    }
+    let folder = wf::load(&dir);
+    assert!(folder.docs.is_empty());
+    assert_eq!(folder.unreadable.len(), 1);
+    assert!(
+        folder.unreadable[0].1.contains("lien symbolique")
+            || folder.unreadable[0].1.contains("symbolic link"),
+        "{}",
+        folder.unreadable[0].1
+    );
+}
+
+#[test]
+fn nothing_is_written_when_the_folder_is_a_link_to_elsewhere() {
+    let root = test_dir("wf-files-link-dir");
+    let outside = root.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    let project = root.join("project");
+    std::fs::create_dir_all(project.join(".escouade")).unwrap();
+    let dir = project.join(".escouade/workflows");
+    if !link(&outside, &dir) {
+        eprintln!("no symbolic link allowed here: skipped");
+        return;
+    }
+    let changed = wf::merge_reading(&dir, &wf::load(&dir), &[gsd()]);
+    assert!(changed.is_empty());
+    assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
+    let folder = wf::load(&dir);
+    assert!(folder.docs.is_empty());
+    assert_eq!(folder.unreadable.len(), 1, "the section says why");
+}
+
+#[test]
+fn nothing_is_written_when_escouade_itself_is_a_link() {
+    let root = test_dir("wf-files-link-escouade");
+    let outside = root.join("outside");
+    std::fs::create_dir_all(outside.join("workflows")).unwrap();
+    let project = root.join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    if !link(&outside, &project.join(".escouade")) {
+        eprintln!("no symbolic link allowed here: skipped");
+        return;
+    }
+    let dir = project.join(".escouade/workflows");
+    assert!(wf::merge_reading(&dir, &wf::load(&dir), &[gsd()]).is_empty());
+    assert_eq!(
+        std::fs::read_dir(outside.join("workflows"))
+            .unwrap()
+            .count(),
+        0
+    );
+}
+
+#[test]
+fn a_plain_folder_is_not_in_the_way() {
+    let root = test_dir("wf-files-plain");
+    let dir = root.join(".escouade/workflows");
+    assert!(wf::unsafe_dir(&dir).is_none(), "not there yet");
+    assert!(!wf::merge_reading(&dir, &wf::load(&dir), &[gsd()]).is_empty());
+    assert!(wf::unsafe_dir(&dir).is_none());
+}

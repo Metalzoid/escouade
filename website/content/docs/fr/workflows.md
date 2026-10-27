@@ -43,12 +43,15 @@ Chaque passage dans une étape reste dans l’historique de l’agent : l’heur
 | Claude Code (conversation) | oui | oui | oui |
 | Claude Code (vue Claude Code) | oui, par ses hooks | oui, par ses hooks | à la fin du tour |
 | OpenCode | oui | oui | oui |
-| Copilot CLI | oui | oui | en crédits |
+| Copilot CLI | oui | oui | le coût du tour, selon l’offre du compte |
 | Codex | par ses prompts et les fichiers d’état | non | par tour |
 | Cursor CLI | par ses commandes et les fichiers d’état | oui, selon ACP | non |
 | Cursor CLI (vue Cursor) | par son transcript, à quelques secondes près | non | non |
 
 Un suivi partiel est dit comme tel dans la fenêtre (« Suivi partiel »), avec ce qui manque. Rien n’est inventé : ce qu’un harness ne montre pas n’est pas deviné.
+
+Trois précisions vues en vrai : une porte que l’agent lance seul (Claude Code appelle `/ecrire` par son outil `Skill` dans le tour de `/etude`) compte comme une porte, l’étape suit donc sans que tu aies tapé la seconde ; le coût d’un modèle local (OpenCode sur Ollama) est de 0 $, ce qui n’est pas un trou du suivi ; et dans la vue Cursor, une commande tapée est reconnue même si l’interface la remplace par son fichier.
+
 
 ## Par le serveur MCP
 

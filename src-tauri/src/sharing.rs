@@ -256,9 +256,11 @@ pub fn id_of_file(name: &str) -> Option<&str> {
     plain_id(id).then_some(id)
 }
 
-/// An id that is safe as a file's name: letters, digits, `-` and `_`, 40 at most.
+/// An id that is safe as a file's name: letters, digits, `-` and `_`, 40 at most, and not a name
+/// Windows keeps for its devices (`con`, `aux`, `com1`…: a file of a teammate named so is never opened).
 pub fn plain_id(id: &str) -> bool {
     !id.is_empty()
+        && !crate::workflowfiles::reserved_stem(&id.to_ascii_lowercase())
         && id.len() <= 40
         && id
             .chars()
@@ -1250,6 +1252,9 @@ pub fn dir_of(project: &Project) -> PathBuf {
 /// The files of the folder: id → text. None of them when the folder is not there.
 fn read_dir(dir: &Path) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
+    if crate::workflowfiles::unsafe_dir(dir).is_some() {
+        return out;
+    }
     let Ok(entries) = std::fs::read_dir(dir) else {
         return out;
     };
@@ -1258,6 +1263,7 @@ fn read_dir(dir: &Path) -> BTreeMap<String, String> {
         let Some(id) = id_of_file(&name) else {
             continue;
         };
+        // `file_type` of an entry does not follow a link: one is never read (it can point anywhere).
         if !e.file_type().is_ok_and(|t| t.is_file()) {
             continue;
         }
@@ -1348,6 +1354,12 @@ impl<R: Runtime> Core<R> {
             return;
         };
         let dir = dir_of(&project);
+        // A folder that is a link, or leaves the project: neither read (its files would look removed)
+        // nor written.
+        if let Some(why) = crate::workflowfiles::unsafe_dir(&dir) {
+            log::warn!("shared tickets of {}: {why}", project.name);
+            return;
+        }
         let files = read_dir(&dir);
         let me = self.me_in(&project);
         let now = iso(now_ms());
@@ -1396,6 +1408,10 @@ impl<R: Runtime> Core<R> {
 
     /// Writes a ticket's file, and the images and files of a ticket of ours beside it.
     fn write_shared_file(&self, dir: &Path, sid: &str, text: &str, tid: &str) -> Result<()> {
+        // Never through a link, nor out of the project (ESC-199).
+        if let Some(why) = crate::workflowfiles::unsafe_dir(dir) {
+            bail!(why);
+        }
         std::fs::create_dir_all(dir)?;
         crate::paths::write_atomic(&dir.join(format!("{sid}.yml")), text.as_bytes())?;
         let Ok(t) = self.ticket(tid) else {
@@ -1567,7 +1583,19 @@ impl<R: Runtime> Core<R> {
         let t = self.ticket(id)?;
         let s = t.shared.clone().ok_or_else(not_shared)?;
         let project = self.project(&t.project_id)?;
-        let path = dir_of(&project).join(format!("{}.yml", s.id));
+        let dir = dir_of(&project);
+        // Never through a link, nor out of the project (ESC-199): the folder, then the file itself.
+        if let Some(why) = crate::workflowfiles::unsafe_dir(&dir) {
+            bail!(why);
+        }
+        let path = dir.join(format!("{}.yml", s.id));
+        if std::fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_symlink()) {
+            bail!(tr!(
+                "{p} est un lien symbolique : ignoré",
+                "{p} is a symbolic link: ignored",
+                p = path.display()
+            ));
+        }
         if keep_mine {
             let me = self.me_in(&project);
             let text = {

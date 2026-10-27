@@ -84,24 +84,62 @@ pub fn safe_name(id: &str) -> String {
         }
     }
     let out = out.trim_matches(['-', '.']).to_string();
-    // A name Windows keeps for itself is one no more.
-    const RESERVED: &[&str] = &[
-        "con", "prn", "aux", "nul", "com1", "com2", "com3", "lpt1", "lpt2", "lpt3",
-    ];
     let out = if out.is_empty() {
         "workflow".to_string()
     } else {
         out
     };
-    if RESERVED.contains(&out.as_str()) {
-        format!("{out}-workflow")
-    } else {
-        out.chars().take(80).collect()
+    // A name Windows keeps for itself is one no more, with or without an extension (`con.yml` is
+    // the device too): the stem before the first dot counts.
+    let (stem, rest) = out
+        .split_once('.')
+        .map_or((out.as_str(), ""), |(s, _)| (s, &out[s.len()..]));
+    if reserved_stem(stem) {
+        return format!("{stem}-workflow{rest}").chars().take(80).collect();
     }
+    out.chars().take(80).collect()
+}
+
+/// A name Windows keeps for devices: `CON`, `PRN`, `AUX`, `NUL`, `COM0`–`COM9`, `LPT0`–`LPT9`,
+/// and `CONIN$` / `CONOUT$` (whose `$` `safe_name` never lets through, so `conin` and `conout`
+/// stand for them). Lower case.
+pub fn reserved_stem(stem: &str) -> bool {
+    matches!(stem, "con" | "prn" | "aux" | "nul" | "conin" | "conout")
+        || ((stem.starts_with("com") || stem.starts_with("lpt"))
+            && stem.len() == 4
+            && stem.as_bytes()[3].is_ascii_digit())
 }
 
 fn is_absolute(s: &str) -> bool {
     s.starts_with('/') || s.starts_with('\\') || (s.len() >= 2 && s.as_bytes()[1] == b':')
+}
+
+/// Why the repository's `.escouade/<x>` folder `dir` is not to be read or written, if it is not: it
+/// (or `.escouade`) is a link, or its real path leaves the project's folder. A cloned repository
+/// can hold such a link, to somewhere the user never meant. None when it is not there yet.
+pub fn unsafe_dir(dir: &Path) -> Option<String> {
+    let parent = dir.parent()?;
+    if parent.file_name()? != ".escouade" {
+        return None;
+    }
+    for p in [parent, dir] {
+        if std::fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Some(tr!(
+                "le dossier {p} est un lien symbolique : ignoré",
+                "the folder {p} is a symbolic link: ignored",
+                p = p.display()
+            ));
+        }
+    }
+    let project = parent.parent()?;
+    let (real, home) = (dir.canonicalize().ok()?, project.canonicalize().ok()?);
+    (!real.starts_with(&home)).then(|| {
+        tr!(
+            "le dossier {p} sort du projet : ignoré",
+            "the folder {p} leaves the project: ignored",
+            p = dir.display()
+        )
+    })
 }
 
 /// An absolute path (one the reading could not say from the project or `~`) is only its name.
@@ -468,16 +506,30 @@ impl Folder {
 /// Reads the `.yml` files of `dir` (none when it is not there).
 pub fn load(dir: &Path) -> Folder {
     let mut out = Folder::default();
+    if let Some(why) = unsafe_dir(dir) {
+        out.unreadable.push((dir.to_path_buf(), why));
+        return out;
+    }
     let Ok(entries) = std::fs::read_dir(dir) else {
         return out;
     };
     let mut paths: Vec<PathBuf> = entries
         .flatten()
         .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|x| x == "yml") && p.is_file())
+        .filter(|p| p.extension().is_some_and(|x| x == "yml"))
         .collect();
     paths.sort();
     for path in paths {
+        // A link is never followed: it can point at any file of the machine.
+        let kind = std::fs::symlink_metadata(&path).map(|m| m.file_type());
+        if kind.as_ref().is_ok_and(|k| k.is_symlink()) {
+            out.unreadable
+                .push((path, tr!("lien symbolique ignoré", "symbolic link ignored")));
+            continue;
+        }
+        if !kind.is_ok_and(|k| k.is_file()) {
+            continue;
+        }
         let name = path
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -517,6 +569,9 @@ pub fn load(dir: &Path) -> Folder {
 }
 
 fn write_file(path: &Path, text: &str) -> std::io::Result<()> {
+    if let Some(why) = path.parent().and_then(unsafe_dir) {
+        return Err(std::io::Error::other(why));
+    }
     if std::fs::read_to_string(path).ok().as_deref() == Some(text) {
         return Ok(());
     }

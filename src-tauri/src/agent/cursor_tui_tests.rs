@@ -50,6 +50,22 @@ fn the_users_text_is_taken_out_of_what_the_interface_wraps_it_in() {
         typed_text("<timestamp>Sunday, Oct 25, 2026, 11:29 AM (UTC+1)</timestamp>\n<user_query>\nRéponds seulement : OK VUE\n</user_query>"),
         "Réponds seulement : OK VUE"
     );
+    // A command typed (ESC-199, tried for real): the interface puts the command's file first, then the query.
+    assert_eq!(
+        typed_text(
+            "<cursor_commands>
+
+--- Cursor Command: etude ---
+Write it.
+--- End Command ---
+</cursor_commands>
+<timestamp>Tuesday, Oct 27, 2026, 12:29 AM (UTC+1)</timestamp>
+<user_query>
+/etude Fais ça.
+</user_query>"
+        ),
+        "/etude Fais ça."
+    );
     assert_eq!(typed_text("  plain  "), "plain");
     assert_eq!(
         typed_text("<user_query>\nDeux\nlignes\n</user_query>"),

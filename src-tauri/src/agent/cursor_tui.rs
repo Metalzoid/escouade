@@ -14,6 +14,11 @@ use super::*;
 /// The text the user typed, out of what the interface wrapped it in.
 pub(super) fn typed_text(text: &str) -> String {
     let mut t = text.trim();
+    // The interface puts what it expanded (the file of a command typed: `<cursor_commands>`) before the query.
+    if let Some((_, rest)) = t.split_once("<user_query>") {
+        t = rest.rsplit_once("</user_query>").map_or(rest, |(q, _)| q);
+        return t.trim().to_string();
+    }
     if let Some(rest) = t.strip_prefix("<timestamp>") {
         t = rest
             .split_once("</timestamp>")

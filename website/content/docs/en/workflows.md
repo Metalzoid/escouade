@@ -43,12 +43,15 @@ Every stay in a step is kept in the agent’s history: the time, the duration, t
 | Claude Code (conversation) | yes | yes | yes |
 | Claude Code (Claude Code view) | yes, by its hooks | yes, by its hooks | at the end of the turn |
 | OpenCode | yes | yes | yes |
-| Copilot CLI | yes | yes | in credits |
+| Copilot CLI | yes | yes | the turn’s cost, as the account’s plan gives it |
 | Codex | by its prompts and the state files | no | per turn |
 | Cursor CLI | by its commands and the state files | yes, as far as ACP tells | no |
 | Cursor CLI (Cursor view) | by its transcript, a few seconds behind | no | no |
 
 A partial tracking is said so in the window (“Partial tracking”), with what is missing. Nothing is made up: what a harness does not show is not guessed.
+
+Three things seen for real: a door the agent runs by itself (Claude Code calls `/ecrire` with its `Skill` tool within the turn of `/etude`) counts as a door, so the step follows without you typing the second one; the cost of a local model (OpenCode on Ollama) is $0, which is not a gap in the tracking; and in the Cursor view, a typed command is recognised even though the interface replaces it with its file.
+
 
 ## Through the MCP server
 

@@ -692,3 +692,39 @@ fn the_tickets_files_are_told_apart_in_git_status() {
     assert!(!tickets(" M .escouade.yml"));
     assert!(!tickets(" M src/app.ts"));
 }
+
+#[test]
+fn an_id_that_is_a_device_name_of_windows_is_no_file_name() {
+    for id in ["con", "CON", "aux", "nul", "prn", "com1", "LPT9", "com0"] {
+        assert!(!sh::plain_id(id), "{id}");
+        assert_eq!(sh::id_of_file(&format!("{id}.yml")), None);
+    }
+    for id in ["q4w7c2na", "com10", "console", "con-1", "a_b"] {
+        assert!(sh::plain_id(id), "{id}");
+    }
+}
+
+#[test]
+fn a_folder_of_tickets_that_is_a_link_is_neither_read_nor_written() {
+    let root = crate::paths::test_dir("sh-link-dir");
+    let outside = root.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    let project = root.join("project");
+    std::fs::create_dir_all(project.join(".escouade")).unwrap();
+    let dir = project.join(sh::DIR);
+    #[cfg(unix)]
+    let made = std::os::unix::fs::symlink(&outside, &dir).is_ok();
+    #[cfg(windows)]
+    let made = std::os::windows::fs::symlink_dir(&outside, &dir).is_ok()
+        || std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(dir.to_string_lossy().replace('/', "\\"))
+            .arg(outside.to_string_lossy().replace('/', "\\"))
+            .output()
+            .is_ok_and(|o| o.status.success());
+    if !made {
+        eprintln!("no symbolic link allowed here: skipped");
+        return;
+    }
+    assert!(crate::workflowfiles::unsafe_dir(&dir).is_some());
+}
