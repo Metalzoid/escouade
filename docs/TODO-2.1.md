@@ -359,6 +359,15 @@ Notées par l'utilisateur pour plus tard, sans ticket ni étude pour l'instant :
   - Pouvoir afficher ou cacher chaque élément de l'interface : jauges de la barre d'état, colonnes et lignes des cartes, compteurs, onglets, boutons de l'en-tête…
   - Un réglage par élément, groupé par zone, avec un aperçu, et un retour aux réglages par défaut.
   - À penser avec les thèmes et les plugins (PLG-7, ESC-179).
+- [ ] **Des réglages proposés au bon moment** (noté le 2026-10-27, idée de Zied).
+  - Le constat : « toutes ces configurations, ça commence à être beaucoup ». Personne ne fait le tour de tous les réglages.
+  - L'idée, comme Orca : Escouade détecte certains comportements et propose le réglage qui va avec, dans une petite fenêtre en bas à droite.
+    - Exemples : toujours relancer à la main après la limite d'usage → la reprise automatique ; toujours choisir le même modèle → le défaut du projet ; ouvrir le panneau à chaque fois → le garder ouvert ; une branche de départ toujours changée → la régler pour le projet.
+  - À penser :
+    - « Activer », « Pas maintenant », « Ne plus proposer » ;
+    - une seule proposition à la fois, jamais pendant un tour ni une saisie ;
+    - rien d'envoyé hors de la machine ;
+    - avec « Choisir ce que l'interface affiche » ci-dessus.
 
 ## Restes du redesign
 
