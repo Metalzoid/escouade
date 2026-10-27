@@ -343,6 +343,14 @@ Notées par l'utilisateur pour plus tard, sans ticket ni étude pour l'instant :
   - Planifier des tâches qu'Escouade lance seule : à une heure, à intervalle (tous les matins, chaque lundi…), ou à un événement.
   - Exemples : une revue de dépendances, un ticket à reprendre, un rapport.
   - À penser avec le pilote auto du Kanban, les comptes et leurs quotas, et le mode serveur (`docs/REMOTE.md`), pour que ça tourne même quand la fenêtre est fermée.
+- [ ] **Mémoire partagée entre tous les harness** (notée le 2026-10-27).
+  - Une seule mémoire, que Claude Code, Codex, Copilot CLI, Cursor CLI et OpenCode lisent et écrivent tous, au lieu de la mémoire propre à chacun.
+  - Accessible par le serveur MCP d'Escouade : lire, chercher, écrire, oublier.
+  - À penser :
+    - la portée (par projet, globale, partagée avec l'équipe comme `.escouade/`) ;
+    - les projets privés (ESC-140) ;
+    - ce qui est repris des mémoires existantes (`CLAUDE.md`, `AGENTS.md`, la mémoire de Claude Code) ;
+    - le lien avec la gestion documentaire ci-dessus.
 
 ## Restes du redesign
 
