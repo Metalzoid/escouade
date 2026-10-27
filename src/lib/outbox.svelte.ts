@@ -45,7 +45,8 @@ export function holdModeOf(agent: Agent): HoldMode | null {
   const before = heldOf(agent.id).at(-1);
   if (before) return before.mode;
   if (!atWork(agent) || agent.setup || agent.worktreePending) return null;
-  switch (capsOf(agent.engine)?.midTurn) {
+  const midTurn = capsOf(agent.engine)?.midTurn;
+  switch (midTurn) {
     case 'turnEnd':
       return 'turnEnd';
     case 'queued':

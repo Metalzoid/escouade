@@ -62,6 +62,7 @@
   import { shortWindow } from '../lib/short-window.svelte';
   import { closeTerminal, newTerminal, terminalIn } from '../lib/term-actions';
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
+  import { returnHeld } from '../lib/outbox.svelte';
   import { backTarget, forwardTargets } from '../lib/handover';
   import type { Agent, AgentStatus, BranchInfo, EngineId, Project } from '../lib/types';
   import RunsSection from './RunsSection.svelte';
@@ -484,6 +485,8 @@
     const archive = () => {
       // Archiving stops its test launches: stopped first, their ends are no crashes.
       stopTests(a.id);
+      // Its messages held during the turn go back to its draft: the end of that turn, archived, must not send them.
+      returnHeld(a.id);
       return app.run(api.archiveAgent(a.id, true));
     };
     const ticket = app.ticketOf(a.id);

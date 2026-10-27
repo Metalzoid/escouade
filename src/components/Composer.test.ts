@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { conversationOf } from '../lib/conversations.svelte';
 import { fileOrigins } from '../lib/file-origin';
+import { cancelHeld, editHeld, heldOf } from '../lib/outbox.svelte';
 import { setLang } from '../lib/i18n';
 import { readPref, writePref } from '../lib/prefs';
 import { app } from '../lib/state.svelte';
@@ -564,6 +565,68 @@ describe('Composer', () => {
       requestId: 'req-2',
       decision: 'deny',
       message: 'Utilise plutôt npm run clean',
+    });
+  });
+
+  describe('during a turn', () => {
+    const question = {
+      kind: 'question',
+      id: 'req-1',
+      toolUseId: 't1',
+      questions: [{ question: 'Quelle base ?', options: [] }],
+      answers: null,
+      ts: 1,
+    };
+    // What a test leaves held would go once its delay is over, in the next test.
+    afterEach(() => {
+      for (const id of Object.keys(app.agents)) for (const h of heldOf(id)) cancelHeld(h.id);
+    });
+
+    it('holds a message typed while Claude works, and empties the field', async () => {
+      const { a, backend, textarea } = setup({ status: 'running' });
+      app.settings.midTurnDelaySecs = 10;
+      await userEvent.type(textarea, 'Ajoute un test{Enter}');
+      expect(heldOf(a.id).map((h) => [h.body, h.mode])).toEqual([['Ajoute un test', 'delay']]);
+      expect(textarea.value).toBe('');
+      expect(backend.called('send_message')).toEqual([]);
+    });
+
+    it('sends at once an answer to a waiting question, even with a delay', async () => {
+      const { a, backend, textarea } = setup({ status: 'waiting', pending: ['req-1'] }, [question]);
+      app.settings.midTurnDelaySecs = 10;
+      await waitFor(() => expect(conversationOf(a.id).loaded).toBe(true));
+      await userEvent.type(textarea, 'PostgreSQL{Enter}');
+      await waitFor(() => expect(backend.called('answer_question')).toHaveLength(1));
+      expect(heldOf(a.id)).toEqual([]);
+    });
+
+    it('sends at once while Claude works when the delay is off', async () => {
+      const { a, backend, textarea } = setup({ status: 'running' });
+      await userEvent.type(textarea, 'Ajoute un test{Enter}');
+      await waitFor(() => expect(backend.called('send_message')).toHaveLength(1));
+      expect(heldOf(a.id)).toEqual([]);
+    });
+
+    it('brings an edited message back before what was typed since', async () => {
+      const { a, textarea } = setup({ status: 'running' });
+      app.settings.midTurnDelaySecs = 10;
+      await userEvent.type(textarea, 'a{Enter}');
+      await userEvent.type(textarea, 'b');
+      editHeld(heldOf(a.id)[0].id);
+      await waitFor(() => expect(textarea.value).toBe('a\n\nb'));
+      await waitFor(() => expect(document.activeElement).toBe(textarea));
+    });
+
+    it('says on « Send » that a message sent now can be cancelled until it goes', async () => {
+      setLang('en');
+      setup({ status: 'running' });
+      app.settings.midTurnDelaySecs = 10;
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute(
+          'data-tip',
+          'Sent to Claude in 10 s, can be cancelled until then · Enter to send',
+        ),
+      );
     });
   });
 
