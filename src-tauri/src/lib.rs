@@ -46,6 +46,12 @@ mod docs;
 #[cfg(test)]
 mod docs_tests;
 mod docsbranch;
+mod docsdrive;
+#[cfg(test)]
+mod docsdrive_tests;
+mod docsextract;
+#[cfg(test)]
+mod docsextract_tests;
 mod docsimport;
 #[cfg(test)]
 mod docsimport_tests;
@@ -517,6 +523,11 @@ pub fn run() {
             commands::docs_documents,
             commands::docs_document_text,
             commands::docs_document_add,
+            commands::docs_drive,
+            commands::docs_document_check,
+            commands::docs_document_move,
+            commands::docs_folder_add,
+            commands::docs_documents_search,
             commands::docs_pending,
             commands::docs_share,
             commands::docs_share_resolve,

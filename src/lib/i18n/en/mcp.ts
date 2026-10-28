@@ -59,6 +59,7 @@ export default defineZone('mcp', {
     replaceDecision: 'Propose a replacement decision',
     listDocuments: 'List the documents',
     readDocument: 'Read a document',
+    searchDocuments: 'Search the documents',
     addDocument: 'Add a document',
     getDocsToShare: 'Read what the docs have to share',
     shareDocs: 'Share the docs',

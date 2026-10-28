@@ -61,6 +61,31 @@ Un projet sans spec part d’un espace vide. Si Escouade trouve une spec dans le
 
 Rien n’est écrit avant « Importer », et une page qui existe déjà reste telle quelle. Le fichier d’origine n’est ni modifié ni supprimé : c’est à toi de le retirer du dépôt si tu le veux.
 
+## Les documents
+
+L’espace Documents est le drive du projet : les cahiers des charges, comptes rendus, maquettes et pièces juridiques, rangés en dossiers sous `.escouade/documents/`.
+
+- À gauche, **les dossiers**, avec le nombre de fichiers de chacun ; « Tous les documents » les montre tous. Un dossier qui en contient d’autres se déplie.
+- À droite, **les fichiers** du dossier ouvert, chacun avec qui l’a ajouté, sa taille, sa date, et ce que les agents en ont fait : « ✓ lu par les agents » dès qu’un agent l’a lu, « cité 3 fois » quand des pages de la spec ou des décisions le citent.
+- Un clic sur un fichier montre le texte qu’Escouade en a lu.
+
+**Déposer des fichiers.** Glisse des fichiers sur l’espace, ou « Déposer des fichiers ». Chaque fichier est **lu et indexé sur ta machine** : rien ne part sur Internet. Escouade lit le texte des PDF, des fichiers Word (`.docx`) et OpenDocument (`.odt`), du Markdown et du texte ; d’une image, il ne garde que son format et sa taille. Le texte lu reste dans le dossier d’Escouade, jamais dans le dépôt ; le fichier, lui, va dans le dépôt, sur la branche des docs.
+
+**Le rangement.** Un fichier déposé dans un dossier ouvert y reste. Déposé sur « Tous les documents », Escouade le range seul, dans cet ordre :
+
+1. le dossier dont son nom ou son titre porte le nom (« Compte rendu atelier » va dans « Comptes rendus ») ;
+2. le dossier de sa nature, si le drive en a un : un compte rendu, un cahier des charges, une maquette, une pièce juridique, un devis ou une facture, une présentation, un planning ;
+3. le dossier dont les fichiers lui ressemblent le plus par le sens, quand le [modèle des vecteurs](shared-memory) est téléchargé, puis par les mots ;
+4. sinon, un **nouveau dossier**, créé pour lui : celui de sa nature (« Planning »), « Images » pour une image, ou « Divers ».
+
+Escouade dit où il l’a rangé et pourquoi ; « Déplacer vers » le change de dossier. Tu peux aussi glisser une carte sur un dossier de gauche. « Nouveau dossier » crée un dossier dans celui qui est ouvert.
+
+**Rechercher dans les documents** cherche dans les noms et le texte de tous les documents, par le sens et les mots quand le modèle des vecteurs est là, par les mots sinon, et montre le passage qui répond.
+
+**Les fichiers lourds.** Si le dépôt a des règles Git LFS (`.gitattributes`) qui prennent le fichier, elles s’appliquent : rien à faire. Sinon, au-delà de 50 Mo, Escouade prévient avant de l’ajouter, parce que git garde chaque version en entier et que chacun de l’équipe la télécharge : « Ajouter quand même » ou « Ne pas les ajouter ».
+
+**Les agents** cherchent et lisent les documents par les outils d’Escouade (`search_documents`, `read_document`), quel que soit leur harness, et citent ceux d’où vient ce qu’ils écrivent dans les sources d’une page de la spec. Les documents d’un projet privé ne sont vus que de ses propres agents.
+
 ## Partager les docs
 
 Tant que l’onglet Docs est ouvert, ou que les docs ont des changements, la barre d’état dit « Docs sur la branche main · 2 changements à partager ». Les changements sont les fichiers de `.escouade/spec`, `decisions` et `documents` modifiés et pas encore envoyés.

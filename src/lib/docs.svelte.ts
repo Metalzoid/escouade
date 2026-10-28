@@ -2,12 +2,14 @@
 // changes and what is left to share. Read when the tab opens, again after a write and when what is left to share changes.
 import { api } from './ipc';
 import { app } from './state.svelte';
-import type { DocsDecision, DocsFile, DocsMoved, DocsPending, DocsTree } from './types';
+import type { DocsDecision, DocsFile, DocsFolder, DocsMoved, DocsPending, DocsTree } from './types';
 
 class DocsStore {
   tree = $state<Record<string, DocsTree>>({});
   decisions = $state<Record<string, DocsDecision[]>>({});
   documents = $state<Record<string, DocsFile[]>>({});
+  /** The folders of the drive (ESC-260). */
+  folders = $state<Record<string, DocsFolder[]>>({});
   moved = $state<Record<string, DocsMoved[]>>({});
   pending = $state<Record<string, DocsPending>>({});
   /** Why a project's docs could not be read (its docs branch refused, a link in `.escouade`…). */
@@ -21,7 +23,7 @@ class DocsStore {
     const [tree, decisions, documents, moved, pending] = await Promise.allSettled([
       api.docsSpecTree(projectId),
       api.docsDecisions(projectId),
-      api.docsDocuments(projectId),
+      api.docsDrive(projectId),
       api.docsRecent(projectId),
       api.docsPending(projectId),
     ]);
@@ -33,7 +35,10 @@ class DocsStore {
       this.error[projectId] = String(tree.reason);
     }
     if (decisions.status === 'fulfilled') this.decisions[projectId] = decisions.value;
-    if (documents.status === 'fulfilled') this.documents[projectId] = documents.value;
+    if (documents.status === 'fulfilled') {
+      this.documents[projectId] = documents.value.files;
+      this.folders[projectId] = documents.value.folders;
+    }
     if (moved.status === 'fulfilled') this.moved[projectId] = moved.value;
     if (pending.status === 'fulfilled') {
       this.pending[projectId] = pending.value;

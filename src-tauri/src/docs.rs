@@ -592,11 +592,31 @@ pub struct DocInfo {
     pub size: u64,
     /// text, pdf, word, image or other.
     pub kind: String,
-    /// Whether Escouade can read its text now.
+    /// Whether Escouade reads its text (text, PDF, Word, OpenDocument).
     pub readable: bool,
+    /// When its file was last changed, in milliseconds since the epoch.
+    pub modified: u64,
+    /// Who added it last, as git says (the user of this machine when it is not committed yet);
+    /// filled by the core.
+    pub author: String,
+    /// How many times the agents read it (`read_document`); filled by the core.
+    pub reads: u32,
+    /// How many pages of the spec and decisions cite it; filled by the core.
+    pub cited: u32,
 }
 
-fn kind_of(name: &str) -> &'static str {
+/// A folder of the drive.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Folder {
+    /// Under `documents/`, with `/`.
+    pub path: String,
+    pub name: String,
+    /// The files in it and in its folders.
+    pub files: usize,
+}
+
+pub fn kind_of(name: &str) -> &'static str {
     match ext(name).as_str() {
         "md" | "markdown" | "txt" | "text" | "csv" | "tsv" | "json" | "yaml" | "yml" | "xml"
         | "html" | "htm" | "rst" | "log" | "toml" | "ini" => "text",
@@ -625,6 +645,9 @@ pub struct DocText {
     pub total: usize,
     pub from: usize,
     pub truncated: bool,
+    /// What is known of a file whose content is not read (an image: its format and size).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meta: Option<String>,
 }
 
 // ---------- a spec found in the project ----------
@@ -1091,7 +1114,7 @@ impl Space {
 
     // ----- documents -----
 
-    fn info(&self, rel: &str, size: u64) -> DocInfo {
+    fn info(&self, rel: &str, size: u64, modified: u64) -> DocInfo {
         let name = rel.rsplit('/').next().unwrap_or(rel).to_string();
         let kind = kind_of(&name);
         DocInfo {
@@ -1100,14 +1123,27 @@ impl Space {
                 .rsplit_once('/')
                 .map(|(f, _)| f.to_string())
                 .unwrap_or_default(),
-            readable: kind == "text",
+            readable: crate::docsextract::reads_text(&name),
             name,
             size,
             kind: kind.into(),
+            modified,
+            author: String::new(),
+            reads: 0,
+            cited: 0,
         }
     }
 
-    /// The files of the drive (those of a folder when `folder` is given).
+    fn info_of(&self, rel: &str) -> DocInfo {
+        let meta = self
+            .file(DOCUMENTS, rel)
+            .ok()
+            .and_then(|f| std::fs::metadata(f).ok());
+        let size = meta.as_ref().map_or(0, |m| m.len());
+        self.info(rel, size, meta.as_ref().map_or(0, modified_ms))
+    }
+
+    /// The files of the drive (those of a folder and its folders when `folder` is given).
     pub fn documents(&self, folder: &str) -> Result<Vec<DocInfo>> {
         let base = self.dir(DOCUMENTS)?;
         let folder = folder_of(folder)?;
@@ -1120,17 +1156,78 @@ impl Space {
         Ok(walk(&start, |_| true, MAX_FILES)
             .into_iter()
             .map(|(rel, size)| {
+                let modified = std::fs::metadata(start.join(&rel)).map_or(0, |m| modified_ms(&m));
                 let full = if folder.is_empty() {
                     rel
                 } else {
                     format!("{folder}/{rel}")
                 };
-                self.info(&full, size)
+                self.info(&full, size, modified)
             })
             .collect())
     }
 
-    /// Where the text of a document is kept, by its path and what its file is now.
+    /// The folders of the drive, depth first, sorted, each with how many files it holds (its
+    /// folders' included). Links and hidden folders are left out.
+    pub fn folders(&self) -> Result<Vec<Folder>> {
+        let base = self.dir(DOCUMENTS)?;
+        let files = self.documents("")?;
+        let mut out = Vec::new();
+        fn go(base: &Path, dir: &Path, depth: usize, out: &mut Vec<String>) {
+            if depth > MAX_FOLDER_DEPTH {
+                return;
+            }
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            let mut entries: Vec<_> = entries.flatten().collect();
+            entries.sort_by_key(|e| e.file_name().to_string_lossy().to_lowercase());
+            for e in entries {
+                let name = e.file_name().to_string_lossy().to_string();
+                let Ok(t) = e.file_type() else { continue };
+                if t.is_symlink() || !t.is_dir() || name.starts_with('.') {
+                    continue;
+                }
+                let rel = e
+                    .path()
+                    .strip_prefix(base)
+                    .map(|r| r.to_string_lossy().replace('\\', "/"))
+                    .unwrap_or_default();
+                out.push(rel);
+                go(base, &e.path(), depth + 1, out);
+            }
+        }
+        let mut dirs = Vec::new();
+        go(&base, &base, 1, &mut dirs);
+        for path in dirs {
+            let prefix = format!("{path}/");
+            out.push(Folder {
+                name: path.rsplit('/').next().unwrap_or(&path).to_string(),
+                files: files.iter().filter(|f| f.path.starts_with(&prefix)).count(),
+                path,
+            });
+        }
+        Ok(out)
+    }
+
+    /// « Nouveau dossier »: a folder of the drive, with a `.gitkeep` so that git keeps it while it
+    /// is empty. Its path as it was made.
+    pub fn folder_add(&self, folder: &str) -> Result<String> {
+        let folder = folder_of(folder)?;
+        if folder.is_empty() {
+            bail!(tr!("Donne un nom au dossier.", "Give the folder a name."));
+        }
+        let rel = document_path(&folder).ok_or_else(|| bad_document(&folder))?;
+        let keep = self.file(DOCUMENTS, &format!("{rel}/.gitkeep"))?;
+        if !keep.exists() {
+            self.write(&keep, b"")?;
+        }
+        Ok(rel)
+    }
+
+    /// Where the text of a document is kept, by its path and what its file is now: `<key>.txt`
+    /// for a text, `<key>.meta` for what is known of an image, `<key>.none` when there is nothing
+    /// to read (not tried again until the file changes).
     fn text_file(&self, rel: &str, file: &Path) -> Option<PathBuf> {
         let dir = self.text_dir.as_ref()?;
         let meta = std::fs::metadata(file).ok()?;
@@ -1141,47 +1238,81 @@ impl Space {
             .map_or(0, |d| d.as_millis());
         let key = Sha256::digest(format!("{rel}\n{}\n{stamp}", meta.len()).as_bytes());
         let key: String = key.iter().take(12).map(|b| format!("{b:02x}")).collect();
-        Some(dir.join(format!("{key}.txt")))
+        Some(dir.join(key))
     }
 
-    /// A document's text, from `from` on (`TEXT_CHUNK` characters at most). The text is extracted
-    /// once and kept in Escouade's folder, not in the repository. A format whose text Escouade
-    /// does not extract answers `text: None`.
-    pub fn document_text(&self, rel: &str, from: usize, max: usize) -> Result<DocText> {
+    fn keep(cache: &Path, got: &crate::docsextract::Extracted) {
+        use crate::docsextract::Extracted;
+        let (ext, body) = match got {
+            Extracted::Text(t) => ("txt", t.as_str()),
+            Extracted::Meta(m) => ("meta", m.as_str()),
+            Extracted::None => ("none", ""),
+        };
+        if let Some(dir) = cache.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = crate::paths::write_atomic(&cache.with_extension(ext), body.as_bytes());
+    }
+
+    /// What Escouade reads of a document (`docsextract`), read once and kept in Escouade's folder,
+    /// not in the repository.
+    pub fn extracted(&self, rel: &str) -> Result<crate::docsextract::Extracted> {
+        use crate::docsextract::{extract, Extracted};
         let path = document_path(rel).ok_or_else(|| bad_document(rel))?;
         let file = self.file(DOCUMENTS, &path)?;
         if !file.is_file() {
             bail!(tr!("Aucun document « {path} ».", "No document “{path}”."));
         }
-        let kind = kind_of(&path);
-        let none = |kind: &str| DocText {
-            path: path.clone(),
-            kind: kind.into(),
-            text: None,
-            total: 0,
-            from: 0,
-            truncated: false,
-        };
-        if kind != "text" {
-            return Ok(none(kind));
-        }
         let cache = self.text_file(&path, &file);
-        let text = match cache.as_ref().and_then(|c| std::fs::read_to_string(c).ok()) {
-            Some(t) => t,
-            None => {
-                let meta = std::fs::metadata(&file)?;
-                if meta.len() > 20 * 1024 * 1024 {
-                    return Ok(none(kind));
-                }
-                let t = String::from_utf8_lossy(&std::fs::read(&file)?).into_owned();
-                if let Some(c) = &cache {
-                    if let Some(dir) = c.parent() {
-                        let _ = std::fs::create_dir_all(dir);
-                    }
-                    let _ = crate::paths::write_atomic(c, t.as_bytes());
-                }
-                t
+        if let Some(c) = &cache {
+            if let Ok(t) = std::fs::read_to_string(c.with_extension("txt")) {
+                return Ok(Extracted::Text(t));
             }
+            if let Ok(m) = std::fs::read_to_string(c.with_extension("meta")) {
+                return Ok(Extracted::Meta(m));
+            }
+            if c.with_extension("none").exists() {
+                return Ok(Extracted::None);
+            }
+        }
+        let name = path.rsplit('/').next().unwrap_or(&path).to_string();
+        let got = extract(&file, &name);
+        if let Some(c) = &cache {
+            Self::keep(c, &got);
+        }
+        Ok(got)
+    }
+
+    /// Keeps what was read of the document `rel` (read before it was put in the drive), so that it
+    /// is not read again.
+    pub fn keep_extracted(&self, rel: &str, got: &crate::docsextract::Extracted) {
+        if let Ok(file) = self.file(DOCUMENTS, rel) {
+            if let Some(c) = self.text_file(rel, &file) {
+                Self::keep(&c, got);
+            }
+        }
+    }
+
+    /// A document's text, from `from` on (`TEXT_CHUNK` characters at most). A format whose text
+    /// Escouade does not read answers `text: None` (an image, its `meta`).
+    pub fn document_text(&self, rel: &str, from: usize, max: usize) -> Result<DocText> {
+        use crate::docsextract::Extracted;
+        let path = document_path(rel).ok_or_else(|| bad_document(rel))?;
+        let kind = kind_of(&path);
+        let got = self.extracted(&path)?;
+        let Extracted::Text(text) = got else {
+            return Ok(DocText {
+                path,
+                kind: kind.into(),
+                text: None,
+                total: 0,
+                from: 0,
+                truncated: false,
+                meta: match got {
+                    Extracted::Meta(m) => Some(m),
+                    _ => None,
+                },
+            });
         };
         let total = text.chars().count();
         let max = max.clamp(1, TEXT_CHUNK);
@@ -1194,42 +1325,80 @@ impl Space {
             total,
             from,
             truncated: from + max < total,
+            meta: None,
         })
     }
 
+    /// The first free path for `name` under `folder`: its own, else `name-2`, `name-3`…
+    fn free_path(&self, folder: &str, name: &str) -> Result<String> {
+        let at = |n: &str| {
+            let rel = if folder.is_empty() {
+                n.to_string()
+            } else {
+                format!("{folder}/{n}")
+            };
+            document_path(&rel).ok_or_else(|| bad_document(&rel))
+        };
+        let mut rel = at(name)?;
+        let mut n = 2;
+        while self.file(DOCUMENTS, &rel)?.exists() {
+            let (stem, e) = name
+                .rsplit_once('.')
+                .map_or((name, String::new()), |(s, e)| (s, format!(".{e}")));
+            rel = at(&format!("{stem}-{n}{e}"))?;
+            n += 1;
+        }
+        Ok(rel)
+    }
+
     /// Puts a file in the drive under `folder`, under its name or another when that one is taken:
-    /// nothing already there is overwritten.
+    /// nothing already there is overwritten. The window and the tools go by `document_copy`.
+    #[cfg(test)]
     pub fn document_add(&self, folder: &str, name: &str, bytes: &[u8]) -> Result<DocInfo> {
         let name = crate::attachfiles::safe_name(name.trim());
         let folder = folder_of(folder)?;
-        let folder = folder.as_str();
-        let mut rel = if folder.is_empty() {
-            name.clone()
-        } else {
-            format!("{folder}/{name}")
-        };
-        rel = document_path(&rel).ok_or_else(|| bad_document(&rel))?;
-        let mut n = 2;
-        loop {
-            let file = self.file(DOCUMENTS, &rel)?;
-            if !file.exists() {
-                self.write(&file, bytes)?;
-                return Ok(self.info(&rel, bytes.len() as u64));
-            }
-            let (stem, e) = name
-                .rsplit_once('.')
-                .map_or((name.as_str(), String::new()), |(s, e)| {
-                    (s, format!(".{e}"))
-                });
-            let renamed = format!("{stem}-{n}{e}");
-            rel = if folder.is_empty() {
-                renamed
-            } else {
-                format!("{folder}/{renamed}")
-            };
-            rel = document_path(&rel).ok_or_else(|| bad_document(&rel))?;
-            n += 1;
+        let rel = self.free_path(&folder, &name)?;
+        let file = self.file(DOCUMENTS, &rel)?;
+        self.write(&file, bytes)?;
+        Ok(self.info_of(&rel))
+    }
+
+    /// `document_add` of the file `src`, copied without being held whole in memory.
+    pub fn document_copy(&self, folder: &str, name: &str, src: &Path) -> Result<DocInfo> {
+        let name = crate::attachfiles::safe_name(name.trim());
+        let folder = folder_of(folder)?;
+        let rel = self.free_path(&folder, &name)?;
+        let file = self.file(DOCUMENTS, &rel)?;
+        // An empty file first: the folders are made and checked as for any write.
+        self.write(&file, b"")?;
+        if let Err(e) = std::fs::copy(src, &file) {
+            let _ = std::fs::remove_file(&file);
+            return Err(e.into());
         }
+        Ok(self.info_of(&rel))
+    }
+
+    /// A document moved to `folder` (the root when empty), under its name or a free one. Its new
+    /// path; its text is read again there if need be.
+    pub fn document_move(&self, rel: &str, folder: &str) -> Result<DocInfo> {
+        let path = document_path(rel).ok_or_else(|| bad_document(rel))?;
+        let from = self.file(DOCUMENTS, &path)?;
+        if !from.is_file() {
+            bail!(tr!("Aucun document « {path} ».", "No document “{path}”."));
+        }
+        let folder = folder_of(folder)?;
+        let here = path.rsplit_once('/').map_or("", |(f, _)| f);
+        if here == folder {
+            return Ok(self.info_of(&path));
+        }
+        let name = path.rsplit('/').next().unwrap_or(&path).to_string();
+        let to_rel = self.free_path(&folder, &name)?;
+        let to = self.file(DOCUMENTS, &to_rel)?;
+        // The folder made and checked as for any write, then the file moved in.
+        self.write(&to, b"")?;
+        std::fs::remove_file(&to)?;
+        std::fs::rename(&from, &to)?;
+        Ok(self.info_of(&to_rel))
     }
 
     // ----- a spec already there -----
@@ -1340,6 +1509,13 @@ impl Space {
 }
 
 /// A folder of the drive as it is kept: no leading `/`, none at the end; empty for the root.
+fn modified_ms(m: &std::fs::Metadata) -> u64 {
+    m.modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_millis() as u64)
+}
+
 fn folder_of(folder: &str) -> Result<String> {
     let f = folder.trim();
     if f.starts_with('/') {

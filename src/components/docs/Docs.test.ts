@@ -58,7 +58,7 @@ function backend(over: Record<string, (a: any) => unknown> = {}) {
   return fakeBackend({
     docs_spec_tree: () => TREE,
     docs_decisions: () => [],
-    docs_documents: () => [],
+    docs_drive: () => ({ folders: [], files: [] }),
     docs_recent: () => [{ when: 1_761_640_000, author: 'Claire', message: 'Docs', pages: ['paiement/plusieurs-fois'] }],
     docs_pending: () => ({ files: ['.escouade/spec/adhesion/pieces.md'], count: 1, codeCommits: 0, conflict: null }),
     docs_spec_page: () => PAGE,

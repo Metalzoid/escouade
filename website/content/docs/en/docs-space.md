@@ -61,6 +61,31 @@ A project without a spec starts from an empty space. When Escouade finds a spec 
 
 Nothing is written before “Import”, and a page that already exists stays as it is. The original file is neither changed nor removed: removing it from the repository is up to you.
 
+## The documents
+
+The Documents space is the project’s drive: requirements, meeting notes, mockups and legal papers, in folders under `.escouade/documents/`.
+
+- On the left, **the folders**, with how many files each holds; “All documents” shows them all. A folder that holds others unfolds.
+- On the right, **the files** of the folder open, each with who added it, its size, its date, and what the agents did with it: “✓ read by the agents” once an agent read it, “cited 3 times” when pages of the spec or decisions cite it.
+- A click on a file shows the text Escouade read of it.
+
+**Dropping files.** Drag files onto the space, or “Drop files”. Each file is **read and indexed on your machine**: nothing goes to the Internet. Escouade reads the text of PDFs, Word (`.docx`) and OpenDocument (`.odt`) files, Markdown and text; of an image, it keeps its format and size only. The text read stays in Escouade’s folder, never in the repository; the file itself goes into the repository, on the docs branch.
+
+**Filing.** A file dropped in an open folder stays there. Dropped on “All documents”, Escouade files it by itself, in this order:
+
+1. the folder whose name its name or its title bears (“Meeting notes workshop” goes into “Meeting notes”);
+2. the folder of its nature, when the drive has one: meeting notes, requirements, a mockup, a legal paper, a quote or an invoice, a presentation, a planning;
+3. the folder whose files are nearest to it by the meaning, when the [vectors’ model](shared-memory) is downloaded, then by the words;
+4. otherwise, a **new folder**, made for it: the one of its nature (“Planning”), “Images” for an image, or “Other”.
+
+Escouade says where it filed it and why; “Move to” puts it in another folder. You can also drag a card onto a folder on the left. “New folder” makes a folder in the one open.
+
+**Search the documents** searches the names and the text of all the documents, by the meaning and the words when the vectors’ model is there, by the words otherwise, and shows the passage that answers.
+
+**Heavy files.** When the repository has Git LFS rules (`.gitattributes`) that take the file, they apply: nothing to do. Otherwise, past 50 MB, Escouade warns before adding it, because git keeps every version in full and everyone on the team downloads it: “Add anyway” or “Don’t add them”.
+
+**The agents** search and read the documents through Escouade’s tools (`search_documents`, `read_document`), whatever their harness, and cite the ones what they write comes from in the sources of a page of the spec. A private project’s documents are seen by its own agents only.
+
 ## Sharing the docs
 
 While the Docs tab is open, or while the docs have changes, the status bar says “Docs on the branch main · 2 changes to share”. The changes are the files of `.escouade/spec`, `decisions` and `documents` changed and not sent yet.

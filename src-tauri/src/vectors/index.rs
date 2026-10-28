@@ -118,6 +118,8 @@ impl Index {
     }
 
     fn with(conn: Connection, embedder: Arc<dyn Embedder>) -> Result<Self> {
+        // The memory's search and a document dropped may write at the same time: one waits for the other.
+        conn.busy_timeout(std::time::Duration::from_secs(10))?;
         conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;")?;
         conn.execute_batch(SCHEMA)?;
         let me = Self { conn, embedder };
@@ -282,6 +284,49 @@ impl Index {
             .query_map([source.as_str()], |r| Ok((r.get(0)?, r.get(1)?)))?
             .collect::<std::result::Result<_, _>>()?;
         Ok(rows)
+    }
+
+    /// Each document of `source` as one vector: the mean of its pieces', brought to a length of 1. What a folder of the
+    /// drive is compared on (`docsdrive::place`).
+    pub fn doc_vectors(&self, source: Source) -> Result<Vec<(String, Vec<f32>)>> {
+        let mut st = self.conn.prepare(
+            "SELECT d.path, c.vec FROM chunks c JOIN docs d ON d.id = c.doc WHERE d.source = ?1 ORDER BY d.path, c.ord",
+        )?;
+        let mut rows = st.query([source.as_str()])?;
+        let mut out: Vec<(String, Vec<f32>)> = Vec::new();
+        while let Some(r) = rows.next()? {
+            let path: String = r.get(0)?;
+            let v: Vec<f32> = unblob(r.get_ref(1)?.as_blob()?).collect();
+            match out.last_mut() {
+                Some((p, sum)) if *p == path && sum.len() == v.len() => {
+                    sum.iter_mut().zip(&v).for_each(|(a, b)| *a += b);
+                }
+                _ => out.push((path, v)),
+            }
+        }
+        for (_, v) in &mut out {
+            super::embed::normalize(v);
+        }
+        Ok(out)
+    }
+
+    /// A text as one vector, read as a passage (what is searched in), its pieces' mean as `doc_vectors` makes it.
+    pub fn passage_vector(&self, text: &str, format: Format) -> Result<Vec<f32>> {
+        let texts: Vec<String> = chunks(text, format).iter().map(|c| c.embedded()).collect();
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+        let vs = self.embedder.embed(&texts, Kind::Passage)?;
+        let mut sum = vec![0f32; vs.first().map_or(0, Vec::len)];
+        for v in &vs {
+            sum.iter_mut().zip(v).for_each(|(a, b)| *a += b);
+        }
+        super::embed::normalize(&mut sum);
+        Ok(sum)
+    }
+
+    pub fn embedder_id(&self) -> String {
+        self.embedder.id().to_string()
     }
 
     /// The hash `put` keeps of a text: a caller skips the `put` of a file whose hash is the one in `documents`.

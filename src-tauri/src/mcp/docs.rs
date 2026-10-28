@@ -484,11 +484,23 @@ pub(super) async fn documents<R: Runtime>(
     caller: &Caller,
     args: ListDocumentsArgs,
 ) -> Result<String, ToolError> {
-    let (_, space) = open(core, caller, &args.project).await?;
-    let files = space
-        .documents(args.folder.as_deref().unwrap_or_default())
+    let (project, space) = open(core, caller, &args.project).await?;
+    let folder = args.folder.unwrap_or_default();
+    // The folder checked (a way out refused), then the drive as the window sees it.
+    space.documents(&folder).map_err(failed)?;
+    let drive = core
+        .docs_drive_in(&project.id, space)
+        .await
         .map_err(failed)?;
-    json(&json!({ "documents": files }))
+    let folder = folder.trim().trim_matches('/').to_string();
+    let files: Vec<_> = drive
+        .files
+        .into_iter()
+        .filter(|f| {
+            folder.is_empty() || f.folder == folder || f.folder.starts_with(&format!("{folder}/"))
+        })
+        .collect();
+    json(&json!({ "folders": drive.folders, "documents": files }))
 }
 
 pub(super) async fn read_document<R: Runtime>(
@@ -496,14 +508,21 @@ pub(super) async fn read_document<R: Runtime>(
     caller: &Caller,
     args: ReadDocumentArgs,
 ) -> Result<String, ToolError> {
-    let (_, space) = open(core, caller, &args.project).await?;
-    let text = space
-        .document_text(
-            &args.path,
-            args.from.unwrap_or(0) as usize,
-            args.max_chars.map_or(docs::TEXT_CHUNK, |n| n as usize),
-        )
+    let (project, space) = open(core, caller, &args.project).await?;
+    let (from, max) = (
+        args.from.unwrap_or(0) as usize,
+        args.max_chars.map_or(docs::TEXT_CHUNK, |n| n as usize),
+    );
+    let path = args.path.clone();
+    // A PDF is read once, and may take a moment: off the server's threads.
+    let text = tokio::task::spawn_blocking(move || space.document_text(&path, from, max))
+        .await
+        .map_err(|e| failed(e.into()))?
         .map_err(failed)?;
+    // Read by an agent: the window says so on its card. Only the first piece counts.
+    if from == 0 {
+        core.docs_note_read(&project.id, &text.path);
+    }
     json(&text)
 }
 
@@ -519,15 +538,56 @@ pub(super) async fn add_document<R: Runtime>(
         ))));
     }
     let (project, space) = open(core, caller, &args.project).await?;
-    let info = space
-        .document_add(
-            args.folder.as_deref().unwrap_or_default(),
-            &args.name,
-            args.text.as_bytes(),
+    // Through a file of Escouade's folder, as a file dropped: read, indexed and filed the same way.
+    let dir = core.data.drafts_files();
+    std::fs::create_dir_all(&dir).map_err(|e| failed(e.into()))?;
+    let tmp = dir.join(format!("doc-{}.part", uuid::Uuid::new_v4().simple()));
+    std::fs::write(&tmp, args.text.as_bytes()).map_err(|e| failed(e.into()))?;
+    let dropped = core
+        .docs_drop_in(
+            &project.id,
+            space,
+            Some(args.folder.as_deref().unwrap_or_default()).filter(|f| !f.trim().is_empty()),
+            &tmp,
+            Some(&args.name),
+            true,
         )
+        .await;
+    let _ = std::fs::remove_file(&tmp);
+    let dropped = dropped.map_err(failed)?;
+    let mut out = serde_json::to_value(&dropped.file).map_err(|e| failed(e.into()))?;
+    out["placement"] = serde_json::to_value(&dropped.placement).map_err(|e| failed(e.into()))?;
+    json(&out)
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SearchDocumentsArgs {
+    #[schemars(description = "The project: its id, or its name in any case.")]
+    pub project: String,
+    #[schemars(description = "What to find: words, or a question in any language.")]
+    pub query: String,
+    #[schemars(description = "The most documents to give (10 by default, 50 at most).")]
+    pub limit: Option<u32>,
+}
+
+/// `search_documents`: the documents that answer a query, by the meaning too when the vectors'
+/// model is there.
+pub(super) async fn search_documents<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    args: SearchDocumentsArgs,
+) -> Result<String, ToolError> {
+    let (project, space) = open(core, caller, &args.project).await?;
+    let (found, how) = core
+        .docs_search_in(
+            &project.id,
+            space,
+            &args.query,
+            args.limit.unwrap_or(10) as usize,
+        )
+        .await
         .map_err(failed)?;
-    core.docs_changed(&project.id).await;
-    json(&info)
+    json(&json!({ "project": project.name, "by": how, "documents": found }))
 }
 
 /// `get_docs_to_share`: the changes of the docs not shared yet (the files and their number), and

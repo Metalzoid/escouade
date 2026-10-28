@@ -83,6 +83,10 @@ import type {
   WorkflowTrack,
   DocsCandidate,
   DocsDecision,
+  DocsCheck,
+  DocsDocHit,
+  DocsDrive,
+  DocsDropped,
   DocsFile,
   DocsHit,
   DocsPage,
@@ -447,9 +451,18 @@ export const api = {
   docsDecisionAccept: (id: string, number: number) => invoke<DocsDecision>('docs_decision_accept', { id, number }),
   docsDocuments: (id: string, folder: string | null = null) => invoke<DocsFile[]>('docs_documents', { id, folder }),
   docsDocumentText: (id: string, path: string, from: number | null = null) => invoke<DocsText>('docs_document_text', { id, path, from }),
-  /** A file chosen, put in the drive; over 50 MB it asks to be `confirmed` first. */
+  /**
+   * A file of this machine put in the drive (ESC-260): in `folder`, or filed by Escouade when null. Over 50 MB without an
+   * LFS rule that takes it, it asks to be `confirmed` first.
+   */
   docsDocumentAdd: (id: string, folder: string | null, source: string, confirmed = false) =>
-    invoke<DocsFile>('docs_document_add', { id, folder, source, confirmed }),
+    invoke<DocsDropped>('docs_document_add', { id, folder, source, confirmed }),
+  docsDrive: (id: string) => invoke<DocsDrive>('docs_drive', { id }),
+  docsDocumentCheck: (id: string, folder: string | null, files: { name: string; size: number }[]) =>
+    invoke<DocsCheck[]>('docs_document_check', { id, folder, files }),
+  docsDocumentMove: (id: string, path: string, folder: string) => invoke<DocsFile>('docs_document_move', { id, path, folder }),
+  docsFolderAdd: (id: string, folder: string) => invoke<string>('docs_folder_add', { id, folder }),
+  docsDocumentsSearch: (id: string, query: string) => invoke<DocsDocHit[]>('docs_documents_search', { id, query }),
   docsPending: (id: string) => invoke<DocsPending>('docs_pending', { id }),
   docsShare: (id: string, message: string | null = null, withCode = false) => invoke<DocsShared>('docs_share', { id, message, withCode }),
   docsShareResolve: (id: string) => invoke<DocsConflict>('docs_share_resolve', { id }),

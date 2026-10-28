@@ -599,18 +599,23 @@ pub fn claude_take(offered: &[Offered], names: &[String], own: &Path) -> Result<
     Ok(out)
 }
 
-/// What every agent of Escouade is told of the memory (added to its instructions at its making).
+/// What every agent of Escouade is told of the memory, and of the documents of the drive (ESC-260), added to its
+/// instructions at its making.
 pub fn instruction(lang: crate::i18n::Lang) -> String {
     tr_in!(
         lang,
         "Le projet a une mémoire partagée par tous ses agents, quel que soit leur harness : le carnet de travail \
          (façons de faire, écueils à éviter), pas le produit. Au départ, cherche-y ce qui touche ta tâche \
          (search_memory, read_memory d'Escouade) ; quand tu apprends comment travailler dans ce projet, note-le \
-         (write_memory), et oublie ce qui s'avère faux (forget_memory).",
+         (write_memory), et oublie ce qui s'avère faux (forget_memory). Les documents du projet (cahiers des charges, \
+         comptes rendus…) se cherchent et se lisent par search_documents et read_document ; cite ceux d'où vient ce que \
+         tu écris dans la spec (sources de write_spec_page).",
         "The project has a memory shared by all its agents, whatever their harness: the work notebook \
          (ways of doing, traps to avoid), not the product. At the start, look in it for what touches your task \
          (Escouade's search_memory, read_memory); when you learn how to work in this project, note it \
-         (write_memory), and forget what turns out wrong (forget_memory)."
+         (write_memory), and forget what turns out wrong (forget_memory). The project's documents (requirements, \
+         meeting notes…) are searched and read by search_documents and read_document; cite those what you write in the \
+         spec comes from (sources of write_spec_page)."
     )
 }
 

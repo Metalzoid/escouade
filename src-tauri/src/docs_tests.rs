@@ -329,7 +329,7 @@ fn the_documents_go_in_folders_their_text_stays_outside_the_repository() {
     let pdf = s.document_add("", "plan.pdf", b"%PDF-1.4").unwrap();
     assert_eq!(
         (pdf.kind.as_str(), pdf.readable, pdf.folder.as_str()),
-        ("pdf", false, "")
+        ("pdf", true, "")
     );
     let all = s.documents("").unwrap();
     assert_eq!(all.len(), 3);
@@ -663,7 +663,7 @@ async fn a_large_file_asks_for_a_confirmation_before_it_goes_in_the_repository()
     drop(f);
     let refused = h
         .core
-        .docs_add_file(&p.id, "videos", &src.to_string_lossy(), false)
+        .docs_drop(&p.id, Some("videos"), &src, false)
         .await
         .unwrap_err()
         .to_string();
@@ -674,21 +674,17 @@ async fn a_large_file_asks_for_a_confirmation_before_it_goes_in_the_repository()
     assert!(!repo.join(".escouade/documents/videos").exists());
     let ok = h
         .core
-        .docs_add_file(&p.id, "videos", &src.to_string_lossy(), true)
+        .docs_drop(&p.id, Some("videos"), &src, true)
         .await
         .unwrap();
-    assert_eq!(ok.path, "videos/gros.bin");
+    assert_eq!(ok.file.path, "videos/gros.bin");
     // A small one needs nothing, and a missing one is an error.
     let small = h.dir.join("petit.md");
     std::fs::write(&small, "# Petit").unwrap();
+    assert!(h.core.docs_drop(&p.id, None, &small, false).await.is_ok());
     assert!(h
         .core
-        .docs_add_file(&p.id, "", &small.to_string_lossy(), false)
-        .await
-        .is_ok());
-    assert!(h
-        .core
-        .docs_add_file(&p.id, "", "/nulle/part.md", false)
+        .docs_drop(&p.id, None, Path::new("/nulle/part.md"), false)
         .await
         .is_err());
 }

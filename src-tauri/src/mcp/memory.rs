@@ -11,8 +11,6 @@ use crate::core::Core;
 use crate::memory::{self, Draft, Kind};
 use crate::model::Project;
 use crate::vectors::embed::Embedder;
-use crate::vectors::model::{Store, MODEL};
-use parking_lot::Mutex;
 use serde_json::json;
 use std::sync::Arc;
 use tauri::Runtime;
@@ -43,23 +41,9 @@ fn failed(e: anyhow::Error) -> ToolError {
     ToolError::Failed(format!("{e:#}"))
 }
 
-/// The vectors' model loaded once, when it is downloaded: None otherwise (the search goes by the words).
+/// The vectors' model, when it is downloaded: None otherwise (the search goes by the words).
 fn embedder<R: Runtime>(core: &Core<R>) -> Option<Arc<dyn Embedder>> {
-    static LOADED: Mutex<Option<Arc<dyn Embedder>>> = Mutex::new(None);
-    let store = Store {
-        dir: core.data.vectors_model(MODEL.id),
-    };
-    if !store.has(&MODEL) {
-        return None;
-    }
-    let mut loaded = LOADED.lock();
-    if loaded.is_none() {
-        match store.load(&MODEL) {
-            Ok(m) => *loaded = Some(Arc::new(m)),
-            Err(e) => log::warn!("memory: the vectors' model not loaded: {e:#}"),
-        }
-    }
-    loaded.clone()
+    core.vectors_embedder()
 }
 
 /// `search_memory`: the memories that fit `query`, by the meaning too when the vectors' model is there.

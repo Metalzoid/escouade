@@ -156,6 +156,11 @@ fn naming_calls() -> Vec<(&'static str, Names, Value)> {
             json!({ "project": "{}", "path": "a.md" }),
         ),
         (
+            "search_documents",
+            Names::Project,
+            json!({ "project": "{}", "query": "plan" }),
+        ),
+        (
             "add_document",
             Names::Project,
             json!({ "project": "{}", "name": "a.md", "text": "x" }),

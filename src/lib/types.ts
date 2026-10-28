@@ -2758,7 +2758,63 @@ export interface DocsFile {
   folder: string;
   size: number;
   kind: 'text' | 'pdf' | 'word' | 'image' | 'other';
+  /** Escouade reads its text (text, PDF, Word, OpenDocument). */
   readable: boolean;
+  /** When its file last changed, in milliseconds since the epoch. */
+  modified: number;
+  /** Who added it last, as git says (this machine's user while it is not committed). */
+  author: string;
+  /** Times the agents read it. */
+  reads: number;
+  /** Pages of the spec and decisions that cite it. */
+  cited: number;
+}
+
+/** A folder of the drive (ESC-260). */
+export interface DocsFolder {
+  /** Under `documents/`. */
+  path: string;
+  name: string;
+  /** The files in it and in its folders. */
+  files: number;
+}
+
+export interface DocsDrive {
+  folders: DocsFolder[];
+  files: DocsFile[];
+}
+
+/** Where a file dropped went, and why: chosen (dropped in it), name, sort, meaning, words, or new. */
+export interface DocsPlacement {
+  folder: string;
+  /** The folder was made for it. */
+  new: boolean;
+  by: 'chosen' | 'name' | 'sort' | 'meaning' | 'words' | 'new';
+}
+
+export interface DocsDropped {
+  file: DocsFile;
+  placement: DocsPlacement;
+  /** The repository's LFS rules take it. */
+  lfs: boolean;
+}
+
+/** What the window learns of a file before it drops it. */
+export interface DocsCheck {
+  name: string;
+  size: number;
+  lfs: boolean;
+  /** Over 50 MB and no LFS rule takes it: asked first. */
+  large: boolean;
+}
+
+/** A document found by « Rechercher dans les documents ». */
+export interface DocsDocHit {
+  path: string;
+  name: string;
+  folder: string;
+  kind: string;
+  excerpt: string;
 }
 
 export interface DocsText {
@@ -2769,6 +2825,8 @@ export interface DocsText {
   total: number;
   from: number;
   truncated: boolean;
+  /** What is known of a file whose content is not read (an image: its format and size). */
+  meta?: string;
 }
 
 /** A conflict between two versions of a page of the docs, handed to the writer agent (« L'agent résout » / « Annuler »). */

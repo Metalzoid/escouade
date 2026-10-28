@@ -325,7 +325,8 @@ async fn documents_are_added_listed_and_read_by_the_tools() {
         json!({ "project": p.id, "folder": "../.." }),
     )
     .await;
-    // A name with a way up is one name of the root: the separators are gone.
+    // A name with a way up is one name: the separators are gone. Without a folder, it is filed by
+    // Escouade: nothing fits it, a folder is made for it.
     let named = read(
         &c,
         "add_document",
@@ -333,7 +334,11 @@ async fn documents_are_added_listed_and_read_by_the_tools() {
     )
     .await;
     let path = named["path"].as_str().unwrap();
-    assert!(!path.contains('/'), "{named}");
+    assert!(
+        path.ends_with("evil.md") && path.matches('/').count() == 1,
+        "{named}"
+    );
+    assert_eq!(named["placement"]["new"], true, "{named}");
     assert!(std::path::Path::new(&p.path)
         .join(".escouade/documents")
         .join(path)
@@ -435,6 +440,21 @@ async fn a_private_project_keeps_its_docs_from_the_agents_of_the_others() {
         json!({ "project": vault.name, "title": "Secrète" }),
     )
     .await;
+    read(
+        &inside,
+        "add_document",
+        json!({ "project": vault.name, "folder": "coffre", "name": "plan.md", "text": "Le plan secret du coffre." }),
+    )
+    .await;
+    assert_eq!(
+        read(
+            &inside,
+            "search_documents",
+            json!({ "project": vault.name, "query": "coffre" })
+        )
+        .await["documents"][0]["path"],
+        "coffre/plan.md"
+    );
     assert_eq!(
         read(
             &inside,
@@ -469,6 +489,10 @@ async fn a_private_project_keeps_its_docs_from_the_agents_of_the_others() {
         ),
         ("list_documents", json!({ "project": "{}" })),
         ("read_document", json!({ "project": "{}", "path": "a.md" })),
+        (
+            "search_documents",
+            json!({ "project": "{}", "query": "plan" }),
+        ),
         (
             "add_document",
             json!({ "project": "{}", "name": "a.md", "text": "pirate" }),
@@ -632,4 +656,57 @@ async fn a_tickets_agent_proposes_its_decisions_as_its_tickets() {
         (json!("brainstorm"), json!("Tarif famille"))
     );
     e.cancel().await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn agents_find_read_and_cite_the_documents_and_the_drive_counts_it() {
+    let h = harness("mcp-docs-cite");
+    let p = project(&h).await;
+    let agent = put_agent(&h, &p, "Alice", 1);
+    let c = as_agent(&h, &agent.id).await;
+    let docs = std::path::Path::new(&p.path).join(".escouade/documents/Comptes rendus");
+    std::fs::create_dir_all(&docs).unwrap();
+    std::fs::write(
+        docs.join("cr.pdf"),
+        crate::docsextract_tests::pdf_bytes(&["Le bureau relance les adhesions a 30 jours."]),
+    )
+    .unwrap();
+    // Found by its words (no vectors' model here), read whole: a PDF's text.
+    let found = read(
+        &c,
+        "search_documents",
+        json!({ "project": p.id, "query": "relance adhesions" }),
+    )
+    .await;
+    assert_eq!(found["by"], "words");
+    assert_eq!(found["documents"][0]["path"], "Comptes rendus/cr.pdf");
+    let text = read(
+        &c,
+        "read_document",
+        json!({ "project": p.id, "path": "Comptes rendus/cr.pdf" }),
+    )
+    .await;
+    assert!(
+        text["text"]
+            .as_str()
+            .unwrap()
+            .contains("relance les adhesions"),
+        "{text}"
+    );
+    // Cited by a page of the spec it wrote.
+    read(
+        &c,
+        "write_spec_page",
+        json!({ "project": p.id, "path": "adhesion/relance", "body": "On relance a 30 jours.", "sources": ["documents/Comptes rendus/cr.pdf"] }),
+    )
+    .await;
+    let all = read(&c, "list_documents", json!({ "project": p.id })).await;
+    let f = &all["documents"][0];
+    assert_eq!(
+        (f["reads"].clone(), f["cited"].clone()),
+        (json!(1), json!(1)),
+        "{all}"
+    );
+    assert_eq!(all["folders"][0]["path"], "Comptes rendus");
+    c.cancel().await.unwrap();
 }

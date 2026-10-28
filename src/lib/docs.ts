@@ -112,3 +112,62 @@ export function draftsBySubject<T extends { subject: string }>(drafts: T[]): { s
   }
   return out;
 }
+
+// ---------- the drive of the documents (ESC-260) ----------
+
+/** The files of the drive under `folder` (its folders' too); all of them for the root (''). */
+export function filesUnder<T extends { folder: string }>(files: T[], folder: string): T[] {
+  if (!folder) return files;
+  return files.filter((f) => f.folder === folder || f.folder.startsWith(`${folder}/`));
+}
+
+/** How deep a folder is: 0 for one at the root. */
+export function folderDepth(path: string): number {
+  return path.split('/').length - 1;
+}
+
+/** The folders the tree shows: those at the root, and those whose every folder above is open. */
+export function visibleFolders<T extends { path: string }>(folders: T[], open: Set<string>): T[] {
+  return folders.filter((f) => {
+    const parts = f.path.split('/');
+    for (let i = 1; i < parts.length; i++) if (!open.has(parts.slice(0, i).join('/'))) return false;
+    return true;
+  });
+}
+
+/** Whether a folder has folders under it. */
+export function hasChildren(folders: { path: string }[], path: string): boolean {
+  return folders.some((f) => f.path.startsWith(`${path}/`));
+}
+
+/** The folders above `path` and itself, for the crumb: `A`, `A/B`… */
+export function folderTrail(path: string): { path: string; name: string }[] {
+  if (!path) return [];
+  const parts = path.split('/');
+  return parts.map((name, i) => ({ name, path: parts.slice(0, i + 1).join('/') }));
+}
+
+/** What the box of a file's card says: its extension in capitals (DOCX, PDF, MD), else its kind. */
+export function fileBadge(f: { name: string; kind: string }): string {
+  const i = f.name.lastIndexOf('.');
+  const ext = i > 0 ? f.name.slice(i + 1) : '';
+  return (ext && ext.length <= 5 ? ext : f.kind).toUpperCase();
+}
+
+/** A file's name as its card shows it: without its extension, which its box says. */
+export function fileTitle(name: string): string {
+  const i = name.lastIndexOf('.');
+  return i > 0 ? name.slice(0, i) : name;
+}
+
+/** What the agents did with a file: read (and how many times cited), cited only, or nothing yet. */
+export function readState(f: { reads: number; cited: number; readable: boolean }): 'read' | 'cited' | 'unread' | 'noText' {
+  if (f.reads > 0) return 'read';
+  if (f.cited > 0) return 'cited';
+  return f.readable ? 'unread' : 'noText';
+}
+
+/** The window's path of a document, as a page of the spec cites it: `documents/<path>`. */
+export function documentCitation(path: string): string {
+  return `documents/${path}`;
+}

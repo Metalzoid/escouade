@@ -40,6 +40,7 @@ const ESCOUADE_TOOLS: Record<string, Key> = {
   replace_decision: 'mcp.tools.replaceDecision',
   list_documents: 'mcp.tools.listDocuments',
   read_document: 'mcp.tools.readDocument',
+  search_documents: 'mcp.tools.searchDocuments',
   add_document: 'mcp.tools.addDocument',
   get_docs_to_share: 'mcp.tools.getDocsToShare',
   share_docs: 'mcp.tools.shareDocs',

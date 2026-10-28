@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  documentCitation,
   draftsBySubject,
+  fileBadge,
+  filesUnder,
+  fileTitle,
+  folderDepth,
+  folderTrail,
+  hasChildren,
+  readState,
+  visibleFolders,
   findPage,
   movedLines,
   newPagePath,
@@ -110,5 +119,56 @@ describe('the pages of the docs', () => {
       ['A', ['1', '3']],
       ['B', ['2']],
     ]);
+  });
+});
+
+describe('the drive of the documents', () => {
+  const folders = [
+    { path: 'Comptes rendus', name: 'Comptes rendus', files: 3 },
+    { path: 'Comptes rendus/2026', name: '2026', files: 1 },
+    { path: 'Comptes rendus/2026/Bureau', name: 'Bureau', files: 1 },
+    { path: 'Juridique', name: 'Juridique', files: 0 },
+  ];
+  const files = [
+    { path: 'Comptes rendus/a.md', folder: 'Comptes rendus' },
+    { path: 'Comptes rendus/2026/b.pdf', folder: 'Comptes rendus/2026' },
+    { path: 'Comptes rendus-vieux/c.md', folder: 'Comptes rendus-vieux' },
+    { path: 'd.md', folder: '' },
+  ];
+
+  it('shows a folder with what is under it, the root with everything', () => {
+    expect(filesUnder(files, 'Comptes rendus').map((f) => f.path)).toEqual(['Comptes rendus/a.md', 'Comptes rendus/2026/b.pdf']);
+    expect(filesUnder(files, '')).toHaveLength(4);
+    expect(filesUnder(files, 'Juridique')).toEqual([]);
+  });
+
+  it('shows the folders of the open ones only, each at its depth', () => {
+    expect(visibleFolders(folders, new Set()).map((f) => f.path)).toEqual(['Comptes rendus', 'Juridique']);
+    expect(visibleFolders(folders, new Set(['Comptes rendus'])).map((f) => f.path)).toEqual([
+      'Comptes rendus',
+      'Comptes rendus/2026',
+      'Juridique',
+    ]);
+    expect(visibleFolders(folders, new Set(['Comptes rendus/2026']))).toHaveLength(2);
+    expect(folderDepth('Comptes rendus/2026/Bureau')).toBe(2);
+    expect(hasChildren(folders, 'Comptes rendus')).toBe(true);
+    expect(hasChildren(folders, 'Juridique')).toBe(false);
+    expect(folderTrail('Comptes rendus/2026')).toEqual([
+      { name: 'Comptes rendus', path: 'Comptes rendus' },
+      { name: '2026', path: 'Comptes rendus/2026' },
+    ]);
+    expect(folderTrail('')).toEqual([]);
+  });
+
+  it('says a file by its extension, and what the agents did with it', () => {
+    expect(fileBadge({ name: 'CR atelier.docx', kind: 'word' })).toBe('DOCX');
+    expect(fileBadge({ name: 'LISEZMOI', kind: 'other' })).toBe('OTHER');
+    expect(fileTitle('CR atelier du 22.10.docx')).toBe('CR atelier du 22.10');
+    expect(fileTitle('.env')).toBe('.env');
+    expect(readState({ reads: 2, cited: 3, readable: true })).toBe('read');
+    expect(readState({ reads: 0, cited: 1, readable: true })).toBe('cited');
+    expect(readState({ reads: 0, cited: 0, readable: true })).toBe('unread');
+    expect(readState({ reads: 0, cited: 0, readable: false })).toBe('noText');
+    expect(documentCitation('Comptes rendus/a.md')).toBe('documents/Comptes rendus/a.md');
   });
 });

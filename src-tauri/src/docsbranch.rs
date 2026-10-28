@@ -17,7 +17,7 @@ use anyhow::{bail, Result};
 use tauri::Runtime;
 
 use crate::core::Core;
-use crate::docs::{DocInfo, Space, LARGE_FILE};
+use crate::docs::Space;
 use crate::model::Project;
 
 /// One worktree is made at a time: two tools asking at once must not both make it.
@@ -174,39 +174,5 @@ impl<R: Runtime> Core<R> {
             }
         }
         Ok(done)
-    }
-
-    /// A file the user chose put in the drive of the docs. A file over 50 MB asks to be
-    /// confirmed (`confirmed`) first: it goes in the repository, and git keeps every version.
-    pub async fn docs_add_file(
-        &self,
-        project_id: &str,
-        folder: &str,
-        source: &str,
-        confirmed: bool,
-    ) -> Result<DocInfo> {
-        let src = Path::new(source);
-        let meta = std::fs::metadata(src)?;
-        if !meta.is_file() {
-            bail!(tr!(
-                "{source} n’est pas un fichier.",
-                "{source} is not a file."
-            ));
-        }
-        if meta.len() > LARGE_FILE && !confirmed {
-            bail!(tr!(
-                "Ce fichier pèse {mb} Mo : il entre dans le dépôt, que git garde en entier à chaque version. Confirme pour l’ajouter.",
-                "This file weighs {mb} MB: it goes into the repository, and git keeps every version of it in full. Confirm to add it.",
-                mb = meta.len() / (1024 * 1024)
-            ));
-        }
-        let name = src
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
-        let bytes = std::fs::read(src)?;
-        self.docs_space(project_id, None)
-            .await?
-            .document_add(folder, &name, &bytes)
     }
 }

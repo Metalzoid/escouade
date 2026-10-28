@@ -1505,7 +1505,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "List the documents of a project's drive (the files the team dropped under .escouade/documents of the docs branch): path, name, folder, size, kind (text, pdf, word, image or other) and readable (whether read_document gives their text). Open to every client, for the projects it sees.",
+        description = "List the documents of a project's drive (the files the team dropped under .escouade/documents of the docs branch): its folders (path, name, files), and each document's path, name, folder, size, kind (text, pdf, word, image or other), readable (whether read_document gives their text), modified (epoch milliseconds), author, reads (times the agents read it) and cited (pages of the spec and decisions that cite it). To find the documents about something, search_documents. Open to every client, for the projects it sees.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn list_documents(
@@ -1522,7 +1522,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Read a document's text (kept in Escouade's folder, not in the repository): text (null for a format whose text Escouade does not extract yet, as PDF, Word and images), total (characters of the whole text), from and truncated (more follows: ask again with from). Open to every client, for the projects it sees.",
+        description = "Read a document's text, extracted on this machine from text, Markdown, PDF, Word (.docx) and OpenDocument (.odt) files and kept in Escouade's folder, not in the repository: text (null for a format whose text Escouade does not read, as an image or a PDF of scans; an image gives its format and size in meta), total (characters of the whole text), from and truncated (more follows: ask again with from). To cite a document, name its path (documents/<path>) in a page's sources (write_spec_page) or a decision's documents: the window counts the citations. Open to every client, for the projects it sees.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn read_document(
@@ -1533,6 +1533,23 @@ impl<R: Runtime> Tools<R> {
         let asked = summary(&[("project", Some(&args.project)), ("path", Some(&args.path))]);
         let result = docs::read_document(&ctx.core, &ctx.caller, args).await;
         ctx.reply("read_document", &asked, result)
+    }
+
+    #[tool(
+        description = "Search a project's documents (the drive of .escouade/documents: text, Markdown, PDF, Word, OpenDocument, and images by their name): by the meaning and the words together when the vectors' model is downloaded, by the words otherwise (by says which). Answers each document's path, name, folder, kind and the passage that answers (excerpt); read_document gives the whole text. Everything runs on this machine. Open to every client, for the projects it sees.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn search_documents(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::SearchDocumentsArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("query", Some(&args.query)),
+        ]);
+        let result = docs::search_documents(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("search_documents", &asked, result)
     }
 
     #[tool(
@@ -1568,7 +1585,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Add a text file to a project's drive of documents, in the docs branch, under a folder (made if needed). Nothing already there is overwritten: a taken name gets a number. Nothing is committed nor pushed.",
+        description = "Add a text file to a project's drive of documents, in the docs branch: under the folder given (made if needed), or, without one, filed by Escouade in the folder that fits it (by its name, its sort and its words, or a new folder): placement says where and why (by). Nothing already there is overwritten: a taken name gets a number. Nothing is committed nor pushed.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,

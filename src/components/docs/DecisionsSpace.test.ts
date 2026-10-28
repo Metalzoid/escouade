@@ -60,7 +60,7 @@ function backend(list: DocsDecision[]) {
   return fakeBackend({
     docs_spec_tree: () => TREE,
     docs_decisions: () => list,
-    docs_documents: () => [],
+    docs_drive: () => ({ files: [], folders: [] }),
     docs_recent: () => [],
     docs_pending: () => ({ files: [], count: 0, codeCommits: 0, conflict: null }),
     docs_decision_accept: (a) => {

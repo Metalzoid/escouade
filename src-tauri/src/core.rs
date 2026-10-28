@@ -1020,6 +1020,10 @@ pub struct Core<R: Runtime = Wry> {
     /// Scheduling passes asked for (`schedule`) and not over yet (tests only).
     #[cfg(test)]
     pub(crate) passes_queued: AtomicUsize,
+    /// The model of the vectors the tests give (tests only: none is downloaded).
+    #[cfg(test)]
+    pub(crate) test_embedder:
+        parking_lot::Mutex<Option<std::sync::Arc<dyn crate::vectors::embed::Embedder>>>,
     /// How far ahead of the real clock the autopilot's pauses and the retries of the syncs go by,
     /// in milliseconds (tests only: the end of a pause, or a retry's time, without waiting for
     /// it).
@@ -1895,6 +1899,8 @@ impl<R: Runtime> Core<R> {
             gh_on_path: RwLock::default(),
             #[cfg(test)]
             passes_queued: AtomicUsize::new(0),
+            #[cfg(test)]
+            test_embedder: parking_lot::Mutex::new(None),
             #[cfg(test)]
             clock_ahead: std::sync::atomic::AtomicI64::new(0),
         });

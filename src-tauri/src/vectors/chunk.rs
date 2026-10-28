@@ -17,8 +17,9 @@ impl Format {
     pub fn of_path(path: &str) -> Self {
         let ext = path.rsplit('.').next().unwrap_or("").to_lowercase();
         match ext.as_str() {
-            "md" | "markdown" | "mdx" => Self::Markdown,
-            "txt" | "text" | "rst" | "adoc" | "" => Self::Text,
+            // Word and OpenDocument read as Markdown (their headings made titles, `docsextract`).
+            "md" | "markdown" | "mdx" | "docx" | "odt" => Self::Markdown,
+            "txt" | "text" | "rst" | "adoc" | "pdf" | "" => Self::Text,
             _ => Self::Code,
         }
     }

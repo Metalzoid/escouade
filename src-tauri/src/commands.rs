@@ -3131,7 +3131,9 @@ pub async fn docs_document_text(
         .map_err(err)
 }
 
-/// A file dropped or chosen, put in the drive under `folder`; over 50 MB it asks to be `confirmed`.
+/// A file dropped or chosen (`source`, a file of this machine), put in the drive: in `folder` when
+/// one is given, else filed by itself (`docsdrive::place`). Over 50 MB without an LFS rule that
+/// takes it, it asks to be `confirmed`.
 #[tauri::command]
 pub async fn docs_document_add(
     core: CoreState<'_>,
@@ -3139,18 +3141,76 @@ pub async fn docs_document_add(
     folder: Option<String>,
     source: String,
     confirmed: Option<bool>,
+) -> Res<crate::docsdrive::Dropped> {
+    core.docs_drop(
+        &id,
+        folder.as_deref(),
+        std::path::Path::new(&source),
+        confirmed.unwrap_or(false),
+    )
+    .await
+    .map_err(err)
+}
+
+/// The drive: its folders, its files with who added them, how many times the agents read them and
+/// how many pages and decisions cite them.
+#[tauri::command]
+pub async fn docs_drive(core: CoreState<'_>, id: String) -> Res<crate::docsdrive::Drive> {
+    core.docs_drive(&id).await.map_err(err)
+}
+
+#[derive(serde::Deserialize)]
+pub struct NamedSize {
+    name: String,
+    size: u64,
+}
+
+/// What the window must know of files before it drops them: LFS takes them, or they are large.
+#[tauri::command]
+pub async fn docs_document_check(
+    core: CoreState<'_>,
+    id: String,
+    folder: Option<String>,
+    files: Vec<NamedSize>,
+) -> Res<Vec<crate::docsdrive::Check>> {
+    core.docs_check(
+        &id,
+        folder.as_deref().unwrap_or_default(),
+        files.into_iter().map(|f| (f.name, f.size)).collect(),
+    )
+    .await
+    .map_err(err)
+}
+
+/// A document moved to another folder (the root when empty).
+#[tauri::command]
+pub async fn docs_document_move(
+    core: CoreState<'_>,
+    id: String,
+    path: String,
+    folder: String,
 ) -> Res<crate::docs::DocInfo> {
-    let out = core
-        .docs_add_file(
-            &id,
-            folder.as_deref().unwrap_or_default(),
-            &source,
-            confirmed.unwrap_or(false),
-        )
+    core.docs_move(&id, &path, &folder).await.map_err(err)
+}
+
+/// « Nouveau dossier ».
+#[tauri::command]
+pub async fn docs_folder_add(core: CoreState<'_>, id: String, folder: String) -> Res<String> {
+    core.docs_folder_add(&id, &folder).await.map_err(err)
+}
+
+/// « Rechercher dans les documents ».
+#[tauri::command]
+pub async fn docs_documents_search(
+    core: CoreState<'_>,
+    id: String,
+    query: String,
+) -> Res<Vec<crate::docsdrive::DocHit>> {
+    let space = core.docs_space(&id, None).await.map_err(err)?;
+    core.docs_search_in(&id, space, &query, 30)
         .await
-        .map_err(err);
-    core.docs_changed(&id).await;
-    out
+        .map(|(hits, _)| hits)
+        .map_err(err)
 }
 
 /// What the project's docs have to share: the files, their number, the conflict being handled.

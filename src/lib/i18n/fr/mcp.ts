@@ -69,6 +69,7 @@ export default {
     replaceDecision: 'Proposer une décision de remplacement',
     listDocuments: 'Lister les documents',
     readDocument: 'Lire un document',
+    searchDocuments: 'Chercher dans les documents',
     addDocument: 'Ajouter un document',
     getDocsToShare: 'Lire ce que les docs ont à partager',
     shareDocs: 'Partager les docs',
