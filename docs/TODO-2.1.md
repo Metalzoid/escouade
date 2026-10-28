@@ -356,15 +356,15 @@ Notées par l'utilisateur pour plus tard, sans ticket ni étude pour l'instant :
     - les projets privés (ESC-140) ;
     - ce qui est repris des mémoires existantes (`CLAUDE.md`, `AGENTS.md`, la mémoire de Claude Code) ;
     - le lien avec la gestion documentaire ci-dessus.
-- [ ] **Les tokens « chauds » et « froids »** (noté le 2026-10-27).
+- [ ] **Les tokens « chauds » et « froids »** (noté le 2026-10-27). Conçu le 2026-10-28 : la température du cache en degrés, voir docs/FEATURES.md.
   - Voir ce qui est utilisé en tokens servis par le cache (lus du cache, « chauds ») et en tokens payés plein tarif (écrits dans le cache ou hors cache, « froids »).
   - Par agent, par tour, et dans les statistiques, pour chaque harness qui le dit (Claude Code et ses `cache_read_input_tokens` / `cache_creation_input_tokens`, Codex, OpenCode…).
   - Avec ce que le cache fait gagner, et quand il expire (5 min, 1 h).
-- [ ] **Choisir ce que l'interface affiche** (noté le 2026-10-27).
+- [ ] **Choisir ce que l'interface affiche** (noté le 2026-10-27). Conçu le 2026-10-28 : des fonctionnalités à activer, présentées par un assistant, voir docs/FEATURES.md.
   - Pouvoir afficher ou cacher chaque élément de l'interface : jauges de la barre d'état, colonnes et lignes des cartes, compteurs, onglets, boutons de l'en-tête…
   - Un réglage par élément, groupé par zone, avec un aperçu, et un retour aux réglages par défaut.
   - À penser avec les thèmes et les plugins (PLG-7, ESC-179).
-- [ ] **Des réglages proposés au bon moment** (noté le 2026-10-27, idée de Zied).
+- [ ] **Des réglages proposés au bon moment** (noté le 2026-10-27, idée de Zied). Conçu le 2026-10-28 : proposer d'allumer une fonctionnalité coupée, voir docs/FEATURES.md.
   - Le constat : « toutes ces configurations, ça commence à être beaucoup ». Personne ne fait le tour de tous les réglages.
   - L'idée, comme Orca : Escouade détecte certains comportements et propose le réglage qui va avec, dans une petite fenêtre en bas à droite.
     - Exemples : toujours relancer à la main après la limite d'usage → la reprise automatique ; toujours choisir le même modèle → le défaut du projet ; ouvrir le panneau à chaque fois → le garder ouvert ; une branche de départ toujours changée → la régler pour le projet.
