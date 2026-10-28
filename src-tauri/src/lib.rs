@@ -132,6 +132,7 @@ mod tui;
 mod tui_tests;
 mod updates;
 mod usage;
+mod vectors;
 mod voice;
 mod which;
 mod workflow;

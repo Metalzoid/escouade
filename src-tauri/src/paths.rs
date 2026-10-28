@@ -390,6 +390,19 @@ impl DataDir {
         self.0.join("projects").join(name)
     }
 
+    /// The embedding model's folder (`vectors`, ESC-252): downloaded once for every project, of this machine.
+    #[allow(dead_code)] // no caller until the Docs tickets
+    pub fn vectors_model(&self, model_id: &str) -> PathBuf {
+        let name = if is_plain_id(model_id) { model_id } else { "_" };
+        self.0.join("vectors").join(name)
+    }
+
+    /// The index of a project's docs and their vectors: recomputed from the documents, so never in the project.
+    #[allow(dead_code)] // idem
+    pub fn vectors_index(&self, project_id: &str) -> PathBuf {
+        self.project_files(project_id).join("vectors.db")
+    }
+
     /// What the last reading of a project's workflows found (`workflow`), of this machine: never in
     /// the project, never versioned.
     pub fn workflows_file(&self, project_id: &str) -> PathBuf {

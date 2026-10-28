@@ -82,6 +82,9 @@ hound = "3.5"
 espeak-ng = { version = "0.2", default-features = false, features = ["bundled-data-fr", "bundled-data-en"] }
 yaml-edit = "0.3"
 
+# The embeddings of `vectors` (ESC-252): the model's own tokenizer (HF tokenizer.json), no regex engine to build (fancy-regex).
+tokenizers = { version = "0.22", default-features = false, features = ["unstable_wasm"] }
+
 # ONNX Runtime, linked in statically on Windows and Apple Silicon (pyke's builds, downloaded by its build script). Pyke
 # builds none for Intel Macs, and its Linux one needs glibc 2.38: there Microsoft's own library (1.23.2, glibc 2.27) is
 # shipped in the bundle (scripts/onnxruntime.sh, tauri.ort-<os>.conf.json) and loaded at run time.
