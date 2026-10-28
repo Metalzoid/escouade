@@ -411,7 +411,7 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
     await userEvent.click(screen.getByRole('switch', { name: 'Projet privé' }));
     const list = screen.getByRole('list', { name: 'Ses fichiers' });
     const rows = within(list).getAllByRole('listitem');
-    expect(rows).toHaveLength(7);
+    expect(rows).toHaveLength(8);
     const kind = (name: string) => rows.find((r) => r.textContent?.startsWith(name))!.querySelector('.kind')!.textContent;
     expect(kind('Claude Code')).toBe('Garde-fou');
     expect(kind('Codex')).toBe('Barrière');
@@ -420,6 +420,7 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
     expect(kind('Cursor CLI')).toBe('Garde-fou');
     expect(kind('Mistral Vibe')).toBe('Garde-fou');
     expect(kind('Antigravity CLI')).toBe('Garde-fou');
+    expect(kind('Gemini CLI')).toBe('Garde-fou');
     // What each cannot guarantee, said.
     expect(within(list).getByText(/sauf en mode Bypass, qui n’en a pas/)).toBeVisible();
     expect(within(list).getByText(/Rien n’est garanti en mode Bypass, ni en vue Copilot CLI/)).toBeVisible();
@@ -427,6 +428,7 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
     expect(within(list).getByText(/Ses lectures et ses écritures ne demandent rien, même hors du dossier de l’agent/)).toBeVisible();
     expect(within(list).getByText(/Vibe reste dans son agent ask pour que ces refus tiennent/)).toBeVisible();
     expect(within(list).getByText(/que son mode Bypass ne lève pas/)).toBeVisible();
+    expect(within(list).getByText(/que son mode Bypass \(yolo\) ne lève pas/)).toBeVisible();
     expect(screen.getByText(/Une barrière pour tous les harness demanderait un compte système par projet/)).toBeVisible();
   });
 

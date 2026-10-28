@@ -24,6 +24,8 @@ const FAKE_CURSOR = path.join(ROOT, 'tests', 'fixtures', 'fake-cursor.cmd');
 const FAKE_VIBE = path.join(ROOT, 'tests', 'fixtures', 'fake-vibe.cmd');
 /** The fake `agy` of Antigravity CLI (tests/fixtures/fake-agy.mjs), for a test that runs agents on Antigravity CLI. */
 const FAKE_AGY = path.join(ROOT, 'tests', 'fixtures', 'fake-agy.cmd');
+/** The fake `gemini` of Gemini CLI (tests/fixtures/fake-gemini.mjs), for a test that runs agents on Gemini CLI. */
+const FAKE_GEMINI = path.join(ROOT, 'tests', 'fixtures', 'fake-gemini.cmd');
 
 export interface App {
   /** The window of the app: a new one after each `restart()` (read `app.page` again, do not keep the old one). */
@@ -276,6 +278,7 @@ const FAKE_OF: Record<string, string> = {
   cursor: 'ESCOUADE_CURSOR',
   vibe: 'ESCOUADE_VIBE',
   agy: 'ESCOUADE_AGY',
+  gemini: 'ESCOUADE_GEMINI',
 };
 
 /**
@@ -408,6 +411,10 @@ export const test = base.extend<{
       // never the user's ~/.gemini.
       ESCOUADE_AGY: 'none',
       FAKE_AGY_LOG: path.join(root, 'fake-agy.jsonl'),
+      // The same for Gemini CLI (`appEnv: { ESCOUADE_GEMINI: FAKE_GEMINI }`): each agent has its own GEMINI_CLI_HOME in the
+      // app's data, never the user's ~/.gemini.
+      ESCOUADE_GEMINI: 'none',
+      FAKE_GEMINI_LOG: path.join(root, 'fake-gemini.jsonl'),
       ...appEnv,
     };
     // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
@@ -563,4 +570,4 @@ export async function send(page: Page, text: string) {
   await box.press('Enter');
 }
 
-export { expect, FAKE, FAKE_AGY, FAKE_CODEX, FAKE_COPILOT, FAKE_CURSOR, FAKE_OPENCODE, FAKE_VIBE };
+export { expect, FAKE, FAKE_AGY, FAKE_CODEX, FAKE_COPILOT, FAKE_CURSOR, FAKE_GEMINI, FAKE_OPENCODE, FAKE_VIBE };

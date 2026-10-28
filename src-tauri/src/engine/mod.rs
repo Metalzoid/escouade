@@ -12,6 +12,7 @@ mod claude;
 pub(crate) mod codex;
 pub(crate) mod copilot;
 pub(crate) mod cursor;
+pub(crate) mod gemini;
 pub mod jsonc;
 pub mod mcp;
 pub mod oneshot;
@@ -58,6 +59,7 @@ pub(crate) use copilot::{
 #[cfg(test)]
 pub(crate) use cursor::fake_cursor;
 pub use cursor::CURSOR;
+pub use gemini::GEMINI;
 pub use mcp::Escouade;
 #[cfg(test)]
 pub(crate) use opencode::fake_opencode;
@@ -105,7 +107,7 @@ pub fn of(meta: &AgentMeta) -> &'static dyn Engine {
     by_id(meta.engine)
 }
 
-/// The engine `id` names: the seven harnesses are written.
+/// The engine `id` names: the eight harnesses are written.
 pub fn by_id(id: EngineId) -> &'static dyn Engine {
     match id {
         EngineId::Codex => &CODEX,
@@ -114,6 +116,7 @@ pub fn by_id(id: EngineId) -> &'static dyn Engine {
         EngineId::Cursor => &CURSOR,
         EngineId::Vibe => &VIBE,
         EngineId::Agy => &AGY,
+        EngineId::Gemini => &GEMINI,
         EngineId::Claude => &CLAUDE,
         #[cfg(test)]
         EngineId::Bench => &minimal::MINIMAL,
@@ -144,6 +147,7 @@ pub fn by_name(id: EngineId) -> &'static str {
         EngineId::Opencode => "OpenCode",
         EngineId::Vibe => "Mistral Vibe",
         EngineId::Agy => "Antigravity CLI",
+        EngineId::Gemini => "Gemini CLI",
         #[cfg(test)]
         EngineId::Bench => "Minimal",
     }

@@ -106,6 +106,7 @@ const NAMES: Record<EngineId, string> = {
   opencode: 'OpenCode',
   vibe: 'Mistral Vibe',
   agy: 'Antigravity CLI',
+  gemini: 'Gemini CLI',
 };
 
 /** The name of a harness as the interface says it: as the backend declares it, else its usual name, else its id. */
@@ -138,9 +139,9 @@ export function showsMark(): boolean {
 
 /**
  * The harnesses whose models are read by account, without an agent (`Core::read_account_models`): Claude Code (ESC-124),
- * Codex, Copilot CLI, Cursor CLI and OpenCode (ESC-186), Mistral Vibe (ESC-266), Antigravity CLI (`agy models`, ESC-270).
+ * Codex, Copilot CLI, Cursor CLI and OpenCode (ESC-186), Mistral Vibe (ESC-266), Antigravity CLI (`agy models`, ESC-270), Gemini CLI (the `models` of its `session/new`, ESC-274).
  */
-const BY_ACCOUNT: EngineId[] = ['claude', 'codex', 'copilot', 'cursor', 'opencode', 'vibe', 'agy'];
+const BY_ACCOUNT: EngineId[] = ['claude', 'codex', 'copilot', 'cursor', 'opencode', 'vibe', 'agy', 'gemini'];
 
 /**
  * The models the harness of `who` listed for its account, none until it has. Claude Code and Codex: those its account

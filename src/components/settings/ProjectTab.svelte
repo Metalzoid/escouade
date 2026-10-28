@@ -123,6 +123,7 @@
     { id: 'cursor', name: 'Cursor CLI', kind: 'guard' },
     { id: 'vibe', name: 'Mistral Vibe', kind: 'guard' },
     { id: 'agy', name: 'Antigravity CLI', kind: 'guard' },
+    { id: 'gemini', name: 'Gemini CLI', kind: 'guard' },
   ] as const;
 
   /** Asks before closing it, then comes back to these settings, their draft as it was. */

@@ -120,6 +120,16 @@ pub fn store(engine: EngineId) -> Store {
             dirs: &[],
             login: &[],
         },
+        // Gemini CLI: its sign-in is the machine's (its Google account in the system's keychain, or
+        // GEMINI_API_KEY), and each agent has a GEMINI_CLI_HOME of its own (`Engine::agent_home_var`);
+        // its accounts come with its third ticket.
+        EngineId::Gemini => Store {
+            home: ".gemini",
+            var: crate::engine::gemini::HOME_VAR,
+            files: &[],
+            dirs: &[],
+            login: &[],
+        },
         // One account in 1.8: OpenCode's own config (ESC-45), its providers connected by it.
         EngineId::Opencode => Store {
             home: ".config/opencode",
@@ -320,10 +330,18 @@ pub fn defaults(account: Option<&Account>, engine: EngineId) -> Defaults {
         EngineId::Claude => CLAUDE_DEFAULT_MODEL.to_string(),
         _ => String::new(),
     });
+    // A harness without the mode `auto` (Cursor CLI, Mistral Vibe, Gemini CLI…) starts its new
+    // agents in « Demander », the mode they would run in anyway.
+    let auto = crate::engine::by_id(engine)
+        .caps()
+        .modes
+        .iter()
+        .any(|m| m.id == "auto");
     Defaults {
         model,
         effort: own(|a| &a.default_effort).unwrap_or_else(|| "medium".into()),
-        mode: own(|a| &a.default_mode).unwrap_or_else(|| "auto".into()),
+        mode: own(|a| &a.default_mode)
+            .unwrap_or_else(|| if auto { "auto" } else { "default" }.into()),
     }
 }
 
@@ -2378,9 +2396,11 @@ impl<R: Runtime> Core<R> {
         // OpenCode signs in to no account of its own: its providers are its config's. Mistral Vibe's
         // Principal goes by the key `vibe --setup` kept in the keychain, never read: signed in as
         // far as can be told.
-        // Antigravity CLI the same: its Google account is in the keychain, never read.
-        if matches!(account.engine, EngineId::Opencode | EngineId::Agy)
-            || (account.engine == EngineId::Vibe && !by_key(account))
+        // Antigravity CLI and Gemini CLI the same: their Google account is in the keychain, never read.
+        if matches!(
+            account.engine,
+            EngineId::Opencode | EngineId::Agy | EngineId::Gemini
+        ) || (account.engine == EngineId::Vibe && !by_key(account))
         {
             let dir = config_dir(account, &settings);
             return AccountStatus {

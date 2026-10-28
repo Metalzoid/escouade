@@ -8,6 +8,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
+- Gemini CLI becomes an eighth harness: its agents converse in Escouade over ACP, with its models, its modes, its plan to approve and its questions, each in its own configuration folder; not yet tried with a real account.
 - Antigravity CLI, Google’s agent, becomes a seventh harness: its agents converse in Escouade with its models, its efforts and its Plan mode, and what it refuses during a turn is asked of you at the end of the turn, then taken up again.
 - Mistral Vibe becomes a sixth harness: its agents converse, ask their permissions and their questions in Escouade, with its models, its modes and a Plan mode played by Escouade.
 - Mistral Vibe has several accounts, each by its Mistral API key, and shows what each turn costs, in the conversation, the status bar and the statistics; at its rate limit, the agent goes on by itself a minute later.
@@ -23,6 +24,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### Fixes
 
+- A new agent of a harness without an Auto mode (Cursor CLI, Mistral Vibe, Antigravity CLI, Gemini CLI, OpenCode) starts in “Ask”, no longer in an Auto it doesn’t have.
 - “Approve the plan” resumes in the mode the agent was in before Plan, Auto for instance, instead of “Ask”, with every harness; the button says which mode.
 - A ticket launched by hand starts even past “Pause above quota”: that threshold now holds back the autopilot alone.
 - Under WSLg, links, files and folders open in Windows, instead of doing nothing.

@@ -1,0 +1,62 @@
+{
+  "about": "En mode yolo, invoke_agent « generalist » (ESC-273, faux serveur) : un Task, ses outils non diffusés.",
+  "agent": {
+    "cwd": "C:\\tmp\\esc273\\proj2",
+    "engine": "gemini",
+    "mode": "bypassPermissions",
+    "model": "auto"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": null,
+    "sessionId": "f9903802-3d93-4dcc-8c8e-5f2fde753cf8",
+    "status": "done",
+    "tokens": 2440,
+    "touchedFiles": []
+  },
+  "flux": "../../gemini/18-subagent-yolo.jsonl",
+  "items": [
+    {
+      "images": 0,
+      "kind": "user",
+      "queued": false,
+      "text": "delegue"
+    },
+    {
+      "input": {
+        "description": "generalist",
+        "prompt": "Delegating to agent 'generalist'",
+        "subagent_type": "generalist"
+      },
+      "kind": "tool",
+      "name": "Task",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": ""
+      },
+      "run": {
+        "status": "done",
+        "tools": 0
+      },
+      "status": "ok"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "Terminé : {\"output\":\"Subagent 'generalist' finished.\\nTermination Reas"
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "gemini",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 2440
+    }
+  ]
+}

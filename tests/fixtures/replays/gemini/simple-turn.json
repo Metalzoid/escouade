@@ -1,0 +1,43 @@
+{
+  "about": "Un tour de Gemini CLI 0.66.0 (faux serveur d’API, ESC-273) : session/new avec ses modes et modèles, la réponse « ok », ses jetons dans la réponse au prompt (aucun coût).",
+  "agent": {
+    "cwd": "C:\\tmp\\esc273\\proj2",
+    "engine": "gemini",
+    "mode": "default",
+    "model": "auto"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": null,
+    "sessionId": "32a99f3d-3f32-4f77-9ca1-9b0884339f50",
+    "status": "done",
+    "tokens": 1220,
+    "touchedFiles": []
+  },
+  "flux": "../../gemini/02-simple-turn.jsonl",
+  "items": [
+    {
+      "images": 0,
+      "kind": "user",
+      "queued": false,
+      "text": "dis ok"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "ok"
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "gemini",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 1220
+    }
+  ]
+}

@@ -1,9 +1,9 @@
 # The harnesses
 
-A harness is the program that runs an agent: Claude Code, Codex, OpenCode, GitHub Copilot CLI, Cursor CLI, Mistral Vibe or Antigravity CLI. This page compares them, then tells for each one how to install it, its account, its models and modes, its cost, its terminal view and what it doesn’t do.
+A harness is the program that runs an agent: Claude Code, Codex, OpenCode, GitHub Copilot CLI, Cursor CLI, Mistral Vibe, Antigravity CLI or Gemini CLI. This page compares them, then tells for each one how to install it, its account, its models and modes, its cost, its terminal view and what it doesn’t do.
 
 > [!NOTE]
-> Codex, OpenCode and Copilot CLI have been there since Escouade 1.8, Cursor CLI since 2.0.1, Mistral Vibe and Antigravity CLI since the version after 2.0.5; Claude Code from the start.
+> Codex, OpenCode and Copilot CLI have been there since Escouade 1.8, Cursor CLI since 2.0.1, Mistral Vibe, Antigravity CLI and Gemini CLI since the version after 2.0.5; Claude Code from the start.
 
 ## Choosing a harness
 
@@ -24,21 +24,21 @@ Whatever the harness, the agent has the same conversation: the answer and the re
 
 ## Comparison
 
-| | Claude Code | Codex | OpenCode | Copilot CLI | Cursor CLI | Mistral Vibe | Antigravity CLI |
-|---|---|---|---|---|---| --- | --- |
-| Installation | Claude Code’s script | `npm install -g @openai/codex` | `npm install -g opencode-ai` | `npm install -g @github/copilot` | Cursor’s script | `uv tool install mistral-vibe` | Antigravity’s script |
-| Tested with | 2.1.283 to 2.1.301 | 0.163.0 | 1.19.3 | 1.0.98 | 2026.10.22 | 3.0.3 | 1.4.9 |
-| Account | Claude subscription or API key | ChatGPT account | the providers connected to OpenCode, local models included | GitHub account with Copilot, Free included | Cursor account (`agent login`, or an API key), Free included | Mistral API key (`vibe --setup`) | Google account (its interface’s sign-in) |
-| Several accounts | yes | yes | no | yes | yes, by API key | yes, by API key | no |
-| Models | those Claude Code lists for each account | those Codex lists for your account | your providers’, with search and favorites | those Copilot lists, with their multiplier | your account’s, Auto first | its session’s | those `agy models` lists, Gemini’s effort apart |
-| Modes | all five | all five | four (no Auto) | all five | four (no Auto) | four (no Auto; Plan played by Escouade) | four (no Auto) |
-| What protects | its permissions | its sandbox | its permission rules | Escouade’s rules | its permissions, for its commands | its permissions; Escouade’s rules | its rules, written by Escouade; asks once the turn is over |
-| Message during a turn | waits for the end of the turn | enters the turn | waits for the end of the turn | enters the turn | waits for the end of the turn | waits for the end of the turn | waits for the end of the turn |
-| Cost | exact | estimated | exact (0 when local) | exact, in AI credits | not told | exact | not given (tokens) |
-| Quota | 5-hour and 7-day windows | 5-hour and 7-day windows (30 days on the free plan) | none: daily budget | monthly credits | a link to its dashboard | none: daily budget, a link to Mistral’s console | not read |
-| Terminal view | “Claude Code view” | “Codex view” | “OpenCode view” | “Copilot CLI view” | “Cursor CLI view”, limited following | “Mistral Vibe view” | not yet |
-| Attached PDFs | yes | no | no | no | no | no | no |
-| Remote control, background tasks | yes | no | no | no | no | no | no |
+| | Claude Code | Codex | OpenCode | Copilot CLI | Cursor CLI | Mistral Vibe | Antigravity CLI | Gemini CLI |
+|---|---|---|---|---|---| --- | --- | --- |
+| Installation | Claude Code’s script | `npm install -g @openai/codex` | `npm install -g opencode-ai` | `npm install -g @github/copilot` | Cursor’s script | `uv tool install mistral-vibe` | Antigravity’s script | `npm install -g @google/gemini-cli` |
+| Tested with | 2.1.283 to 2.1.301 | 0.163.0 | 1.19.3 | 1.0.98 | 2026.10.22 | 3.0.3 | 1.4.9 | 0.66.0, without an account (not yet tried for real) |
+| Account | Claude subscription or API key | ChatGPT account | the providers connected to OpenCode, local models included | GitHub account with Copilot, Free included | Cursor account (`agent login`, or an API key), Free included | Mistral API key (`vibe --setup`) | Google account (its interface’s sign-in) | Google account, Gemini API key or Vertex AI (the machine’s sign-in) |
+| Several accounts | yes | yes | no | yes | yes, by API key | yes, by API key | no | no |
+| Models | those Claude Code lists for each account | those Codex lists for your account | your providers’, with search and favorites | those Copilot lists, with their multiplier | your account’s, Auto first | its session’s | those `agy models` lists, Gemini’s effort apart | its session’s, Auto first |
+| Modes | all five | all five | four (no Auto) | all five | four (no Auto) | four (no Auto; Plan played by Escouade) | four (no Auto) | four (no Auto) |
+| What protects | its permissions | its sandbox | its permission rules | Escouade’s rules | its permissions, for its commands | its permissions; Escouade’s rules | its rules, written by Escouade; asks once the turn is over | its permissions; its rules for a private project |
+| Message during a turn | waits for the end of the turn | enters the turn | waits for the end of the turn | enters the turn | waits for the end of the turn | waits for the end of the turn | waits for the end of the turn | waits for the end of the turn |
+| Cost | exact | estimated | exact (0 when local) | exact, in AI credits | not told | exact | not given (tokens) | not given (tokens) |
+| Quota | 5-hour and 7-day windows | 5-hour and 7-day windows (30 days on the free plan) | none: daily budget | monthly credits | a link to its dashboard | none: daily budget, a link to Mistral’s console | not read | not read |
+| Terminal view | “Claude Code view” | “Codex view” | “OpenCode view” | “Copilot CLI view” | “Cursor CLI view”, limited following | “Mistral Vibe view” | not yet | not yet |
+| Attached PDFs | yes | no | no | no | no | no | no | no |
+| Remote control, background tasks | yes | no | no | no | no | no | no | no |
 
 ## Claude Code
 
@@ -224,10 +224,38 @@ For a private project, reading the other projects’ paths is refused to it by i
 
 Antigravity gives each turn’s tokens, not their cost nor its quota: its `/usage` is only in its interface; “Usage on antigravity.google”, in Settings › Accounts and the quota panel, opens the page of its plans. No terminal view nor several accounts yet. No Auto mode, attached images or PDFs, “Duplicate the conversation”, `/` commands in Escouade, remote control or background tasks. It gets Escouade’s MCP server through its folder’s config; the switch doesn’t declare it in yours yet.
 
+## Gemini CLI
+
+> [!WARNING]
+> Gemini CLI hasn’t been tried with a real account yet: its adapter follows its documentation and what its program does against a fake server. What is left to see for real: the size of its live answers, its questions, its quotas, its sign-in in each agent’s folder.
+
+### Installation and account
+
+Install Gemini CLI with npm (`npm install -g @google/gemini-cli`, Node 20 or later) or Homebrew (`brew install gemini-cli`), then run `gemini` once in a terminal to sign in to your Google account, or give it an API key by `GEMINI_API_KEY`. Escouade finds `gemini` on the `PATH`, or in npm’s global folder. Each agent has its own configuration folder (`GEMINI_CLI_HOME`), removed with it: its settings, its sessions and its rules are kept there, never in your `~/.gemini`, which Antigravity CLI shares. Escouade turns off its updates and usage statistics there, and trusts the agent’s folder (without it, Gemini would leave out Escouade’s MCP server). Your sign-in stays the machine’s; several accounts will come later.
+
+### Models and modes
+
+The “Model” menu lists its session’s models, Auto (its router, which picks Pro or Flash at each turn) first. It has no “Effort” menu: its thinking isn’t set along the way.
+
+| Mode | In Gemini CLI |
+|---|---|
+| Ask | Its `default` mode: it reads without asking; its writes in the agent’s folder go by Escouade’s rules, elsewhere they are asked with their diff; its commands and MCP tools are asked; its subagents are refused. |
+| Auto edits | Its `autoEdit` mode: its writes go through without asking. |
+| Plan | Its `plan` mode: it studies without changing anything and writes its plan, which comes as a plan to approve; approved, Gemini carries it out. |
+| Bypass | Its `yolo` mode: it does everything without asking, subagents included. |
+
+“For this agent” holds for its session. Refusing stops the turn; your word, if any, is sent to it after. Gemini has no tool to ask a question when Escouade drives it: Escouade tells it to end its turn on its question, which comes as a card (in the window as in the list), and your answer is sent to it. It has no task list. A message sent during a turn waits for its end. “Stop” stops the turn; the conversation resumes after a restart. No sandbox.
+
+For a private project, its file tools and its commands that name the other projects’ paths are refused by its rules (`--policy`), even in Bypass, and what it asks about them is refused right away. A script that opens a file itself isn’t guarded.
+
+### Cost, quota and what Gemini doesn’t do
+
+Gemini gives each turn’s tokens, not their cost nor its quota; its limit (a 429 error) stops the turn on an amber card, and the agent goes on by itself a minute later. No terminal view nor several accounts yet. No Auto mode, attached PDFs, “Duplicate the conversation”, `/` commands in Escouade (`/compact`: its `/compress`, in its interface), remote control nor background tasks. It gets Escouade’s MCP server by its session; the switch doesn’t declare it in your config yet.
+
 ## The MCP server
 
 Whatever their harness, Escouade’s agents get its MCP server, each with its own token, when “Agents can drive Escouade” is on. The same switch declares it in each installed harness, so that Claude Code, Codex, OpenCode or Copilot CLI started outside Escouade, in a terminal or their app, drive Escouade: see [the MCP server](mcp).
 
 ## Written texts
 
-A new agent’s name, the suggested commit messages and pull request descriptions are written by the harness of Settings › Application › “Model for written texts”: “Claude Haiku”, “Codex (GPT-6-Luna)”, an OpenCode model , “Copilot (GPT-5 mini)”, “Cursor (Auto)”, “Mistral Vibe” or “Gemini 3.8 Flash” (Antigravity CLI), among the installed harnesses (see [written texts](settings-application#written-texts)).
+A new agent’s name, the suggested commit messages and pull request descriptions are written by the harness of Settings › Application › “Model for written texts”: “Claude Haiku”, “Codex (GPT-6-Luna)”, an OpenCode model , “Copilot (GPT-5 mini)”, “Cursor (Auto)”, “Mistral Vibe”, “Gemini 3.8 Flash” (Antigravity CLI) or “Gemini CLI”, among the installed harnesses (see [written texts](settings-application#written-texts)).

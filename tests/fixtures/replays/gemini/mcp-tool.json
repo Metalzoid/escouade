@@ -1,0 +1,66 @@
+{
+  "about": "Un outil du serveur MCP d’Escouade (ESC-273, faux serveur MCP) : mcp_escouade_get_board, son nom de Claude Code, sa permission, son résultat.",
+  "agent": {
+    "cwd": "C:\\tmp\\esc273\\proj2",
+    "engine": "gemini",
+    "mode": "default",
+    "model": "auto"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": null,
+    "sessionId": "b42d772d-9636-41e9-845d-c55b4506d203",
+    "status": "done",
+    "tokens": 2440,
+    "touchedFiles": []
+  },
+  "flux": "../../gemini/12-mcp-session-new.jsonl",
+  "items": [
+    {
+      "images": 0,
+      "kind": "user",
+      "queued": false,
+      "text": "utilise le mcp"
+    },
+    {
+      "input": {},
+      "kind": "tool",
+      "name": "mcp__escouade__get_board",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": "pong-from-mcp"
+      },
+      "status": "ok"
+    },
+    {
+      "alwaysScope": "agent",
+      "canAlways": true,
+      "decision": "allow",
+      "defaultNo": false,
+      "description": "Serveur MCP escouade, outil get_board",
+      "input": {},
+      "kind": "permission",
+      "reason": null,
+      "toolName": "mcp__escouade__get_board",
+      "toolUseId": "mcp_escouade_get_board__mcp_escouade_get_board_1793213494152_0"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "Terminé : {\"output\":\"<untrusted_context>\\npong-from-mcp\\n</untrusted_c"
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "gemini",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 2440
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "about": "Un 429 du serveur (ESC-273, faux serveur) : le tour finit « limité ».",
+  "agent": {
+    "cwd": "C:\\tmp\\esc273\\proj2",
+    "engine": "gemini",
+    "mode": "default",
+    "model": "auto"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": null,
+    "sessionId": "ee68fb4a-3ce2-4dc5-9fe8-fc99e87dfc6e",
+    "status": "error",
+    "tokens": 0,
+    "touchedFiles": []
+  },
+  "flux": "../../gemini/13-rate-limit-429.jsonl",
+  "items": [
+    {
+      "images": 0,
+      "kind": "user",
+      "queued": false,
+      "text": "limite atteinte"
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "gemini",
+      "error": "Limite d’usage de Gemini atteinte (429) : Resource has been exhausted (e.g. check quota).",
+      "interrupted": false,
+      "isError": true,
+      "kind": "turn",
+      "limited": true,
+      "tokens": 0
+    }
+  ]
+}

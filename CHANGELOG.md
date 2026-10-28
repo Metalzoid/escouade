@@ -8,6 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- Gemini CLI devient un huitième harness : ses agents conversent dans Escouade par ACP, avec ses modèles, ses modes, son plan à approuver et ses questions, chacun dans son propre dossier de configuration ; pas encore essayé avec un vrai compte.
 - Antigravity CLI, l’agent de Google, devient un septième harness : ses agents conversent dans Escouade avec ses modèles, ses efforts et son mode Plan, et ce qu’il refuse en cours de tour t’est demandé à la fin du tour, puis repris.
 - Mistral Vibe devient un sixième harness : ses agents conversent, demandent leurs permissions et posent leurs questions dans Escouade, avec ses modèles, ses modes et un mode Plan joué par Escouade.
 - Mistral Vibe a plusieurs comptes, chacun par sa clé d’API Mistral, et montre ce que coûte chaque tour, dans la conversation, la barre d’état et les statistiques ; à sa limite de débit, l’agent reprend seul une minute plus tard.
@@ -23,6 +24,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Corrections
 
+- Un nouvel agent d’un harness sans mode Auto (Cursor CLI, Mistral Vibe, Antigravity CLI, Gemini CLI, OpenCode) part en « Demander », et non plus en un Auto qu’il n’a pas.
 - « Approuver le plan » reprend dans le mode d’avant le Plan, Auto par exemple, et non plus en « Demander », avec chaque harness ; le bouton dit ce mode.
 - Un ticket lancé à la main part même au-delà de « Pause au-delà du quota » : ce seuil ne retient plus que le pilote auto.
 - Sous WSLg, les liens, les fichiers et les dossiers s’ouvrent dans Windows, au lieu de ne rien faire.

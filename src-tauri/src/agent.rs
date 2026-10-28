@@ -28,6 +28,7 @@ mod cursor_tui;
 mod localcmd;
 // The translation of the minimal fake engine of the conformance bench (`engine/minimal/`).
 mod agy;
+mod gemini;
 #[cfg(test)]
 mod minimal;
 mod opencode;
@@ -288,6 +289,8 @@ pub struct AgentRt {
     vibe: vibe::VibeState,
     /// What the translation of Antigravity CLI keeps between its events (`agent/agy.rs`).
     agy: agy::AgyState,
+    /// What the translation of Gemini CLI keeps between its updates (`agent/gemini.rs`).
+    gemini: gemini::GeminiState,
 }
 
 /// A stream's process linked to claude.ai, and the session it holds there (its bridge id, when
@@ -560,6 +563,7 @@ impl AgentRt {
             opencode: opencode::OpencodeState::default(),
             vibe: vibe::VibeState::default(),
             agy: agy::AgyState::default(),
+            gemini: gemini::GeminiState::default(),
         }
     }
 
@@ -656,6 +660,7 @@ impl AgentRt {
         self.opencode = opencode::OpencodeState::default();
         self.vibe = vibe::VibeState::default();
         self.agy = agy::AgyState::default();
+        self.gemini = gemini::GeminiState::default();
         // What ran in the process before is gone with it.
         self.interrupt_plan();
     }

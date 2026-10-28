@@ -25,6 +25,7 @@ pub fn all() -> Vec<&'static dyn Engine> {
         &super::CURSOR,
         &super::VIBE,
         &super::AGY,
+        &super::GEMINI,
     ]
 }
 

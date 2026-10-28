@@ -225,7 +225,11 @@ fn gives_the_server() -> Vec<&'static dyn Engine> {
         .filter(|e| {
             !matches!(
                 e.id(),
-                EngineId::Opencode | EngineId::Cursor | EngineId::Vibe | EngineId::Agy
+                EngineId::Opencode
+                    | EngineId::Cursor
+                    | EngineId::Vibe
+                    | EngineId::Agy
+                    | EngineId::Gemini
             )
         })
         .collect()

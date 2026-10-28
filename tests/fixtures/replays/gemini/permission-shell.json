@@ -1,0 +1,70 @@
+{
+  "about": "Une commande (run_shell_command) en mode default (ESC-273, faux serveur) : son titre est la commande, demandée puis accordée ; sa sortie n’est pas dans tool_call_update.",
+  "agent": {
+    "cwd": "C:\\tmp\\esc273\\proj2",
+    "engine": "gemini",
+    "mode": "default",
+    "model": "auto"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": null,
+    "sessionId": "b362fcc0-8c1b-4c54-a364-1f96eebf80ef",
+    "status": "done",
+    "tokens": 2440,
+    "touchedFiles": []
+  },
+  "flux": "../../gemini/05-permission-shell.jsonl",
+  "items": [
+    {
+      "images": 0,
+      "kind": "user",
+      "queued": false,
+      "text": "lance la commande"
+    },
+    {
+      "input": {
+        "command": "node --version"
+      },
+      "kind": "tool",
+      "name": "Bash",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": ""
+      },
+      "status": "ok"
+    },
+    {
+      "alwaysScope": "agent",
+      "canAlways": true,
+      "decision": "allow",
+      "defaultNo": false,
+      "description": null,
+      "input": {
+        "command": "node --version"
+      },
+      "kind": "permission",
+      "reason": "[current working directory C:\\tmp\\esc273\\proj2] (version de node)",
+      "toolName": "Bash",
+      "toolUseId": "run_shell_command__run_shell_command_1793213307847_0"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "Terminé : {\"output\":\"<untrusted_context>\\nOutput: v24.14.0\\nProcess Gr"
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "gemini",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 2440
+    }
+  ]
+}
