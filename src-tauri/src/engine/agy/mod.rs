@@ -22,6 +22,7 @@
 pub(crate) mod bench;
 mod locate;
 mod process;
+pub(crate) mod terminal;
 
 use process::{AgyProcess, Denied};
 
@@ -170,7 +171,7 @@ pub fn caps() -> EngineCaps {
         quota: QuotaKind::None,
         quota_windows: Vec::new(),
         cost: CostKind::None,
-        terminal_view: false,
+        terminal_view: true,
         remote_control: false,
         background_tasks: false,
         todo_tools: false,
@@ -296,7 +297,7 @@ pub(crate) fn launch_args(settings: &Settings, conversation: Option<&str>) -> Ve
 }
 
 /// Its folder of config in the agent's home.
-fn gemini_dir(home: &Path) -> PathBuf {
+pub(crate) fn gemini_dir(home: &Path) -> PathBuf {
     home.join(".gemini")
 }
 
@@ -404,9 +405,24 @@ pub(crate) fn write_settings(
     allowed: &[String],
 ) -> Result<()> {
     let file = settings_file(home);
-    let mut doc: Value = std::fs::read_to_string(&file)
+    let before = std::fs::read_to_string(&file).unwrap_or_default();
+    let doc = settings_doc(&before, rules, mode, allowed);
+    if let Some(parent) = file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&file, serde_json::to_string_pretty(&doc)?)?;
+    Ok(())
+}
+
+/// The settings `before` (a JSON object, else none) with their `permissions` as Escouade sets them.
+pub(crate) fn settings_doc(
+    before: &str,
+    rules: &AgyRules,
+    mode: &str,
+    allowed: &[String],
+) -> Value {
+    let mut doc: Value = serde_json::from_str(before)
         .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
         .filter(Value::is_object)
         .unwrap_or_else(|| json!({}));
     let mut allow = mode_rules(rules, mode);
@@ -416,6 +432,15 @@ pub(crate) fn write_settings(
         }
     }
     doc["permissions"] = json!({ "allow": allow, "deny": deny_rules(rules), "ask": [] });
+    doc
+}
+
+/// Escouade's server in the agent's MCP config, its token in the file (`agy` expands no variable
+/// there, ESC-269), never on a command line; none when it is refused.
+pub(crate) fn write_grant(home: &Path, escouade: Option<(&str, &str)>) -> Result<()> {
+    let file = mcp_file(home);
+    let before = std::fs::read_to_string(&file).unwrap_or_default();
+    let doc = grant_doc(&before, escouade);
     if let Some(parent) = file.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -423,13 +448,10 @@ pub(crate) fn write_settings(
     Ok(())
 }
 
-/// Escouade's server in the agent's MCP config, its token in the file (`agy` expands no variable
-/// there, ESC-269), never on a command line; none when it is refused.
-pub(crate) fn write_grant(home: &Path, escouade: Option<(&str, &str)>) -> Result<()> {
-    let file = mcp_file(home);
-    let mut doc: Value = std::fs::read_to_string(&file)
+/// The MCP config `before` (a JSON object, else none) with Escouade's server in it, or out of it.
+pub(crate) fn grant_doc(before: &str, escouade: Option<(&str, &str)>) -> Value {
+    let mut doc: Value = serde_json::from_str(before)
         .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
         .filter(Value::is_object)
         .unwrap_or_else(|| json!({}));
     if !doc["mcpServers"].is_object() {
@@ -448,11 +470,7 @@ pub(crate) fn write_grant(home: &Path, escouade: Option<(&str, &str)>) -> Result
             }
         }
     }
-    if let Some(parent) = file.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(&file, serde_json::to_string_pretty(&doc)?)?;
-    Ok(())
+    doc
 }
 
 /// Escouade's server taken out of the agent's MCP config once its process is over: its token goes
@@ -937,7 +955,7 @@ impl Engine for Agy {
     }
 
     fn terminal(&self) -> Option<&'static dyn super::TerminalView> {
-        None
+        Some(&terminal::AGY_TERMINAL)
     }
 
     fn install(&self) -> Install {
@@ -1007,6 +1025,8 @@ impl Engine for Agy {
             Escouade::Denied { .. } => None,
         };
         write_grant(&home, escouade)?;
+        // The hooks of its interface (« Vue Antigravity ») would run here too, for nothing.
+        terminal::forget_hooks(&home);
         let rules = AgyRules {
             cwd: spawn.cwd.clone(),
             read_dirs: spawn

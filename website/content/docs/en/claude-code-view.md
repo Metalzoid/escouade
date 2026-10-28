@@ -1,6 +1,6 @@
 # The terminal view
 
-The terminal view runs an agent in its harness’s interface (Claude Code, Codex, OpenCode or Copilot CLI), in a terminal, without losing its session. This page explains how to switch views, what Escouade keeps tracking, and what changes.
+The terminal view runs an agent in its harness’s interface (Claude Code, Codex, OpenCode, Copilot CLI, Cursor CLI, Mistral Vibe or Antigravity CLI), in a terminal, without losing its session. This page explains how to switch views, what Escouade keeps tracking, and what changes.
 
 ## What it’s for
 
@@ -132,6 +132,18 @@ An agent on Mistral Vibe has its view too: the button is called “Mistral Vibe 
 - **Modes.** “Ask” starts its `ask` agent, “Accept edits” `accept-edits`, “Bypass” `auto-approve`; “Plan” asks, as “Ask” does, Vibe having no plan mode. For a private project, the other projects’ paths stay refused to its file tools, and “Bypass” stays in `ask`.
 - **Interrupting** sends `Esc`, as in the interface.
 - **Not tracked in this view**: the “Plan” banner, cost and tokens, thinking (set by `/thinking` in the interface).
+
+## With Antigravity CLI
+
+An agent on Antigravity CLI has its view too: the button is called “Antigravity CLI view” and starts Antigravity’s interface (`agy`) in the agent’s folder, with its model, effort and mode, in the agent’s own home, where its conversation is kept. Both views share the same conversation: the interface resumes it (`agy --conversation`) with all its history, and `agy -p` resumes it back in the Escouade view, with nothing lost and nothing to relay. What differs from Claude Code:
+
+- **Following.** Escouade reads the conversation’s transcript (`brain/<conversation>/.system_generated/logs/transcript_full.jsonl` under the agent’s `.gemini`), a line per step: your messages, its replies, its tools and their end, the question it asks you, and the end of each turn. The agent’s card says when it works, when it waits for your answer to its question, and when it’s done. Its hooks (`SessionStart`, `PreToolUse`, `PostToolUse`, `Stop`) run `escouade-hook`, installed with the app; they’re written in the agent’s folder (`.gemini/config/hooks.json`) when the view opens and taken away on the way back, never in your `~/.gemini`.
+- **A conversation not written yet.** Antigravity keeps a conversation’s transcript only after a first message: an agent that said nothing yet isn’t resumed, the interface opens a new conversation, and its first hook gives it to the agent.
+- **Escouade’s MCP server** is in the MCP config of the agent’s folder, its token written in that file (Antigravity expands no variable there), never on its command line.
+- **Its first screens.** Escouade writes the color choice and the folder’s trust in the agent’s folder: Antigravity doesn’t ask. Your Google account’s address isn’t shown in its header.
+- **Modes.** “Ask” is its default mode, “Accept edits” `accept-edits`, “Plan” `plan`, “Bypass” its rules that allow everything; a private project’s paths stay refused to its file tools.
+- **Interrupting** sends `Esc`, as in the interface: what it wrote so far ends the turn.
+- **Not tracked in this view**: a permission it asks you in the terminal (neither a hook nor the transcript tells it: the card stays “working” until you answer), the “Plan” banner, cost and tokens, thinking.
 
 ## On Windows with WSL
 

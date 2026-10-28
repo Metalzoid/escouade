@@ -25,6 +25,9 @@ pub(crate) struct AgyState {
     input: u64,
     output: u64,
     cached: u64,
+    /// The calls its interface's transcript told and did not run yet (« Vue Antigravity »), by
+    /// their id: their tool and arguments, for their end.
+    pub(super) tui_calls: std::collections::HashMap<String, (String, Value)>,
 }
 
 impl AgentRt {
@@ -211,16 +214,17 @@ impl AgentRt {
 
 /// What a call of `kind` said, as Cursor's translation reads it: a command's output and code
 /// (`Command exited with code 0.\n\nCommand output:\n…`), its refusal on its error.
-fn output(kind: &Value, said: &str, failed: bool) -> Value {
+pub(super) fn output(kind: &Value, said: &str, failed: bool) -> Value {
     if kind != "execute" {
         return json!({ "content": said });
     }
     if failed {
         return json!({ "stderr": said, "content": said });
     }
+    // In its interface's transcript, after the times it ran (`Created At: …`).
     let code = said
-        .strip_prefix("Command exited with code ")
-        .and_then(|r| r.split(['.', ' ']).next())
+        .split_once("Command exited with code ")
+        .and_then(|(_, r)| r.split(['.', ' ']).next())
         .and_then(|c| c.parse::<i64>().ok());
     let text = said
         .split_once("Command output:\n")

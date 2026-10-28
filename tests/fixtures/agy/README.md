@@ -20,3 +20,14 @@ Enregistrés le 2026-10-28 contre le vrai `agy -p`, avec `USERPROFILE`/`HOME` je
 | `hook-payloads.jsonl` | stdin d'un hook `PreToolUse` |
 | `mcp_config.http-header.json` | ce que `agy mcp add -H` écrit (le `${…}` n'est **pas** développé) |
 | `tui-permission-prompt.txt`, `tui-usage.txt` | texte de l'interface : demande d'autorisation, `/usage` |
+
+## Interface (`agy` sans `-p`, ESC-272)
+
+Enregistrés le 2026-10-28 contre la vraie interface d'`agy` 1.4.9 dans un pseudo-terminal, avec `USERPROFILE`/`HOME` jetable et `gemini-3.8-flash-low`. Ce que lit la « Vue Antigravity CLI » (`src-tauri/src/agent/agy_tui.rs`) ; résultats dans `docs/PROTOCOL.md`, « Vue Antigravity CLI ».
+
+| Fichier | Contenu |
+|---|---|
+| `tui-transcript-command-resumed.jsonl` | `brain/<id>/.system_generated/logs/transcript_full.jsonl` : un `run_command` autorisé dans l'interface (« Yes, run command »), puis la conversation reprise par `--conversation` (un `SYSTEM_MESSAGE` de reprise, une réponse) |
+| `tui-transcript-question-interrupted.jsonl` | un `ask_question` répondu dans l'interface (`A1: …`), puis un tour arrêté par Échap : sa réponse partielle, sans hook |
+| `tui-hook-payloads.jsonl` | l'entrée des hooks de `.gemini/config/hooks.json` (l'événement ajouté en `event`) : `SessionStart` au premier message, `PreInvocation`/`PostInvocation`, `PreToolUse`/`PostToolUse` autour de la question, `Stop` (`NO_TOOL_CALL`) ; rien après Échap |
+| `tui-transcript-write.jsonl` | un `write_file` (`Path`, `Content`, `Overwrite`) autorisé dans l'interface, son exécution (« Created file. ») et la réponse |

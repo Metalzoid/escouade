@@ -1,6 +1,6 @@
 # La vue terminal
 
-La vue terminal fait tourner un agent dans l’interface de son harness (Claude Code, Codex, OpenCode ou Copilot CLI), dans un terminal, sans perdre sa session. Cette page explique comment changer de vue, ce qu’Escouade continue de suivre et ce qui change.
+La vue terminal fait tourner un agent dans l’interface de son harness (Claude Code, Codex, OpenCode, Copilot CLI, Cursor CLI, Mistral Vibe ou Antigravity CLI), dans un terminal, sans perdre sa session. Cette page explique comment changer de vue, ce qu’Escouade continue de suivre et ce qui change.
 
 ## À quoi ça sert
 
@@ -132,6 +132,18 @@ Un agent sur Mistral Vibe a aussi sa vue : le bouton s’appelle « Vue Mistra
 - **Les modes.** « Demander » lance son agent `ask`, « Édits auto » `accept-edits`, « Bypass » `auto-approve` ; « Plan » demande, comme « Demander », Vibe n’ayant pas de mode plan. Pour un projet privé, les chemins des autres projets restent refusés à ses outils de fichiers, et « Bypass » reste en `ask`.
 - **Interrompre** envoie `Échap`, comme dans l’interface.
 - **Ce qui n’est pas suivi dans cette vue** : le bandeau « Plan », le coût et les tokens, la réflexion (réglée par `/thinking` dans l’interface).
+
+## Avec Antigravity CLI
+
+Un agent sur Antigravity CLI a aussi sa vue : le bouton s’appelle « Vue Antigravity CLI » et lance l’interface d’Antigravity (`agy`) dans le dossier de l’agent, avec son modèle, son effort et son mode, dans le dossier personnel de l’agent, celui où sa conversation est gardée. Les deux vues partagent la même conversation : l’interface la reprend (`agy --conversation`) avec tout son historique, et `agy -p` la reprend au retour dans la vue Escouade, sans rien perdre ni rien relayer. Ce qui change par rapport à Claude Code :
+
+- **Le suivi.** Escouade lit le transcript de la conversation (`brain/<conversation>/.system_generated/logs/transcript_full.jsonl` sous le `.gemini` de l’agent), une ligne par étape : tes messages, ses réponses, ses outils et leur fin, la question qu’il te pose, et la fin de chaque tour. La carte de l’agent dit quand il travaille, quand il attend ta réponse à sa question, et quand il a fini. Ses hooks (`SessionStart`, `PreToolUse`, `PostToolUse`, `Stop`) lancent `escouade-hook`, installée avec l’app ; ils sont écrits dans le dossier de l’agent (`.gemini/config/hooks.json`) à l’ouverture de la vue et retirés au retour, jamais dans ton `~/.gemini`.
+- **Une conversation pas encore écrite.** Antigravity ne garde le transcript d’une conversation qu’après un premier message : celle d’un agent qui n’a encore rien dit n’est pas reprise, l’interface en ouvre une nouvelle, et son premier hook la donne à l’agent.
+- **Le serveur MCP d’Escouade** est dans la config MCP du dossier de l’agent, son jeton écrit dans ce fichier (Antigravity n’y développe aucune variable), jamais sur sa ligne de commande.
+- **Ses premiers écrans.** Escouade écrit le choix des couleurs et la confiance du dossier dans le dossier de l’agent : Antigravity ne pose pas la question. L’adresse de ton compte Google n’est pas affichée dans son en-tête.
+- **Les modes.** « Demander » est son mode par défaut, « Accepter les modifications » `accept-edits`, « Plan » `plan`, « Bypass » ses règles qui permettent tout ; les chemins d’un projet privé restent refusés à ses outils de fichiers.
+- **Interrompre** envoie `Échap`, comme dans l’interface : ce qu’il a écrit jusque-là finit le tour.
+- **Ce qui n’est pas suivi dans cette vue** : une autorisation qu’il te demande dans le terminal (aucun hook ni le transcript ne la disent : la carte reste « travaille » jusqu’à ta réponse), le bandeau « Plan », le coût et les tokens, la réflexion.
 
 ## Sous Windows avec WSL
 

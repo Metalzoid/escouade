@@ -36,7 +36,7 @@ Whatever the harness, the agent has the same conversation: the answer and the re
 | Message during a turn | waits for the end of the turn | enters the turn | waits for the end of the turn | enters the turn | waits for the end of the turn | waits for the end of the turn | waits for the end of the turn | waits for the end of the turn |
 | Cost | exact | estimated | exact (0 when local) | exact, in AI credits | not told | exact | not given (tokens) | not given (tokens) |
 | Quota | 5-hour and 7-day windows | 5-hour and 7-day windows (30 days on the free plan) | none: daily budget | monthly credits | a link to its dashboard | none: daily budget, a link to Mistral’s console | not read | not read |
-| Terminal view | “Claude Code view” | “Codex view” | “OpenCode view” | “Copilot CLI view” | “Cursor CLI view”, limited following | “Mistral Vibe view” | not yet | not yet |
+| Terminal view | “Claude Code view” | “Codex view” | “OpenCode view” | “Copilot CLI view” | “Cursor CLI view”, limited following | “Mistral Vibe view” | “Antigravity CLI view” | not yet |
 | Attached PDFs | yes | no | no | no | no | no | no | no |
 | Remote control, background tasks | yes | no | no | no | no | no | no | no |
 
@@ -222,7 +222,7 @@ For a private project, reading the other projects’ paths is refused to it by i
 
 ### Cost, quota and what Antigravity doesn’t do
 
-Antigravity gives each turn’s tokens, not their cost nor its quota: its `/usage` is only in its interface; “Usage on antigravity.google”, in Settings › Accounts and the quota panel, opens the page of its plans. No terminal view nor several accounts yet. No Auto mode, attached images or PDFs, “Duplicate the conversation”, `/` commands in Escouade, remote control or background tasks. It gets Escouade’s MCP server through its folder’s config; the switch doesn’t declare it in yours yet.
+Antigravity gives each turn’s tokens, not their cost nor its quota: its `/usage` is only in its interface; “Usage on antigravity.google”, in Settings › Accounts and the quota panel, opens the page of its plans. Only one account for now. No Auto mode, attached images or PDFs, “Duplicate the conversation”, `/` commands in Escouade, remote control or background tasks. It gets Escouade’s MCP server through its folder’s config; the switch doesn’t declare it in yours yet. The “Antigravity CLI view” runs the agent in Antigravity’s interface, on the same conversation (see [the terminal view](claude-code-view#with-antigravity-cli)).
 
 ## Gemini CLI
 

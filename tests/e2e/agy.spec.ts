@@ -180,3 +180,81 @@ test.describe('an agent on Antigravity CLI', () => {
     await expect(page.getByText('Antigravity a reçu : encore')).toBeVisible();
   });
 });
+
+// ESC-272: the agent's conversation in Antigravity's own interface (fake-agy-tui.mjs), in its home, with Escouade's server
+// in its MCP config (never on its command line), its hooks telling Escouade; back in Escouade's view, nothing lost.
+test.describe('« Vue Antigravity » (ESC-272)', () => {
+  test.use({ appEnv: { ESCOUADE_AGY: FAKE_AGY }, preStart: { run: () => ({ mcpEnabled: true }) } });
+
+  /** What the fake interface wrote in the agents' homes: its launches, the hooks it ran. */
+  const ofHomes = (app: App, name: string): any[] => {
+    const homes = path.join(app.data, 'agent-homes');
+    if (!fs.existsSync(homes)) return [];
+    return fs
+      .readdirSync(homes)
+      .map((id) => path.join(homes, id, name))
+      .filter((f) => fs.existsSync(f))
+      .flatMap((f) => fs.readFileSync(f, 'utf8').split('\n').filter(Boolean))
+      .map((l) => JSON.parse(l));
+  };
+
+  test('opens Antigravity’s interface on the agent’s conversation with Escouade’s server, follows its turns, and hands it back', async ({
+    app,
+  }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    await newAgyAgent(page);
+    await send(page, 'bonjour Antigravity');
+    await expect(page.getByText('Antigravity a reçu : bonjour Antigravity')).toBeVisible();
+    expect(agentLaunches(app)).toHaveLength(1);
+
+    await page.getByRole('button', { name: 'Vue Antigravity CLI' }).click();
+    const view = page.locator('main .tui');
+    await expect(view.locator('.xterm')).toBeVisible({ timeout: 20_000 });
+    await expect.poll(() => ofHomes(app, 'fake-tui-launches.jsonl').length, { timeout: 20_000 }).toBe(1);
+    // Its interface on the conversation (one store for both), in the agent's home, with Escouade's server in its MCP
+    // config: its token in that file, never on its command line nor in its variables.
+    const launch = ofHomes(app, 'fake-tui-launches.jsonl')[0];
+    expect(launch.argv).toContain('--conversation');
+    const conversation = launch.argv[launch.argv.indexOf('--conversation') + 1];
+    const header: string = launch.mcp.mcpServers.escouade.headers.Authorization;
+    const token = header.replace(/^Bearer /, '');
+    expect(token).toBeTruthy();
+    expect(launch.argv.join(' ')).not.toContain(token);
+    // Its first screens passed, the account's address kept off its screen, its hooks for Escouade.
+    expect(launch.onboarding.onboardingComplete).toBe(true);
+    expect(launch.settings.trustedWorkspaces.map((w: string) => path.resolve(w))).toContain(path.resolve(app.repo));
+    expect(launch.hideAccount).toBe('1');
+    expect(Object.keys(launch.hooks.escouade).sort()).toEqual(['PostToolUse', 'PreToolUse', 'SessionStart', 'Stop']);
+    await expect(view.getByRole('status')).toHaveCount(0);
+
+    // Messages typed there: the card says it works, then that it is done. The terminal is drawn on a canvas: what the
+    // fake does is read from its hooks and the conversation.
+    await view.locator('.xterm').click();
+    const ended = () => ofHomes(app, 'fake-tui-hooks.jsonl').filter((e) => e.event === 'Stop').length;
+    await page.keyboard.type('Bonjour la vue');
+    await page.keyboard.press('Enter');
+    await expect.poll(ended, { timeout: 20_000 }).toBe(1);
+    await page.keyboard.type('commande');
+    await page.keyboard.press('Enter');
+    await expect.poll(ended, { timeout: 20_000 }).toBe(2);
+    expect(ofHomes(app, 'fake-tui-hooks.jsonl').map((e) => e.event)).toEqual(['Stop', 'PreToolUse', 'PostToolUse', 'Stop']);
+    await expect(page.locator('.card', { hasText: 'Antigravity' })).toContainText('Terminé');
+    await page.waitForTimeout(500);
+    await shots(page, 'view');
+
+    // Back in Escouade's view: the interface's turns in the conversation, its command among them; the same
+    // conversation resumed by `agy -p`, the hooks of its view gone.
+    await page.getByRole('button', { name: 'Vue Escouade' }).click();
+    await expect(page.getByText('Fini : Bonjour la vue')).toBeVisible();
+    await expect(page.getByText('Fini : commande')).toBeVisible();
+    await expect(page.locator('main.conv .bubble', { hasText: /^\s*Bonjour la vue\s*$/ })).toHaveCount(1);
+    await expect(page.locator('main.conv').getByText('npm test').first()).toBeVisible();
+    await send(page, 'encore');
+    await expect(page.getByText('Antigravity a reçu : encore')).toBeVisible();
+    const last = agentLaunches(app).at(-1)!;
+    expect(last.argv[last.argv.indexOf('--conversation') + 1]).toBe(conversation);
+    expect(fs.existsSync(path.join(launch.home, '.gemini', 'config', 'hooks.json'))).toBe(false);
+    await shots(page, 'view-back');
+  });
+});

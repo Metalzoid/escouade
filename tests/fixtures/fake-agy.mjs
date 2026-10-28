@@ -19,6 +19,7 @@
 // `--conversation <id>` resumes a conversation kept in .gemini/antigravity-cli/conversations/fake/<id>.json (an unknown
 // one: its error on stderr, exit 1). `models` lists the models of `agy models`. Each launch ({launch: {argv, cwd, home,
 // geminiKey, autoUpdate, gitConfig}}) and message ({user}) goes to $FAKE_AGY_LOG when set.
+// Without -p (nor models), it is its interface `agy` (fake-agy-tui.mjs, « Vue Antigravity »).
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -52,6 +53,13 @@ if (argv[0] === 'models') {
     ].join('\n'),
   );
   process.exit(0);
+}
+if (!argv.some((a) => a === '-p' || a.startsWith('-p=') || a === '--print')) {
+  // Its interface (« Vue Antigravity »): fake-agy-tui.mjs, which ends the process itself.
+  const { tui } = await import('./fake-agy-tui.mjs');
+  tui(argv);
+  // The rest is its `-p`'s: never reached.
+  await new Promise(() => {});
 }
 const arg = (name) => {
   const at = argv.indexOf(name);

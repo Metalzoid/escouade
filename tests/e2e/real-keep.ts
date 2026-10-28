@@ -168,3 +168,35 @@ export function keepVibe() {
     );
   };
 }
+
+/**
+ * Antigravity CLI (ESC-272): each agent has a home of its own, so the user's ~/.gemini (which Gemini CLI shares) is never
+ * to be touched. Its files are listed by size and date only, never read (`google_accounts.json` above all, and its logs,
+ * which hold the account's address), and nothing is written back: a session of `agy` the user runs meanwhile writes its
+ * own logs there. What changed is told.
+ */
+export function keepAgy() {
+  const home = path.join(HOME, '.gemini');
+  const list = () =>
+    new Map(
+      fs.existsSync(home)
+        ? (fs.readdirSync(home, { recursive: true, encoding: 'utf8' }) as string[]).flatMap((f) => {
+            try {
+              const st = fs.statSync(path.join(home, f));
+              return st.isFile() ? [[f, `${st.size}:${st.mtimeMs}`] as const] : [];
+            } catch {
+              return [];
+            }
+          })
+        : [],
+    );
+  const before = list();
+  return () => {
+    const after = list();
+    const changed = [...after].filter(([f, m]) => before.get(f) !== m).map(([f]) => f);
+    const gone = [...before.keys()].filter((f) => !after.has(f));
+    console.log(
+      `agy: ~/.gemini ${changed.length || gone.length ? `changed (${[...changed, ...gone].join(', ')}): a session of the user's?` : 'untouched'}`,
+    );
+  };
+}

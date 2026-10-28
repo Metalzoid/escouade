@@ -36,7 +36,7 @@ Quel que soit le harness, l’agent a la même conversation : la réponse et le 
 | Message pendant un tour | attend la fin du tour | entre dans le tour | attend la fin du tour | entre dans le tour | attend la fin du tour | attend la fin du tour | attend la fin du tour | attend la fin du tour |
 | Coût | exact | estimé | exact (0 en local) | exact, en crédits d’IA | non donné | exact | non donné (tokens) | non donné (tokens) |
 | Quota | fenêtres 5 h et 7 jours | fenêtres 5 h et 7 jours (30 jours en offre gratuite) | aucun : budget par jour | crédits du mois | lien vers son tableau de bord | aucun : budget par jour, lien vers la console de Mistral | non lu | non lu |
-| Vue terminal | « Vue Claude Code » | « Vue Codex » | « Vue OpenCode » | « Vue Copilot CLI » | « Vue Cursor CLI », suivi limité | « Vue Mistral Vibe » | pas encore | pas encore |
+| Vue terminal | « Vue Claude Code » | « Vue Codex » | « Vue OpenCode » | « Vue Copilot CLI » | « Vue Cursor CLI », suivi limité | « Vue Mistral Vibe » | « Vue Antigravity CLI » | pas encore |
 | PDF joints | oui | non | non | non | non | non | non | non |
 | Remote control, tâches de fond | oui | non | non | non | non | non | non | non |
 
@@ -222,7 +222,7 @@ Pour un projet privé, la lecture des chemins des autres projets lui est refusé
 
 ### Coût, quota et ce qu’Antigravity ne fait pas
 
-Antigravity donne les tokens de chaque tour, pas leur coût ni son quota : son `/usage` n’est que dans son interface ; « Usage sur antigravity.google », dans Réglages › Comptes et le panneau des quotas, ouvre la page de ses forfaits. Pas encore de vue terminal ni de plusieurs comptes. Pas de mode Auto, d’images ni de PDF joints, de « Dupliquer la conversation », de commandes `/` dans Escouade, ni de remote control ni de tâches de fond. Il reçoit le serveur MCP d’Escouade par la config de son dossier ; l’interrupteur ne le déclare pas encore dans la tienne.
+Antigravity donne les tokens de chaque tour, pas leur coût ni son quota : son `/usage` n’est que dans son interface ; « Usage sur antigravity.google », dans Réglages › Comptes et le panneau des quotas, ouvre la page de ses forfaits. Un seul compte pour l’instant. Pas de mode Auto, d’images ni de PDF joints, de « Dupliquer la conversation », de commandes `/` dans Escouade, ni de remote control ni de tâches de fond. Il reçoit le serveur MCP d’Escouade par la config de son dossier ; l’interrupteur ne le déclare pas encore dans la tienne. La « Vue Antigravity CLI » fait tourner l’agent dans l’interface d’Antigravity, sur la même conversation (voir [la vue terminal](claude-code-view#avec-antigravity-cli)).
 
 ## Gemini CLI
 

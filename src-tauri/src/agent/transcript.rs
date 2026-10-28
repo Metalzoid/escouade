@@ -396,7 +396,7 @@ impl AgentRt {
         match self.meta.engine {
             EngineId::Codex => return self.codex_tui_end(fx),
             EngineId::Copilot => return self.copilot_tui_end(fx),
-            EngineId::Cursor | EngineId::Vibe => return self.cursor_tui_end(fx),
+            EngineId::Cursor | EngineId::Vibe | EngineId::Agy => return self.cursor_tui_end(fx),
             _ => {}
         }
         let mut models = serde_json::Map::new();

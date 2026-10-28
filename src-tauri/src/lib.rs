@@ -9,6 +9,8 @@ mod agentbranch_tests;
 mod agentprs;
 #[cfg(test)]
 mod agentprs_tests;
+#[cfg(test)]
+mod agy_tui_tests;
 mod attach;
 mod attachfiles;
 #[cfg(test)]

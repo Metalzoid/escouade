@@ -18,6 +18,8 @@ use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+mod agy;
+mod agy_tui;
 mod claude;
 mod codex;
 mod codex_tui;
@@ -27,7 +29,6 @@ mod cursor;
 mod cursor_tui;
 mod localcmd;
 // The translation of the minimal fake engine of the conformance bench (`engine/minimal/`).
-mod agy;
 mod gemini;
 #[cfg(test)]
 mod minimal;
