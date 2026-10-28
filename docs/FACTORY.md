@@ -121,6 +121,15 @@ On donne un sujet. **On ne choisit pas de documents** : l'agent a accès à tous
 - À droite, **« Ce qui ira dans la spec »** : les changements proposés, page par page (sections ajoutées, phrases changées), et les décisions proposées.
 - **« Verser dans la spec »** les écrit sur la branche des docs. Ce n'est pas encore partagé : la barre d'état dit « N changements à partager ».
 
+### « Planifier » : de la spec aux tickets (décidé le 2026-10-28)
+
+Quand on a fini d'éditer la spec, un bouton **« Planifier »** appelle un **agent planificateur**, qui ajoute au Kanban les tickets nécessaires pour implémenter les modifications. (Il remplace l'idée d'une « Performance Loop » façon BMAD, abandonnée.)
+
+- **Où** (choix du chef) : sur une discussion dont les changements ont été versés, et en tête de l'espace Spécification tant que des changements de spec n'ont pas de tickets (« 3 changements sans tickets · Planifier »).
+- **Ce qu'il lit** (choix du chef) : les changements de spec et les décisions depuis la dernière planification, le code par l'index, et les tickets du Kanban, pour ne rien créer en double ni recréer ce qui est déjà fait.
+- **Ce qu'il fait** (choix du chef) : il crée les tickets dans « À faire », chacun avec sa description, ses critères d'acceptation, ses dépendances (« Après ») et le lien vers les pages et décisions qu'il implémente. Il ne les lance pas lui-même : le pilote auto et les règles du Kanban s'appliquent comme pour tout ticket. Il dit dans la discussion ce qu'il a créé, avec « Annuler ».
+- Les agents de ces tickets tiennent ensuite la spec à jour comme les autres (plus bas), et la carte d'un sujet montre ses tickets.
+
 ### La spécification (piste C, retenue pour cet espace)
 
 - On arrive sur **la carte des sujets** : chaque sujet en carte, avec son état face au code (à jour, écart, brouillon), ses pages, ses tickets, ses décisions, et ce qui a bougé.

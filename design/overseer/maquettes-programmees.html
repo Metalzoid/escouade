@@ -1,5 +1,5 @@
-<h2>Les tâches planifiées dans la barre latérale : les deux places</h2>
-<p class="subtitle">Une section « Planifiées » comme « Lancement » et « Terminaux » : le rythme, la prochaine échéance, un interrupteur. À gauche au-dessus des lancements, à droite sous les terminaux. « ＋ » ouvre le formulaire du ticket en mode « Planifier » (dessous).</p>
+<h2>Les tâches programmées dans la barre latérale : les deux places</h2>
+<p class="subtitle">Une section « Programmées » comme « Lancement » et « Terminaux » : le rythme, la prochaine échéance, un interrupteur. À gauche au-dessus des lancements, à droite sous les terminaux. « ＋ » ouvre le formulaire du ticket en mode « Programmer » (dessous).</p>
 
 <style>
   .esc { --p: oklch(0.72 0.12 250); --frame: color-mix(in oklch, var(--p) 8%, #08090a); --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
@@ -130,9 +130,9 @@
       <div class="sb">
         <div class="tabs"><span>Agents 4</span><span class="on">Kanban 6</span><span>Docs</span></div>
         <div class="card"><div class="n"><span class="dot"></span>dem-41-relances<span class="st" style="color:var(--run)">En cours</span></div><div class="m">Opus 5.5 · boucle 1/5</div></div>
-        <div class="card"><div class="n"><span class="dot"></span>dem-44-revue-des-dep…<span class="st" style="color:var(--run)">En cours</span></div><div class="m">⏱ planifiée · Sonnet 5.5</div></div>
+        <div class="card"><div class="n"><span class="dot"></span>dem-44-revue-des-dep…<span class="st" style="color:var(--run)">En cours</span></div><div class="m">⏱ programmée · Sonnet 5.5</div></div>
         <div class="sep"></div>
-        <div class="sec hl"><div class="hd2">⏱ Planifiées <span>3</span><span class="r">＋</span></div>
+        <div class="sec hl"><div class="hd2">⏱ Programmées <span>3</span><span class="r">＋</span></div>
           <div class="row2 run"><span class="n">Revue des dépendances</span><span class="sw"></span><span class="w">Chaque lundi 7:00 · <b>en cours (DEM-44)</b></span></div>
           <div class="row2"><span class="n">Rapport des erreurs Sentry</span><span class="sw"></span><span class="w">Chaque jour 23:30 · <b>ce soir</b></span></div>
           <div class="row2" style="opacity:.55"><span class="n">Purge des comptes inactifs</span><span class="sw off"></span><span class="w">Le 1er du mois 9:00 · en pause</span></div>
@@ -149,14 +149,14 @@
       <div class="sb">
         <div class="tabs"><span>Agents 4</span><span class="on">Kanban 6</span><span>Docs</span></div>
         <div class="card"><div class="n"><span class="dot"></span>dem-41-relances<span class="st" style="color:var(--run)">En cours</span></div><div class="m">Opus 5.5 · boucle 1/5</div></div>
-        <div class="card"><div class="n"><span class="dot"></span>dem-44-revue-des-dep…<span class="st" style="color:var(--run)">En cours</span></div><div class="m">⏱ planifiée · Sonnet 5.5</div></div>
+        <div class="card"><div class="n"><span class="dot"></span>dem-44-revue-des-dep…<span class="st" style="color:var(--run)">En cours</span></div><div class="m">⏱ programmée · Sonnet 5.5</div></div>
         <div class="sep"></div>
         <div class="sec"><div class="hd2">Lancement <span>2/3</span><span class="r">Tout arrêter</span></div>
           <div class="lrow">Front<span class="r">en cours</span></div><div class="lrow">API<span class="r">en cours</span></div></div>
         <div class="sep"></div>
         <div class="sec"><div class="hd2">Terminaux <span>1</span><span class="r">＋</span></div><div class="lrow">PowerShell <span style="color:var(--muted)">~/dev/portail</span></div></div>
         <div class="sep"></div>
-        <div class="sec hl"><div class="hd2">⏱ Planifiées <span>3</span><span class="r">＋</span></div>
+        <div class="sec hl"><div class="hd2">⏱ Programmées <span>3</span><span class="r">＋</span></div>
           <div class="row2 run"><span class="n">Revue des dépendances</span><span class="sw"></span><span class="w">Chaque lundi 7:00 · <b>en cours (DEM-44)</b></span></div>
           <div class="row2"><span class="n">Rapport des erreurs Sentry</span><span class="sw"></span><span class="w">Chaque jour 23:30 · <b>ce soir</b></span></div>
           <div class="row2" style="opacity:.55"><span class="n">Purge des comptes inactifs</span><span class="sw off"></span><span class="w">Le 1er du mois 9:00 · en pause</span></div>
@@ -166,18 +166,18 @@
     </div>
   </div>
 
-  <h3>2. « ＋ » : le formulaire du ticket, en mode « Planifier »</h3>
+  <h3>2. « ＋ » : le formulaire du ticket, en mode « Programmer »</h3>
   <p>La même consigne, les mêmes critères, compte, modèle et effort qu’un ticket ; en plus, le rythme. Une expression cron reste possible.</p>
   <div class="esc shot" style="display:block;height:auto;padding:4px 0;background:var(--frame)">
     <div class="form">
-      <h4>Nouvelle tâche planifiée</h4>
+      <h4>Nouvelle tâche programmée</h4>
       <div class="frow"><span>Titre</span><div class="inp">Revue des dépendances</div></div>
       <div class="frow"><span>Rythme</span><div class="seg"><span>Chaque jour</span><span class="on">Chaque semaine</span><span>Chaque mois</span><span>Cron</span></div></div>
       <div class="frow"><span>Jours</span><div class="days"><span class="on">L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div></div>
       <div class="frow"><span>Heure</span><div class="inp" style="width:90px">07:00</div></div>
       <div class="frow"><span>Escouade fermé à l’heure dite</span><div class="chk"><i>✓</i><span>Lancer au retour d’Escouade, une seule fois même si plusieurs échéances ont été manquées</span></div></div>
       <div class="frow"><span></span><div class="next">Jamais deux à la fois : si la précédente tourne encore, l’échéance passe son tour.<br>Prochaines : <b>lun. 3 nov. 7:00</b> · lun. 10 nov. 7:00 · lun. 17 nov. 7:00 · <code>0 7 * * 1</code></div></div>
-      <div class="mfoot"><span class="l">Consigne, critères, compte, modèle et effort : plus bas, comme un ticket</span><span class="btn">Annuler</span><span class="btn pri">Planifier</span></div>
+      <div class="mfoot"><span class="l">Consigne, critères, compte, modèle et effort : plus bas, comme un ticket</span><span class="btn">Annuler</span><span class="btn pri">Programmer</span></div>
     </div>
   </div>
 </div>
