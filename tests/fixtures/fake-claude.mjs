@@ -55,6 +55,8 @@
 // report it keeps the spec as its protocol asks, by Escouade's docs tools (its --mcp-config server): the page
 // paiement/echeances written (« Quatre échéances au plus (<key>). [écart] ») and a decision proposed. In one-shot mode, a page
 // compared to the code (<spec-page>) gets a gap when it says [écart] (none otherwise; [muet]: the model fails).
+// In one-shot mode, « Planifier » (ESC-262, <changed-page>) gets a ticket per page changed, each after the one before (see
+// the planner's branch below).
 // [proposer:<project>] in a message (ESC-261, a discussion of the Docs tab): by the same tools, the page
 // espace-adherent/relances written (« Trois relances par e-mail… »), the page notifications/general changed when it is there,
 // and a decision proposed (« Relances par e-mail seulement »), then « Proposé dans la spec. ». The message of « Mettre la spec à
@@ -392,6 +394,36 @@ if (argv[0] === 'mcp') {
       });
       if (input.includes('[invente]')) workflows.push({ id: 'inconnu|x', steps: [], transitions: [] });
       const result = `Voici.\n\n\`\`\`json\n${JSON.stringify({ workflows })}\n\`\`\``;
+      process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
+      return;
+    }
+    // « Planifier » (ESC-262): one ticket per page changed (« Implémenter : <title> »), each after the one before, the
+    // first with the decisions; then again the first (twice in the list) and each ticket of the board whose title says
+    // [doublon] (one the board has): Escouade leaves those out. A page that says [muet]: the model fails.
+    if (input.includes('<changed-page ') || input.includes('<decision number=')) {
+      const changed = [...input.matchAll(/<changed-page path="([^"]*)" title="([^"]*)">\n([\s\S]*?)\n<\/changed-page>/g)];
+      if (changed.some((c) => c[3].includes('[muet]'))) {
+        process.stderr.write('model unavailable\n');
+        process.exit(1);
+      }
+      const decisions = [...input.matchAll(/<decision number="(\d+)"/g)].map((m) => Number(m[1]));
+      const tickets = changed.map((c, i) => ({
+        title: `Implémenter : ${c[2]}`,
+        description: `D’après la page ${c[1]} de la spec.`,
+        criteria: [`${c[2]} : fait comme la page le dit`, 'Tests passés'],
+        after: i ? [String(i)] : [],
+        pages: [c[1], 'inconnu/page'],
+        decisions: i ? [] : decisions,
+      }));
+      if (!tickets.length && decisions.length)
+        tickets.push({ title: 'Appliquer les décisions', description: '', criteria: ['Fait'], after: [], pages: [], decisions });
+      if (tickets.length) tickets.push({ ...tickets[0], title: tickets[0].title.toUpperCase() });
+      const board = input.match(/<board>\n([\s\S]*?)\n?<\/board>/)?.[1] ?? '';
+      for (const line of board.split('\n')) {
+        const m = line.match(/^\S+ \[\w+\] (.*?)(?: — .*)?$/);
+        if (m && m[1].includes('[doublon]')) tickets.push({ title: m[1], description: '', criteria: [], after: [], pages: [] });
+      }
+      const result = `Planifié.\n\n\`\`\`json\n${JSON.stringify({ tickets })}\n\`\`\``;
       process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
       return;
     }

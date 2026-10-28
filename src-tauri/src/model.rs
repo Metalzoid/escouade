@@ -1145,6 +1145,11 @@ pub struct Ticket {
     /// folder, written by Escouade and committed by the user (`sharing`). None: this machine's
     /// alone, and for a ticket saved before.
     pub shared: Option<Shared>,
+    /// The pages of the spec it implements (`subject/page`), as « Planifier » made it (ESC-262);
+    /// each of them names it in its `tickets`. Empty for a ticket made otherwise.
+    pub pages: Vec<String>,
+    /// The numbers of the decisions it implements, the same way.
+    pub decisions: Vec<u32>,
 }
 
 /// Someone of the team, as the files of the shared tickets name them (ESC-190): the name they

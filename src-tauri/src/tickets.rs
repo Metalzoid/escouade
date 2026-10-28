@@ -370,6 +370,9 @@ pub struct TicketDraft {
     /// « Partager avec l'équipe » (ESC-190): shared, or no longer; None, absent: as it is (a new
     /// ticket: as « Partager chaque nouveau ticket » of its project says).
     pub shared: Option<bool>,
+    /// The pages and decisions it implements (« Planifier », ESC-262); None: as they are.
+    pub pages: Option<Vec<String>>,
+    pub decisions: Option<Vec<u32>>,
 }
 
 /// A field that is there, null or not: Some, its value (null: None); absent, it is None by its
@@ -588,6 +591,8 @@ impl<R: Runtime> Core<R> {
             account,
             model: trimmed(d.model.as_deref()),
             effort: trimmed(d.effort.as_deref()),
+            pages: d.pages.clone().unwrap_or_default(),
+            decisions: d.decisions.clone().unwrap_or_default(),
             ..Default::default()
         };
         let pushed = {

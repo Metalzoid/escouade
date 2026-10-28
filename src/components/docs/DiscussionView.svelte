@@ -1,10 +1,12 @@
 <script lang="ts">
   import Icon from '../Icon.svelte';
   import Conversation from '../Conversation.svelte';
+  import PlanResult from './PlanResult.svelte';
   import SpaceHead from './SpaceHead.svelte';
   import { decisionNo } from '../../lib/decisions';
   import { docsStore } from '../../lib/docs.svelte';
   import { pageLines, proposedCount } from '../../lib/discussions';
+  import { canPlan } from '../../lib/planning';
   import { fAgo } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
@@ -20,6 +22,9 @@
   const d = $derived(agent.discussion!);
   const count = $derived(proposedCount(d));
   let pouring = $state(false);
+  /** « Planifier » (ESC-262): offered once changes were poured, none planned since. */
+  const plannable = $derived(canPlan(d));
+  const planning = $derived(!!docsStore.planning[project.id]);
 
   async function pour() {
     pouring = true;
@@ -51,9 +56,30 @@
           ><Icon name="file" size={14} />{t('docs.discussion.openPage')}</button
         >
       {/if}
-      <button class="btn primary" disabled={!count || pouring} use:tip={t('docs.discussion.pourTip')} onclick={pour}
-        >{t('docs.discussion.pour')}</button
-      >
+      {#if plannable && !count}
+        <button
+          class="btn primary"
+          data-plan-discussion
+          disabled={planning}
+          use:tip={t('docs.plan.tip')}
+          onclick={() => docsStore.plan(project.id, agent.id)}
+          ><Icon name="kanban" size={14} />{planning ? t('docs.plan.running') : t('docs.plan.action')}</button
+        >
+      {:else}
+        {#if plannable}
+          <button
+            class="btn"
+            data-plan-discussion
+            disabled={planning}
+            use:tip={t('docs.plan.tip')}
+            onclick={() => docsStore.plan(project.id, agent.id)}
+            ><Icon name="kanban" size={14} />{planning ? t('docs.plan.running') : t('docs.plan.action')}</button
+          >
+        {/if}
+        <button class="btn primary" disabled={!count || pouring} use:tip={t('docs.discussion.pourTip')} onclick={pour}
+          >{t('docs.discussion.pour')}</button
+        >
+      {/if}
     {/snippet}
   </SpaceHead>
 
@@ -64,6 +90,10 @@
       {/key}
     </div>
     <aside class="pour" aria-label={t('docs.discussion.pourPanel')}>
+      {#if d.planned}
+        <h3 class="sh">{t('docs.plan.heading')}</h3>
+        <PlanResult {project} plan={d.planned} />
+      {/if}
       <h3 class="sh">{t('docs.discussion.pourPanel')}</h3>
       {#if !count}
         <p class="nothing">{t('docs.discussion.nothing')}</p>

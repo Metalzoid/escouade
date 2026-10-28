@@ -18,6 +18,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Les décisions sur le produit ont leur registre, numéroté et daté : d’où vient chacune, ce qu’elle a changé dans la spec, et « Accepter » d’un clic ; une décision acceptée ne se réécrit plus, une nouvelle la remplace, et celle laissée par l’agent d’un ticket est acceptée quand tu le valides.
 - « Nouvelle discussion » dans l’onglet Docs : discute de la spec avec un agent rédacteur, ou brainstorme avec un agent produit qui pense usages, RGPD et ce que font d’autres secteurs ; ce qu’ils proposent s’affiche page par page et se verse dans la spec d’un clic, sans qu’ils touchent jamais au code.
 - La spec suit le code : l’agent d’un ticket met à jour les pages qu’il touche et laisse une décision, puis, le ticket validé, un agent compare ces pages au code et montre les écarts sur la carte des sujets et en haut de la page, à régler d’un clic ; « Comparer au code » le refait à la demande.
+- « Planifier » transforme les changements de la spec en tickets : un agent planificateur lit ce qui a changé, le code et le Kanban, puis crée dans « À faire » les tickets nécessaires, sans doublon et sans les lancer, liés aux pages qu’ils implémentent ; « Annuler » les retire.
 
 ### Corrections
 

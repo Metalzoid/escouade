@@ -1035,6 +1035,9 @@ export interface Ticket {
   files: TicketFile[];
   /** Shared with the team (ESC-190): its file `.escouade/tickets/<id>.yml`. Absent or null: this machine's alone. */
   shared?: Shared | null;
+  /** The pages of the spec and the decisions it implements, as « Planifier » made it (ESC-262). */
+  pages?: string[];
+  decisions?: number[];
 }
 
 /** Someone of the team, as the shared tickets' files name them (ESC-190). */
@@ -1413,6 +1416,44 @@ export interface Discussion {
   decisions: DocsDecision[];
   /** What « Verser dans la spec » wrote so far; absent until then. */
   poured?: DiscussionPoured;
+  /** What « Planifier » made of it (ESC-262); absent until then, and once cancelled. */
+  planned?: DocsPlan;
+}
+
+/** A ticket « Planifier » made (ESC-262). */
+export interface DocsPlanMade {
+  id: string;
+  key: string;
+  title: string;
+}
+
+/** What a « Planifier » did (ESC-262): the tickets made in « À faire », those left out because the board has them. */
+export interface DocsPlan {
+  id: string;
+  /** When (ms). */
+  at: number;
+  /** The discussion it was asked from (its agent); absent: from the Specification. */
+  discussion?: string;
+  pages: string[];
+  decisions: number[];
+  made: DocsPlanMade[];
+  /** Proposed again by the planner, left out: `key` is the ticket of the board it repeats. */
+  skipped: { title: string; key: string }[];
+  cancelled: boolean;
+}
+
+/** What the Specification shows of the planning (ESC-262): the changes without tickets, the latest plan. */
+export interface DocsPlanning {
+  pages: string[];
+  decisions: number[];
+  last?: DocsPlan;
+  running: boolean;
+}
+
+/** What « Annuler » of a planning did: the tickets removed, and those kept because they started. */
+export interface DocsPlanCancelled {
+  removed: string[];
+  kept: string[];
 }
 
 export interface DiscussionPage {
@@ -2786,6 +2827,8 @@ export interface DocsTree {
   existingSpec: DocsCandidate[];
   /** The pages being compared to the code now (ESC-263). */
   comparing?: string[];
+  /** The changes without tickets and the latest plan (ESC-262). */
+  planning?: DocsPlanning | null;
 }
 
 /** What a « Comparer au code » did (ESC-263). */

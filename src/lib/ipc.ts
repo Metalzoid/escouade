@@ -86,6 +86,8 @@ import type {
   DocsDecision,
   DocsCheck,
   DiscussionPoured,
+  DocsPlan,
+  DocsPlanCancelled,
   DiscussionStart,
   DocsDocHit,
   DocsDrive,
@@ -476,6 +478,11 @@ export const api = {
   discussionStart: (id: string, start: DiscussionStart) => invoke<Agent>('discussion_start', { id, start }),
   /** « Verser dans la spec »: what the discussion proposes, written on the docs branch (nothing committed). */
   discussionPour: (agent: string) => invoke<DiscussionPoured>('discussion_pour', { agent }),
+  /** « Planifier » (ESC-262): the changes poured by the discussion `agent`, or every change without tickets when null,
+   * made into tickets « À faire » by the planner (not started). */
+  docsPlan: (id: string, agent: string | null = null) => invoke<DocsPlan>('docs_plan', { id, agent }),
+  /** « Annuler » of a planning: its tickets not started yet removed, its changes to plan again. */
+  docsPlanCancel: (id: string, plan: string) => invoke<DocsPlanCancelled>('docs_plan_cancel', { id, plan }),
   /** Takes a page (its path) or a decision (from 1) out of « Ce qui ira dans la spec ». */
   discussionDrop: (agent: string, page: string | null, decision: number | null) =>
     invoke<void>('discussion_drop', { agent, page, decision }),

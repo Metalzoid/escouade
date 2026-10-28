@@ -61,6 +61,9 @@ mod docsextract_tests;
 mod docsimport;
 #[cfg(test)]
 mod docsimport_tests;
+mod docsplan;
+#[cfg(test)]
+mod docsplan_tests;
 mod docsshare;
 #[cfg(test)]
 mod docsshare_tests;
@@ -555,6 +558,8 @@ pub fn run() {
             commands::discussion_start,
             commands::discussion_pour,
             commands::discussion_drop,
+            commands::docs_plan,
+            commands::docs_plan_cancel,
             commands::get_workflows,
             commands::get_workflow_tracks,
             commands::refresh_workflows,

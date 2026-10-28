@@ -888,6 +888,23 @@ async fn a_discussion_proposes_pages_and_decisions_that_pour_writes() {
     assert!(h.core.discussion_pour(&id).await.is_err());
     let repo = std::path::Path::new(&p.path);
     assert_eq!(git(repo, &["log", "--oneline", "--all"]).lines().count(), 1);
+    // What was poured is to plan (ESC-262), the decision the window proposed before too.
+    let v = h.core.docs_planning(&p.id).await.unwrap();
+    assert_eq!(
+        v.pages,
+        vec!["espace-adherent/relances", "notifications/general"]
+    );
+    assert_eq!(v.decisions, vec![2, 3]);
+    // « Planifier » on the discussion: its changes made into tickets, the plan kept on it.
+    let mut board = h.core.project(&p.id).unwrap().board;
+    board.autopilot = false;
+    h.core.board_set(&p.id, board).unwrap();
+    let plan = h.core.docs_plan(&p.id, Some(&id)).await.unwrap();
+    assert_eq!(plan.made.len(), 2);
+    assert_eq!(plan.discussion.as_deref(), Some(id.as_str()));
+    let d = h.core.agent(&id).unwrap().lock().meta.discussion.clone();
+    assert_eq!(d.unwrap().planned.unwrap().id, plan.id);
+    assert!(h.core.docs_plan(&p.id, Some(&id)).await.is_err());
 }
 
 #[tokio::test(flavor = "multi_thread")]

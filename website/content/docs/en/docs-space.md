@@ -55,6 +55,14 @@ A discussion open shows the conversation on the left, and on the right **“What
 
 “Ask the spec”, at the top of the specification, opens a discussion with the spec writer. A project without a spec offers “Write a first spec from the code”: the spec writer reads the code and proposes a first version, filed by subject (it costs tokens, hence the gesture).
 
+## Plan tickets: from the spec to the tickets
+
+Once the spec changed, **“Plan tickets”** asks a planner for the tickets that will implement it. The button is on a discussion whose changes were poured, and at the top of the specification while changes have no tickets (“3 changes without tickets · Plan tickets”): the pages poured or written by hand, and the decisions proposed, since the last planning.
+
+The planner reads these changes and decisions, the code (the files the code index links to them, and the project’s folder, without changing anything) and the tickets of the board. It makes the tickets in “To do”, each with its description, its acceptance criteria, the tickets it comes after (“After”) and the pages and decisions it implements, which its description names for its agent. A ticket the board already has, even done, is not made again: it is said “On the board already”. The planner does not start the tickets: the autopilot and the board’s rules apply as to any ticket.
+
+What it made shows under the discussion, or on the map of the subjects, with **“Undo”**: the tickets not started yet are removed, and the changes are to plan again. A subject’s card shows the keys of its tickets, and a ticket’s card on the board the pages it implements, which open in one click in the Docs tab.
+
 ## The spec always up to date
 
 The spec follows the code in two ways.

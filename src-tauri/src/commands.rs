@@ -3007,6 +3007,7 @@ pub async fn docs_spec_tree(core: CoreState<'_>, id: String) -> Res<Value> {
         "subjects": subjects,
         "existingSpec": if pages == 0 { space.detect() } else { Vec::new() },
         "comparing": crate::docscompare::comparing(&id),
+        "planning": core.docs_planning(&id).await.ok(),
     }))
 }
 
@@ -3049,6 +3050,7 @@ pub async fn docs_spec_write(
     subject: Option<String>,
 ) -> Res<crate::docs::Page> {
     let space = core.docs_space(&id, None).await.map_err(err)?;
+    let changes_body = body.is_some();
     let written = space
         .spec_write(&path, |p| {
             if let Some(t) = title.filter(|t| !t.trim().is_empty()) {
@@ -3063,6 +3065,12 @@ pub async fn docs_spec_write(
         })
         .map(|(page, _, _)| page)
         .map_err(err);
+    // Its text written by hand is to plan (« Planifier », ESC-262); a page only made is not yet.
+    if let (Ok(page), true) = (&written, changes_body) {
+        if !page.body.trim().is_empty() {
+            core.docs_to_plan(&id, std::slice::from_ref(&page.path), &[]);
+        }
+    }
     core.docs_changed(&id).await;
     written
 }
@@ -3098,6 +3106,9 @@ pub async fn docs_decision_propose(
         .await
         .and_then(|s| s.decision_propose(number, decision))
         .map_err(err);
+    if let Ok(d) = &out {
+        core.docs_to_plan(&id, &[], &[d.number]);
+    }
     core.docs_changed(&id).await;
     out
 }
@@ -3115,6 +3126,9 @@ pub async fn docs_decision_replace(
         .await
         .and_then(|s| s.decision_replace(number, decision))
         .map_err(err);
+    if let Ok(d) = &out {
+        core.docs_to_plan(&id, &[], &[d.number]);
+    }
     core.docs_changed(&id).await;
     out
 }
@@ -3442,6 +3456,30 @@ pub async fn discussion_start(
 #[tauri::command]
 pub async fn discussion_pour(core: CoreState<'_>, agent: String) -> Res<crate::discussion::Poured> {
     core.discussion_pour(&agent).await.map_err(err)
+}
+
+/// « Planifier » (ESC-262): the changes of the discussion `agent` poured, or every change of the
+/// spec without tickets when None, made into tickets « À faire » by the planner.
+#[tauri::command]
+pub async fn docs_plan(
+    core: CoreState<'_>,
+    id: String,
+    agent: Option<String>,
+) -> Res<crate::docsplan::Plan> {
+    core.inner()
+        .docs_plan(&id, agent.as_deref())
+        .await
+        .map_err(err)
+}
+
+/// « Annuler » of a planning: its tickets not started yet removed, its changes to plan again.
+#[tauri::command]
+pub async fn docs_plan_cancel(
+    core: CoreState<'_>,
+    id: String,
+    plan: String,
+) -> Res<crate::docsplan::Cancelled> {
+    core.inner().docs_plan_cancel(&id, &plan).await.map_err(err)
 }
 
 /// Takes a proposal out of « Ce qui ira dans la spec »: a page, or a decision (from 1).

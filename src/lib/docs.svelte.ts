@@ -1,5 +1,6 @@
 // What the Docs tab (ESC-258) has read of each project's docs: the spec's tree, the decisions, the documents, the last
 // changes and what is left to share. Read when the tab opens, again after a write and when what is left to share changes.
+import { t } from './i18n';
 import { api } from './ipc';
 import { app } from './state.svelte';
 import type { DocsDecision, DocsFile, DocsFolder, DocsMoved, DocsPending, DocsTree } from './types';
@@ -14,6 +15,8 @@ class DocsStore {
   pending = $state<Record<string, DocsPending>>({});
   /** Why a project's docs could not be read (its docs branch refused, a link in `.escouade`…). */
   error = $state<Record<string, string>>({});
+  /** The projects whose « Planifier » runs (ESC-262), from this window. */
+  planning = $state<Record<string, boolean>>({});
   /** The last load asked for each project: an older answer coming after a newer one is dropped. */
   #asked: Record<string, number> = {};
 
@@ -46,6 +49,28 @@ class DocsStore {
       this.pending[projectId] = pending.value;
       app.docsShare[projectId] = { pending: pending.value.count, conflict: pending.value.conflict };
     }
+  }
+
+  /** « Planifier » (ESC-262): the changes of the discussion `agent`, or every change without tickets, made into tickets
+   * « À faire » by the planner; what it made is told. */
+  async plan(projectId: string, agent: string | null = null) {
+    this.planning[projectId] = true;
+    const done = await app.run(api.docsPlan(projectId, agent));
+    this.planning[projectId] = false;
+    if (done) app.toast(t('docs.plan.done', { count: done.made.length }), 'ok');
+    await this.load(projectId);
+    return done;
+  }
+
+  /** « Annuler » of a planning: its tickets not started yet removed. */
+  async cancelPlan(projectId: string, plan: string) {
+    const done = await app.run(api.docsPlanCancel(projectId, plan));
+    if (done) {
+      const kept = done.kept.length ? ' ' + t('docs.plan.kept', { count: done.kept.length, keys: done.kept.join(', ') }) : '';
+      app.toast(t('docs.plan.cancelled', { count: done.removed.length }) + kept, 'ok');
+    }
+    await this.load(projectId);
+    return done;
   }
 }
 

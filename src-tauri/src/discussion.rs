@@ -70,6 +70,9 @@ pub struct Discussion {
     /// that page is poured.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settles: Option<Settles>,
+    /// What « Planifier » made of what was poured (ESC-262); None until then, and once cancelled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub planned: Option<crate::docsplan::Plan>,
 }
 
 /// A gap of a page a discussion settles.
@@ -185,8 +188,8 @@ pub fn instructions(lang: Lang, kind: Kind, project: &str) -> String {
         ),
         Kind::Brainstorm => tr_in!(
             lang,
-            "Tu es l’agent produit du projet « {project} », dans un brainstorm de l’onglet Docs d’Escouade, à la manière de BMAD (analyste et chef de produit). Fais mûrir l’idée avec l’utilisateur pour faire gagner le produit en fonctionnalités et en maturité : usages et parcours, découverte (pour qui, quel problème, comment le vérifier), conformité et RGPD (base légale, consentement, durée de conservation), accessibilité, et ce que font d’autres secteurs dans le même cas. Propose des fonctionnalités, des pages de spec (en brouillon, draft, tant que ce n’est pas tranché), des décisions, et des tickets : ceux-là, dis-les dans la conversation sans les créer, « Planifier » les créera.",
-            "You are the product agent of the project “{project}”, in a brainstorm of Escouade’s Docs tab, in the manner of BMAD (analyst and product manager). Mature the idea with the user so the product gains features and maturity: uses and journeys, discovery (for whom, what problem, how to check it), compliance and GDPR (legal basis, consent, retention), accessibility, and what other trades do in the same case. Propose features, spec pages (as drafts until settled), decisions, and tickets: say those in the conversation without making them, “Plan” will make them."
+            "Tu es l’agent produit du projet « {project} », dans un brainstorm de l’onglet Docs d’Escouade, à la manière de BMAD (analyste et chef de produit). Fais mûrir l’idée avec l’utilisateur pour faire gagner le produit en fonctionnalités et en maturité : usages et parcours, découverte (pour qui, quel problème, comment le vérifier), conformité et RGPD (base légale, consentement, durée de conservation), accessibilité, et ce que font d’autres secteurs dans le même cas. Propose des fonctionnalités, des pages de spec (en brouillon, draft, tant que ce n’est pas tranché), des décisions, et des tickets : ceux-là, dis-les dans la conversation sans les créer, « Planifier » les créera une fois versés.",
+            "You are the product agent of the project “{project}”, in a brainstorm of Escouade’s Docs tab, in the manner of BMAD (analyst and product manager). Mature the idea with the user so the product gains features and maturity: uses and journeys, discovery (for whom, what problem, how to check it), compliance and GDPR (legal basis, consent, retention), accessibility, and what other trades do in the same case. Propose features, spec pages (as drafts until settled), decisions, and tickets: say those in the conversation without making them, “Plan tickets” will make them once poured."
         ),
     };
     let rules = tr_in!(
@@ -466,6 +469,8 @@ impl<R: Runtime> Core<R> {
             disc.poured = Some(p.clone());
             p
         })?;
+        // What was poured is to plan (« Planifier », ESC-262).
+        self.docs_to_plan(&project_id, &pages, &numbers);
         self.docs_changed(&project_id).await;
         Ok(poured)
     }

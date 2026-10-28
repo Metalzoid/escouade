@@ -513,6 +513,8 @@ pub(super) async fn create_ticket<R: Runtime>(
         model,
         effort,
         shared: a.shared,
+        pages: None,
+        decisions: None,
     };
     let made = core
         .ticket_create(&project.id, draft)
@@ -622,6 +624,8 @@ pub(super) async fn update_ticket<R: Runtime>(
         model,
         effort,
         shared: a.shared,
+        pages: None,
+        decisions: None,
     };
     let (images_given, files_given) = (
         !add.is_empty() || !remove.is_empty(),
@@ -2171,6 +2175,8 @@ fn sub_draft<R: Runtime>(
         model: None,
         effort: None,
         shared: None,
+        pages: None,
+        decisions: None,
     })
 }
 

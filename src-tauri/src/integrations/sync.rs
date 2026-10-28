@@ -316,6 +316,8 @@ pub(crate) fn draft_of(i: &ExternalIssue, max_loops: u32, extract: bool) -> Tick
         effort: None,
         // As « Partager chaque nouveau ticket » of its project says (ESC-190).
         shared: None,
+        pages: None,
+        decisions: None,
     }
 }
 

@@ -149,6 +149,15 @@ Quand on a fini d'éditer la spec, un bouton **« Planifier »** appelle un **ag
 - **Ce qu'il fait** (choix du chef) : il crée les tickets dans « À faire », chacun avec sa description, ses critères d'acceptation, ses dépendances (« Après ») et le lien vers les pages et décisions qu'il implémente. Il ne les lance pas lui-même : le pilote auto et les règles du Kanban s'appliquent comme pour tout ticket. Il dit dans la discussion ce qu'il a créé, avec « Annuler ».
 - Les agents de ces tickets tiennent ensuite la spec à jour comme les autres (plus bas), et la carte d'un sujet montre ses tickets.
 
+**Fait (ESC-262, 2026-10-28)** : `docsplan.rs`, `components/docs/PlanResult.svelte`. Ce que le constructeur a tranché :
+
+- « depuis la dernière planification » : Escouade note, par projet, dans `planning.json` du dossier système (pas dans le dépôt), les pages versées par une discussion ou écrites dans la fenêtre, et les décisions proposées dans la fenêtre ou versées ; une planification les retire, « Annuler » les remet. Les pages écrites par l'agent d'un ticket ont déjà leur ticket ; un import n'est pas noté (toute la spec serait « sans tickets ») ;
+- le planificateur est un agent court en lecture seule (`Weight::Reading`, comme la comparaison au code, 10 min au plus), une planification à la fois par projet. Il reçoit les pages changées entières, les décisions, une ligne par ticket du Kanban (clé, colonne, titre, début de la description) et, l'index allumé, les fichiers que l'index rapproche des changements ; il lit le reste du code dans le dossier du projet. Il répond un JSON de tickets ;
+- « rien en double » : Escouade écarte un ticket dont le titre (sans casse, accents ni ponctuation) est celui d'un ticket du Kanban, quelle que soit sa colonne, ou d'un autre de la liste ; un ticket qui suit un écarté suit le ticket du Kanban qu'il répète. 12 tickets au plus ;
+- les liens : le ticket garde ses pages et ses décisions (`Ticket::pages`, `Ticket::decisions`, sa carte au Kanban nomme ses pages, qui s'ouvrent dans Docs), sa description finit par la phrase qui les cite pour son agent, et chaque page prend sa clé dans ses `tickets` (la carte d'un sujet montre les clés). Une décision acceptée ne se réécrit pas : le lien d'une décision reste du côté du ticket ;
+- le résultat se dit sous la discussion (« Tickets ») ou sur la carte des sujets (le dernier, pendant un jour), avec « Annuler », qui retire les tickets pas encore lancés et garde les autres en le disant ;
+- en anglais, le bouton dit « Plan tickets » (« Plan » est déjà le mode de permission).
+
 ### La spécification (piste C, retenue pour cet espace)
 
 - On arrive sur **la carte des sujets** : chaque sujet en carte, avec son état face au code (à jour, écart, brouillon), ses pages, ses tickets, ses décisions, et ce qui a bougé.

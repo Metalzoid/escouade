@@ -55,6 +55,14 @@ Une discussion ouverte montre la conversation à gauche, et à droite **« Ce q
 
 « Demander à la spec », en tête de la spécification, ouvre une discussion avec l’agent rédacteur. Un projet sans spec propose « Écrire une première spec depuis le code » : l’agent rédacteur lit le code et propose une première version, rangée par sujet (cela coûte des tokens, d’où le geste).
 
+## Planifier : de la spec aux tickets
+
+Quand la spec a changé, **« Planifier »** demande à un agent planificateur les tickets qui la mettront en œuvre. Le bouton est sur une discussion dont les changements ont été versés, et en tête de la spécification tant que des changements n’ont pas de tickets (« 3 changements sans tickets · Planifier ») : les pages versées ou écrites à la main, et les décisions proposées, depuis la dernière planification.
+
+Le planificateur lit ces changements et ces décisions, le code (les fichiers que l’index du code en rapproche, et le dossier du projet, sans rien modifier) et les tickets du Kanban. Il crée les tickets dans « À faire », chacun avec sa description, ses critères d’acceptation, les tickets qu’il suit (« Après ») et les pages et décisions qu’il implémente, que sa description cite pour son agent. Un ticket que le Kanban a déjà, même terminé, n’est pas recréé : il est dit « Déjà au Kanban ». Les tickets ne sont pas lancés par le planificateur : le pilote auto et les règles du Kanban s’appliquent comme pour tout ticket.
+
+Ce qu’il a créé s’affiche sous la discussion, ou sur la carte des sujets, avec **« Annuler »** : les tickets pas encore lancés sont retirés, et les changements sont de nouveau à planifier. La carte d’un sujet montre les clés de ses tickets, et la carte d’un ticket au Kanban les pages qu’il implémente, qui s’ouvrent d’un clic dans l’onglet Docs.
+
 ## La spec toujours à jour
 
 La spec suit le code de deux façons.

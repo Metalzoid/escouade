@@ -73,6 +73,35 @@ export default {
       'Ce projet n’a pas encore de spécification. Lis le code et propose-en une première version, rangée par sujet : une page par sujet ou par fonctionnalité, qui dit ce que fait le produit, pas comment il est codé.',
     ask: 'Demander à la spec',
   },
+  // « Planifier » (ESC-262): the planner makes the tickets of the changes of the spec, in « À faire », not started.
+  plan: {
+    action: 'Planifier',
+    tip: 'Un agent planificateur lit ces changements, les décisions, le code par l’index et le Kanban, puis crée les tickets nécessaires dans « À faire », sans les lancer.',
+    unplanned: { one: '{count} changement sans tickets', other: '{count} changements sans tickets' },
+    running: 'Le planificateur lit les changements…',
+    heading: 'Tickets',
+    made: {
+      one: '{count} ticket créé dans « À faire » {when}',
+      other: '{count} tickets créés dans « À faire » {when}',
+    },
+    none: 'Planifié {when} : aucun ticket nouveau, le Kanban couvre déjà ces changements.',
+    skipped: { one: 'Déjà au Kanban : {keys}', other: 'Déjà au Kanban : {keys}' },
+    notStarted: 'Pas lancés : le pilote auto et les règles du Kanban s’appliquent.',
+    open: 'Ouvrir {key} au Kanban',
+    cancel: 'Annuler',
+    cancelTip: 'Retirer les tickets pas encore lancés ; les changements seront de nouveau à planifier.',
+    cancelled: {
+      one: '{count} ticket retiré, les changements sont de nouveau à planifier.',
+      other: '{count} tickets retirés, les changements sont de nouveau à planifier.',
+    },
+    kept: { one: '{keys} déjà lancé, gardé.', other: '{keys} déjà lancés, gardés.' },
+    done: {
+      one: '{count} ticket créé dans « À faire ».',
+      other: '{count} tickets créés dans « À faire ».',
+    },
+    pages: 'Spec : {pages}',
+    openPage: 'Ouvrir la page {name} de la spec',
+  },
   spaces: { spec: 'Spécification', decisions: 'Décisions', documents: 'Documents' },
   count: {
     gaps: { one: '{count} écart', other: '{count} écarts' },

@@ -16,10 +16,12 @@
     unsharedPages,
   } from '../../lib/docs';
   import { api } from '../../lib/ipc';
+  import { subjectTickets, unplannedCount } from '../../lib/planning';
   import { app } from '../../lib/state.svelte';
   import type { DocsCandidate, DocsSubject, Project } from '../../lib/types';
   import Rich from '../../lib/i18n/Rich.svelte';
   import { tip } from '../../lib/tip';
+  import PlanResult from './PlanResult.svelte';
   import SpaceHead from './SpaceHead.svelte';
   import SpecImport from './SpecImport.svelte';
   import SpecPage from './SpecPage.svelte';
@@ -96,6 +98,14 @@
     await docsStore.load(project.id);
   }
 
+  /** « Planifier » (ESC-262): the changes without tickets, the planner running, and the latest plan of the last day. */
+  const unplanned = $derived(unplannedCount(tree?.planning));
+  const planRunning = $derived(!!docsStore.planning[project.id] || !!tree?.planning?.running);
+  const lastPlan = $derived.by(() => {
+    const last = tree?.planning?.last;
+    return last && app.now - last.at < 24 * 3600 * 1000 ? last : null;
+  });
+
   /** The spec the project has, whose cut is being looked at before an import. */
   let importing = $state<DocsCandidate | null>(null);
 </script>
@@ -133,6 +143,22 @@
     {/if}
   {/snippet}
 </SpaceHead>
+
+{#if tree?.pages && (unplanned || planRunning)}
+  <div class="plan-bar" data-plan-bar>
+    <Icon name="kanban" size={14} />
+    <span class="grow">{planRunning ? t('docs.plan.running') : t('docs.plan.unplanned', { count: unplanned })}</span>
+    {#if unplanned}
+      <button
+        class="btn primary"
+        data-plan="all"
+        disabled={planRunning}
+        use:tip={t('docs.plan.tip')}
+        onclick={() => docsStore.plan(project.id)}>{t('docs.plan.action')}</button
+      >
+    {/if}
+  </div>
+{/if}
 
 {#if creating}
   <form class="new" onsubmit={createPage} aria-label={t('docs.newPage.title')}>
@@ -248,6 +274,9 @@
           <SpecPage {project} path={page} onback={() => openPage(null)} />
         {/key}
       {:else}
+        {#if lastPlan}
+          <div class="last-plan"><PlanResult {project} plan={lastPlan} /></div>
+        {/if}
         <ul class="map" aria-label={t('docs.spec.mapLabel')}>
           {#each tree.subjects as s (s.name)}
             {@const st = subjectState(s)}
@@ -272,6 +301,17 @@
                   <span>{t('docs.count.tickets', { count: n.tickets })}</span>
                   <span>{t('docs.count.decisions', { count: n.decisions })}</span>
                 </span>
+                {#if n.tickets}
+                  {@const keys = subjectTickets(s.pages)}
+                  <!-- Its tickets (ESC-262): the keys, the state of those of this board. -->
+                  <span class="c-tickets" data-subject-tickets>
+                    {#each keys.slice(0, 4) as k (k)}
+                      {@const tk = Object.values(app.tickets).find((x) => x.projectId === project.id && x.key === k)}
+                      <span class="tkey {tk?.column ?? ''}" use:tip={tk ? `${k} · ${tk.title}` : k}>{k}</span>
+                    {/each}
+                    {#if keys.length > 4}<span class="tkey more">+{keys.length - 4}</span>{/if}
+                  </span>
+                {/if}
                 <span class="c-when" data-compared={at ?? null}
                   >{s.pages.some((p) => comparing.includes(p.path))
                     ? t('docs.compare.runningOne')
@@ -303,6 +343,50 @@
 {/if}
 
 <style>
+  .plan-bar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 22px;
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in oklch, var(--accent) 7%, transparent);
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .plan-bar .grow {
+    flex: 1;
+    min-width: 0;
+  }
+  .last-plan {
+    flex: none;
+    max-width: 680px;
+    padding: 20px 20px 0;
+  }
+  .last-plan + .map {
+    padding-top: 14px;
+  }
+  .c-tickets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .tkey {
+    padding: 0 6px;
+    border-radius: 5px;
+    background: var(--hover);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 18px;
+  }
+  .tkey.done {
+    color: var(--ok);
+  }
+  .tkey.doing,
+  .tkey.review {
+    color: var(--accent);
+  }
   .stat b {
     color: var(--text);
     font-weight: 620;
