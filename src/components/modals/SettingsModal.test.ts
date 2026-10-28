@@ -532,7 +532,9 @@ describe('SettingsModal', () => {
     ).toEqual(['80 %', '90 %', '95 %', '100 %']);
     expect(within(pause).getByRole('button', { name: '100 %' })).toHaveAttribute('aria-pressed', 'true');
     expect(
-      screen.getByText('Aucun ticket ne démarre tant que la fenêtre de 5 h ou la fenêtre hebdomadaire dépasse ce seuil.'),
+      screen.getByText(
+        'Le pilote auto ne démarre aucun ticket tant que la fenêtre de 5 h ou la fenêtre hebdomadaire dépasse ce seuil. Un ticket lancé à la main part quand même.',
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText('pour tous les projets')).toBeInTheDocument();
     await userEvent.click(within(pause).getByRole('button', { name: '90 %' }));

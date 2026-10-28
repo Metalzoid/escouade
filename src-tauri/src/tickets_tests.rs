@@ -2173,22 +2173,40 @@ async fn nothing_starts_while_a_window_is_used_past_the_threshold_until_it_reads
         .ticket_create(&p.id, draft("Patienter [ok]", &[], 5))
         .await
         .unwrap();
+    let u = h
+        .core
+        .ticket_create(&p.id, draft("Patienter aussi [ok]", &[], 5))
+        .await
+        .unwrap();
     h.wait_board_idle().await;
     assert_eq!(h.ticket(&t.id).column, Column::Todo);
+    assert_eq!(h.ticket(&u.id).column, Column::Todo);
     assert_eq!(
         h.pauses(),
         [
             json!({ "reason": "window", "minutes": 10080, "pct": 96.0, "until": end + RESUME_MARGIN_MS })
         ]
     );
-    // Launched by hand ("Lancer", the autopilot off), it waits too.
+    // Launched by hand ("Lancer", the autopilot off), it starts: « Pause au-delà du quota » holds
+    // back the autopilot alone (the user, 2026-10-28).
     h.set_board(&p.id, |s| s.autopilot = false);
     h.core.ticket_start(&t.id).unwrap();
+    h.wait_ticket(&t.id, "started by hand past the threshold", |t| {
+        t.column != Column::Todo
+    })
+    .await;
+    // Its agent read the fake CLI's quota, well under: the window past the threshold again.
+    h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
+        .await;
+    h.record_usage("principal", Reading::claude((None, week)))
+        .await;
+    // The autopilot on again, the other one still waits for the window.
+    h.set_board(&p.id, |s| s.autopilot = true);
     h.wait_board_idle().await;
-    assert_eq!(h.ticket(&t.id).column, Column::Todo);
+    assert_eq!(h.ticket(&u.id).column, Column::Todo);
     // Read under it, the tickets go by themselves.
     h.core.refresh_usage().await;
-    h.wait_ticket(&t.id, "started under the threshold", |t| {
+    h.wait_ticket(&u.id, "started under the threshold", |t| {
         t.column != Column::Todo
     })
     .await;

@@ -1351,23 +1351,42 @@ impl<R: Runtime> Core<R> {
     /// No ticket of the project on `engine` may start now: every account of that harness it may go
     /// to waits for its quota (an agent waiting for its reset, a window over the threshold, a usage
     /// limit with no resume).
-    fn held(&self, project_id: &str, engine: EngineId) -> bool {
-        self.project_hold(project_id, engine).is_some()
+    /// Launched by hand (`by_hand`), by a usage limit alone (`project_limit`).
+    fn held(&self, project_id: &str, engine: EngineId, by_hand: bool) -> bool {
+        self.project_hold_as(project_id, engine, by_hand).is_some()
     }
 
     /// What holds back the tickets, and the new agents, of the project on `engine`, if anything
     /// does (`board::project_hold`): every account of that harness it may go to is held, and then
     /// until the first of them is free again. Another harness is not held by it, and one without a
     /// quota is never held but by a usage limit. The tools that act refuse by it.
+    #[cfg(test)]
     pub(crate) fn project_hold(&self, project_id: &str, engine: EngineId) -> Option<board::Held> {
+        self.project_hold_as(project_id, engine, false)
+    }
+
+    /// What holds back a ticket or a new agent of the project asked for by hand, by a tool of
+    /// Escouade's server as by the window's buttons: a usage limit alone (a window used up, an
+    /// agent waiting for its reset, a pause after a limit). « Pause au-delà du quota » and the
+    /// day's budget hold back the autopilot, never a hand (the user, 2026-10-28).
+    pub(crate) fn project_limit(&self, project_id: &str, engine: EngineId) -> Option<board::Held> {
+        self.project_hold_as(project_id, engine, true)
+    }
+
+    fn project_hold_as(
+        &self,
+        project_id: &str,
+        engine: EngineId,
+        by_hand: bool,
+    ) -> Option<board::Held> {
         let settings = accounts::for_project(&self.settings.read(), engine, Some(project_id));
         let preferred = self
             .project(project_id)
             .ok()
             .and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
-        let threshold = board::quota_threshold(settings.quota_pause);
+        let threshold = hold_threshold(settings.quota_pause, by_hand);
         let accounts = accounts::candidates(&settings, preferred.as_deref());
-        let usage = self.usage.lock().accounts.clone();
+        let usage = hold_usage(&self.usage.lock().accounts, by_hand);
         let hold = self.hold.lock().clone();
         let waiting = self.quota_paused();
         board::project_hold(
@@ -1380,14 +1399,21 @@ impl<R: Runtime> Core<R> {
         )
     }
 
-    /// What holds back anything that spends the account's quota, a message to one of its agents
-    /// included, if anything does (`board::account_hold`). An account the settings do not know is
-    /// Principal, as for `quota_paused`.
-    pub(crate) fn account_hold(&self, account: &str) -> Option<board::Held> {
+    /// What holds back what spends the account's quota when asked for by hand (`project_limit`),
+    /// a message to one of its agents included: a usage limit alone.
+    pub(crate) fn account_limit(&self, account: &str) -> Option<board::Held> {
+        self.account_hold_as(account, true)
+    }
+
+    /// What holds back anything that spends the account's quota, if anything does
+    /// (`board::account_hold`): for the autopilot (`by_hand` false), « Pause au-delà du quota »
+    /// and the day's budget too. An account the settings do not know is Principal, as for
+    /// `quota_paused`.
+    fn account_hold_as(&self, account: &str, by_hand: bool) -> Option<board::Held> {
         let settings = self.settings.read().clone();
         let id = accounts::get(&settings, account).id;
-        let threshold = board::quota_threshold(settings.quota_pause);
-        let usage = self.usage.lock().accounts.clone();
+        let threshold = hold_threshold(settings.quota_pause, by_hand);
+        let usage = hold_usage(&self.usage.lock().accounts, by_hand);
         let hold = self.hold.lock().clone();
         let waiting = self.quota_paused();
         board::account_hold(&usage, &id, threshold, &hold, &waiting, self.pause_now())
@@ -1473,21 +1499,24 @@ impl<R: Runtime> Core<R> {
                     continue;
                 }
             }
-            // Held (`held`), none starts, even launched by hand. Looked at again for each project
+            // Held (`ticket_held`), none starts: the autopilot's by « Pause au-delà du quota »
+            // too, one launched by hand by a usage limit alone. Looked at again for each project
             // and each start: one started in this pass, or already at work, may meet the usage
             // limit while the pass goes on (each start takes seconds).
             // Each ticket by the accounts of its own harness.
             let engine_of = |t: &Ticket| t.engine.unwrap_or_else(|| p.engine());
             let ids = {
                 let tickets = self.tickets.read().clone();
-                let mut held: HashMap<EngineId, bool> = HashMap::new();
+                let mut held: HashMap<(EngineId, bool), bool> = HashMap::new();
                 board::to_start(&tickets, &p.id, &p.board, |t| {
                     let e = engine_of(t);
                     // One set on an account waits for that account alone (ESC-153).
                     if !t.account.is_empty() {
                         return self.ticket_held(&p, t, e);
                     }
-                    *held.entry(e).or_insert_with(|| self.held(&p.id, e))
+                    *held
+                        .entry((e, t.forced))
+                        .or_insert_with(|| self.held(&p.id, e, t.forced))
                 })
             };
             // A board that told why nothing starts is looked at again even with nothing to start:
@@ -1796,10 +1825,12 @@ impl<R: Runtime> Core<R> {
 
     /// Whether the ticket may not start now for want of an account (`held`): one set on an account
     /// waits for that account alone (ESC-153), else for those of its harness.
+    /// Launched by hand, a ticket waits for a usage limit alone: « Pause au-delà du quota » and the
+    /// day's budget hold back the autopilot (the user, 2026-10-28).
     fn ticket_held(&self, project: &Project, t: &Ticket, engine: EngineId) -> bool {
         match self.pinned(project, t, engine) {
-            Some(id) => self.account_hold(&id).is_some(),
-            None => self.held(&project.id, engine),
+            Some(id) => self.account_hold_as(&id, t.forced).is_some(),
+            None => self.held(&project.id, engine, t.forced),
         }
     }
 
@@ -3788,4 +3819,29 @@ pub(crate) fn same_dir(a: &str, b: &str) -> bool {
             norm(a) == norm(b)
         }
     }
+}
+
+/// The threshold of a window that holds back a start: « Pause au-delà du quota » for the
+/// autopilot, a window used up (100 %) for a start asked by hand (`Core::project_limit`).
+fn hold_threshold(saved: u32, by_hand: bool) -> u32 {
+    if by_hand {
+        100
+    } else {
+        board::quota_threshold(saved)
+    }
+}
+
+/// The accounts' usage a hold reads: for a start asked by hand, without their day's budget, which
+/// pauses the autopilot alone (`Core::project_limit`).
+fn hold_usage(usage: &[AccountUsage], by_hand: bool) -> Vec<AccountUsage> {
+    usage
+        .iter()
+        .cloned()
+        .map(|mut u| {
+            if by_hand {
+                u.daily_budget = None;
+            }
+            u
+        })
+        .collect()
 }

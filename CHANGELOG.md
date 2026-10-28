@@ -18,6 +18,11 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - « Nouvelle discussion » dans l’onglet Docs : discute de la spec avec un agent rédacteur, ou brainstorme avec un agent produit qui pense usages, RGPD et ce que font d’autres secteurs ; ce qu’ils proposent s’affiche page par page et se verse dans la spec d’un clic, sans qu’ils touchent jamais au code.
 - La spec suit le code : l’agent d’un ticket met à jour les pages qu’il touche et laisse une décision, puis, le ticket validé, un agent compare ces pages au code et montre les écarts sur la carte des sujets et en haut de la page, à régler d’un clic ; « Comparer au code » le refait à la demande.
 
+### Corrections
+
+- Un ticket lancé à la main part même au-delà de « Pause au-delà du quota » : ce seuil ne retient plus que le pilote auto.
+- Sous WSLg, les liens, les fichiers et les dossiers s’ouvrent dans Windows, au lieu de ne rien faire.
+
 ## [2.0.5] — 2026-10-27
 
 ### Corrections

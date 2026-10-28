@@ -792,6 +792,58 @@ async fn a_ticket_is_started_by_hand_and_the_scheduler_takes_it() {
 }
 
 #[tokio::test]
+async fn pause_past_the_quota_holds_back_the_autopilot_alone_never_a_ticket_started_by_hand() {
+    let h = harness("mcp-act-start-past-threshold");
+    let p = project(&h).await;
+    let a = made(&h, &p, "Malgré le seuil [ok]").await;
+    // The weekly window past « Pause au-delà du quota »: the autopilot is paused. Set before the
+    // client connects: saving the settings starts the server again.
+    h.set_settings(|s| s.quota_pause = 95);
+    let end = h.core.pause_now() + 3_600_000;
+    h.core.record_usage(
+        PRINCIPAL,
+        Reading::claude((
+            None,
+            Some(RateWindow {
+                pct: 97.0,
+                resets_at: Some(end),
+            }),
+        )),
+    );
+    assert!(h.core.autopilot_pause().is_some());
+    assert!(h.core.project_hold(&p.id, EngineId::Claude).is_some());
+    // Started by hand, it goes (the user, 2026-10-28): the scheduler gives it an agent.
+    assert!(h.core.project_limit(&p.id, EngineId::Claude).is_none());
+    let c = external(&h).await;
+    let v = read(&c, "start_ticket", json!({ "ticket": a.key })).await;
+    assert_eq!(v["key"], a.key.as_str());
+    h.wait("the ticket to start past the threshold", |h| {
+        stored(h, &a.id).column != Column::Todo
+    })
+    .await;
+    // A window used up holds it back, by hand too.
+    let b = made(&h, &p, "À la limite").await;
+    h.core.record_usage(
+        PRINCIPAL,
+        Reading::claude((
+            None,
+            Some(RateWindow {
+                pct: 100.0,
+                resets_at: Some(end),
+            }),
+        )),
+    );
+    let limit = refused(&c, "start_ticket", json!({ "ticket": b.key })).await;
+    assert!(limit.contains("100 %"), "{limit}");
+    h.wait("its turn to end", |h| {
+        stored(h, &a.id).column == Column::Review
+    })
+    .await;
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
 async fn a_ticket_is_not_started_while_the_autopilot_is_paused_the_board_is_full_or_it_waits() {
     let h = harness("mcp-act-start-guards");
     let p = project(&h).await;

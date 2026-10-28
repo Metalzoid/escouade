@@ -416,22 +416,24 @@ fn why<R: Runtime>(core: &Core<R>, held: &Held) -> String {
     }
 }
 
-/// A ticket, or a new agent, of the project does not start while every account it may go to is
-/// held back (`Core::project_hold`: the one the project prefers, else any active one): one that is
-/// free takes it, as the scheduler has it. The refusal says why, and until when.
+/// A ticket, or a new agent, of the project does not start while every account it may go to is at
+/// its usage limit (`Core::project_limit`: the one the project prefers, else any active one): one
+/// that is free takes it, as the scheduler has it. Asked for by hand, it is not held by « Pause
+/// au-delà du quota » nor by the day's budget, which hold back the autopilot alone. The refusal says
+/// why, and until when.
 fn not_held<R: Runtime>(
     core: &Core<R>,
     project_id: &str,
     engine: EngineId,
 ) -> Result<(), ToolError> {
-    match core.project_hold(project_id, engine) {
+    match core.project_limit(project_id, engine) {
         Some(held) => Err(ToolError::Refused(why(core, &held))),
         None => Ok(()),
     }
 }
 
-/// A message to an agent does not go out while the agent's own account is held back
-/// (`Core::account_hold`): it would spend that account's quota. An agent on another account is not
+/// A message to an agent does not go out while the agent's own account is at its usage limit
+/// (`Core::account_limit`; « Pause au-delà du quota » holds back the autopilot alone). An agent on another account is not
 /// held by it. The refusal says why, until when, and which account when there are several.
 pub(super) fn account_not_held<R: Runtime>(
     core: &Core<R>,
@@ -444,7 +446,7 @@ pub(super) fn account_not_held<R: Runtime>(
     else {
         return Ok(());
     };
-    let Some(held) = core.account_hold(&account) else {
+    let Some(held) = core.account_limit(&account) else {
         return Ok(());
     };
     let mut refusal = why(core, &held);
@@ -712,7 +714,7 @@ pub(super) fn start_ticket<R: Runtime>(
         };
         match core.pinned(&project, &pinned, engine) {
             Some(id) => {
-                if let Some(held) = core.account_hold(&id) {
+                if let Some(held) = core.account_limit(&id) {
                     return Err(ToolError::Refused(why(core, &held)));
                 }
             }

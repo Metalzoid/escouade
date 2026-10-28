@@ -18,6 +18,11 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - “New discussion” in the Docs tab: discuss the spec with a spec writer agent, or brainstorm with a product agent that thinks about uses, GDPR and what other trades do; what they propose shows page by page and is poured into the spec in one click, without them ever touching the code.
 - The spec follows the code: a ticket’s agent updates the pages it touches and leaves a decision, then, once the ticket is approved, an agent compares those pages to the code and shows the gaps on the map of the subjects and at the top of the page, to settle in one click; “Compare to the code” does it again on demand.
 
+### Fixes
+
+- A ticket launched by hand starts even past “Pause above quota”: that threshold now holds back the autopilot alone.
+- Under WSLg, links, files and folders open in Windows, instead of doing nothing.
+
 ## [2.0.5] — 2026-10-27
 
 ### Fixes
