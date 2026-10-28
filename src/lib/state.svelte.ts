@@ -29,6 +29,7 @@ import type {
   Agent,
   AgentStatus,
   AutopilotPause,
+  DocsConflict,
   FileTree,
   GitInfo,
   LangInfo,
@@ -354,6 +355,8 @@ class AppState {
   board = $state<Record<string, boolean>>({});
   /** Why no ticket of a project's board starts (its target branch has no commit yet, or is gone), by project. */
   boardIssues = $state<Record<string, string>>({});
+  /** What each project's docs have to share (ESC-257), by project id: the status bar says « N changements à partager ». */
+  docsShare = $state<Record<string, { pending: number; conflict: DocsConflict | null }>>({});
   /** Why no ticket of any board starts for now (a quota window, a usage limit), as the backend says. */
   autopilotPause = $state<AutopilotPause | null>(null);
   /** The same for the paused projects that prefer an account, by project (they wait for that account alone). */
@@ -656,6 +659,9 @@ class AppState {
       case 'voice':
         dictation.take(e.voice);
         conversation.take(e.voice);
+        break;
+      case 'docsShare':
+        this.docsShare[e.projectId] = { pending: e.pending, conflict: e.conflict };
         break;
       case 'boardIssue':
         if (e.issue) this.boardIssues[e.projectId] = e.issue;

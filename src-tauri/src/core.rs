@@ -776,6 +776,8 @@ pub struct AgentOptions {
     /// Set apart from Remote Control from the start (`AgentMeta::remote_off`): a ticket's next
     /// agent, when the user set the ticket's previous one apart.
     pub remote_off: bool,
+    /// Works in this folder (where the project's docs are) when it has no worktree of its own.
+    pub cwd: Option<String>,
 }
 
 /// What a copy takes of its original, read while no turn of the original ran.
@@ -928,6 +930,9 @@ pub struct Core<R: Runtime = Wry> {
     /// Blocks of ports reserved for agents being made, or being given one: taken until the agent
     /// holds its own.
     pub(crate) ports_reserved: Mutex<Vec<u16>>,
+    /// What each project's docs have to share, as last told to the window, and the conflict a
+    /// « Partager » stopped on (`docsshare`).
+    pub(crate) docs_shares: Mutex<HashMap<String, crate::docsshare::Memo>>,
     /// One validation's merge at a time per repository (`merge_lock`).
     pub(crate) merge_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     /// One change of the Claude accounts' settings at a time (the accounts' tab, the window's
@@ -1834,6 +1839,7 @@ impl<R: Runtime> Core<R> {
             switching: Mutex::default(),
             switch_told: Mutex::default(),
             ports_reserved: Mutex::default(),
+            docs_shares: Mutex::default(),
             merge_locks: Mutex::default(),
             claude_accounts_lock: Mutex::default(),
             accounts: RwLock::new(accounts),
@@ -5844,6 +5850,9 @@ impl<R: Runtime> Core<R> {
                 ))
             }
             None => {}
+        }
+        if let Some(cwd) = o.cwd.as_ref().filter(|_| meta.worktree.is_none()) {
+            meta.cwd = cwd.clone();
         }
         let id = meta.id.clone();
         let fresh = meta.worktree.clone();

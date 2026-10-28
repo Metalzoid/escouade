@@ -2991,7 +2991,7 @@ pub async fn docs_spec_write(
     body: Option<String>,
 ) -> Res<crate::docs::Page> {
     let space = core.docs_space(&id, None).await.map_err(err)?;
-    space
+    let written = space
         .spec_write(&path, |p| {
             if let Some(t) = title.filter(|t| !t.trim().is_empty()) {
                 p.title = t.trim().to_string();
@@ -3001,7 +3001,9 @@ pub async fn docs_spec_write(
             }
         })
         .map(|(page, _, _)| page)
-        .map_err(err)
+        .map_err(err);
+    core.docs_changed(&id).await;
+    written
 }
 
 #[tauri::command]
@@ -3030,10 +3032,13 @@ pub async fn docs_decision_propose(
     number: Option<u32>,
     decision: crate::docs::Decision,
 ) -> Res<crate::docs::Decision> {
-    core.docs_space(&id, None)
+    let out = core
+        .docs_space(&id, None)
         .await
         .and_then(|s| s.decision_propose(number, decision))
-        .map_err(err)
+        .map_err(err);
+    core.docs_changed(&id).await;
+    out
 }
 
 /// A proposal that replaces the accepted decision `number`.
@@ -3044,10 +3049,13 @@ pub async fn docs_decision_replace(
     number: u32,
     decision: crate::docs::Decision,
 ) -> Res<crate::docs::Decision> {
-    core.docs_space(&id, None)
+    let out = core
+        .docs_space(&id, None)
         .await
         .and_then(|s| s.decision_replace(number, decision))
-        .map_err(err)
+        .map_err(err);
+    core.docs_changed(&id).await;
+    out
 }
 
 /// « Accepter »: a human accepts a proposed decision. The only way to: no MCP tool does.
@@ -3057,7 +3065,9 @@ pub async fn docs_decision_accept(
     id: String,
     number: u32,
 ) -> Res<crate::docs::Decision> {
-    core.docs_accept_decision(&id, number).await.map_err(err)
+    let out = core.docs_accept_decision(&id, number).await.map_err(err);
+    core.docs_changed(&id).await;
+    out
 }
 
 #[tauri::command]
@@ -3094,14 +3104,52 @@ pub async fn docs_document_add(
     source: String,
     confirmed: Option<bool>,
 ) -> Res<crate::docs::DocInfo> {
-    core.docs_add_file(
-        &id,
-        folder.as_deref().unwrap_or_default(),
-        &source,
-        confirmed.unwrap_or(false),
-    )
-    .await
-    .map_err(err)
+    let out = core
+        .docs_add_file(
+            &id,
+            folder.as_deref().unwrap_or_default(),
+            &source,
+            confirmed.unwrap_or(false),
+        )
+        .await
+        .map_err(err);
+    core.docs_changed(&id).await;
+    out
+}
+
+/// What the project's docs have to share: the files, their number, the conflict being handled.
+#[tauri::command]
+pub async fn docs_pending(core: CoreState<'_>, id: String) -> Res<crate::docsshare::Pending> {
+    core.docs_pending(&id).await.map_err(err)
+}
+
+/// « Partager »: fetches, commits the changes of the docs and only them, pushes. Stops on a
+/// conflict, which is kept for `docs_share_resolve` / `docs_share_cancel`.
+#[tauri::command]
+pub async fn docs_share(
+    core: CoreState<'_>,
+    id: String,
+    message: Option<String>,
+    with_code: Option<bool>,
+) -> Res<crate::docsshare::Shared> {
+    core.docs_share(&id, message.as_deref(), with_code.unwrap_or(false))
+        .await
+        .map_err(err)
+}
+
+/// « L'agent résout » a conflict of the docs.
+#[tauri::command]
+pub async fn docs_share_resolve(
+    core: CoreState<'_>,
+    id: String,
+) -> Res<crate::docsshare::Conflict> {
+    core.docs_share_resolve(&id).await.map_err(err)
+}
+
+/// « Annuler » a conflict of the docs.
+#[tauri::command]
+pub async fn docs_share_cancel(core: CoreState<'_>, id: String) -> Res<()> {
+    core.docs_share_cancel(&id).await.map_err(err)
 }
 
 #[cfg(test)]

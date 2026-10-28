@@ -2602,6 +2602,14 @@ pub enum UiEvent {
     Voice {
         voice: crate::voice::VoiceEvent,
     },
+    /// What a project's docs have to share (ESC-257): the changes not shared yet, and the conflict
+    /// a « Partager » stopped on, if any.
+    #[serde(rename_all = "camelCase")]
+    DocsShare {
+        project_id: String,
+        pending: u32,
+        conflict: Option<crate::docsshare::Conflict>,
+    },
 }
 
 pub fn now_ms() -> i64 {

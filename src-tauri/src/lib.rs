@@ -46,6 +46,9 @@ mod docs;
 #[cfg(test)]
 mod docs_tests;
 mod docsbranch;
+mod docsshare;
+#[cfg(test)]
+mod docsshare_tests;
 mod engine;
 #[cfg(test)]
 mod engines_tests;
@@ -510,6 +513,10 @@ pub fn run() {
             commands::docs_documents,
             commands::docs_document_text,
             commands::docs_document_add,
+            commands::docs_pending,
+            commands::docs_share,
+            commands::docs_share_resolve,
+            commands::docs_share_cancel,
             commands::get_workflows,
             commands::get_workflow_tracks,
             commands::refresh_workflows,

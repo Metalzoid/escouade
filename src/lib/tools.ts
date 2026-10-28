@@ -36,6 +36,8 @@ const ESCOUADE_TOOLS: Record<string, Key> = {
   list_documents: 'mcp.tools.listDocuments',
   read_document: 'mcp.tools.readDocument',
   add_document: 'mcp.tools.addDocument',
+  get_docs_to_share: 'mcp.tools.getDocsToShare',
+  share_docs: 'mcp.tools.shareDocs',
   get_board: 'mcp.tools.getBoard',
   set_board: 'mcp.tools.setBoard',
   get_agent_summary: 'mcp.tools.getAgentSummary',

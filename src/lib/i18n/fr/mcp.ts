@@ -65,6 +65,8 @@ export default {
     listDocuments: 'Lister les documents',
     readDocument: 'Lire un document',
     addDocument: 'Ajouter un document',
+    getDocsToShare: 'Lire ce que les docs ont à partager',
+    shareDocs: 'Partager les docs',
     setBoard: 'Régler le Kanban',
     getAgentSummary: 'Résumer un agent',
     listRequests: 'Lister les demandes en attente',

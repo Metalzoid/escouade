@@ -2235,6 +2235,8 @@ export type UiEvent =
   | { type: 'mcpDeclared'; declared: McpDeclaration[] }
   /** The dictation: its level, its end, a model's download. */
   | { type: 'voice'; voice: VoiceEvent }
+  /** What a project's docs have to share (the changes not shared yet), and the conflict a « Partager » stopped on. */
+  | { type: 'docsShare'; projectId: string; pending: number; conflict: DocsConflict | null }
   /** Lines a step of the setup of an agent's worktree wrote since the last event, `total` counting all it wrote; a step starts with none. */
   | ({ type: 'setupOutput'; agentId: string } & SetupOutput);
 
@@ -2658,3 +2660,28 @@ export interface DocsText {
   from: number;
   truncated: boolean;
 }
+
+/** A conflict between two versions of a page of the docs, handed to the writer agent (« L'agent résout » / « Annuler »). */
+export interface DocsConflict {
+  /** The pages both sides changed. */
+  files: string[];
+  /** The branch that was being merged in. */
+  target: string;
+  /** The writer agent resolving it, once « L'agent résout » was clicked. */
+  agentId: string | null;
+}
+
+/** The changes of a project's docs not shared yet. */
+export interface DocsPending {
+  files: string[];
+  count: number;
+  /** Commits of code not pushed yet: « Partager » asks to be confirmed (`withCode`) before publishing them. */
+  codeCommits: number;
+  conflict: DocsConflict | null;
+}
+
+/** How a « Partager » ended. */
+export type DocsShared =
+  | { kind: 'nothing' }
+  | { kind: 'done'; committed: number; message: string; pulled: boolean }
+  | { kind: 'conflict'; conflict: DocsConflict };

@@ -1885,6 +1885,7 @@ impl<R: Runtime> Core<R> {
                     new_branch: false,
                     // Set apart from Remote Control by hand for its earlier agent: so is this one.
                     remote_off: t.remote_off,
+                    cwd: None,
                 },
             )
             .await;

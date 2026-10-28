@@ -83,6 +83,9 @@ import type {
   DocsHit,
   DocsPage,
   DocsText,
+  DocsPending,
+  DocsShared,
+  DocsConflict,
   DocsTree,
 } from './types';
 
@@ -422,6 +425,10 @@ export const api = {
   /** A file chosen, put in the drive; over 50 MB it asks to be `confirmed` first. */
   docsDocumentAdd: (id: string, folder: string | null, source: string, confirmed = false) =>
     invoke<DocsFile>('docs_document_add', { id, folder, source, confirmed }),
+  docsPending: (id: string) => invoke<DocsPending>('docs_pending', { id }),
+  docsShare: (id: string, message: string | null = null, withCode = false) => invoke<DocsShared>('docs_share', { id, message, withCode }),
+  docsShareResolve: (id: string) => invoke<DocsConflict>('docs_share_resolve', { id }),
+  docsShareCancel: (id: string) => invoke<void>('docs_share_cancel', { id }),
   gitLog: (projectId: string, agentId: string | null, repo: string | null = null) =>
     invoke<GitLog>('git_log', { projectId, agentId, ...inRepo(repo) }),
   gitShow: (projectId: string, hash: string, repo: string | null = null) =>

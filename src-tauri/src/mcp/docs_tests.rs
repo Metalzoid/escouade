@@ -496,3 +496,102 @@ async fn a_private_project_keeps_its_docs_from_the_agents_of_the_others() {
     outside.cancel().await.unwrap();
     all.cancel().await.unwrap();
 }
+
+/// A remote for the project's repository.
+fn with_remote(h: &crate::core_tests::Harness, p: &crate::model::Project) -> std::path::PathBuf {
+    let remote = h.dir.join("remote.git");
+    git(
+        &h.dir,
+        &["init", "-q", "--bare", "-b", "main", "remote.git"],
+    );
+    let at = std::path::Path::new(&p.path);
+    git(at, &["remote", "add", "origin", &remote.to_string_lossy()]);
+    git(at, &["push", "-q", "-u", "origin", "main"]);
+    remote
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn what_the_docs_have_to_share_is_read_and_sharing_is_the_users_gesture() {
+    let h = harness("mcp-docs-share");
+    let p = project(&h).await;
+    let remote = with_remote(&h, &p);
+    let c = external(&h).await;
+    read(
+        &c,
+        "write_spec_page",
+        json!({ "project": p.name, "path": "paiement/echeances", "body": "Trois." }),
+    )
+    .await;
+    let to_share = read(&c, "get_docs_to_share", json!({ "project": p.name })).await;
+    assert_eq!(to_share["pending"]["count"], 1);
+    assert_eq!(
+        to_share["pending"]["files"][0],
+        ".escouade/spec/paiement/echeances.md"
+    );
+    // An agent of Escouade is refused: sharing is the user's gesture.
+    let a = put_agent(&h, &p, "Alice", 1);
+    let ca = as_agent(&h, &a.id).await;
+    let said = refused(&ca, "share_docs", json!({ "project": p.name })).await;
+    assert!(said.contains("userAskedForIt"), "{said}");
+    let said = refused(
+        &ca,
+        "share_docs",
+        json!({ "project": p.name, "userAskedForIt": false }),
+    )
+    .await;
+    assert!(said.contains("userAskedForIt"), "{said}");
+    assert!(git(&remote, &["log", "--oneline", "main"]).lines().count() == 1);
+    // It reads what there is to share, as every client does.
+    let seen = read(&ca, "get_docs_to_share", json!({ "project": p.name })).await;
+    assert_eq!(seen["pending"]["count"], 1);
+    // Told by the user, it may.
+    let done = read(
+        &ca,
+        "share_docs",
+        json!({ "project": p.name, "userAskedForIt": true, "message": "Les échéances" }),
+    )
+    .await;
+    assert_eq!(done["kind"], "done");
+    assert_eq!(done["committed"], 1);
+    assert_eq!(
+        git(&remote, &["log", "-1", "--format=%s", "main"]),
+        "Les échéances"
+    );
+    // Claude outside Escouade, run by the user, shares as the window does: here nothing is left.
+    let again = read(&c, "share_docs", json!({ "project": p.name })).await;
+    assert_eq!(again["kind"], "nothing");
+    let left = read(&c, "get_docs_to_share", json!({ "project": p.name })).await;
+    assert_eq!(left["pending"]["count"], 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn code_not_pushed_is_published_by_the_tool_only_with_with_code() {
+    let h = harness("mcp-docs-share-code");
+    let p = project(&h).await;
+    let remote = with_remote(&h, &p);
+    let at = std::path::Path::new(&p.path);
+    std::fs::write(at.join("code.ts"), "x\n").unwrap();
+    git(at, &["add", "-A"]);
+    git(at, &["commit", "-qm", "du code"]);
+    let c = external(&h).await;
+    read(
+        &c,
+        "write_spec_page",
+        json!({ "project": p.name, "path": "a/b", "body": "Texte" }),
+    )
+    .await;
+    let before = git(&remote, &["rev-parse", "main"]);
+    let said = refused(&c, "share_docs", json!({ "project": p.name })).await;
+    assert!(said.contains("commits"), "{said}");
+    assert_eq!(git(&remote, &["rev-parse", "main"]), before);
+    let seen = read(&c, "get_docs_to_share", json!({ "project": p.name })).await;
+    assert_eq!(seen["pending"]["codeCommits"], 1);
+    let done = read(
+        &c,
+        "share_docs",
+        json!({ "project": p.name, "withCode": true }),
+    )
+    .await;
+    assert_eq!(done["kind"], "done");
+    assert_ne!(git(&remote, &["rev-parse", "main"]), before);
+}

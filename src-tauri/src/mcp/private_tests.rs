@@ -116,6 +116,16 @@ fn naming_calls() -> Vec<(&'static str, Names, Value)> {
         ),
         ("list_documents", Names::Project, json!({ "project": "{}" })),
         (
+            "get_docs_to_share",
+            Names::Project,
+            json!({ "project": "{}" }),
+        ),
+        (
+            "share_docs",
+            Names::Project,
+            json!({ "project": "{}", "userAskedForIt": true }),
+        ),
+        (
             "read_document",
             Names::Project,
             json!({ "project": "{}", "path": "a.md" }),

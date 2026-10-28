@@ -112,10 +112,11 @@ async fn the_acting_tools_say_what_they_take_and_that_they_change_things() {
         assert!(v["description"].as_str().unwrap().len() > 60, "{name}: {v}");
         // They change something: the client must not take them for reads.
         assert_eq!(v["annotations"]["readOnlyHint"], false, "{name}: {v}");
-        // Only an approval may reach beyond Escouade (it may push and open a pull request).
+        // Only an approval (it may push and open a pull request) and the sharing of the docs (it
+        // pushes) may reach beyond Escouade.
         assert_eq!(
             v["annotations"]["openWorldHint"],
-            *name == "approve_ticket",
+            matches!(*name, "approve_ticket" | "share_docs"),
             "{name}: {v}"
         );
         // And of the board's flow, only an approval and a deletion cannot be taken back.

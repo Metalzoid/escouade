@@ -1307,6 +1307,38 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
+        description = "The changes of a project's docs (spec, decisions, documents) not shared with the team yet: pending.files, pending.count, and pending.conflict when a sharing stopped on a conflict between two versions of a page, which the writer agent resolves from the window. Open to every client, for the projects it sees.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn get_docs_to_share(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::DocsProjectArgs>,
+    ) -> CallToolResult {
+        let result = docs::to_share(&ctx.core, &ctx.caller, &args.project).await;
+        let asked = summary(&[("project", Some(&args.project))]);
+        ctx.reply("get_docs_to_share", &asked, result)
+    }
+
+    #[tool(
+        description = "Share a project's docs, as the window's « Partager » does: the remote branch is fetched first, the changes of the docs (and only them) are committed with a message, others' work is merged in and the branch is pushed. A conflict between two versions of a page is undone and left for the writer agent (the window offers « L'agent résout » / « Annuler »); it is never shown as lines of git. Sharing is the user's gesture: an agent of Escouade is refused unless the user told it to (userAskedForIt). Refused, in a sentence, while the branch has commits of code not pushed yet, unless withCode is true. Answers kind nothing, done (committed, message, pulled) or conflict.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = true
+        )
+    )]
+    async fn share_docs(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::ShareDocsArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("project", Some(&args.project))]);
+        let result = docs::share(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("share_docs", &asked, result)
+    }
+
+    #[tool(
         description = "Add a text file to a project's drive of documents, in the docs branch, under a folder (made if needed). Nothing already there is overwritten: a taken name gets a number. Nothing is committed nor pushed.",
         annotations(
             read_only_hint = false,

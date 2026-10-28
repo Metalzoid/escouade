@@ -270,7 +270,7 @@ pub(super) async fn write<R: Runtime>(
     caller: &Caller,
     args: WriteSpecArgs,
 ) -> Result<String, ToolError> {
-    let (_, space) = open(core, caller, &args.project).await?;
+    let (project, space) = open(core, caller, &args.project).await?;
     // A path with no folder goes under its subject.
     let mut path = docs::page_path(&args.path).ok_or_else(|| {
         failed(anyhow::anyhow!(tr!(
@@ -322,6 +322,7 @@ pub(super) async fn write<R: Runtime>(
             }
         })
         .map_err(failed)?;
+    core.docs_changed(&project.id).await;
     json(&json!({
         "path": page.path,
         "title": page.title,
@@ -431,10 +432,11 @@ pub(super) async fn propose<R: Runtime>(
     caller: &Caller,
     args: ProposeDecisionArgs,
 ) -> Result<String, ToolError> {
-    let (_, space) = open(core, caller, &args.project).await?;
+    let (project, space) = open(core, caller, &args.project).await?;
     let d = space
         .decision_propose(args.number, decision_of(args.fields))
         .map_err(failed)?;
+    core.docs_changed(&project.id).await;
     json(&json!({ "number": d.number, "title": d.title, "state": d.state, "date": d.date }))
 }
 
@@ -443,10 +445,11 @@ pub(super) async fn replace<R: Runtime>(
     caller: &Caller,
     args: ReplaceDecisionArgs,
 ) -> Result<String, ToolError> {
-    let (_, space) = open(core, caller, &args.project).await?;
+    let (project, space) = open(core, caller, &args.project).await?;
     let d = space
         .decision_replace(args.number, decision_of(args.fields))
         .map_err(failed)?;
+    core.docs_changed(&project.id).await;
     json(&json!({
         "number": d.number,
         "title": d.title,
@@ -495,7 +498,7 @@ pub(super) async fn add_document<R: Runtime>(
             "The text is over 2 MB: drop the file in the window."
         ))));
     }
-    let (_, space) = open(core, caller, &args.project).await?;
+    let (project, space) = open(core, caller, &args.project).await?;
     let info = space
         .document_add(
             args.folder.as_deref().unwrap_or_default(),
@@ -503,5 +506,58 @@ pub(super) async fn add_document<R: Runtime>(
             args.text.as_bytes(),
         )
         .map_err(failed)?;
+    core.docs_changed(&project.id).await;
     json(&info)
+}
+
+/// `get_docs_to_share`: the changes of the docs not shared yet (the files and their number), and
+/// the conflict a sharing stopped on.
+pub(super) async fn to_share<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    project: &str,
+) -> Result<String, ToolError> {
+    let p = resolve::project(core, caller, project)?;
+    let pending = core.docs_pending(&p.id).await.map_err(failed)?;
+    json(&json!({ "project": p.name, "projectId": p.id, "pending": pending }))
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ShareDocsArgs {
+    #[schemars(description = "The project: its id, or its name in any case.")]
+    pub project: String,
+    #[schemars(
+        description = "The commit's message; one that says what the changes are is made when left out."
+    )]
+    pub message: Option<String>,
+    #[schemars(
+        description = "For an agent of Escouade only: true when the user told you, in this conversation, to share the docs. Without it an agent is refused: sharing is the user's gesture."
+    )]
+    pub user_asked_for_it: Option<bool>,
+    #[schemars(
+        description = "True to also publish the commits of code not pushed yet on the branch; without it, sharing refuses when there are some. Only when the user said so."
+    )]
+    pub with_code: Option<bool>,
+}
+
+/// `share_docs`: the window's « Partager ». It is the user's gesture: an agent of Escouade is
+/// refused unless it says the user told it to.
+pub(super) async fn share<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    args: ShareDocsArgs,
+) -> Result<String, ToolError> {
+    let p = resolve::project(core, caller, &args.project)?;
+    if matches!(caller, Caller::Agent(_)) && args.user_asked_for_it != Some(true) {
+        return Err(ToolError::Refused(tr!(
+            "Partager les docs est un geste de l’utilisateur (le bouton « Partager ») : ne le fais que s’il te l’a demandé, en passant userAskedForIt.",
+            "Sharing the docs is the user’s gesture (the “Share” button): only do it if they told you to, passing userAskedForIt."
+        )));
+    }
+    let shared = core
+        .docs_share(&p.id, args.message.as_deref(), args.with_code == Some(true))
+        .await
+        .map_err(failed)?;
+    json(&shared)
 }

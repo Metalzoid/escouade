@@ -55,6 +55,8 @@ export default defineZone('mcp', {
     listDocuments: 'List the documents',
     readDocument: 'Read a document',
     addDocument: 'Add a document',
+    getDocsToShare: 'Read what the docs have to share',
+    shareDocs: 'Share the docs',
     setBoard: 'Set the Kanban',
     getAgentSummary: 'Sum up an agent',
     listRequests: 'List the waiting requests',
