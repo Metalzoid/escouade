@@ -39,6 +39,17 @@ Un sixième harness : Mistral Vibe, l'agent de code de Mistral AI dans le termin
 - [ ] L'adaptateur par ACP, en reprenant celui de Cursor CLI (`engine/cursor/`, `agent/cursor.rs`) ; à décider selon l'ordre de « Tout l'externe en plugins » : un harness ACP décrit (PLG-6, ESC-178) plutôt qu'un adaptateur de plus dans le cœur.
 - [ ] Ses comptes, son usage et son coût ; sa vue terminal ; la clôture des projets privés ; le banc des harness, la doc et le site.
 
+## Antigravity CLI (demandé le 2026-10-28)
+
+Un septième harness : Antigravity CLI (`agy`), l'agent de Google dans le terminal, à côté de Claude Code, Codex, OpenCode, Copilot CLI, Cursor CLI et Mistral Vibe. Il entre **dans le cœur** comme Cursor CLI et Mistral Vibe ; le passage des harness en plugins (PLG-6, ESC-178) viendra après. **Il ne parle pas ACP** : son mode sans surveillance `agy -p= --input-format stream-json --output-format stream-json` est la voie, avec un format à lui (étapes `step_update`, pas les blocs de Claude Code).
+
+**Sur le poste de l'utilisateur** (2026-10-28) : `agy` 1.4.9 installé (`%LOCALAPPDATA%\agy\bin\agy.exe`) et authentifié par Google ; sa config est `~/.gemini/antigravity-cli/`, **partagée avec Gemini CLI** ; ses jetons sont au Gestionnaire d'identifiants. Les essais réels s'y font comme ceux des autres harness : config sauvegardée puis rendue à l'octet près, jamais de déconnexion, jamais un jeton ni `google_accounts.json` lu ou copié.
+
+- [x] Essais réels d'abord (ESC-269, 2026-10-28), comme pour Cursor CLI (ESC-24) et Mistral Vibe (ESC-265) : protocole, permissions et questions, config et isolement (`USERPROFILE`), compte, quota, serveur MCP, hooks, interface, modèles et modes ; les réponses notées dans `docs/TODO-1.8.md` (point 0, « Antigravity CLI » : stream-json recommandé), les flux gardés dans `tests/fixtures/agy/`.
+- [ ] L'adaptateur par stream-json (ESC-270 et suivants) : un processus et un `USERPROFILE` par agent, lecteur de flux à part, permissions par `denied_actions` puis règle `permissions.allow` écrite dans le `settings.json` (relu à chaud) puis renvoi du message, MCP par `.agents/mcp_config.json` (jeton écrit dans le fichier, jamais en argument), `hooks.json` pour l'`escouade-hook`.
+- [ ] Ses comptes (celui du trousseau ; la clé d'API Gemini pour un compte de plus), son usage (jetons seulement, quota par `/usage` de l'interface), sa vue terminal (`agy --conversation <id>`, suivie par `transcript.jsonl`) ; la clôture des projets privés ; le banc des harness, la doc et le site.
+- [ ] À dire à l'utilisateur : pas de questions ni de coût en dollars ni de liste de tâches en stream-json ; le mode `auto` dépend du compte ; les modèles tiers dépendent du forfait.
+
 ## Demandés pendant le redesign (2026-10-24)
 
 - [ ] **Wispr Flow** pour la transcription vocale, comme service en ligne et comme app de bureau (ESC-164).

@@ -1,0 +1,22 @@
+# Flux d'Antigravity CLI (`agy`) 1.4.9 (ESC-269)
+
+Enregistrés le 2026-10-28 contre le vrai `agy -p`, avec `USERPROFILE`/`HOME` jetable (config isolée), modèle `gemini-3.8-flash-low` (ou `-medium`). Sortie brute de `--output-format stream-json`, **une ligne JSON par événement** (pas de `ms`/`dir` : `agy` n'écrit que sur stdout). Les `init.tools` sont la liste réelle des outils. Aucun jeton, aucune donnée de compte : ni journal (`cli.log` contient l'adresse du compte), ni `google_accounts.json`. Les chemins `C:\tmp\esc269\…` sont ceux de l'essai. Résultats commentés dans `docs/TODO-1.8.md`, section « Antigravity CLI ».
+
+| Fichier | Contenu |
+|---|---|
+| `01-simple-turn.jsonl` | un tour sans outil : `init`, `step_update` (`user_input`, `agent_response` avec `text_delta` et `usage`), `result` |
+| `02-stream-input-two-turns.jsonl` | `--input-format stream-json` : deux tours dans un même processus, un `result` par tour (`num_turns` cumulé) ; entrée dans `stdin-example.jsonl` |
+| `03-permission-denied-print.jsonl` | `run_command` sans règle : `step` en `ERROR`, `denied_actions` dans le `result` |
+| `04-write-denied-print.jsonl` | idem pour `write_file` (lecture `read_file` sans permission) |
+| `05-tools-allowed-by-rules.jsonl` | règles `permissions.allow` du `settings.json` : écriture et commande passent |
+| `06-hook-allow-not-enough.jsonl` | hook `PreToolUse` qui répond `allow` : le refus sans surveillance reste |
+| `07-mcp-denied-print.jsonl` | outil MCP (`call_mcp_tool`) refusé sans règle `mcp(*)` |
+| `08-mcp-allowed-project-config.jsonl` | `.agents/mcp_config.json` du projet, outil MCP autorisé et appelé |
+| `09-ask-question-skipped-print.jsonl` | `ask_question` sautée d'office (`step_type: unknown`), pas de question remontée |
+| `10-accept-edits-write.jsonl` | `--mode accept-edits` : écriture sans règle |
+| `11-plan-mode-artifact.jsonl` | `--mode plan` : le plan est un artefact `plan_*.md` |
+| `12-subagent-tasks.jsonl` | `invoke_subagent` : `step_type: subagent`, `subagent_info` (id, transcript) |
+| `13-rule-hot-reload-two-turns.jsonl` | une règle écrite dans `settings.json` entre deux tours est prise au second tour |
+| `hook-payloads.jsonl` | stdin d'un hook `PreToolUse` |
+| `mcp_config.http-header.json` | ce que `agy mcp add -H` écrit (le `${…}` n'est **pas** développé) |
+| `tui-permission-prompt.txt`, `tui-usage.txt` | texte de l'interface : demande d'autorisation, `/usage` |
