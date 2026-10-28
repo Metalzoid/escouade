@@ -418,6 +418,7 @@ export const fr: Catalog = {
       integrations: 'Tickets externes',
       'shared-board': 'Partager le Kanban',
       workflows: 'Les workflows',
+      'shared-memory': 'Mémoire partagée',
       mcp: 'Le serveur MCP',
       accounts: 'Plusieurs comptes',
       usage: 'Quotas et coût',

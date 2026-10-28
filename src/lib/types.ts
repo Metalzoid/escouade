@@ -755,6 +755,8 @@ export interface Project {
    * when its own reach the usage limit (`accounts::confined`).
    */
   sharedOnLimit: boolean;
+  /** Claude Code's memory of this project was offered to its shared memory (ESC-255): once, taken or not. */
+  claudeMemoryAsked?: boolean;
   /** The corrections of its workflows (ESC-195), ahead of the reading. Absent from a project of the window’s tests made before it. */
   workflowFixes?: WorkflowFix[];
   /** « Relire quand les fichiers changent » (ESC-195): on unless switched off. Absent from a project of the window’s tests made before it. */
@@ -2201,6 +2203,7 @@ export type UiEvent =
   | { type: 'agent'; agent: Agent }
   | { type: 'agentRemoved'; id: string; projectId: string }
   | { type: 'conv'; agentId: string; ops: ConvOp[] }
+  | { type: 'memory'; projectId: string }
   | { type: 'git'; projectId: string; git: GitInfo }
   | { type: 'usage'; usage: Usage }
   | { type: 'focus'; projectId: string; agentId: string | null }
@@ -2560,6 +2563,22 @@ export type PrFix = 'checks' | 'reviews';
 export interface LeftoverReport {
   removed: number;
   kept: { agentId: string; name: string; reason: string }[];
+}
+
+/** What a memory of the shared memory is about (ESC-255), as Claude Code sorts its own. */
+export type MemoryKind = 'feedback' | 'project' | 'reference' | 'user';
+
+/** A memory of a project's shared memory: `.escouade/memory/<name>.md` of its folder. */
+export interface Memory {
+  name: string;
+  description: string;
+  kind: MemoryKind;
+  body: string;
+}
+
+/** A memory of Claude Code's offered to the project's; `exists`: one of that name is there, which it replaces. */
+export interface OfferedMemory extends Memory {
+  exists: boolean;
 }
 
 /** A page of the spec (`docs::Page`, ESC-256), under `.escouade/spec` of the branch of the docs. */

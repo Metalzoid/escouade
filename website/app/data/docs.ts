@@ -8,7 +8,17 @@ export const DOC_GROUPS = [
   { id: 'start', pages: ['introduction', 'installation', 'harness', 'quick-start', 'interface'] },
   {
     id: 'agents',
-    pages: ['managing-agents', 'chat', 'plan', 'workflows', 'overview', 'notifications', 'claude-code-view', 'remote-control'],
+    pages: [
+      'managing-agents',
+      'chat',
+      'plan',
+      'workflows',
+      'shared-memory',
+      'overview',
+      'notifications',
+      'claude-code-view',
+      'remote-control',
+    ],
   },
   { id: 'code', pages: ['git', 'worktrees', 'branches', 'editor', 'terminals', 'launch'] },
   { id: 'board', pages: ['board', 'autopilot', 'testing', 'integrations', 'shared-board', 'mcp'] },

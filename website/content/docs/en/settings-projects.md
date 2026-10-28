@@ -222,6 +222,10 @@ The “Start from a blank project” switch (“The history stays in Settings �
 > [!NOTE]
 > A project closed before this version has already lost its history: there is nothing to get back for it.
 
+## Shared memory
+
+The “Shared memory” group lists what the project’s agents noted in its [shared memory](shared-memory): each memory, its kind and its description; a click shows its text. “Forget”, then “Confirm forgetting”, deletes its file from `.escouade/memory/`.
+
 ## The project’s other settings
 
 A project’s links to Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, and Azure Boards are set in the [“Integrations”](settings-integrations) tab. Its Kanban (autopilot, agents, approval) is set in the [“Kanban”](settings-board) tab.

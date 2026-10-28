@@ -992,13 +992,16 @@ mod events {
             )
             .await
             .unwrap();
-        // An agent with no ticket: no instructions at all while the index is off.
+        // An agent with no ticket: no rule while the index is off, only the shared memory's line
+        // (ESC-255) every agent is told.
         let plain = h
             .core
             .create_agent_with(&p.id, AgentOptions::default())
             .await
             .unwrap();
-        assert_eq!(plain.meta.append_prompt, None);
+        let told = plain.meta.append_prompt.clone().unwrap();
+        assert!(!told.contains("index_search"), "{told}");
+        assert!(told.contains("search_memory"), "{told}");
         h.core.set_code_index(&p.id, true).await.unwrap();
         let on = h
             .core
@@ -1037,10 +1040,15 @@ mod events {
             .ticket_instructions(&project, crate::i18n::Lang::Fr, &t, None, false);
         assert!(with.contains("index_search") && with.contains("ESC-1"));
         assert!(!with.contains('\n'));
+        // With the shared memory's line added after it (`core::with_memory`), it still fits.
+        let whole = format!(
+            "{with} {}",
+            crate::memory::instruction(crate::i18n::Lang::Fr)
+        );
         assert!(
-            escaped_len(&with) <= PROTOCOL_BUDGET,
+            escaped_len(&whole) <= PROTOCOL_BUDGET,
             "{}",
-            escaped_len(&with)
+            escaped_len(&whole)
         );
         let _ = crate::engine::CLAUDE.instructions_room();
         h.core.set_code_index(&p.id, false).await.unwrap();

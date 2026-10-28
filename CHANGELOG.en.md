@@ -4,6 +4,12 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [Unreleased]
+
+### New
+
+- A project’s agents share a working memory, whatever their harness: they note in it the project’s ways of doing and its pitfalls, and Escouade offers once to bring in what Claude Code had remembered.
+
 ## [2.0.5] — 2026-10-27
 
 ### Fixes

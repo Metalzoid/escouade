@@ -35,6 +35,9 @@ mod index_tests;
 pub(crate) mod install;
 #[cfg(test)]
 mod install_tests;
+mod memory;
+#[cfg(test)]
+mod memory_tests;
 #[cfg(test)]
 mod private_tests;
 mod read;

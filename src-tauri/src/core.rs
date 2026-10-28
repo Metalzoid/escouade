@@ -1327,6 +1327,16 @@ pub(crate) fn auto_resume(lang: i18n::Lang) -> String {
     tr_in!(lang, "continue", "continue")
 }
 
+/// The instructions of a new agent: those it is given (a ticket's protocol…), then what it is told of the project's
+/// shared memory (ESC-255), so that every harness reads and writes it.
+pub(crate) fn with_memory(lang: i18n::Lang, given: Option<String>) -> Option<String> {
+    let line = crate::memory::instruction(lang);
+    Some(match given.filter(|g| !g.trim().is_empty()) {
+        Some(g) => format!("{g} {line}"),
+        None => line,
+    })
+}
+
 /// What the Claude of a copy of an agent is told at every start: its conversation names the
 /// original's folder (`from`) everywhere, it works in `path`.
 pub(crate) fn copied_conversation(lang: i18n::Lang, from: &str, path: &str) -> String {
@@ -1550,6 +1560,7 @@ pub(crate) fn blank_project(path: &str) -> Project {
         docs_branch: String::new(),
         shared: Default::default(),
         shared_on_limit: false,
+        claude_memory_asked: false,
         workflow_fixes: Vec::new(),
         workflows_auto_read: true,
         workflows_in_repo: true,
@@ -5633,11 +5644,15 @@ impl<R: Runtime> Core<R> {
                 && crate::engine::by_id(engine).attaches(),
             remote_off: o.remote_off || o.copy_of.as_ref().is_some_and(|c| c.remote_off),
             ticket_id: o.ticket_id.clone(),
-            // The code index's rule, for an agent that has no ticket's protocol (which carries it).
-            append_prompt: o.append_prompt.or_else(|| {
-                (project.code_index && o.ticket_id.is_none())
-                    .then(|| crate::codeindex::hint::rule(self.lang().claude))
-            }),
+            // The code index's rule, for an agent that has no ticket's protocol (which carries it),
+            // then what every agent is told of the shared memory.
+            append_prompt: with_memory(
+                self.lang().claude,
+                o.append_prompt.or_else(|| {
+                    (project.code_index && o.ticket_id.is_none())
+                        .then(|| crate::codeindex::hint::rule(self.lang().claude))
+                }),
+            ),
             port_base: o.port_base,
             ..Default::default()
         };
@@ -5810,11 +5825,14 @@ impl<R: Runtime> Core<R> {
                         Some(wsl) => wsl.linux_path(p).unwrap_or_else(|| p.to_string()),
                         None => p.to_string(),
                     };
-                    meta.append_prompt = Some(copied_conversation(
+                    meta.append_prompt = with_memory(
                         self.lang().claude,
-                        &shown(&from.path),
-                        &shown(&path),
-                    ));
+                        Some(copied_conversation(
+                            self.lang().claude,
+                            &shown(&from.path),
+                            &shown(&path),
+                        )),
+                    );
                 }
                 meta.cwd = path.clone();
                 // Out of the project's folder (its « Dossier des worktrees » beside it): watched too.
@@ -7898,6 +7916,91 @@ impl<R: Runtime> Core<R> {
     /// « Logo » (ESC-167): the image of the file `source` copied under the project in place of its
     /// letters, or (None) no logo. A file refused (too heavy, unreadable, of another format) leaves
     /// the project as it was. Returns the project.
+    /// A project's shared memory changed (ESC-255): the window reads it again.
+    pub fn memory_changed(&self, project_id: &str) {
+        self.hub.emit(UiEvent::Memory {
+            project_id: project_id.to_string(),
+        });
+    }
+
+    /// The memories of the project's shared memory, by name.
+    pub fn memories(&self, id: &str) -> Result<Vec<crate::memory::Memory>> {
+        crate::memory::list(&crate::memory::dir_of(&self.project(id)?))
+    }
+
+    /// « Oublier » of the settings: a memory's file removed.
+    pub fn forget_memory(&self, id: &str, name: &str) -> Result<()> {
+        if !crate::memory::forget(&crate::memory::dir_of(&self.project(id)?), name)? {
+            bail!(tr!(
+                "Aucun souvenir « {name} » dans la mémoire du projet.",
+                "No memory “{name}” in the project's memory."
+            ));
+        }
+        self.memory_changed(id);
+        Ok(())
+    }
+
+    /// The folders Claude Code keeps the memory of `p` in: one under each Claude account's configuration folder
+    /// (`accounts::config_dir`, never the machine user's own in the tests). Read, never written.
+    fn claude_memory_dirs(&self, p: &Project) -> Vec<PathBuf> {
+        let settings = self.settings.read().clone();
+        let mut out: Vec<PathBuf> = Vec::new();
+        for a in settings
+            .accounts
+            .iter()
+            .filter(|a| a.engine == EngineId::Claude)
+        {
+            let dir = crate::memory::claude_dir(&accounts::config_dir(a, &settings), &p.path);
+            if !out.contains(&dir) {
+                out.push(dir);
+            }
+        }
+        out
+    }
+
+    /// What Claude Code remembers of the project, offered once to its shared memory: nothing once it was offered
+    /// (taken or not), nor when Claude Code has none.
+    pub fn claude_memory_offer(&self, id: &str) -> Result<Vec<crate::memory::Offered>> {
+        let p = self.project(id)?;
+        if p.claude_memory_asked {
+            return Ok(Vec::new());
+        }
+        Ok(crate::memory::claude_offer(
+            &self.claude_memory_dirs(&p),
+            &crate::memory::dir_of(&p),
+        ))
+    }
+
+    /// « Reprendre » of the window: the memories of Claude Code the user ticked, written into the project's; the
+    /// offer is not made again.
+    pub fn claude_memory_take(&self, id: &str, names: &[String]) -> Result<Project> {
+        let p = self.project(id)?;
+        if !names.is_empty() {
+            let offered = crate::memory::claude_offer(
+                &self.claude_memory_dirs(&p),
+                &crate::memory::dir_of(&p),
+            );
+            crate::memory::claude_take(&offered, names, &crate::memory::dir_of(&p))?;
+            self.memory_changed(id);
+        }
+        self.claude_memory_asked(id)
+    }
+
+    /// The offer of Claude Code's memory made: never again for this project.
+    pub fn claude_memory_asked(&self, id: &str) -> Result<Project> {
+        let updated = {
+            let mut projects = self.projects.write();
+            let cur = projects
+                .iter_mut()
+                .find(|x| x.id == id)
+                .ok_or_else(project_not_found)?;
+            cur.claude_memory_asked = true;
+            cur.clone()
+        };
+        self.request_save();
+        Ok(updated)
+    }
+
     pub fn set_project_logo(&self, id: &str, source: Option<&str>) -> Result<Project> {
         self.project(id)?;
         let file = match source {

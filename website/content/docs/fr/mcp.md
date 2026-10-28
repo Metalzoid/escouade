@@ -147,6 +147,10 @@ Chacun suit les règles du bouton de la fenêtre et les garde-fous ci-dessous : 
 
 Un agent « Terminé » peut avoir encore du travail qui tourne : `list_agents` et `get_agent_summary` comptent ses sous-agents en cours (`subagentsRunning`) et ses tâches de fond en cours (`backgroundTasksRunning`, le « N en fond » de sa carte). Quand l’un des deux n’est pas nul, `list_background_work` dit lesquels, `get_background_output` lit la fin de la sortie d’une commande ou le rapport d’un sous-agent, puis `stop_background_work` arrête ce qui ne doit pas continuer, ou `message_subagent` donne une consigne à un sous-agent en arrière-plan. C’est ce que tu fais dans la fenêtre avec [les sous-agents](plan#les-sous-agents) et [les tâches de fond](plan#les-taches-de-fond) d’un agent, avec les mêmes bornes et les mêmes refus. La sortie d’une commande peut être longue : `bytes` (64 Kio au plus) en demande moins que la fenêtre, pour que la réponse tienne dans ce que Claude Code accepte d’un outil (environ 25 000 jetons). Lire n’est jamais agir : `get_background_output` ne change rien, même pour le rapport d’un sous-agent en vue Claude Code.
 
+### La mémoire partagée
+
+Quatre outils lisent et écrivent la [mémoire partagée](shared-memory) d’un projet, le carnet de travail de ses agents : `search_memory` (`query`, `limit` facultatif), `read_memory` (`name`), `write_memory` (`name`, `description`, `type` facultatif, `body`) et `forget_memory` (`name`). Chacun prend un `project`, qu’un agent d’Escouade peut omettre pour le sien. Ils ne touchent qu’au dossier `.escouade/memory/` du projet, jamais à travers un lien symbolique.
+
 ### Réservés aux agents d’Escouade
 
 Ces deux outils sont refusés à Claude hors Escouade.

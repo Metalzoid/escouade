@@ -30,6 +30,7 @@ pub(super) const EXPOSED: &[&str] = &[
     "create_ticket",
     "delete_ticket",
     "dismiss_block",
+    "forget_memory",
     "get_agent_summary",
     "get_background_output",
     "get_board",
@@ -57,12 +58,14 @@ pub(super) const EXPOSED: &[&str] = &[
     "propose_decision",
     "read_decision",
     "read_document",
+    "read_memory",
     "read_spec_page",
     "reject_ticket",
     "replace_decision",
     "report_progress",
     "resolve_conflict",
     "resume_ticket",
+    "search_memory",
     "search_spec",
     "send_message",
     "set_board",
@@ -73,6 +76,7 @@ pub(super) const EXPOSED: &[&str] = &[
     "stop_background_work",
     "update_ticket",
     "wait_ticket",
+    "write_memory",
     "write_spec_page",
 ];
 
@@ -102,7 +106,9 @@ pub(super) const READING: &[&str] = &[
     "list_tickets",
     "read_decision",
     "read_document",
+    "read_memory",
     "read_spec_page",
+    "search_memory",
     "search_spec",
     "wait_ticket",
 ];
@@ -117,6 +123,7 @@ pub(super) const ACTING: &[&str] = &[
     "create_ticket",
     "delete_ticket",
     "dismiss_block",
+    "forget_memory",
     "message_subagent",
     "move_ticket",
     "propose_decision",
@@ -131,6 +138,7 @@ pub(super) const ACTING: &[&str] = &[
     "stop_agent",
     "stop_background_work",
     "update_ticket",
+    "write_memory",
     "write_spec_page",
 ];
 

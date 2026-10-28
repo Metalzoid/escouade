@@ -95,6 +95,16 @@ Les vecteurs servent d'abord aux docs : la spec, les décisions, les documents d
 - **Choix du chef** : Escouade propose de reprendre ce que Claude Code a déjà retenu pour ce projet (sa mémoire de projet), une fois, avec l'accord de l'utilisateur, souvenir par souvenir.
 - Elle est indexée (vecteurs) pour que la recherche trouve un souvenir par le sens.
 
+**Fait (ESC-255, 2026-10-28)** : `memory.rs` et `mcp/memory.rs`. Ce que le constructeur a tranché :
+
+- quatre outils, `search_memory`, `read_memory`, `write_memory`, `forget_memory` ; le projet se déduit pour un agent d'Escouade ;
+- les sortes de Claude Code (`feedback`, `project`, `reference`, `user`) et son en-tête (`metadata.type`), lus aussi à l'ancienne (`type` en haut) ;
+- la recherche va par les mots, et par le sens (hybride) dès que le modèle des vecteurs est téléchargé ; l'index se met à jour à chaque recherche (`projects/<id>/vectors.db`) ;
+- la consigne est ajoutée aux instructions de **chaque nouvel agent**, après le protocole d'un ticket, dans la place que son harness lui donne ;
+- `git::stage_all` laisse toujours `.escouade/memory/` de côté, et elle ne bloque pas une fusion ;
+- la reprise de Claude Code : une fenêtre à l'affichage d'un projet pas encore interrogé, aucun souvenir coché au départ ; « Reprendre » et « Ne rien reprendre » règlent la question pour de bon, fermer sans choisir la repose au démarrage suivant. Elle lit `projects/<chemin>/memory/` sous le dossier de chaque compte Claude Code, rien d'autre (pas un compte Claude Code sous WSL pour l'instant) ;
+- la liste des réglages oublie un souvenir au second clic (« Confirmer l'oubli »).
+
 ## 3. L'onglet Docs
 
 Un troisième onglet de la barre latérale : **Agents · Kanban · Docs** (décidé). Les mêmes écrans pour tout le monde.

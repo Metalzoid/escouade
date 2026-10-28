@@ -1,5 +1,7 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
+  Memory,
+  OfferedMemory,
   WorkflowRefineOutcome,
   WorkflowRefinePlan,
   WorkflowScan,
@@ -244,6 +246,14 @@ export const api = {
   projectLogo: (id: string) => invoke<string | null>('project_logo', { id }),
   /** The image of `path` as a logo would be taken (`data:` URL), or why it would be refused. */
   readLogo: (path: string) => invoke<string>('read_logo', { path }),
+  /** The project’s shared memory (ESC-255), by name. */
+  memoryList: (projectId: string) => invoke<Memory[]>('memory_list', { projectId }),
+  /** « Oublier » a memory of the project’s shared memory. */
+  memoryForget: (projectId: string, name: string) => invoke<void>('memory_forget', { projectId, name }),
+  /** What Claude Code remembers of the project, offered once: empty once offered, or when it has nothing. */
+  claudeMemoryOffer: (projectId: string) => invoke<OfferedMemory[]>('claude_memory_offer', { projectId }),
+  /** « Reprendre » the memories ticked (none: « Pas maintenant »): the offer is not made again. */
+  claudeMemoryTake: (projectId: string, names: string[]) => invoke<Project>('claude_memory_take', { projectId, names }),
   /** « Faire confiance à ces commandes »: those of the project’s `.escouade.yml` read (`hash`). */
   sharedTrust: (projectId: string, hash: string) => invoke<Project>('shared_trust', { projectId, hash }),
   /** « Exporter vers .escouade.yml » (no `keys`), or « Écrire dans .escouade.yml » of the keys given. */

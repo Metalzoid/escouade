@@ -766,6 +766,8 @@ fn the_tickets_files_are_told_apart_in_git_status() {
     assert!(tickets(
         "R  .escouade/tickets/a.yml -> .escouade/tickets/b.yml"
     ));
+    assert!(tickets(" M .escouade/memory/e2e-build.md"));
+    assert!(tickets("?? api/.escouade/memory/MEMORY.md"));
     assert!(!tickets(" M .escouade.yml"));
     assert!(!tickets(" M src/app.ts"));
 }

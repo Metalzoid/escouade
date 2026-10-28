@@ -1835,7 +1835,9 @@ impl<R: Runtime> Core<R> {
         let room = engine.instructions_room().map(|r| crate::engine::Room {
             max: r
                 .max
-                .saturating_sub(rule.as_deref().map_or(0, |x| (r.weigh)(&format!(" {x}")))),
+                .saturating_sub(rule.as_deref().map_or(0, |x| (r.weigh)(&format!(" {x}"))))
+                // The shared memory's line, added after it (`core::with_memory`).
+                .saturating_sub((r.weigh)(&crate::memory::instruction(lang)) + 1),
             weigh: r.weigh,
         });
         let mut p = board::protocol_prompt_for(lang, t, ports, isola, room);
@@ -1894,7 +1896,8 @@ impl<R: Runtime> Core<R> {
                     mode: Some(mode),
                     name: Some(board::ticket_agent_name(t)),
                     worktree: new_branch,
-                    // Within the room its harness gives it, the code index's rule included.
+                    // Within the room its harness gives it, the code index's rule included, and what
+                    // it is told of the shared memory after it (`core::with_memory`).
                     append_prompt: Some(self.ticket_instructions(project, lang, t, ports, isola)),
                     ticket_id: Some(t.id.clone()),
                     port_base: ports,

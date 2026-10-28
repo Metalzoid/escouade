@@ -2363,10 +2363,13 @@ pub async fn touched_by(
     Ok(files)
 }
 
+/// What `stage_all` never stages: the agents' shared memory (ESC-255), the team's to commit, never Escouade's.
+const NEVER_STAGED: &str = ":(exclude,glob)**/.escouade/memory/**";
+
 /// Stages every change of `cwd` but the files `keep_out` (copied `.env` files…), even staged
-/// already. True when something is staged.
+/// already, and the shared memory (`NEVER_STAGED`). True when something is staged.
 pub async fn stage_all(cwd: &str, keep_out: &[String]) -> Result<bool> {
-    run(cwd, &["add", "-A"]).await?;
+    run(cwd, &["add", "-A", "--", ".", NEVER_STAGED]).await?;
     for p in keep_out {
         run(
             cwd,
@@ -2631,11 +2634,14 @@ pub async fn has_tracked_changes_but_tickets(repo: &str) -> Result<bool> {
         .any(|l| !l.trim().is_empty() && !is_shared_ticket_line(l)))
 }
 
-/// A line of `git status --porcelain` about a shared ticket's file (or one of its images and files).
+/// A line of `git status --porcelain` about a shared ticket's file (or one of its images and files), or
+/// about the agents' shared memory (ESC-255): Escouade writes both in the project's folder.
 pub fn is_shared_ticket_line(line: &str) -> bool {
     let path = line.get(3..).unwrap_or_default();
     let path = path.rsplit(" -> ").next().unwrap_or(path).trim_matches('"');
-    path.starts_with(".escouade/tickets/") || path.contains("/.escouade/tickets/")
+    [".escouade/tickets/", ".escouade/memory/"]
+        .iter()
+        .any(|d| path.starts_with(d) || path.contains(&format!("/{d}")))
 }
 
 pub async fn merge(repo: &str, branch: &str, squash: bool, message: &str) -> Result<String> {
@@ -3837,6 +3843,30 @@ mod repo_tests {
         assert_eq!(
             text(&r, &["status", "--porcelain"]).await.unwrap(),
             "?? .env"
+        );
+        // The shared memory is never staged (ESC-255), at the root or in a repository below.
+        for dir in [".escouade/memory", "sub/.escouade/memory"] {
+            std::fs::create_dir_all(root.join(dir)).unwrap();
+            std::fs::write(
+                root.join(dir).join("a.md"),
+                "x
+",
+            )
+            .unwrap();
+        }
+        assert!(!stage_all(&r, &[".env".into()]).await.unwrap());
+        std::fs::write(
+            root.join("b.txt"),
+            "b
+",
+        )
+        .unwrap();
+        assert!(stage_all(&r, &[".env".into()]).await.unwrap());
+        assert_eq!(
+            text(&r, &["diff", "--cached", "--name-only"])
+                .await
+                .unwrap(),
+            "b.txt"
         );
     }
 

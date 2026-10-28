@@ -147,6 +147,10 @@ Each follows the rules of the window’s button and the guardrails below: an Esc
 
 An agent that shows “Done” may still have work running: `list_agents` and `get_agent_summary` count its subagents that are running (`subagentsRunning`) and its background tasks that are running (`backgroundTasksRunning`, the “N in background” of its card). When either is not zero, `list_background_work` says which ones, `get_background_output` reads the end of a command’s output or a subagent’s report, then `stop_background_work` stops what should not go on, or `message_subagent` gives an instruction to a subagent in the background. It is what you do in the window with an agent’s [subagents](plan#subagents) and [background tasks](plan#background-tasks), with the same limits and the same refusals. A command’s output can be long: `bytes` (64 KiB at most) asks for less than the window, so the answer fits what Claude Code accepts from a tool (about 25,000 tokens). Reading is never acting: `get_background_output` changes nothing, even for the report of a subagent in the Claude Code view.
 
+### The shared memory
+
+Four tools read and write a project’s [shared memory](shared-memory), its agents’ work notebook: `search_memory` (`query`, optional `limit`), `read_memory` (`name`), `write_memory` (`name`, `description`, optional `type`, `body`) and `forget_memory` (`name`). Each takes a `project`, which an Escouade agent may leave out for its own. They only touch the project’s `.escouade/memory/` folder, never through a symbolic link.
+
 ### Reserved to Escouade’s agents
 
 These two tools are refused to Claude outside Escouade.

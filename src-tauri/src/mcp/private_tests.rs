@@ -161,6 +161,26 @@ fn naming_calls() -> Vec<(&'static str, Names, Value)> {
             json!({ "project": "{}", "name": "a.md", "text": "x" }),
         ),
         (
+            "search_memory",
+            Names::Project,
+            json!({ "project": "{}", "query": "e2e" }),
+        ),
+        (
+            "read_memory",
+            Names::Project,
+            json!({ "project": "{}", "name": "e2e" }),
+        ),
+        (
+            "write_memory",
+            Names::Project,
+            json!({ "project": "{}", "name": "e2e", "description": "d", "body": "b" }),
+        ),
+        (
+            "forget_memory",
+            Names::Project,
+            json!({ "project": "{}", "name": "e2e" }),
+        ),
+        (
             "create_ticket",
             Names::Project,
             json!({ "project": "{}", "title": "Un ticket" }),

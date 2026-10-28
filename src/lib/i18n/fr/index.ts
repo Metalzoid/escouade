@@ -15,6 +15,7 @@ import git from './git';
 import handover from './handover';
 import integrations from './integrations';
 import mcp from './mcp';
+import memory from './memory';
 import nav from './nav';
 import plan from './plan';
 import prs from './prs';
@@ -49,6 +50,7 @@ export const fr = {
   accounts,
   handover,
   mcp,
+  memory,
   branches,
   plan,
   prs,

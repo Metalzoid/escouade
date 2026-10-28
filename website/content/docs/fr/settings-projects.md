@@ -222,6 +222,10 @@ L’interrupteur « Partir d’un projet vierge » (« L’historique reste d
 > [!NOTE]
 > Un projet fermé avant cette version a déjà perdu son historique : il n’y a rien à retrouver pour lui.
 
+## Mémoire partagée
+
+Le groupe « Mémoire partagée » liste ce que les agents du projet ont noté dans sa [mémoire partagée](shared-memory) : chaque souvenir, sa sorte et sa description ; un clic montre son texte. « Oublier », puis « Confirmer l’oubli », supprime son fichier de `.escouade/memory/`.
+
 ## Les autres réglages d’un projet
 
 Les liens d’un projet vers Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues et Azure Boards se règlent dans l’onglet [« Intégrations »](settings-integrations). Son Kanban (pilote auto, agents, validation) se règle dans l’onglet [« Kanban »](settings-board).

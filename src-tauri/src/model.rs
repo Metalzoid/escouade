@@ -730,6 +730,10 @@ pub struct Project {
     /// for the reset (`accounts::confined`).
     #[serde(default)]
     pub shared_on_limit: bool,
+    /// The memory Claude Code kept for this project was offered to its shared memory (ESC-255): once,
+    /// taken or not. Set by `claude_memory_take` and `claude_memory_dismiss` alone.
+    #[serde(default)]
+    pub claude_memory_asked: bool,
     /// Its `.escouade.yml` (ESC-146): the keys kept on this machine, the commands trusted, the file
     /// as last read.
     #[serde(default)]
@@ -2474,6 +2478,11 @@ pub enum UiEvent {
     Conv {
         agent_id: String,
         ops: Vec<ConvOp>,
+    },
+    /// A project's shared memory changed (ESC-255): written or forgotten through the server or the window.
+    #[serde(rename_all = "camelCase")]
+    Memory {
+        project_id: String,
     },
     #[serde(rename_all = "camelCase")]
     Git {

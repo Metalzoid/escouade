@@ -414,6 +414,7 @@ export const en: Catalog = {
       integrations: 'External tickets',
       'shared-board': 'Sharing the Kanban',
       workflows: 'Workflows',
+      'shared-memory': 'Shared memory',
       mcp: 'The MCP server',
       accounts: 'Several accounts',
       usage: 'Quotas and cost',

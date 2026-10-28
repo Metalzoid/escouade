@@ -50,6 +50,7 @@ import type {
   UiEvent,
   UiState,
   Usage,
+  OfferedMemory,
 } from './types';
 
 /** What an agent's header, too narrow, no longer shows (ESC-166): « … » offers it in its menu. */
@@ -83,6 +84,8 @@ export type Modal =
   | { kind: 'telemetry' }
   /** The first launch's other question (ESC-190): the user's name for the team; `then`, what waited for it (a share). */
   | { kind: 'teamName'; projectId?: string; then?: () => void }
+  /** ESC-255: what Claude Code remembers of a project, offered once to its shared memory, memory by memory. */
+  | { kind: 'claudeMemory'; projectId: string; offered: OfferedMemory[] }
   /**
    * On a tab (Claude Code by default) and, for a project's tabs, a project (the one on screen by default),
    * scrolled to a section of it; `resume`: with the draft it had, back from a modal it opened; `suggest`: Claude
@@ -328,6 +331,8 @@ class AppState {
   toasts = $state<Toast[]>([]);
   now = $state(Date.now());
   gitTick = $state(0);
+  /** Each project's shared memory changed this many times (ESC-255): its settings' list reads it again. */
+  memoryTicks = $state<Record<string, number>>({});
   update = $state<UpdateInfo | null>(null);
   /** When the automatic restart for the update comes (the backend warned of it), if one is planned. */
   restartAt = $state<number | null>(null);
@@ -676,6 +681,9 @@ class AppState {
         break;
       case 'conv':
         applyConvOps(e.agentId, e.ops);
+        break;
+      case 'memory':
+        this.memoryTicks[e.projectId] = (this.memoryTicks[e.projectId] ?? 0) + 1;
         break;
       case 'git':
         this.git[e.projectId] = e.git;

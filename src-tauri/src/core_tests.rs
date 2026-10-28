@@ -7117,7 +7117,11 @@ async fn an_agent_made_for_a_ticket_has_its_branch_from_a_base_and_the_projects_
             a.meta.port_base,
             a.meta.append_prompt.as_deref()
         ),
-        (Some("t1"), Some(4100), Some("Protocole"))
+        (
+            Some("t1"),
+            Some(4100),
+            crate::core::with_memory(crate::i18n::Lang::Fr, Some("Protocole".into())).as_deref()
+        )
     );
     // Made by the board, not by the user: the sidebar keeps its selection.
     assert_ne!(h.core.ui.read().selected_agent.get(&p.id), Some(&a.meta.id));
@@ -7140,7 +7144,10 @@ async fn an_agent_made_for_a_ticket_has_its_branch_from_a_base_and_the_projects_
         .iter()
         .position(|x| x == "--append-system-prompt")
         .unwrap();
-    assert_eq!(argv[i + 1], "Protocole");
+    assert_eq!(
+        Some(argv[i + 1].clone()),
+        crate::core::with_memory(crate::i18n::Lang::Fr, Some("Protocole".into()))
+    );
 }
 
 #[tokio::test]
@@ -8307,9 +8314,14 @@ async fn a_copy_shows_the_conversation_again_and_forks_its_session_leaving_the_o
     h.core.ensure_process(&copy.id).await.unwrap();
     let argv = h.launches(&r).pop().unwrap();
     assert!(pinned(&argv), "{argv:?}");
-    // Nothing to say of its folder: it is the original's.
-    assert!(
-        !argv.contains(&"--append-system-prompt".to_string()),
+    // Nothing to say of its folder: it is the original's. Only the shared memory (ESC-255).
+    let told = argv
+        .iter()
+        .position(|a| a == "--append-system-prompt")
+        .map(|i| argv[i + 1].clone());
+    assert_eq!(
+        told,
+        Some(crate::memory::instruction(crate::i18n::Lang::Fr)),
         "{argv:?}"
     );
     // …and there still, the original having gone on meanwhile, at every start until its first turn.
@@ -8406,6 +8418,8 @@ async fn a_copy_of_a_worktree_agent_has_its_own_from_the_current_commit_set_up_l
         "Cette conversation a été copiée depuis un agent qui travaillait dans {}. Tu travailles maintenant dans {} : ne lis et n'écris que dedans.",
         wt.path, cwt.path
     );
+    // Then what every agent is told of the shared memory (ESC-255).
+    let moved = crate::core::with_memory(crate::i18n::Lang::Fr, Some(moved)).unwrap();
     assert_eq!(copy.append_prompt.as_deref(), Some(moved.as_str()));
     h.core.ensure_process(&copy.id).await.unwrap();
     let argv = h.launches(&cdir).pop().unwrap();
@@ -8449,6 +8463,7 @@ async fn a_copy_is_told_where_it_works_in_the_language_of_the_texts_for_claude()
     let moved = format!(
         "This conversation was copied from an agent that worked in {from}. You now work in {to}: only read and write in it."
     );
+    let moved = crate::core::with_memory(crate::i18n::Lang::En, Some(moved)).unwrap();
     assert_eq!(copy.append_prompt.as_deref(), Some(moved.as_str()));
     // Its Claude reads it as the French one: an ordinary agent, no ticket's.
     h.turn(&copy.id, "Bonjour").await;

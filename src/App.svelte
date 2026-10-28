@@ -12,6 +12,7 @@
   import { watchForUpdates } from './lib/updater';
   import { watchPresence } from './lib/presence';
   import { createWarmer } from './lib/warm';
+  import { offerClaudeMemory } from './lib/memory';
   import Board from './components/board/Board.svelte';
   import TicketForm from './components/board/TicketForm.svelte';
   import MergedBranchesModal from './components/branches/MergedBranchesModal.svelte';
@@ -43,6 +44,7 @@
   import TelemetryModal from './components/modals/TelemetryModal.svelte';
   import TeamNameModal from './components/modals/TeamNameModal.svelte';
   import UpdateModal from './components/modals/UpdateModal.svelte';
+  import ClaudeMemoryModal from './components/modals/ClaudeMemoryModal.svelte';
   import Overview from './components/Overview.svelte';
   import ProjectRail from './components/ProjectRail.svelte';
   import { railWidth } from './lib/rail-width.svelte';
@@ -92,6 +94,13 @@
   $effect(() => {
     const size = app.settings.editorFontSize || DEFAULT_FONT_SIZE;
     document.documentElement.style.setProperty('--editor-font', `${size}px`);
+  });
+
+  // What Claude Code remembers of the project on screen, offered once to its shared memory (ESC-255), when no other
+  // window is open.
+  $effect(() => {
+    const id = app.ui.view === 'project' ? app.ui.activeProject : null;
+    if (app.ready && !app.modal && id) untrack(() => void offerClaudeMemory(id));
   });
 
   const warmSelected = createWarmer((id) => api.warmAgent(id).catch(() => {}));
@@ -238,6 +247,8 @@
   <ImportModal projectId={app.modal.projectId} />
 {:else if app.modal?.kind === 'update' && app.update}
   <UpdateModal version={app.update.version} notes={app.update.notes} back={app.modal.back} />
+{:else if app.modal?.kind === 'claudeMemory'}
+  <ClaudeMemoryModal projectId={app.modal.projectId} offered={app.modal.offered} />
 {:else if app.modal?.kind === 'telemetry'}
   <TelemetryModal />
 {:else if app.modal?.kind === 'teamName'}

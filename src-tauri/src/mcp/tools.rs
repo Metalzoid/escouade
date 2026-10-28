@@ -44,6 +44,7 @@ use super::docs;
 use super::files;
 use super::images;
 use super::index;
+use super::memory;
 use super::read;
 use super::wait;
 use super::workflow;
@@ -736,6 +737,59 @@ pub struct GetWorkflowArgs {
     pub project: String,
 }
 
+const MEMORY_PROJECT: &str = "The project: its id, or its name in any case. An agent of Escouade may leave it out for its own.";
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SearchMemoryArgs {
+    #[schemars(description = MEMORY_PROJECT)]
+    pub project: Option<String>,
+    #[schemars(
+        description = "What to look for, in a few words (any language). Empty: the memories by name, up to limit."
+    )]
+    pub query: String,
+    #[schemars(description = "The most memories answered: 10 when left out, 50 at most.")]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ReadMemoryArgs {
+    #[schemars(description = MEMORY_PROJECT)]
+    pub project: Option<String>,
+    #[schemars(description = "The memory's name, as search_memory gives it.")]
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct WriteMemoryArgs {
+    #[schemars(description = MEMORY_PROJECT)]
+    pub project: Option<String>,
+    #[schemars(
+        description = "Its name, short, in kebab-case (made so: lower case letters, digits and dashes). A memory of that name is replaced: read it first to keep what it says."
+    )]
+    pub name: String,
+    #[schemars(
+        description = "One line that says what it is about, so that a search and the index tell when it matters (300 characters at most)."
+    )]
+    pub description: String,
+    #[serde(rename = "type")]
+    #[schemars(
+        description = "Its kind: feedback (a way to work, a trap to avoid; the default), project (a constraint of the work under way), reference (where to find something) or user (what the user prefers)."
+    )]
+    pub kind: Option<crate::memory::Kind>,
+    #[schemars(
+        description = "What to remember, in Markdown: the rule, then why, then how to apply it (20,000 characters at most)."
+    )]
+    pub body: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ForgetMemoryArgs {
+    #[schemars(description = MEMORY_PROJECT)]
+    pub project: Option<String>,
+    #[schemars(description = "The memory's name.")]
+    pub name: String,
+}
+
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetBoardArgs {
     #[schemars(description = "The project: its id, or its name in any case.")]
@@ -1218,6 +1272,95 @@ impl<R: Runtime> Tools<R> {
         ]);
         let result = index::impact(&ctx.core, &ctx.caller, args).await;
         ctx.reply("index_impact", &asked, result)
+    }
+
+    #[tool(
+        description = "Search the shared memory of a project: the work notebook of its agents, shared by every harness (Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode) and by the team, of how to work in the project and the traps to avoid (not the product: the spec says what it does). Look in it at the start of a task. By the words (name, description, text; accents and case ignored), and by the meaning too when Escouade's vectors' model is downloaded (by: meaning, else words). Answers the memories found, best first: name, description, type and the start of their text (excerpt); read_memory reads one whole. A private project's memory is seen by its own agents alone.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn search_memory(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<SearchMemoryArgs>,
+    ) -> CallToolResult {
+        let result = memory::search(
+            &ctx.core,
+            &ctx.caller,
+            args.project.as_deref(),
+            &args.query,
+            args.limit,
+        )
+        .await;
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("query", Some(args.query.trim())),
+        ]);
+        ctx.reply("search_memory", &asked, result)
+    }
+
+    #[tool(
+        description = "Read a memory of a project's shared memory whole: its name, description, type and text (body, Markdown).",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn read_memory(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<ReadMemoryArgs>,
+    ) -> CallToolResult {
+        let result = memory::read(&ctx.core, &ctx.caller, args.project.as_deref(), &args.name);
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("name", Some(&args.name)),
+        ]);
+        ctx.reply("read_memory", &asked, result)
+    }
+
+    #[tool(
+        description = "Note in a project's shared memory what you learned of how to work in it: a way of doing that works, a trap to avoid, a command to run first, a test that is flaky and why. One memory per file of .escouade/memory/ in the project's folder (Markdown with a header), its index MEMORY.md written again; every agent of the project finds it, whatever its harness or its branch. Not the product (what it does belongs to the spec), never a secret (a token, a password, a key). A memory of the same name is replaced: search and read first, and complete one rather than repeat it. Escouade never commits it; the team shares it by git. Answers the memory as written and whether it is new.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn write_memory(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<WriteMemoryArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("name", Some(&args.name)),
+        ]);
+        let draft = crate::memory::Draft {
+            name: args.name,
+            description: args.description,
+            kind: memory::kind_of(args.kind),
+            body: args.body,
+        };
+        let result = memory::write(&ctx.core, &ctx.caller, args.project.as_deref(), draft);
+        ctx.reply_changed("write_memory", &asked, result)
+    }
+
+    #[tool(
+        description = "Forget a memory of a project's shared memory that turned out wrong or no longer holds: its file is removed and the index written again. Answers the name forgotten.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn forget_memory(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<ForgetMemoryArgs>,
+    ) -> CallToolResult {
+        let result = memory::forget(&ctx.core, &ctx.caller, args.project.as_deref(), &args.name);
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("name", Some(&args.name)),
+        ]);
+        ctx.reply_changed("forget_memory", &asked, result)
     }
 
     #[tool(

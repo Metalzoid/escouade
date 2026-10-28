@@ -72,6 +72,7 @@ mod isola;
 mod job;
 mod leftovers;
 mod mcp;
+mod memory;
 mod menus;
 mod model;
 #[cfg(test)]
@@ -538,6 +539,10 @@ pub fn run() {
             commands::project_logo,
             commands::read_logo,
             commands::shared_trust,
+            commands::memory_list,
+            commands::memory_forget,
+            commands::claude_memory_offer,
+            commands::claude_memory_take,
             commands::shared_write,
             commands::shared_unkeep,
             commands::shared_preview,

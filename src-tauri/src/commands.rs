@@ -3247,3 +3247,30 @@ mod tests {
         assert!(back && again.id == p.id);
     }
 }
+
+/// The project's shared memory (ESC-255), as « Mémoire partagée » of its settings lists it.
+#[tauri::command(async)]
+pub fn memory_list(core: CoreState, project_id: String) -> Res<Vec<crate::memory::Memory>> {
+    core.memories(&project_id).map_err(err)
+}
+
+/// « Oublier » of a memory, in the project's settings.
+#[tauri::command(async)]
+pub fn memory_forget(core: CoreState, project_id: String, name: String) -> Res<()> {
+    core.forget_memory(&project_id, &name).map_err(err)
+}
+
+/// What Claude Code remembers of the project, offered once: none once offered.
+#[tauri::command(async)]
+pub fn claude_memory_offer(
+    core: CoreState,
+    project_id: String,
+) -> Res<Vec<crate::memory::Offered>> {
+    core.claude_memory_offer(&project_id).map_err(err)
+}
+
+/// « Reprendre » the memories ticked (none: « Pas maintenant »); the offer is not made again.
+#[tauri::command(async)]
+pub fn claude_memory_take(core: CoreState, project_id: String, names: Vec<String>) -> Res<Project> {
+    core.claude_memory_take(&project_id, &names).map_err(err)
+}

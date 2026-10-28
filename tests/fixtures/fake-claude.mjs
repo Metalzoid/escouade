@@ -39,7 +39,8 @@
 // What Escouade tells it is read in French or in English (« Langue des textes rédigés par Claude »):
 // each scenario below is recognized in both, its answers stay the same.
 // Started with --append-system-prompt (a ticket's protocol; not what a copy of an agent is told of
-// its new folder, « Cette conversation a été copiée… », “This conversation was copied…”), it plays the ticket's agent: it writes
+// its new folder, « Cette conversation a été copiée… », “This conversation was copied…”, nor what
+// every agent is told of the shared memory, « Le projet a une mémoire partagée… »), it plays the ticket's agent: it writes
 // <key>.txt ("Boucle n") in its folder and ends each turn with an ```escouade report (criteria and
 // "avancement"). The ticket's title, in the protocol, steers it: [ok] every criterion met at once,
 // [jamais] none ever, [sans-bilan] no report, [lent] a turn that lasts 30 s, [recette] a launch
@@ -922,8 +923,14 @@ function startSession() {
   let longAgent = null;
   const replay = argv.includes('--replay-user-messages');
   const appended = argv.includes('--append-system-prompt') ? (argv[argv.indexOf('--append-system-prompt') + 1] ?? '') : '';
-  // What a copy of an agent is told of its folder is no ticket's protocol: it plays a plain agent.
-  const copied = ['Cette conversation a été copiée', 'This conversation was copied'];
+  // What a copy of an agent is told of its folder, or what every agent is told of the shared memory (ESC-255), is no
+  // ticket's protocol: it plays a plain agent.
+  const copied = [
+    'Cette conversation a été copiée',
+    'This conversation was copied',
+    'Le projet a une mémoire partagée',
+    'The project has a memory shared',
+  ];
   const sys = copied.some((c) => appended.startsWith(c)) ? '' : appended;
   let remoteSent = false;
   let entries = 0;

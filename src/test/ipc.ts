@@ -39,7 +39,7 @@ export interface Call {
 }
 
 /** What a command answers when a test gives it no handler: nothing (null), except the lists the window reads on its own. */
-const ANSWERS: Record<string, unknown> = { closed_projects: [] };
+const ANSWERS: Record<string, unknown> = { closed_projects: [], memory_list: [], claude_memory_offer: [] };
 
 export function fakeBackend(handlers: Record<string, (args: any) => unknown> = {}) {
   const calls: Call[] = [];
