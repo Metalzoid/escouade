@@ -17,6 +17,9 @@ mod background;
 mod background_tests;
 #[cfg(test)]
 mod declare_tests;
+mod docs;
+#[cfg(test)]
+mod docs_tests;
 #[cfg(test)]
 mod engines_tests;
 mod files;

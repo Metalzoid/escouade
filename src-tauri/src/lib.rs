@@ -39,6 +39,10 @@ mod cursor_tests;
 #[cfg(test)]
 mod cursor_tui_tests;
 mod desktop;
+mod docs;
+#[cfg(test)]
+mod docs_tests;
+mod docsbranch;
 mod engine;
 #[cfg(test)]
 mod engines_tests;
@@ -491,6 +495,18 @@ pub fn run() {
             commands::paste_image,
             commands::inspect_folder,
             commands::refresh_repos,
+            commands::docs_spec_tree,
+            commands::docs_detect_spec,
+            commands::docs_spec_page,
+            commands::docs_spec_write,
+            commands::docs_spec_search,
+            commands::docs_decisions,
+            commands::docs_decision_propose,
+            commands::docs_decision_replace,
+            commands::docs_decision_accept,
+            commands::docs_documents,
+            commands::docs_document_text,
+            commands::docs_document_add,
             commands::get_workflows,
             commands::get_workflow_tracks,
             commands::refresh_workflows,

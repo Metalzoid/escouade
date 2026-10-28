@@ -2929,6 +2929,165 @@ fn preview_text(lang: &str) -> &'static str {
     }
 }
 
+// ---------- the docs (ESC-256) ----------
+
+/// The spec's tree by subject, with what the project already has that could be imported when the
+/// spec is empty, and where the docs live (`branch`: current, or the fixed branch).
+#[tauri::command]
+pub async fn docs_spec_tree(core: CoreState<'_>, id: String) -> Res<Value> {
+    let project = core.project(&id).map_err(err)?;
+    let space = core.docs_space(&id, None).await.map_err(err)?;
+    let subjects = space.spec_tree();
+    let pages: usize = subjects.iter().map(|s| s.pages.len()).sum();
+    Ok(serde_json::json!({
+        "branch": project.docs_branch.trim(),
+        "pages": pages,
+        "subjects": subjects,
+        "existingSpec": if pages == 0 { space.detect() } else { Vec::new() },
+    }))
+}
+
+/// The spec already in the project (`SPEC.md`, a `docs/` folder…), offered for import.
+#[tauri::command]
+pub async fn docs_detect_spec(core: CoreState<'_>, id: String) -> Res<Vec<crate::docs::Candidate>> {
+    Ok(core.docs_space(&id, None).await.map_err(err)?.detect())
+}
+
+#[tauri::command]
+pub async fn docs_spec_page(
+    core: CoreState<'_>,
+    id: String,
+    path: String,
+) -> Res<crate::docs::Page> {
+    core.docs_space(&id, None)
+        .await
+        .and_then(|s| s.spec_read(&path))
+        .map_err(err)
+}
+
+/// A page written from the window: the fields left out stay as they are.
+#[tauri::command]
+pub async fn docs_spec_write(
+    core: CoreState<'_>,
+    id: String,
+    path: String,
+    title: Option<String>,
+    body: Option<String>,
+) -> Res<crate::docs::Page> {
+    let space = core.docs_space(&id, None).await.map_err(err)?;
+    space
+        .spec_write(&path, |p| {
+            if let Some(t) = title.filter(|t| !t.trim().is_empty()) {
+                p.title = t.trim().to_string();
+            }
+            if let Some(b) = body {
+                p.body = b;
+            }
+        })
+        .map(|(page, _, _)| page)
+        .map_err(err)
+}
+
+#[tauri::command]
+pub async fn docs_spec_search(
+    core: CoreState<'_>,
+    id: String,
+    query: String,
+) -> Res<Vec<crate::docs::Hit>> {
+    Ok(core
+        .docs_space(&id, None)
+        .await
+        .map_err(err)?
+        .spec_search(&query, 50))
+}
+
+#[tauri::command]
+pub async fn docs_decisions(core: CoreState<'_>, id: String) -> Res<Vec<crate::docs::Decision>> {
+    Ok(core.docs_space(&id, None).await.map_err(err)?.decisions())
+}
+
+/// A decision proposed from the window, or a proposal still open revised (`number`).
+#[tauri::command]
+pub async fn docs_decision_propose(
+    core: CoreState<'_>,
+    id: String,
+    number: Option<u32>,
+    decision: crate::docs::Decision,
+) -> Res<crate::docs::Decision> {
+    core.docs_space(&id, None)
+        .await
+        .and_then(|s| s.decision_propose(number, decision))
+        .map_err(err)
+}
+
+/// A proposal that replaces the accepted decision `number`.
+#[tauri::command]
+pub async fn docs_decision_replace(
+    core: CoreState<'_>,
+    id: String,
+    number: u32,
+    decision: crate::docs::Decision,
+) -> Res<crate::docs::Decision> {
+    core.docs_space(&id, None)
+        .await
+        .and_then(|s| s.decision_replace(number, decision))
+        .map_err(err)
+}
+
+/// « Accepter »: a human accepts a proposed decision. The only way to: no MCP tool does.
+#[tauri::command]
+pub async fn docs_decision_accept(
+    core: CoreState<'_>,
+    id: String,
+    number: u32,
+) -> Res<crate::docs::Decision> {
+    core.docs_accept_decision(&id, number).await.map_err(err)
+}
+
+#[tauri::command]
+pub async fn docs_documents(
+    core: CoreState<'_>,
+    id: String,
+    folder: Option<String>,
+) -> Res<Vec<crate::docs::DocInfo>> {
+    core.docs_space(&id, None)
+        .await
+        .and_then(|s| s.documents(folder.as_deref().unwrap_or_default()))
+        .map_err(err)
+}
+
+#[tauri::command]
+pub async fn docs_document_text(
+    core: CoreState<'_>,
+    id: String,
+    path: String,
+    from: Option<usize>,
+) -> Res<crate::docs::DocText> {
+    core.docs_space(&id, None)
+        .await
+        .and_then(|s| s.document_text(&path, from.unwrap_or(0), crate::docs::TEXT_CHUNK))
+        .map_err(err)
+}
+
+/// A file dropped or chosen, put in the drive under `folder`; over 50 MB it asks to be `confirmed`.
+#[tauri::command]
+pub async fn docs_document_add(
+    core: CoreState<'_>,
+    id: String,
+    folder: Option<String>,
+    source: String,
+    confirmed: Option<bool>,
+) -> Res<crate::docs::DocInfo> {
+    core.docs_add_file(
+        &id,
+        folder.as_deref().unwrap_or_default(),
+        &source,
+        confirmed.unwrap_or(false),
+    )
+    .await
+    .map_err(err)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -746,6 +746,8 @@ export interface Project {
   engine: EngineId | null;
   /** « Projet privé »: the agents of the other projects do not see it through the MCP server, and its own see it alone. */
   private: boolean;
+  /** « Branche des docs » (ESC-256): the branch that holds `.escouade/spec`, `decisions` and `documents`; empty is the branch checked out. */
+  docsBranch?: string;
   /** Its `.escouade.yml`: the keys kept on this machine, the commands trusted, the file as last read. Absent from a project of the window’s tests made before ESC-146. */
   shared?: ProjectShared;
   /**
@@ -2554,4 +2556,103 @@ export type PrFix = 'checks' | 'reviews';
 export interface LeftoverReport {
   removed: number;
   kept: { agentId: string; name: string; reason: string }[];
+}
+
+/** A page of the spec (`docs::Page`, ESC-256), under `.escouade/spec` of the branch of the docs. */
+export interface DocsPage {
+  /** `subject/page`, without `.md`. */
+  path: string;
+  title: string;
+  subject: string;
+  sources: string[];
+  tickets: string[];
+  decisions: number[];
+  /** When it was last compared to the code (ISO 8601); empty: never. */
+  compared: string;
+  body: string;
+}
+
+export interface DocsPageInfo {
+  path: string;
+  title: string;
+  compared: string;
+  tickets: string[];
+  decisions: number[];
+}
+
+export interface DocsSubject {
+  name: string;
+  pages: DocsPageInfo[];
+}
+
+/** A spec the project already has (`SPEC.md`, a `docs/` folder…), offered for import. */
+export interface DocsCandidate {
+  path: string;
+  kind: 'file' | 'folder';
+  files: number;
+  bytes: number;
+}
+
+export interface DocsTree {
+  /** The fixed docs branch; empty: the branch checked out. */
+  branch: string;
+  pages: number;
+  subjects: DocsSubject[];
+  /** Only when the spec has no page. */
+  existingSpec: DocsCandidate[];
+}
+
+export interface DocsHit {
+  path: string;
+  title: string;
+  lines: string[];
+}
+
+export type DecisionState = 'proposed' | 'accepted' | 'superseded';
+
+export interface DecisionChange {
+  page: string;
+  added: number;
+  removed: number;
+}
+
+/** A decision of the register (`docs::Decision`): an accepted one is never rewritten, a new one replaces it. */
+export interface DocsDecision {
+  number: number;
+  title: string;
+  date: string;
+  state: DecisionState;
+  origin: string;
+  originRef: string;
+  pages: string[];
+  tickets: string[];
+  documents: string[];
+  supersedes: number[];
+  supersededBy: number | null;
+  changes: DecisionChange[];
+  acceptedAt: string;
+  acceptedBy: string;
+  context: string;
+  decision: string;
+  consequences: string;
+}
+
+export interface DocsFile {
+  /** Under `documents/`. */
+  path: string;
+  name: string;
+  folder: string;
+  size: number;
+  kind: 'text' | 'pdf' | 'word' | 'image' | 'other';
+  readable: boolean;
+}
+
+export interface DocsText {
+  path: string;
+  kind: string;
+  /** Null: Escouade does not extract the text of this format (yet). */
+  text: string | null;
+  total: number;
+  from: number;
+  truncated: boolean;
 }

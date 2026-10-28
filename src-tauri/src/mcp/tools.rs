@@ -40,6 +40,7 @@
 use super::act;
 use super::activity::{self, Outcome};
 use super::background;
+use super::docs;
 use super::files;
 use super::images;
 use super::read;
@@ -1131,6 +1132,200 @@ impl<R: Runtime> Tools<R> {
         let result = workflow::get(&ctx.core, &ctx.caller, &args.project).await;
         let asked = summary(&[("project", Some(&args.project))]);
         ctx.reply("get_workflow", &asked, result)
+    }
+
+    #[tool(
+        description = "Read a project's specification, the tree of its pages: the subjects (folders) with, for each page, its path, title, when it was last compared to the code (compared, empty when never), the tickets and the decisions it is linked to. The spec lives under .escouade/spec of the project's docs branch (branch: current, or the name of the fixed docs branch). When the spec has no page yet, existingSpec lists what the project already has that looks like one (SPEC.md, a docs folder…: path, kind file or folder, files, bytes) so it can be offered for import; nothing is imported by this tool. Open to every client, for the projects it sees (a private project is seen by its own agents alone).",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn get_spec_tree(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::DocsProjectArgs>,
+    ) -> CallToolResult {
+        let result = docs::tree(&ctx.core, &ctx.caller, &args.project).await;
+        let asked = summary(&[("project", Some(&args.project))]);
+        ctx.reply("get_spec_tree", &asked, result)
+    }
+
+    #[tool(
+        description = "Read a page of the specification: its path, title, subject, sources, tickets, decisions, compared (when it was last compared to the code, empty when never) and body (Markdown). Open to every client, for the projects it sees.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn read_spec_page(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::SpecPageArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("project", Some(&args.project)), ("path", Some(&args.path))]);
+        let result = docs::page(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("read_spec_page", &asked, result)
+    }
+
+    #[tool(
+        description = "Create a page of the specification or change one, in the project's docs branch (the branch you work on, or the project's fixed docs branch): the fields you leave out stay as they are, body replaces the text (or goes at its end with append). Every write of the spec goes through this tool, so the spec stays where the team reads it. Nothing is committed nor pushed: the user shares the changes. Answers the page's path, title, subject, created, and the lines added and removed (which propose_decision takes as the changes of a decision).",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn write_spec_page(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::WriteSpecArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("project", Some(&args.project)), ("path", Some(&args.path))]);
+        let result = docs::write(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("write_spec_page", &asked, result)
+    }
+
+    #[tool(
+        description = "Search the specification: the pages whose title or text hold all the words (any case), the best first, each with its path, title and the first lines that hold a word. Open to every client, for the projects it sees.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn search_spec(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::SearchSpecArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("query", Some(&args.query)),
+        ]);
+        let result = docs::search(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("search_spec", &asked, result)
+    }
+
+    #[tool(
+        description = "List a project's decisions, the register of the product's choices, by number: title, date, state (proposed, accepted or superseded), origin, what it supersedes and what superseded it, replacementProposed (the number of a proposal that would replace an accepted one), and what it changed in the spec (changes: page, lines added and removed). A decision is accepted by a human, in the window: no tool does it. Open to every client, for the projects it sees.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn list_decisions(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::ListDecisionsArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("state", args.state.as_deref()),
+        ]);
+        let result = docs::decisions(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("list_decisions", &asked, result)
+    }
+
+    #[tool(
+        description = "Read a decision whole: number, title, date, state, origin, links (pages, tickets, documents), what it supersedes, what superseded it, what it changed in the spec, when and by whom it was accepted, and its context, decision and consequences. Open to every client, for the projects it sees.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn read_decision(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::ReadDecisionArgs>,
+    ) -> CallToolResult {
+        let number = args.number.to_string();
+        let asked = summary(&[("project", Some(&args.project)), ("number", Some(&number))]);
+        let result = docs::decision(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("read_decision", &asked, result)
+    }
+
+    #[tool(
+        description = "Propose a decision about the product: a new proposal (state proposed, the next number), or the revision of a proposal still open (number). It is not decided until a human accepts it in the window, and an accepted decision is never rewritten: replace_decision replaces it. Give it a title, its context, what is decided and what follows, where it comes from and the spec pages it changed (changes, from write_spec_page). Nothing is committed nor pushed.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn propose_decision(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::ProposeDecisionArgs>,
+    ) -> CallToolResult {
+        let number = args.number.map(|n| n.to_string());
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("number", number.as_deref()),
+            ("title", Some(&args.fields.title)),
+        ]);
+        let result = docs::propose(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("propose_decision", &asked, result)
+    }
+
+    #[tool(
+        description = "Propose a decision that replaces an accepted one (number): a new proposal that lists it in supersedes. Once a human accepts the new one, the old one becomes superseded and says by which; until then the old one stands. Only an accepted decision is replaced. Same fields as propose_decision.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn replace_decision(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::ReplaceDecisionArgs>,
+    ) -> CallToolResult {
+        let number = args.number.to_string();
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("number", Some(&number)),
+            ("title", Some(&args.fields.title)),
+        ]);
+        let result = docs::replace(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("replace_decision", &asked, result)
+    }
+
+    #[tool(
+        description = "List the documents of a project's drive (the files the team dropped under .escouade/documents of the docs branch): path, name, folder, size, kind (text, pdf, word, image or other) and readable (whether read_document gives their text). Open to every client, for the projects it sees.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn list_documents(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::ListDocumentsArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("folder", args.folder.as_deref()),
+        ]);
+        let result = docs::documents(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("list_documents", &asked, result)
+    }
+
+    #[tool(
+        description = "Read a document's text (kept in Escouade's folder, not in the repository): text (null for a format whose text Escouade does not extract yet, as PDF, Word and images), total (characters of the whole text), from and truncated (more follows: ask again with from). Open to every client, for the projects it sees.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn read_document(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::ReadDocumentArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("project", Some(&args.project)), ("path", Some(&args.path))]);
+        let result = docs::read_document(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("read_document", &asked, result)
+    }
+
+    #[tool(
+        description = "Add a text file to a project's drive of documents, in the docs branch, under a folder (made if needed). Nothing already there is overwritten: a taken name gets a number. Nothing is committed nor pushed.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn add_document(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::AddDocumentArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("folder", args.folder.as_deref()),
+            ("name", Some(&args.name)),
+        ]);
+        let result = docs::add_document(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("add_document", &asked, result)
     }
 
     #[tool(

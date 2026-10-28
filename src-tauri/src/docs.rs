@@ -1,0 +1,1288 @@
+//! The product's docs, in the repository (ESC-256, `docs/FACTORY.md` § 3): everything under
+//! `.escouade/` of the branch of the docs, as plain files the team shares by git (Escouade itself
+//! never commits nor pushes them):
+//!
+//! - `spec/<subject>/<page>.md`: the specification, a Markdown page with a header (title,
+//!   subject, sources, linked tickets and decisions, when it was last compared to the code);
+//! - `decisions/<NNNN>-<slug>.md`: the register, a file per decision (number, date, state,
+//!   context / decision / consequences, what it changed in the spec, its links and what it
+//!   replaces). An accepted decision is never rewritten: a new one replaces it;
+//! - `documents/<folders>/<file>`: the files the team dropped.
+//!
+//! What can be worked out again lives in Escouade's own folder, beside the histories: the text
+//! extracted from the documents (`Space::text_dir`).
+//!
+//! `Space` is the files of one branch of the docs, without the core: every path it reads or
+//! writes goes through `Space::dir` / `Space::file`, which refuse a link on the way and anything
+//! that leaves the project (`workflowfiles::unsafe_dir`, as the shared tickets do). The core finds
+//! the space (`Core::docs_space`): the branch the caller works on, or the fixed branch of the
+//! project in a worktree of its own, which Escouade never merges anywhere.
+//!
+//! The headers are one `key: value` per line, a value being JSON (a string, a list, a number),
+//! which YAML reads: they read back as they were written (`front_write` / `front_read`).
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+use anyhow::{bail, Result};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use unicode_normalization::UnicodeNormalization;
+
+use crate::workflowfiles::{reserved_stem, unsafe_dir};
+
+pub const ROOT: &str = ".escouade";
+pub const SPEC: &str = "spec";
+pub const DECISIONS: &str = "decisions";
+pub const DOCUMENTS: &str = "documents";
+
+/// The deepest a page's path goes (`subject/sub-subject/page`).
+const MAX_DEPTH: usize = 4;
+/// The deepest a document's folder goes.
+const MAX_FOLDER_DEPTH: usize = 6;
+/// A text page, a decision: the most Escouade reads of one file.
+const MAX_TEXT: u64 = 2 * 1024 * 1024;
+/// The most files a folder is listed with.
+const MAX_FILES: usize = 5000;
+/// What a joined file may weigh before the window warns (FACTORY.md: 50 MB).
+pub const LARGE_FILE: u64 = 50 * 1024 * 1024;
+/// The most characters of a document's text one reading gives.
+pub const TEXT_CHUNK: usize = 100_000;
+
+// ---------- names ----------
+
+/// A name as a path segment: accents taken off, lower case, other characters a `-`.
+pub fn slug(s: &str) -> String {
+    let mut out = String::new();
+    for c in s.nfd().filter(|c| !('\u{300}'..='\u{36f}').contains(c)) {
+        if c.is_alphanumeric() {
+            out.extend(c.to_lowercase());
+        } else if !out.ends_with('-') && !out.is_empty() {
+            out.push('-');
+        }
+    }
+    let out = out.trim_end_matches('-').to_string();
+    out.chars()
+        .take(60)
+        .collect::<String>()
+        .trim_end_matches('-')
+        .to_string()
+}
+
+/// A page's path as it is kept: `subject/page`, each segment a `slug`, a trailing `.md` dropped.
+/// None when it is no path (empty, absolute, `..`, a drive, too deep, a name Windows keeps).
+pub fn page_path(rel: &str) -> Option<String> {
+    let rel = rel.trim();
+    let rel = rel.strip_suffix(".md").unwrap_or(rel);
+    if rel.is_empty() || rel.contains(['\\', ':']) || rel.starts_with('/') {
+        return None;
+    }
+    let mut out = Vec::new();
+    for seg in rel.split('/') {
+        if seg == "." || seg == ".." {
+            return None;
+        }
+        let s = slug(seg);
+        if s.is_empty() || reserved_stem(&s) {
+            return None;
+        }
+        out.push(s);
+    }
+    (out.len() <= MAX_DEPTH).then(|| out.join("/"))
+}
+
+/// A path inside `documents/`: segments `safe_name` leaves as they are, no way up.
+pub fn document_path(rel: &str) -> Option<String> {
+    let rel = rel.trim();
+    if rel.starts_with('/') {
+        return None;
+    }
+    let rel = rel.trim_end_matches('/');
+    if rel.is_empty() || rel.contains(['\\', ':']) {
+        return None;
+    }
+    let segs: Vec<&str> = rel.split('/').collect();
+    if segs.len() > MAX_FOLDER_DEPTH + 1 {
+        return None;
+    }
+    segs.iter()
+        .all(|s| !s.is_empty() && *s != "." && *s != ".." && crate::attachfiles::safe_name(s) == *s)
+        .then(|| segs.join("/"))
+}
+
+// ---------- headers ----------
+
+fn front_value<T: Serialize + ?Sized>(v: &T) -> String {
+    serde_json::to_string(v).unwrap_or_else(|_| "null".into())
+}
+
+/// `---`, a `key: value` line each, `---`, a blank line, the body.
+fn front_write(lines: &[(&str, String)], body: &str) -> String {
+    let mut out = String::from("---\n");
+    for (k, v) in lines {
+        out.push_str(&format!("{k}: {v}\n"));
+    }
+    out.push_str("---\n");
+    let body = body.trim_end_matches(['\n', '\r']);
+    if !body.is_empty() {
+        out.push('\n');
+        out.push_str(body);
+        out.push('\n');
+    }
+    out
+}
+
+/// A file's header and body. None when it has no header.
+fn front_read(text: &str) -> Option<(HashMap<String, serde_json::Value>, String)> {
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let mut lines = text.split_inclusive('\n');
+    if lines.next()?.trim_end() != "---" {
+        return None;
+    }
+    let mut head = HashMap::new();
+    let mut used = 4;
+    let mut closed = false;
+    for l in lines {
+        used += l.len();
+        if l.trim_end() == "---" {
+            closed = true;
+            break;
+        }
+        if let Some((k, v)) = l.split_once(':') {
+            let v = v.trim();
+            let value = serde_json::from_str(v)
+                .unwrap_or_else(|_| serde_json::Value::String(v.trim_matches(['"', '\'']).into()));
+            head.insert(k.trim().to_string(), value);
+        }
+    }
+    if !closed {
+        return None;
+    }
+    let body = text.get(used..).unwrap_or_default();
+    let body = body.strip_prefix('\n').unwrap_or(body);
+    Some((head, body.trim_end_matches(['\n', '\r']).to_string()))
+}
+
+fn str_of(h: &HashMap<String, serde_json::Value>, k: &str) -> String {
+    match h.get(k) {
+        Some(serde_json::Value::String(s)) => s.clone(),
+        Some(serde_json::Value::Number(n)) => n.to_string(),
+        _ => String::new(),
+    }
+}
+
+fn strs_of(h: &HashMap<String, serde_json::Value>, k: &str) -> Vec<String> {
+    match h.get(k) {
+        Some(serde_json::Value::Array(items)) => items
+            .iter()
+            .filter_map(|i| match i {
+                serde_json::Value::String(s) => Some(s.clone()),
+                serde_json::Value::Number(n) => Some(n.to_string()),
+                _ => None,
+            })
+            .collect(),
+        Some(serde_json::Value::String(s)) if !s.is_empty() => vec![s.clone()],
+        _ => Vec::new(),
+    }
+}
+
+fn nums_of(h: &HashMap<String, serde_json::Value>, k: &str) -> Vec<u32> {
+    strs_of(h, k)
+        .iter()
+        .filter_map(|s| s.trim_start_matches('#').parse().ok())
+        .collect()
+}
+
+// ---------- the specification ----------
+
+/// A page of the spec.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Page {
+    /// `subject/page`, without `.md`.
+    pub path: String,
+    pub title: String,
+    pub subject: String,
+    /// Where it comes from: documents, files, links.
+    pub sources: Vec<String>,
+    /// The keys of the tickets that implement or changed it.
+    pub tickets: Vec<String>,
+    /// The numbers of the decisions it follows.
+    pub decisions: Vec<u32>,
+    /// When it was last compared to the code (ISO 8601); empty: never.
+    pub compared: String,
+    pub body: String,
+}
+
+pub fn page_write(p: &Page) -> String {
+    let compared = if p.compared.is_empty() {
+        "null".to_string()
+    } else {
+        front_value(&p.compared)
+    };
+    front_write(
+        &[
+            ("title", front_value(&p.title)),
+            ("subject", front_value(&p.subject)),
+            ("sources", front_value(&p.sources)),
+            ("tickets", front_value(&p.tickets)),
+            ("decisions", front_value(&p.decisions)),
+            ("compared", compared),
+        ],
+        &p.body,
+    )
+}
+
+/// A page from its file's text. A file without a header (written by hand) is a page too: its
+/// title is its first `# ` heading, else its name; its subject its folder.
+pub fn page_read(path: &str, text: &str) -> Page {
+    let subject_of = |path: &str| {
+        path.split('/')
+            .next()
+            .filter(|_| path.contains('/'))
+            .unwrap_or("general")
+            .to_string()
+    };
+    let name = path.rsplit('/').next().unwrap_or(path).to_string();
+    match front_read(text) {
+        Some((h, body)) => {
+            let title = Some(str_of(&h, "title"))
+                .filter(|t| !t.is_empty())
+                .unwrap_or_else(|| heading(&body).unwrap_or(name));
+            let subject = Some(str_of(&h, "subject"))
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| subject_of(path));
+            Page {
+                path: path.into(),
+                title,
+                subject,
+                sources: strs_of(&h, "sources"),
+                tickets: strs_of(&h, "tickets"),
+                decisions: nums_of(&h, "decisions"),
+                compared: str_of(&h, "compared"),
+                body,
+            }
+        }
+        None => {
+            let body = text.trim_end_matches(['\n', '\r']).to_string();
+            Page {
+                path: path.into(),
+                title: heading(&body).unwrap_or(name),
+                subject: subject_of(path),
+                body,
+                ..Default::default()
+            }
+        }
+    }
+}
+
+fn heading(body: &str) -> Option<String> {
+    body.lines()
+        .find_map(|l| l.strip_prefix("# "))
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+}
+
+/// The lines added and removed going from `old` to `new` (lines compared as a set of counts, not
+/// by position: enough to say « +3 −1 » of a page).
+pub fn line_delta(old: &str, new: &str) -> (u32, u32) {
+    let mut count: HashMap<&str, i64> = HashMap::new();
+    // Blank lines are not counted: they are layout.
+    for l in old.lines().filter(|l| !l.trim().is_empty()) {
+        *count.entry(l).or_default() -= 1;
+    }
+    for l in new.lines().filter(|l| !l.trim().is_empty()) {
+        *count.entry(l).or_default() += 1;
+    }
+    let added = count.values().filter(|n| **n > 0).sum::<i64>();
+    let removed = -count.values().filter(|n| **n < 0).sum::<i64>();
+    (added as u32, removed as u32)
+}
+
+/// A page as the tree lists it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageInfo {
+    pub path: String,
+    pub title: String,
+    pub compared: String,
+    pub tickets: Vec<String>,
+    pub decisions: Vec<u32>,
+}
+
+/// The pages of a subject.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Subject {
+    pub name: String,
+    pub pages: Vec<PageInfo>,
+}
+
+/// What a search finds in a page.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Hit {
+    pub path: String,
+    pub title: String,
+    /// The lines that hold the words, the first few.
+    pub lines: Vec<String>,
+}
+
+// ---------- the decisions ----------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum State {
+    #[default]
+    Proposed,
+    Accepted,
+    Superseded,
+}
+
+impl State {
+    fn name(self) -> &'static str {
+        match self {
+            State::Proposed => "proposed",
+            State::Accepted => "accepted",
+            State::Superseded => "superseded",
+        }
+    }
+
+    fn parse(s: &str) -> Option<State> {
+        Some(match s.trim().to_lowercase().as_str() {
+            "proposed" | "proposée" | "proposee" => State::Proposed,
+            "accepted" | "acceptée" | "acceptee" => State::Accepted,
+            "superseded" | "remplacée" | "remplacee" => State::Superseded,
+            _ => return None,
+        })
+    }
+}
+
+/// What a decision changed in a page of the spec.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Change {
+    pub page: String,
+    pub added: u32,
+    pub removed: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Decision {
+    pub number: u32,
+    pub title: String,
+    /// `YYYY-MM-DD`.
+    pub date: String,
+    pub state: State,
+    /// Where it comes from: brainstorm, discussion, ticket or document; empty when unknown.
+    pub origin: String,
+    /// The ticket's key, the discussion's or the document's name.
+    pub origin_ref: String,
+    pub pages: Vec<String>,
+    pub tickets: Vec<String>,
+    pub documents: Vec<String>,
+    /// The numbers of the decisions it replaces, once accepted.
+    pub supersedes: Vec<u32>,
+    pub superseded_by: Option<u32>,
+    pub changes: Vec<Change>,
+    /// When and by whom a human accepted it.
+    pub accepted_at: String,
+    pub accepted_by: String,
+    pub context: String,
+    pub decision: String,
+    pub consequences: String,
+}
+
+impl Decision {
+    /// The name of its file.
+    pub fn file_name(&self) -> String {
+        let s = slug(&self.title);
+        let s: String = s.chars().take(40).collect();
+        let s = s.trim_end_matches('-');
+        if s.is_empty() {
+            format!("{:04}.md", self.number)
+        } else {
+            format!("{:04}-{s}.md", self.number)
+        }
+    }
+}
+
+/// The three parts of a decision, titled as the interface's language says; both languages read.
+fn parts() -> [String; 3] {
+    [
+        tr!("Contexte", "Context"),
+        tr!("Décision", "Decision"),
+        tr!("Conséquences", "Consequences"),
+    ]
+}
+
+pub fn decision_write(d: &Decision) -> String {
+    let superseded_by = d
+        .superseded_by
+        .map_or("null".to_string(), |n| n.to_string());
+    let body = {
+        let [c, dd, cons] = parts();
+        format!(
+            "## {c}\n\n{}\n\n## {dd}\n\n{}\n\n## {cons}\n\n{}",
+            d.context.trim(),
+            d.decision.trim(),
+            d.consequences.trim()
+        )
+    };
+    front_write(
+        &[
+            ("number", d.number.to_string()),
+            ("title", front_value(&d.title)),
+            ("date", front_value(&d.date)),
+            ("state", front_value(d.state.name())),
+            ("origin", front_value(&d.origin)),
+            ("origin_ref", front_value(&d.origin_ref)),
+            ("pages", front_value(&d.pages)),
+            ("tickets", front_value(&d.tickets)),
+            ("documents", front_value(&d.documents)),
+            ("supersedes", front_value(&d.supersedes)),
+            ("superseded_by", superseded_by),
+            ("changes", front_value(&d.changes)),
+            ("accepted_at", front_value(&d.accepted_at)),
+            ("accepted_by", front_value(&d.accepted_by)),
+        ],
+        &body,
+    )
+}
+
+/// The text under each of the headings `## …` of a decision's body.
+fn sections(body: &str) -> HashMap<String, String> {
+    let mut out: HashMap<String, String> = HashMap::new();
+    let mut at: Option<String> = None;
+    for l in body.lines() {
+        if let Some(h) = l.strip_prefix("## ") {
+            at = Some(h.trim().to_lowercase());
+            out.entry(h.trim().to_lowercase()).or_default();
+        } else if let Some(k) = &at {
+            let e = out.get_mut(k).unwrap();
+            e.push_str(l);
+            e.push('\n');
+        }
+    }
+    out.values_mut().for_each(|v| *v = v.trim().to_string());
+    out
+}
+
+pub fn decision_read(text: &str) -> Result<Decision> {
+    let Some((h, body)) = front_read(text) else {
+        bail!(tr!(
+            "la décision n’a pas d’en-tête (--- … ---)",
+            "the decision has no header (--- … ---)"
+        ));
+    };
+    let number: u32 = str_of(&h, "number").parse().map_err(|_| {
+        anyhow::anyhow!(tr!(
+            "la décision n’a pas de numéro",
+            "the decision has no number"
+        ))
+    })?;
+    let secs = sections(&body);
+    let pick = |names: &[&str]| -> String {
+        names
+            .iter()
+            .find_map(|n| secs.get(*n).cloned())
+            .unwrap_or_default()
+    };
+    let changes = match h.get("changes") {
+        Some(v @ serde_json::Value::Array(_)) => {
+            serde_json::from_value(v.clone()).unwrap_or_default()
+        }
+        _ => Vec::new(),
+    };
+    Ok(Decision {
+        number,
+        title: str_of(&h, "title"),
+        date: str_of(&h, "date"),
+        state: State::parse(&str_of(&h, "state")).unwrap_or_default(),
+        origin: str_of(&h, "origin"),
+        origin_ref: str_of(&h, "origin_ref"),
+        pages: strs_of(&h, "pages"),
+        tickets: strs_of(&h, "tickets"),
+        documents: strs_of(&h, "documents"),
+        supersedes: nums_of(&h, "supersedes"),
+        superseded_by: str_of(&h, "superseded_by").parse().ok(),
+        changes,
+        accepted_at: str_of(&h, "accepted_at"),
+        accepted_by: str_of(&h, "accepted_by"),
+        context: pick(&["contexte", "context"]),
+        decision: pick(&["décision", "decision"]),
+        consequences: pick(&["conséquences", "consequences"]),
+    })
+}
+
+/// Whether going from `old` to `new` rewrites an accepted decision. Accepting a proposal, and an
+/// accepted decision being replaced (state `superseded` and the number that replaces it), are
+/// the only changes a decision that was decided can have.
+pub fn rewrites(old: &Decision, new: &Decision) -> bool {
+    match old.state {
+        State::Proposed => false,
+        State::Accepted => {
+            let mut same = new.clone();
+            if new.state == State::Superseded {
+                same.state = State::Accepted;
+                same.superseded_by = old.superseded_by;
+            }
+            same != *old
+        }
+        State::Superseded => new != old,
+    }
+}
+
+// ---------- the documents ----------
+
+/// A file of the drive.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocInfo {
+    /// Under `documents/`.
+    pub path: String,
+    pub name: String,
+    pub folder: String,
+    pub size: u64,
+    /// text, pdf, word, image or other.
+    pub kind: String,
+    /// Whether Escouade can read its text now.
+    pub readable: bool,
+}
+
+fn kind_of(name: &str) -> &'static str {
+    match ext(name).as_str() {
+        "md" | "markdown" | "txt" | "text" | "csv" | "tsv" | "json" | "yaml" | "yml" | "xml"
+        | "html" | "htm" | "rst" | "log" | "toml" | "ini" => "text",
+        "pdf" => "pdf",
+        "doc" | "docx" | "odt" | "rtf" => "word",
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "bmp" => "image",
+        _ => "other",
+    }
+}
+
+fn ext(name: &str) -> String {
+    name.rsplit_once('.')
+        .map(|(_, e)| e.to_lowercase())
+        .unwrap_or_default()
+}
+
+/// A document's text, a chunk of it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocText {
+    pub path: String,
+    pub kind: String,
+    /// None: Escouade does not extract the text of this format (yet).
+    pub text: Option<String>,
+    /// The characters of the whole text.
+    pub total: usize,
+    pub from: usize,
+    pub truncated: bool,
+}
+
+// ---------- a spec found in the project ----------
+
+/// A spec the project already has, in its own folders, that could be imported.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Candidate {
+    /// Relative to the project, with `/`.
+    pub path: String,
+    /// file or folder.
+    pub kind: String,
+    /// The Markdown files it holds (1 for a file).
+    pub files: usize,
+    pub bytes: u64,
+}
+
+// ---------- the space ----------
+
+/// The docs of one branch: the folder that holds its `.escouade/`.
+#[derive(Debug, Clone)]
+pub struct Space {
+    pub root: PathBuf,
+    /// Where the text extracted from the documents is kept (Escouade's folder); None: not kept.
+    pub text_dir: Option<PathBuf>,
+}
+
+fn is_link(p: &Path) -> bool {
+    std::fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink())
+}
+
+fn refuse_link(p: &Path) -> anyhow::Error {
+    anyhow::anyhow!(tr!(
+        "{p} est un lien symbolique : ignoré",
+        "{p} is a symbolic link: ignored",
+        p = p.display()
+    ))
+}
+
+/// The files of a folder, depth first, sorted: relative paths with `/`. Links are skipped, never
+/// followed (a link can point anywhere).
+fn walk(base: &Path, ext_ok: impl Fn(&str) -> bool, limit: usize) -> Vec<(String, u64)> {
+    fn go(
+        base: &Path,
+        dir: &Path,
+        ext_ok: &dyn Fn(&str) -> bool,
+        out: &mut Vec<(String, u64)>,
+        limit: usize,
+        depth: usize,
+    ) {
+        if depth > MAX_FOLDER_DEPTH + 1 || out.len() >= limit {
+            return;
+        }
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        let mut entries: Vec<_> = entries.flatten().collect();
+        entries.sort_by_key(|e| e.file_name());
+        for e in entries {
+            if out.len() >= limit {
+                return;
+            }
+            let Ok(t) = e.file_type() else { continue };
+            let name = e.file_name().to_string_lossy().to_string();
+            if t.is_symlink() || name.starts_with('.') {
+                continue;
+            }
+            if t.is_dir() {
+                go(base, &e.path(), ext_ok, out, limit, depth + 1);
+            } else if t.is_file() && ext_ok(&name) {
+                let rel = e
+                    .path()
+                    .strip_prefix(base)
+                    .map(|r| r.to_string_lossy().replace('\\', "/"))
+                    .unwrap_or_default();
+                let size = e.metadata().map(|m| m.len()).unwrap_or(0);
+                out.push((rel, size));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    go(base, base, &ext_ok, &mut out, limit, 0);
+    out
+}
+
+fn md_name(n: &str) -> bool {
+    n.to_lowercase().ends_with(".md")
+}
+
+impl Space {
+    pub fn new(root: impl Into<PathBuf>, text_dir: Option<PathBuf>) -> Self {
+        Self {
+            root: root.into(),
+            text_dir,
+        }
+    }
+
+    /// `.escouade/<sub>`, refused when it (or `.escouade`) is a link or leaves the project.
+    pub fn dir(&self, sub: &str) -> Result<PathBuf> {
+        let dir = self.root.join(ROOT).join(sub);
+        if let Some(why) = unsafe_dir(&dir) {
+            bail!(why);
+        }
+        Ok(dir)
+    }
+
+    /// `rel` under `.escouade/<sub>`, with no link on the way (the file itself included when it
+    /// is there). `rel` is a path `page_path` or `document_path` accepted.
+    fn file(&self, sub: &str, rel: &str) -> Result<PathBuf> {
+        let base = self.dir(sub)?;
+        let mut at = base.clone();
+        for seg in rel.split('/') {
+            at.push(seg);
+            if is_link(&at) {
+                return Err(refuse_link(&at));
+            }
+        }
+        // Whatever the pieces were, the whole stays under the folder.
+        if let Ok(real) = at.parent().map(Path::canonicalize).transpose() {
+            if let (Some(real), Ok(b)) = (real, base.canonicalize()) {
+                if !real.starts_with(&b) {
+                    return Err(crate::paths::outside(rel));
+                }
+            }
+        }
+        Ok(at)
+    }
+
+    fn write(&self, path: &Path, bytes: &[u8]) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        // Made now, the folders are checked again: none of them may be a link.
+        let mut at = path.parent();
+        while let Some(p) = at {
+            if p.ends_with(ROOT) {
+                break;
+            }
+            if is_link(p) {
+                return Err(refuse_link(p));
+            }
+            at = p.parent();
+        }
+        crate::paths::write_atomic(path, bytes)?;
+        Ok(())
+    }
+
+    fn read_text(&self, path: &Path) -> Result<String> {
+        if is_link(path) {
+            return Err(refuse_link(path));
+        }
+        let meta = std::fs::metadata(path)?;
+        if meta.len() > MAX_TEXT {
+            bail!(tr!(
+                "{p} est trop gros pour être lu comme une page",
+                "{p} is too big to be read as a page",
+                p = path.display()
+            ));
+        }
+        Ok(String::from_utf8_lossy(&std::fs::read(path)?).into_owned())
+    }
+
+    // ----- spec -----
+
+    fn pages(&self) -> Vec<Page> {
+        let Ok(dir) = self.dir(SPEC) else {
+            return Vec::new();
+        };
+        walk(&dir, md_name, MAX_FILES)
+            .into_iter()
+            .filter_map(|(rel, _)| {
+                let path = rel.strip_suffix(".md")?.to_string();
+                let text = self.read_text(&dir.join(&rel)).ok()?;
+                Some(page_read(&path, &text))
+            })
+            .collect()
+    }
+
+    /// The pages by subject (the first folder of their path), in order.
+    pub fn spec_tree(&self) -> Vec<Subject> {
+        let mut subjects: Vec<Subject> = Vec::new();
+        for p in self.pages() {
+            let name = if p.path.contains('/') {
+                p.path.split('/').next().unwrap_or_default().to_string()
+            } else {
+                p.subject.clone()
+            };
+            let info = PageInfo {
+                path: p.path,
+                title: p.title,
+                compared: p.compared,
+                tickets: p.tickets,
+                decisions: p.decisions,
+            };
+            match subjects.iter_mut().find(|s| s.name == name) {
+                Some(s) => s.pages.push(info),
+                None => subjects.push(Subject {
+                    name,
+                    pages: vec![info],
+                }),
+            }
+        }
+        subjects.sort_by(|a, b| a.name.cmp(&b.name));
+        subjects
+    }
+
+    pub fn spec_read(&self, rel: &str) -> Result<Page> {
+        let path = page_path(rel).ok_or_else(|| bad_page(rel))?;
+        let file = self.file(SPEC, &format!("{path}.md"))?;
+        if !file.is_file() {
+            bail!(tr!(
+                "Aucune page « {path} » dans la spécification.",
+                "No page “{path}” in the specification."
+            ));
+        }
+        Ok(page_read(&path, &self.read_text(&file)?))
+    }
+
+    /// Creates or changes a page: what `edit` leaves of the page as it was (an empty one for a new
+    /// page) is written. Returns the page and the lines it added and removed.
+    pub fn spec_write(&self, rel: &str, edit: impl FnOnce(&mut Page)) -> Result<(Page, u32, u32)> {
+        let path = page_path(rel).ok_or_else(|| bad_page(rel))?;
+        let file = self.file(SPEC, &format!("{path}.md"))?;
+        let before = if file.is_file() {
+            Some(page_read(&path, &self.read_text(&file)?))
+        } else {
+            None
+        };
+        let mut page = before.clone().unwrap_or_else(|| Page {
+            path: path.clone(),
+            ..Default::default()
+        });
+        edit(&mut page);
+        page.path = path.clone();
+        if page.title.trim().is_empty() {
+            page.title = heading(&page.body)
+                .unwrap_or_else(|| path.rsplit('/').next().unwrap_or(&path).replace('-', " "));
+        }
+        if page.subject.trim().is_empty() {
+            page.subject = path.split('/').next().unwrap_or("general").to_string();
+        }
+        page.body = page.body.trim_end_matches(['\n', '\r']).to_string();
+        let (added, removed) = line_delta(before.as_ref().map_or("", |b| &b.body), &page.body);
+        self.write(&file, page_write(&page).as_bytes())?;
+        Ok((page, added, removed))
+    }
+
+    /// The pages that hold all the words (any case), their titles first.
+    pub fn spec_search(&self, query: &str, limit: usize) -> Vec<Hit> {
+        let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+        if words.is_empty() {
+            return Vec::new();
+        }
+        let mut hits: Vec<(usize, Hit)> = Vec::new();
+        for p in self.pages() {
+            let hay = format!("{}\n{}", p.title, p.body).to_lowercase();
+            if !words.iter().all(|w| hay.contains(w.as_str())) {
+                continue;
+            }
+            let in_title = words
+                .iter()
+                .filter(|w| p.title.to_lowercase().contains(w.as_str()))
+                .count();
+            let lines: Vec<String> = p
+                .body
+                .lines()
+                .filter(|l| {
+                    let l = l.to_lowercase();
+                    words.iter().any(|w| l.contains(w.as_str()))
+                })
+                .take(3)
+                .map(|l| l.trim().chars().take(200).collect())
+                .collect();
+            hits.push((
+                in_title,
+                Hit {
+                    path: p.path,
+                    title: p.title,
+                    lines,
+                },
+            ));
+        }
+        hits.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.path.cmp(&b.1.path)));
+        hits.into_iter().map(|(_, h)| h).take(limit).collect()
+    }
+
+    // ----- decisions -----
+
+    fn decision_files(&self) -> Vec<(u32, PathBuf)> {
+        let Ok(dir) = self.dir(DECISIONS) else {
+            return Vec::new();
+        };
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            return Vec::new();
+        };
+        let mut out: Vec<(u32, PathBuf)> = entries
+            .flatten()
+            .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+            .filter_map(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                let digits: String = name.chars().take_while(char::is_ascii_digit).collect();
+                if !name.ends_with(".md") {
+                    return None;
+                }
+                Some((digits.parse().ok()?, e.path()))
+            })
+            .collect();
+        out.sort();
+        out
+    }
+
+    /// Every decision, by number. A file that cannot be read is left out.
+    pub fn decisions(&self) -> Vec<Decision> {
+        self.decision_files()
+            .into_iter()
+            .filter_map(|(_, p)| decision_read(&self.read_text(&p).ok()?).ok())
+            .collect()
+    }
+
+    pub fn decision(&self, number: u32) -> Result<Decision> {
+        self.decisions()
+            .into_iter()
+            .find(|d| d.number == number)
+            .ok_or_else(|| {
+                anyhow::anyhow!(tr!(
+                    "Aucune décision n° {number}.",
+                    "No decision number {number}."
+                ))
+            })
+    }
+
+    /// The next number: after the highest one the folder holds.
+    pub fn next_number(&self) -> u32 {
+        self.decision_files().last().map_or(1, |(n, _)| n + 1)
+    }
+
+    fn decision_save(&self, d: &Decision, prior: Option<&Decision>) -> Result<()> {
+        if let Some(old) = prior {
+            if rewrites(old, d) {
+                bail!(tr!(
+                    "La décision n° {n} est {state} : elle ne se réécrit pas, une nouvelle la remplace.",
+                    "Decision {n} is {state}: it is not rewritten, a new one replaces it.",
+                    n = old.number,
+                    state = match old.state {
+                        State::Accepted => tr!("acceptée", "accepted"),
+                        _ => tr!("remplacée", "superseded"),
+                    }
+                ));
+            }
+        }
+        // Its file keeps its name when it has one (the title of an accepted decision never changes).
+        let name = self
+            .decision_files()
+            .into_iter()
+            .find(|(n, _)| *n == d.number)
+            .and_then(|(_, p)| p.file_name().map(|f| f.to_string_lossy().to_string()))
+            .unwrap_or_else(|| d.file_name());
+        let file = self.file(DECISIONS, &name)?;
+        self.write(&file, decision_write(d).as_bytes())
+    }
+
+    /// A new proposal, numbered after the others, or the revision of a proposal still open
+    /// (`number`). A decision that was decided is not touched.
+    pub fn decision_propose(&self, number: Option<u32>, mut d: Decision) -> Result<Decision> {
+        d.state = State::Proposed;
+        d.superseded_by = None;
+        d.accepted_at.clear();
+        d.accepted_by.clear();
+        if d.title.trim().is_empty() {
+            bail!(tr!("Une décision a un titre.", "A decision needs a title."));
+        }
+        d.pages = d.pages.iter().filter_map(|p| page_path(p)).collect();
+        match number {
+            Some(n) => {
+                let old = self.decision(n)?;
+                d.number = n;
+                d.date = old.date.clone();
+                self.decision_save(&d, Some(&old))?;
+            }
+            None => {
+                d.number = self.next_number();
+                if d.date.is_empty() {
+                    d.date = chrono::Local::now().format("%Y-%m-%d").to_string();
+                }
+                self.decision_save(&d, None)?;
+            }
+        }
+        Ok(d)
+    }
+
+    /// A proposal that replaces the accepted decision `old`: it takes its place once accepted.
+    pub fn decision_replace(&self, old: u32, mut d: Decision) -> Result<Decision> {
+        let was = self.decision(old)?;
+        if was.state != State::Accepted {
+            bail!(tr!(
+                "Seule une décision acceptée se remplace (la n° {old} ne l’est pas) : une proposition se révise.",
+                "Only an accepted decision is replaced (number {old} is not): a proposal is revised."
+            ));
+        }
+        d.supersedes = vec![old];
+        self.decision_propose(None, d)
+    }
+
+    /// A human accepts a proposal: its state, its date and who; the decisions it replaces become
+    /// `superseded`, each naming it.
+    pub fn decision_accept(&self, number: u32, by: &str) -> Result<Decision> {
+        let old = self.decision(number)?;
+        match old.state {
+            State::Accepted => return Ok(old),
+            State::Superseded => bail!(tr!(
+                "La décision n° {number} est remplacée : elle ne s’accepte plus.",
+                "Decision {number} is superseded: it can no longer be accepted."
+            )),
+            State::Proposed => {}
+        }
+        let mut d = old.clone();
+        d.state = State::Accepted;
+        d.accepted_at = chrono::Local::now()
+            .format("%Y-%m-%dT%H:%M:%S%:z")
+            .to_string();
+        d.accepted_by = by.to_string();
+        self.decision_save(&d, Some(&old))?;
+        for n in &d.supersedes {
+            let Ok(was) = self.decision(*n) else { continue };
+            if was.state == State::Accepted {
+                let mut now = was.clone();
+                now.state = State::Superseded;
+                now.superseded_by = Some(number);
+                self.decision_save(&now, Some(&was))?;
+            }
+        }
+        Ok(d)
+    }
+
+    // ----- documents -----
+
+    fn info(&self, rel: &str, size: u64) -> DocInfo {
+        let name = rel.rsplit('/').next().unwrap_or(rel).to_string();
+        let kind = kind_of(&name);
+        DocInfo {
+            path: rel.to_string(),
+            folder: rel
+                .rsplit_once('/')
+                .map(|(f, _)| f.to_string())
+                .unwrap_or_default(),
+            readable: kind == "text",
+            name,
+            size,
+            kind: kind.into(),
+        }
+    }
+
+    /// The files of the drive (those of a folder when `folder` is given).
+    pub fn documents(&self, folder: &str) -> Result<Vec<DocInfo>> {
+        let base = self.dir(DOCUMENTS)?;
+        let folder = folder_of(folder)?;
+        let folder = folder.as_str();
+        let mut start = base.clone();
+        if !folder.is_empty() {
+            let f = document_path(folder).ok_or_else(|| bad_document(folder))?;
+            start = self.file(DOCUMENTS, &f)?;
+        }
+        Ok(walk(&start, |_| true, MAX_FILES)
+            .into_iter()
+            .map(|(rel, size)| {
+                let full = if folder.is_empty() {
+                    rel
+                } else {
+                    format!("{folder}/{rel}")
+                };
+                self.info(&full, size)
+            })
+            .collect())
+    }
+
+    /// Where the text of a document is kept, by its path and what its file is now.
+    fn text_file(&self, rel: &str, file: &Path) -> Option<PathBuf> {
+        let dir = self.text_dir.as_ref()?;
+        let meta = std::fs::metadata(file).ok()?;
+        let stamp = meta
+            .modified()
+            .ok()
+            .and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_millis());
+        let key = Sha256::digest(format!("{rel}\n{}\n{stamp}", meta.len()).as_bytes());
+        let key: String = key.iter().take(12).map(|b| format!("{b:02x}")).collect();
+        Some(dir.join(format!("{key}.txt")))
+    }
+
+    /// A document's text, from `from` on (`TEXT_CHUNK` characters at most). The text is extracted
+    /// once and kept in Escouade's folder, not in the repository. A format whose text Escouade
+    /// does not extract answers `text: None`.
+    pub fn document_text(&self, rel: &str, from: usize, max: usize) -> Result<DocText> {
+        let path = document_path(rel).ok_or_else(|| bad_document(rel))?;
+        let file = self.file(DOCUMENTS, &path)?;
+        if !file.is_file() {
+            bail!(tr!("Aucun document « {path} ».", "No document “{path}”."));
+        }
+        let kind = kind_of(&path);
+        let none = |kind: &str| DocText {
+            path: path.clone(),
+            kind: kind.into(),
+            text: None,
+            total: 0,
+            from: 0,
+            truncated: false,
+        };
+        if kind != "text" {
+            return Ok(none(kind));
+        }
+        let cache = self.text_file(&path, &file);
+        let text = match cache.as_ref().and_then(|c| std::fs::read_to_string(c).ok()) {
+            Some(t) => t,
+            None => {
+                let meta = std::fs::metadata(&file)?;
+                if meta.len() > 20 * 1024 * 1024 {
+                    return Ok(none(kind));
+                }
+                let t = String::from_utf8_lossy(&std::fs::read(&file)?).into_owned();
+                if let Some(c) = &cache {
+                    if let Some(dir) = c.parent() {
+                        let _ = std::fs::create_dir_all(dir);
+                    }
+                    let _ = crate::paths::write_atomic(c, t.as_bytes());
+                }
+                t
+            }
+        };
+        let total = text.chars().count();
+        let max = max.clamp(1, TEXT_CHUNK);
+        let from = from.min(total);
+        let chunk: String = text.chars().skip(from).take(max).collect();
+        Ok(DocText {
+            path,
+            kind: kind.into(),
+            text: Some(chunk),
+            total,
+            from,
+            truncated: from + max < total,
+        })
+    }
+
+    /// Puts a file in the drive under `folder`, under its name or another when that one is taken:
+    /// nothing already there is overwritten.
+    pub fn document_add(&self, folder: &str, name: &str, bytes: &[u8]) -> Result<DocInfo> {
+        let name = crate::attachfiles::safe_name(name.trim());
+        let folder = folder_of(folder)?;
+        let folder = folder.as_str();
+        let mut rel = if folder.is_empty() {
+            name.clone()
+        } else {
+            format!("{folder}/{name}")
+        };
+        rel = document_path(&rel).ok_or_else(|| bad_document(&rel))?;
+        let mut n = 2;
+        loop {
+            let file = self.file(DOCUMENTS, &rel)?;
+            if !file.exists() {
+                self.write(&file, bytes)?;
+                return Ok(self.info(&rel, bytes.len() as u64));
+            }
+            let (stem, e) = name
+                .rsplit_once('.')
+                .map_or((name.as_str(), String::new()), |(s, e)| {
+                    (s, format!(".{e}"))
+                });
+            let renamed = format!("{stem}-{n}{e}");
+            rel = if folder.is_empty() {
+                renamed
+            } else {
+                format!("{folder}/{renamed}")
+            };
+            rel = document_path(&rel).ok_or_else(|| bad_document(&rel))?;
+            n += 1;
+        }
+    }
+
+    // ----- a spec already there -----
+
+    /// The files and folders of the project that look like a specification, to be offered as
+    /// a candidate: `SPEC.md` (anywhere at the top, or in `docs/`), a `spec`/`specs` folder, and a
+    /// `docs/` folder of Markdown. `.escouade/` itself is not one.
+    pub fn detect(&self) -> Vec<Candidate> {
+        let mut out = Vec::new();
+        let names = |dir: &Path| -> Vec<(String, bool)> {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return Vec::new();
+            };
+            let mut v: Vec<(String, bool)> = entries
+                .flatten()
+                .filter_map(|e| {
+                    let t = e.file_type().ok()?;
+                    if t.is_symlink() {
+                        return None;
+                    }
+                    Some((e.file_name().to_string_lossy().to_string(), t.is_dir()))
+                })
+                .collect();
+            v.sort();
+            v
+        };
+        let rel_of = |dir: &str, name: &str| {
+            if dir.is_empty() {
+                name.to_string()
+            } else {
+                format!("{dir}/{name}")
+            }
+        };
+        let push_file = |dir: &str, name: &str, out: &mut Vec<Candidate>| {
+            let path = rel_of(dir, name);
+            let size = std::fs::metadata(self.root.join(&path))
+                .map(|m| m.len())
+                .unwrap_or(0);
+            out.push(Candidate {
+                path,
+                kind: "file".into(),
+                files: 1,
+                bytes: size,
+            });
+        };
+        let is_spec_file = |n: &str| {
+            let l = n.to_lowercase();
+            matches!(
+                l.as_str(),
+                "spec.md"
+                    | "specs.md"
+                    | "specification.md"
+                    | "specifications.md"
+                    | "spécification.md"
+            )
+        };
+        let mut docs_dir: Option<String> = None;
+        let top = names(&self.root);
+        for (name, dir) in &top {
+            if !dir && is_spec_file(name) {
+                push_file("", name, &mut out);
+            }
+            if *dir && name.eq_ignore_ascii_case("docs") {
+                docs_dir = Some(name.clone());
+            }
+        }
+        let folder = |dir: &str, out: &mut Vec<Candidate>| {
+            let files = walk(&self.root.join(dir), md_name, MAX_FILES);
+            if !files.is_empty() {
+                out.push(Candidate {
+                    path: dir.to_string(),
+                    kind: "folder".into(),
+                    files: files.len(),
+                    bytes: files.iter().map(|(_, s)| s).sum(),
+                });
+            }
+        };
+        for (name, dir) in &top {
+            let l = name.to_lowercase();
+            if *dir
+                && matches!(
+                    l.as_str(),
+                    "spec" | "specs" | "specification" | "specifications"
+                )
+            {
+                folder(name, &mut out);
+            }
+        }
+        if let Some(docs) = docs_dir {
+            for (name, dir) in names(&self.root.join(&docs)) {
+                if !dir && is_spec_file(&name) {
+                    push_file(&docs, &name, &mut out);
+                }
+                let l = name.to_lowercase();
+                if dir
+                    && matches!(
+                        l.as_str(),
+                        "spec" | "specs" | "specification" | "specifications"
+                    )
+                {
+                    folder(&rel_of(&docs, &name), &mut out);
+                }
+            }
+            folder(&docs, &mut out);
+        }
+        out
+    }
+}
+
+/// A folder of the drive as it is kept: no leading `/`, none at the end; empty for the root.
+fn folder_of(folder: &str) -> Result<String> {
+    let f = folder.trim();
+    if f.starts_with('/') {
+        return Err(bad_document(f));
+    }
+    Ok(f.trim_end_matches('/').to_string())
+}
+
+fn bad_page(rel: &str) -> anyhow::Error {
+    anyhow::anyhow!(tr!(
+        "« {rel} » n’est pas un chemin de page (sujet/page, sans « .. » ni lettre de lecteur).",
+        "“{rel}” is not a page path (subject/page, with no “..” nor drive letter)."
+    ))
+}
+
+fn bad_document(rel: &str) -> anyhow::Error {
+    anyhow::anyhow!(tr!(
+        "« {rel} » n’est pas un chemin de document (dossiers/fichier, sans « .. »).",
+        "“{rel}” is not a document path (folders/file, with no “..”)."
+    ))
+}

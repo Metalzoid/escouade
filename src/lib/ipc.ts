@@ -77,6 +77,13 @@ import type {
   SetupInfo,
   Workflow,
   WorkflowTrack,
+  DocsCandidate,
+  DocsDecision,
+  DocsFile,
+  DocsHit,
+  DocsPage,
+  DocsText,
+  DocsTree,
 } from './types';
 
 /**
@@ -396,6 +403,25 @@ export const api = {
   effectiveWorkflows: (id: string) => invoke<Workflow[]>('effective_workflows', { id }),
   /** Where each agent of the project is in its workflows, and where it has been (ESC-193). */
   getWorkflowTracks: (id: string) => invoke<WorkflowTrack[]>('get_workflow_tracks', { id }),
+  /** The spec's tree by subject, and the spec the project already has when it has no page (ESC-256). */
+  docsSpecTree: (id: string) => invoke<DocsTree>('docs_spec_tree', { id }),
+  docsDetectSpec: (id: string) => invoke<DocsCandidate[]>('docs_detect_spec', { id }),
+  docsSpecPage: (id: string, path: string) => invoke<DocsPage>('docs_spec_page', { id, path }),
+  docsSpecWrite: (id: string, path: string, title: string | null, body: string | null) =>
+    invoke<DocsPage>('docs_spec_write', { id, path, title, body }),
+  docsSpecSearch: (id: string, query: string) => invoke<DocsHit[]>('docs_spec_search', { id, query }),
+  docsDecisions: (id: string) => invoke<DocsDecision[]>('docs_decisions', { id }),
+  docsDecisionPropose: (id: string, number: number | null, decision: Partial<DocsDecision>) =>
+    invoke<DocsDecision>('docs_decision_propose', { id, number, decision }),
+  docsDecisionReplace: (id: string, number: number, decision: Partial<DocsDecision>) =>
+    invoke<DocsDecision>('docs_decision_replace', { id, number, decision }),
+  /** « Accepter »: a human's act, the only way to accept a decision. */
+  docsDecisionAccept: (id: string, number: number) => invoke<DocsDecision>('docs_decision_accept', { id, number }),
+  docsDocuments: (id: string, folder: string | null = null) => invoke<DocsFile[]>('docs_documents', { id, folder }),
+  docsDocumentText: (id: string, path: string, from: number | null = null) => invoke<DocsText>('docs_document_text', { id, path, from }),
+  /** A file chosen, put in the drive; over 50 MB it asks to be `confirmed` first. */
+  docsDocumentAdd: (id: string, folder: string | null, source: string, confirmed = false) =>
+    invoke<DocsFile>('docs_document_add', { id, folder, source, confirmed }),
   gitLog: (projectId: string, agentId: string | null, repo: string | null = null) =>
     invoke<GitLog>('git_log', { projectId, agentId, ...inRepo(repo) }),
   gitShow: (projectId: string, hash: string, repo: string | null = null) =>

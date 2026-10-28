@@ -720,6 +720,11 @@ pub struct Project {
     /// window see every project.
     #[serde(default)]
     pub private: bool,
+    /// « Branche des docs » (ESC-256): where `.escouade/spec`, `decisions` and `documents` live. Empty: the
+    /// branch checked out (a ticket’s agent writes them on its own branch); a name: that branch, in a
+    /// worktree of its own that Escouade holds and never merges anywhere (`docsbranch`).
+    #[serde(default)]
+    pub docs_branch: String,
     /// « Comptes partagés à la limite » (a private project, ESC-141): its agents may go on on an
     /// account it shares with other projects when its own reach the usage limit. Off: they wait
     /// for the reset (`accounts::confined`).

@@ -82,6 +82,49 @@ fn naming_calls() -> Vec<(&'static str, Names, Value)> {
         ("get_board", Names::Project, json!({ "project": "{}" })),
         ("get_workflow", Names::Project, json!({ "project": "{}" })),
         ("list_requests", Names::Project, json!({ "project": "{}" })),
+        ("get_spec_tree", Names::Project, json!({ "project": "{}" })),
+        (
+            "read_spec_page",
+            Names::Project,
+            json!({ "project": "{}", "path": "a/b" }),
+        ),
+        (
+            "write_spec_page",
+            Names::Project,
+            json!({ "project": "{}", "path": "a/b", "body": "Texte" }),
+        ),
+        (
+            "search_spec",
+            Names::Project,
+            json!({ "project": "{}", "query": "texte" }),
+        ),
+        ("list_decisions", Names::Project, json!({ "project": "{}" })),
+        (
+            "read_decision",
+            Names::Project,
+            json!({ "project": "{}", "number": 1 }),
+        ),
+        (
+            "propose_decision",
+            Names::Project,
+            json!({ "project": "{}", "title": "Une décision" }),
+        ),
+        (
+            "replace_decision",
+            Names::Project,
+            json!({ "project": "{}", "number": 1, "title": "Une autre" }),
+        ),
+        ("list_documents", Names::Project, json!({ "project": "{}" })),
+        (
+            "read_document",
+            Names::Project,
+            json!({ "project": "{}", "path": "a.md" }),
+        ),
+        (
+            "add_document",
+            Names::Project,
+            json!({ "project": "{}", "name": "a.md", "text": "x" }),
+        ),
         (
             "create_ticket",
             Names::Project,

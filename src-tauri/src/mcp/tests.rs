@@ -22,6 +22,7 @@ use tauri::test::{mock_app, MockRuntime};
 /// deleting deletes). The only two that answer for the user (`ANSWERING`) never give a lasting
 /// permission.
 pub(super) const EXPOSED: &[&str] = &[
+    "add_document",
     "answer_permission",
     "answer_question",
     "approve_ticket",
@@ -32,6 +33,7 @@ pub(super) const EXPOSED: &[&str] = &[
     "get_agent_summary",
     "get_background_output",
     "get_board",
+    "get_spec_tree",
     "get_ticket",
     "get_ticket_file",
     "get_ticket_image",
@@ -39,15 +41,23 @@ pub(super) const EXPOSED: &[&str] = &[
     "get_workflow",
     "list_agents",
     "list_background_work",
+    "list_decisions",
+    "list_documents",
     "list_projects",
     "list_requests",
     "list_tickets",
     "message_subagent",
     "move_ticket",
+    "propose_decision",
+    "read_decision",
+    "read_document",
+    "read_spec_page",
     "reject_ticket",
+    "replace_decision",
     "report_progress",
     "resolve_conflict",
     "resume_ticket",
+    "search_spec",
     "send_message",
     "set_board",
     "split_ticket",
@@ -56,6 +66,7 @@ pub(super) const EXPOSED: &[&str] = &[
     "stop_background_work",
     "update_ticket",
     "wait_ticket",
+    "write_spec_page",
 ];
 
 /// Those of `EXPOSED` that only read.
@@ -63,6 +74,7 @@ pub(super) const READING: &[&str] = &[
     "get_agent_summary",
     "get_background_output",
     "get_board",
+    "get_spec_tree",
     "get_ticket",
     "get_ticket_file",
     "get_ticket_image",
@@ -70,14 +82,21 @@ pub(super) const READING: &[&str] = &[
     "get_workflow",
     "list_agents",
     "list_background_work",
+    "list_decisions",
+    "list_documents",
     "list_projects",
     "list_requests",
     "list_tickets",
+    "read_decision",
+    "read_document",
+    "read_spec_page",
+    "search_spec",
     "wait_ticket",
 ];
 
 /// Those that act, under the guardrails of the window and the autopilot.
 pub(super) const ACTING: &[&str] = &[
+    "add_document",
     "answer_permission",
     "answer_question",
     "approve_ticket",
@@ -87,7 +106,9 @@ pub(super) const ACTING: &[&str] = &[
     "dismiss_block",
     "message_subagent",
     "move_ticket",
+    "propose_decision",
     "reject_ticket",
+    "replace_decision",
     "resolve_conflict",
     "resume_ticket",
     "send_message",
@@ -96,6 +117,7 @@ pub(super) const ACTING: &[&str] = &[
     "stop_agent",
     "stop_background_work",
     "update_ticket",
+    "write_spec_page",
 ];
 
 /// Those that answer an agent's request for the user.

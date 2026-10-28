@@ -1540,6 +1540,7 @@ pub(crate) fn blank_project(path: &str) -> Project {
         remote_control: false,
         engine: None,
         private: false,
+        docs_branch: String::new(),
         shared: Default::default(),
         shared_on_limit: false,
         workflow_fixes: Vec::new(),
@@ -7769,8 +7770,10 @@ impl<R: Runtime> Core<R> {
         let worktree_dir = p.worktree_dir.trim().to_string();
         let agent_prefix = p.agent_branch_prefix.trim().to_string();
         let ticket_prefix = p.ticket_branch_prefix.trim().to_string();
+        let docs_branch = p.docs_branch.trim().to_string();
         let path = self.project(&p.id)?.path;
         if let Some(why) = paths::worktrees_root_problem(&path, &worktree_dir)
+            .or_else(|| crate::docsbranch::branch_problem(&docs_branch))
             .or_else(|| git::branch_prefix_problem(&agent_prefix))
             .or_else(|| git::branch_prefix_problem(&ticket_prefix))
         {
@@ -7794,6 +7797,7 @@ impl<R: Runtime> Core<R> {
             .ok_or_else(project_not_found)?;
         let before = cur.clone();
         let account_changed = cur.account != account;
+        cur.docs_branch = docs_branch;
         let remote_changed = cur.remote_control != p.remote_control;
         let renamed = cur.name != p.name;
         cur.remote_control = p.remote_control;
