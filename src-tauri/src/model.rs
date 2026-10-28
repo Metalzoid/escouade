@@ -1495,6 +1495,8 @@ pub enum EngineId {
     Opencode,
     /// Mistral Vibe (ESC-266).
     Vibe,
+    /// Antigravity CLI (ESC-270).
+    Agy,
     /// The minimal fake engine of the conformance bench, run by the core in the tests of the
     /// handover (`engine/minimal/`): a second harness beside Claude Code's fake.
     #[cfg(test)]
@@ -1511,6 +1513,7 @@ impl EngineId {
             EngineId::Cursor => "cursor",
             EngineId::Opencode => "opencode",
             EngineId::Vibe => "vibe",
+            EngineId::Agy => "agy",
             #[cfg(test)]
             EngineId::Bench => "bench",
         }
@@ -3362,6 +3365,7 @@ mod tests {
             (EngineId::Cursor, "cursor"),
             (EngineId::Opencode, "opencode"),
             (EngineId::Vibe, "vibe"),
+            (EngineId::Agy, "agy"),
         ] {
             assert_eq!(engine.as_str(), id);
             let v = serde_json::to_value(AgentMeta {

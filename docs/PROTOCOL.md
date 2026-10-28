@@ -1,6 +1,6 @@
 # Protocoles des harness — notes d'implémentation
 
-Escouade fait tourner ses agents sur six harness : Claude Code, Codex, OpenCode, GitHub Copilot CLI, Cursor CLI et Mistral Vibe. Ce document dit, pour chacun, ce qu'Escouade lance, ce qu'elle envoie et ce qu'elle lit, d'après des essais réels. Ce que l'utilisateur en voit est dans docs/SPEC.md, « Harness » ; l'interface commune du code, dans docs/ENGINES.md.
+Escouade fait tourner ses agents sur sept harness : Claude Code, Codex, OpenCode, GitHub Copilot CLI, Cursor CLI, Mistral Vibe et Antigravity CLI. Ce document dit, pour chacun, ce qu'Escouade lance, ce qu'elle envoie et ce qu'elle lit, d'après des essais réels. Ce que l'utilisateur en voit est dans docs/SPEC.md, « Harness » ; l'interface commune du code, dans docs/ENGINES.md.
 
 | Sujet | Claude Code | Codex | OpenCode | Copilot CLI |
 |---|---|---|---|---|
@@ -958,6 +958,41 @@ Essayée pour de vrai avec la 3.0.3 (`VIBE_HOME` jetable, interface pilotée dan
 ### Ce qui n'est pas pris en charge
 
 Le mode Auto (`smart-approve`, absent d'une session sur deux dans les essais), le quota et le coût (ESC-267), plusieurs comptes (ESC-267), les PDF joints, « Reprendre sur <compte> », les commandes `/` dans le Composer (`/compact` part comme un message, que l'ACP de Vibe lit), Remote Control, les tâches de fond, la déclaration du serveur MCP dans la config de l'utilisateur.
+
+## Antigravity CLI (`agy -p`, stream-json, ESC-270)
+
+Après les essais réels d'ESC-269 (docs/TODO-1.8.md, point 0, « Antigravity CLI » ; flux dans `tests/fixtures/agy/`). Code : `src-tauri/src/engine/agy/` (lancement, process, règles) et `src-tauri/src/agent/agy.rs` (traduction : les événements d'`agy` mis dans la forme d'ACP, puis la traduction de Cursor). Testé avec la 1.4.9. Pas d'ACP.
+
+### Lancement
+
+- **Programme** : celui du réglage, sinon `agy` du `PATH`, sinon `%LOCALAPPDATA%\agy\bin\agy.exe` (Windows) ou `~/.local/bin/agy`, où le posent ses installeurs. `agy --version` rend `1.4.9`.
+- **Arguments** : `-p= --input-format stream-json --output-format stream-json` (`-p` prend une valeur : vide), `--model <id>` (et `--effort low|medium|high` pour un Gemini nommé sans son effort, `gemini-3.8-flash`), `--mode plan|accept-edits` (Plan, Édits auto ; rien pour Demander et Bypass), `--conversation <id>` pour reprendre. Jamais `--dangerously-skip-permissions` ni un jeton.
+- **Environnement** : `USERPROFILE` et `HOME` vers le dossier de l'agent (`<données>/agent-homes/<agent>`, donné par le cœur dans `ESCOUADE_AGY_HOME`) : `agy` y écrit tout son `.gemini` (règles, conversations, transcript, journaux), le compte restant celui du trousseau (essayé en ESC-269 et ESC-270). Comme ce `HOME` vaut aussi pour ses commandes, `GIT_CONFIG_GLOBAL`, `CARGO_HOME` et `RUSTUP_HOME` gardent ceux de l'utilisateur s'ils existent. `GEMINI_API_KEY` et `GOOGLE_API_KEY` de la machine ne lui sont pas passés (ils prendraient la place du compte) ; `AGY_CLI_DISABLE_AUTO_UPDATE=1`.
+- **Fichiers écrits par Escouade** dans `<dossier>/.gemini/` : `antigravity-cli/settings.json`, ses `permissions` (`allow`, `deny`, `ask` ; le reste du fichier gardé) : les règles du mode (Demander : `write_file(<dossier de l'agent>)` ; Édits auto : `command(git add)`, `command(git commit)` ; Bypass : `command(*)`, `write_file(*)`, `read_file(*)`, `mcp(*)`, `read_url(*)`, `execute_url(*)`), `read_file(<dossier>)` des fichiers joints, les « Toujours » de l'utilisateur (gardés dans `escouade-always.json`), en `deny` les chemins des projets privés (`read_file(<chemin>)`, qui refuse aussi l'écriture : règle d'`agy`, `deny` passant avant tout) et, pour une discussion de l'onglet Docs, `write_file(*)` et `command(*)` ; `config/mcp_config.json`, l'entrée `escouade` (`serverUrl`, `headers.Authorization: Bearer <jeton>` en clair : `agy` ne développe aucune variable dans ce fichier), retirée quand le process s'arrête.
+- **Arrêt** : son entrée fermée, il finit le tour en cours et sort, tué 3 s après sinon, avec tout son arbre (Job).
+
+### Hôte → CLI
+
+- Un message par ligne : `{"event":"user","message":{"content":"<texte>"}}` ; les fichiers texte joints dans le texte (images et PDF refusés). Les consignes ajoutées, et celle des questions (« finis ton tour après `ask_question` »), dans un bloc `<instructions>` devant le premier message d'une conversation neuve. Un message envoyé pendant un tour attend sa fin dans le process.
+- **Pas de message d'arrêt** (`cancel` et `interrupt` sont ignorés) : « Stop » tue le programme, le tour finit `cancelled`, et le message suivant relance `agy --conversation <id>` (le tour tué reste dans la conversation sans réponse).
+- **Modèle, effort, mode** : pris au lancement seulement ; changés, le programme est relancé sur la conversation avant le message suivant. Les règles du mode sont écrites tout de suite ; `agy` les relit à chaud, mais un temps après (essayé : un message envoyé aussitôt après une règle écrite a été refusé à nouveau) : après une permission accordée, le programme est relancé sur la conversation avant le message qui continue le tour.
+
+### CLI → hôte
+
+- `init` (au démarrage, avant tout message) : `conversation_id` (la session de l'agent). Une conversation à reprendre introuvable fait sortir `agy` : une neuve est ouverte, dite dans la conversation.
+- `step_update` : `agent_response` (`text_delta` en `ACTIVE`, le `DONE` avec `usage`), `tool` et `subagent` (`ACTIVE` puis `DONE` ou `ERROR`, `tool_name`, `tool_info.parameters|output|error`), `user_input`, `unknown` (une question sautée). Le process complète chaque étape par le transcript de la conversation (`.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript_full.jsonl`, écrit avant l'événement) : les arguments entiers d'un appel (le texte d'une écriture, `Target` et `Replacement` d'une modification, les questions d'`ask_question`), la réflexion d'une étape sans texte (`thinking`), et l'échec d'une écriture refusée que l'événement dit `DONE`.
+- Traduction (forme d'ACP, puis celle de Cursor) : `run_command` → `Bash` (sa sortie et son code), `write_file` → `Write` avec son diff, `edit_file`/`replace_file_content` → `Edit` avec son diff, `read_file`/`view_file` → `Read`, `grep_search`/`find_by_name` → `Grep`, `read_url_content` → `WebFetch`, `call_mcp_tool` → `mcp__<serveur>__<outil>`, `invoke_subagent` → `Task` (au bandeau Plan), un autre outil sous son nom. Chaque appel a pour id `agy-<8 premiers caractères de la conversation>-<étape>`.
+- `result` : la fin du tour d'`agy` (`status`, `error`, `usage` cumulé, `denied_actions`). Le process en fait la fin du tour d'Escouade, sauf :
+  - **permissions** : chaque appel refusé faute de règle (étape en `ERROR`, « permission check failed ») devient une carte (`session/request_permission` : « Autoriser », « Pour cet agent », « Refuser »), la règle qui le permet (`command(<commande>)`, `write_file(<chemin>)`, `read_file(<chemin>)`, `mcp(<serveur>/<outil>)`, `read_url(<hôte>)`) écrite si elle est accordée (« Autoriser » : pour le tour qui suit seulement) ; un appel qui nomme un chemin d'un projet privé n'a pas de carte ;
+  - **questions** : un `ask_question` (sauté d'office en `-p`) devient une carte de question ;
+  - **plan** : en Plan, le fichier `plan_*.md` que le tour a écrit dans la conversation devient « Plan à approuver » (`escouade/plan`) ; approuvé, le mode passe à Demander (ou Édits auto) et « The plan is approved: carry it out now. » continue le tour ; renvoyé avec un mot, le mot part en Plan ; sans mot, le tour finit.
+
+  Une fois tout répondu, un message (« The user allowed … : do it again now, then go on. », les refus, « The user answered your questions: … ») continue **le même tour d'Escouade** ; sans rien d'accordé ni de répondu, le tour finit (le mot d'un refus part ensuite en message).
+- **Tokens** : ceux des `agent_response` du tour (entrée, sortie et réflexion, cache) ; aucun coût. Une erreur (`status: ERROR`) finit le tour en erreur avec son message.
+
+### Ce qui n'est pas pris en charge
+
+Le mode Auto, le quota (son `/usage` est dans son interface), le coût, les images et PDF joints, « Dupliquer » (pas de copie de conversation), « Reprendre sur <compte> », plusieurs comptes (ESC-271), les commandes `/`, Remote Control (`agy remote-control` jamais lancé), les tâches de fond, la vue terminal (ESC-272), la déclaration du serveur MCP dans la config de l'utilisateur, la réflexion d'une réponse écrite (elle n'arrive qu'après son texte). Ses commandes ne sont pas gardées par la clôture d'un projet privé.
 
 ## Serveur MCP d'Escouade
 

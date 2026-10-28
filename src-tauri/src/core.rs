@@ -158,6 +158,7 @@ fn reads_account_models(engine: EngineId) -> bool {
             | EngineId::Cursor
             | EngineId::Opencode
             | EngineId::Vibe
+            | EngineId::Agy
     )
 }
 

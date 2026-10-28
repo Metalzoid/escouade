@@ -7,6 +7,7 @@
 //! agent's conversation (`Engine::translate`). The rest of the backend speaks to an engine through
 //! these two traits only.
 
+pub(crate) mod agy;
 mod claude;
 pub(crate) mod codex;
 pub(crate) mod copilot;
@@ -28,6 +29,7 @@ pub(crate) mod minimal;
 #[cfg(test)]
 mod userconfig_tests;
 
+pub use agy::AGY;
 pub(crate) use claude::terminal as claude_terminal;
 pub use claude::{
     catalog as claude_catalog, read_models as claude_read_models, told_auto as claude_told_auto,
@@ -103,7 +105,7 @@ pub fn of(meta: &AgentMeta) -> &'static dyn Engine {
     by_id(meta.engine)
 }
 
-/// The engine `id` names: the six harnesses are written.
+/// The engine `id` names: the seven harnesses are written.
 pub fn by_id(id: EngineId) -> &'static dyn Engine {
     match id {
         EngineId::Codex => &CODEX,
@@ -111,6 +113,7 @@ pub fn by_id(id: EngineId) -> &'static dyn Engine {
         EngineId::Copilot => &COPILOT,
         EngineId::Cursor => &CURSOR,
         EngineId::Vibe => &VIBE,
+        EngineId::Agy => &AGY,
         EngineId::Claude => &CLAUDE,
         #[cfg(test)]
         EngineId::Bench => &minimal::MINIMAL,
@@ -140,6 +143,7 @@ pub fn by_name(id: EngineId) -> &'static str {
         EngineId::Cursor => "Cursor CLI",
         EngineId::Opencode => "OpenCode",
         EngineId::Vibe => "Mistral Vibe",
+        EngineId::Agy => "Antigravity CLI",
         #[cfg(test)]
         EngineId::Bench => "Minimal",
     }

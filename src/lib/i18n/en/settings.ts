@@ -318,6 +318,7 @@ export default defineZone('settings', {
       cursor:
         'Escouade refuses right away its commands that name these paths, and what it submits about them, even in Bypass mode. Its reads and writes ask nothing, even outside the agent’s folder: Cursor doesn’t pass them through Escouade, which therefore can’t guard them.',
       vibe: 'Refused to its read and write tools by the agent’s config, and Escouade refuses right away what it asks about them. In Bypass mode, Vibe stays in its ask agent so that these refusals hold. A command of its list (cat, ls…) that reads them without asking isn’t guarded.',
+      agy: 'Refused to read (and so to write) by the agent’s rules, which its Bypass mode doesn’t lift, and Escouade refuses right away what it asks about them. Its commands that would read them aren’t guarded.',
     },
     fenceNote:
       'A barrier for every harness would take a system account per project: Escouade doesn’t offer it, as the harnesses and their accounts wouldn’t follow. An agent already running takes this setting before its next turn (its process starts again, its conversation stays); a terminal view, at its next launch.',

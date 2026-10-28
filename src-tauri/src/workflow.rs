@@ -1761,6 +1761,7 @@ fn engine_slug(e: EngineId) -> &'static str {
         EngineId::Cursor => "cursor",
         EngineId::Opencode => "opencode",
         EngineId::Vibe => "vibe",
+        EngineId::Agy => "agy",
         #[cfg(test)]
         EngineId::Bench => "bench",
     }

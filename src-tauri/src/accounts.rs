@@ -111,6 +111,15 @@ pub fn store(engine: EngineId) -> Store {
             dirs: &[],
             login: &["--setup"],
         },
+        // Antigravity CLI: its sign-in is the machine's (the system's keychain, not moved by its
+        // home), and each agent has a home of its own (`Engine::agent_home_var`).
+        EngineId::Agy => Store {
+            home: ".gemini",
+            var: crate::engine::agy::HOME_VAR,
+            files: &[],
+            dirs: &[],
+            login: &[],
+        },
         // One account in 1.8: OpenCode's own config (ESC-45), its providers connected by it.
         EngineId::Opencode => Store {
             home: ".config/opencode",
@@ -2369,7 +2378,8 @@ impl<R: Runtime> Core<R> {
         // OpenCode signs in to no account of its own: its providers are its config's. Mistral Vibe's
         // Principal goes by the key `vibe --setup` kept in the keychain, never read: signed in as
         // far as can be told.
-        if account.engine == EngineId::Opencode
+        // Antigravity CLI the same: its Google account is in the keychain, never read.
+        if matches!(account.engine, EngineId::Opencode | EngineId::Agy)
             || (account.engine == EngineId::Vibe && !by_key(account))
         {
             let dir = config_dir(account, &settings);

@@ -1,0 +1,61 @@
+{
+  "about": "Outil MCP (call_mcp_tool) d’un serveur déclaré et permis : lu sous le nom mcp__proj__esc_ping, sa réponse « pong-from-mcp ».",
+  "agent": {
+    "cwd": "C:\tmpesc269work",
+    "engine": "agy",
+    "mode": "default",
+    "model": "gemini-3.8-flash"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": null,
+    "sessionId": "0ec1e99d-dd76-4621-95a2-65fe7618e597",
+    "status": "done",
+    "tokens": 22185,
+    "touchedFiles": []
+  },
+  "flux": "../../agy/08-mcp-allowed-project-config.jsonl",
+  "items": [
+    {
+      "input": {
+        "file_path": "C:\\tmp\\esc269\\home1\\.gemini\\antigravity-cli\\mcp\\proj\\esc_ping.json"
+      },
+      "kind": "tool",
+      "name": "Read",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": "1 lines, 120 bytes"
+      },
+      "status": "ok"
+    },
+    {
+      "input": {},
+      "kind": "tool",
+      "name": "mcp__proj__esc_ping",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": "pong-from-mcp"
+      },
+      "status": "ok"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "La réponse renvoyée par l'outil MCP `esc_ping` du serveur `proj` est :\n\n> pong-from-mcp"
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "agy",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 22185
+    }
+  ]
+}

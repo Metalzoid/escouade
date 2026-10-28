@@ -191,7 +191,7 @@ C’est Escouade qui lit les fichiers, jamais la fenêtre. Une image est reconnu
 
 Quand l’agent envoie des fichiers de lui-même, sans que tu le lui aies demandé, tu reçois une notification, comme pour une question. Pendant l’envoi, sa carte dans la liste dit par exemple « A envoyé 2 images et 1 fichier ».
 
-Les autres harness (Codex, Copilot CLI, OpenCode, Cursor CLI, Mistral Vibe) n’ont pas d’outil pour envoyer un fichier à l’utilisateur : leurs images passent par le Markdown de leurs messages, ci-dessous.
+Les autres harness (Codex, Copilot CLI, OpenCode, Cursor CLI, Mistral Vibe, Antigravity CLI) n’ont pas d’outil pour envoyer un fichier à l’utilisateur : leurs images passent par le Markdown de leurs messages, ci-dessous.
 
 ### Sous-agents, tâches de fond et autres sessions
 

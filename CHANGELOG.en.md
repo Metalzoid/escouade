@@ -8,6 +8,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
+- Antigravity CLI, Google’s agent, becomes a seventh harness: its agents converse in Escouade with its models, its efforts and its Plan mode, and what it refuses during a turn is asked of you at the end of the turn, then taken up again.
 - Mistral Vibe becomes a sixth harness: its agents converse, ask their permissions and their questions in Escouade, with its models, its modes and a Plan mode played by Escouade.
 - Mistral Vibe has several accounts, each by its Mistral API key, and shows what each turn costs, in the conversation, the status bar and the statistics; at its rate limit, the agent goes on by itself a minute later.
 - The “Mistral Vibe view” opens Vibe’s interface in a terminal, on the agent’s session: Escouade follows its messages, tools and turn ends, gives it its MCP server, and going back to the conversation resumes the same session.

@@ -187,12 +187,9 @@ impl AgentRt {
             let resumed = self.meta.session_id.is_some();
             self.reset_plan(fx);
             if resumed && start == "new" {
-                // Mistral Vibe, whose translation this is too (`agent/vibe.rs`), says its own name.
-                let who = if self.meta.engine == crate::model::EngineId::Vibe {
-                    "Vibe"
-                } else {
-                    "Cursor"
-                };
+                // Mistral Vibe and Antigravity CLI, whose translation this is too (`agent/vibe.rs`,
+                // `agent/agy.rs`), say their own name.
+                let who = crate::engine::of(&self.meta).speaker();
                 self.notice(
                     "warn",
                     tr!(
@@ -800,9 +797,10 @@ impl AgentRt {
             self.cu_close(&who, fx);
         }
         let interrupted = std::mem::take(&mut self.interrupted);
-        // Cursor's refusals are its texts: none for Mistral Vibe, whose errors are ACP's.
+        // Cursor's refusals are its texts: none for Mistral Vibe nor Antigravity CLI, whose errors
+        // are told apart.
         let refused = crate::engine::cursor::refusal(&self.turn_text)
-            .filter(|_| !interrupted && self.meta.engine != crate::model::EngineId::Vibe);
+            .filter(|_| !interrupted && self.meta.engine == crate::model::EngineId::Cursor);
         let mut error = std::mem::take(&mut self.cursor.error).filter(|_| !interrupted);
         let mut limited = false;
         // Mistral Vibe's rate limit: « limité », its resume planned.

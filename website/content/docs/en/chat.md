@@ -191,7 +191,7 @@ Escouade reads the files, never the window. An image is recognised by its conten
 
 When the agent sends files on its own, without you asking, you get a notification, as for a question. While it sends them, its card in the list says for example “Sent 2 images and 1 file”.
 
-The other harnesses (Codex, Copilot CLI, OpenCode, Cursor CLI, Mistral Vibe) have no tool to send a file to the user: their images go through the Markdown of their messages, below.
+The other harnesses (Codex, Copilot CLI, OpenCode, Cursor CLI, Mistral Vibe, Antigravity CLI) have no tool to send a file to the user: their images go through the Markdown of their messages, below.
 
 ### Subagents, background tasks, and other sessions
 

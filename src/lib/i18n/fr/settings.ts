@@ -369,6 +369,7 @@ export default {
       cursor:
         'Escouade refuse d’office ses commandes qui nomment ces chemins, et ce qu’il soumet sur eux, même en mode Bypass. Ses lectures et ses écritures ne demandent rien, même hors du dossier de l’agent : Cursor ne les fait pas passer par Escouade, qui ne peut donc pas les garder.',
       vibe: 'Refusés à ses outils de lecture et d’écriture par la config de l’agent, et Escouade refuse d’office ce qu’il demande sur eux. En mode Bypass, Vibe reste dans son agent ask pour que ces refus tiennent. Une commande de sa liste (cat, ls…) qui les lit sans demander n’est pas gardée.',
+      agy: 'Refusés à la lecture (et donc à l’écriture) par les règles de l’agent, que son mode Bypass ne lève pas, et Escouade refuse d’office ce qu’il demande sur eux. Ses commandes qui les liraient ne sont pas gardées.',
     },
     fenceNote:
       'Une barrière pour tous les harness demanderait un compte système par projet : Escouade ne le propose pas, les harness et leurs comptes n’y suivraient pas. Un agent déjà lancé prend ce réglage avant son prochain tour (son process repart, sa conversation reste) ; une vue terminal, à son prochain lancement.',

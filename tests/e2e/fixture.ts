@@ -22,6 +22,8 @@ const FAKE_COPILOT = path.join(ROOT, 'tests', 'fixtures', 'fake-copilot.cmd');
 const FAKE_CURSOR = path.join(ROOT, 'tests', 'fixtures', 'fake-cursor.cmd');
 /** The fake `vibe-acp` of Mistral Vibe (tests/fixtures/fake-vibe.mjs), for a test that runs agents on Mistral Vibe. */
 const FAKE_VIBE = path.join(ROOT, 'tests', 'fixtures', 'fake-vibe.cmd');
+/** The fake `agy` of Antigravity CLI (tests/fixtures/fake-agy.mjs), for a test that runs agents on Antigravity CLI. */
+const FAKE_AGY = path.join(ROOT, 'tests', 'fixtures', 'fake-agy.cmd');
 
 export interface App {
   /** The window of the app: a new one after each `restart()` (read `app.page` again, do not keep the old one). */
@@ -273,6 +275,7 @@ const FAKE_OF: Record<string, string> = {
   copilot: 'ESCOUADE_COPILOT',
   cursor: 'ESCOUADE_CURSOR',
   vibe: 'ESCOUADE_VIBE',
+  agy: 'ESCOUADE_AGY',
 };
 
 /**
@@ -401,6 +404,10 @@ export const test = base.extend<{
       // VIBE_HOME in the app's data, never the user's ~/.vibe.
       ESCOUADE_VIBE: 'none',
       FAKE_VIBE_LOG: path.join(root, 'fake-vibe.jsonl'),
+      // The same for Antigravity CLI (`appEnv: { ESCOUADE_AGY: FAKE_AGY }`): each agent has its own home in the app's data,
+      // never the user's ~/.gemini.
+      ESCOUADE_AGY: 'none',
+      FAKE_AGY_LOG: path.join(root, 'fake-agy.jsonl'),
       ...appEnv,
     };
     // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
@@ -556,4 +563,4 @@ export async function send(page: Page, text: string) {
   await box.press('Enter');
 }
 
-export { expect, FAKE, FAKE_CODEX, FAKE_COPILOT, FAKE_CURSOR, FAKE_OPENCODE, FAKE_VIBE };
+export { expect, FAKE, FAKE_AGY, FAKE_CODEX, FAKE_COPILOT, FAKE_CURSOR, FAKE_OPENCODE, FAKE_VIBE };

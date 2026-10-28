@@ -1,9 +1,9 @@
 # Les harness
 
-Un harness est le programme qui fait tourner un agent : Claude Code, Codex, OpenCode, GitHub Copilot CLI, Cursor CLI ou Mistral Vibe. Cette page les compare, puis dit pour chacun son installation, son compte, ses modèles, ses modes et ce qui le protège, son coût et son quota, sa vue terminal et ce qu’il ne fait pas.
+Un harness est le programme qui fait tourner un agent : Claude Code, Codex, OpenCode, GitHub Copilot CLI, Cursor CLI, Mistral Vibe ou Antigravity CLI. Cette page les compare, puis dit pour chacun son installation, son compte, ses modèles et ses modes, son coût, sa vue terminal et ce qu’il ne fait pas.
 
 > [!NOTE]
-> Codex, OpenCode et Copilot CLI sont là depuis Escouade 1.8, Cursor CLI depuis la 2.0.1, Mistral Vibe depuis la version qui suit la 2.0.5 ; Claude Code depuis le début.
+> Codex, OpenCode et Copilot CLI sont là depuis Escouade 1.8, Cursor CLI depuis la 2.0.1, Mistral Vibe et Antigravity CLI depuis la version qui suit la 2.0.5 ; Claude Code depuis le début.
 
 ## Choisir un harness
 
@@ -24,21 +24,21 @@ Quel que soit le harness, l’agent a la même conversation : la réponse et le 
 
 ## Comparaison
 
-| | Claude Code | Codex | OpenCode | Copilot CLI | Cursor CLI | Mistral Vibe |
-|---|---|---|---|---|---| --- |
-| Installation | script de Claude Code | `npm install -g @openai/codex` | `npm install -g opencode-ai` | `npm install -g @github/copilot` | script de Cursor | `uv tool install mistral-vibe` |
-| Testé avec | 2.1.283 à 2.1.301 | 0.163.0 | 1.19.3 | 1.0.98 | 2026.10.22 | 3.0.3 |
-| Compte | abonnement Claude ou clé API | compte ChatGPT | les fournisseurs connectés à OpenCode, modèles locaux compris | compte GitHub avec Copilot, Free compris | compte Cursor (`agent login`, ou une clé d’API), Free compris | clé d’API Mistral (`vibe --setup`) |
-| Plusieurs comptes | oui | oui | non | oui | oui, par clé d’API | oui, par clé d’API |
-| Modèles | ceux que Claude Code liste pour chaque compte | ceux que Codex liste pour ton compte | ceux de tes fournisseurs, avec recherche et favoris | ceux que Copilot liste, avec leur multiplicateur | ceux de ton compte, Auto en tête | ceux de sa session |
-| Modes | les cinq | les cinq | quatre (pas d’Auto) | les cinq | quatre (pas d’Auto) | quatre (pas d’Auto ; Plan joué par Escouade) |
-| Ce qui protège | ses permissions | son bac à sable | ses règles de permission | les règles d’Escouade | ses permissions, pour ses commandes | ses permissions ; les règles d’Escouade |
-| Message pendant un tour | attend la fin du tour | entre dans le tour | attend la fin du tour | entre dans le tour | attend la fin du tour | attend la fin du tour |
-| Coût | exact | estimé | exact (0 en local) | exact, en crédits d’IA | non donné | exact |
-| Quota | fenêtres 5 h et 7 jours | fenêtres 5 h et 7 jours (30 jours en offre gratuite) | aucun : budget par jour | crédits du mois | lien vers son tableau de bord | aucun : budget par jour, lien vers la console de Mistral |
-| Vue terminal | « Vue Claude Code » | « Vue Codex » | « Vue OpenCode » | « Vue Copilot CLI » | « Vue Cursor CLI », suivi limité | « Vue Mistral Vibe » |
-| PDF joints | oui | non | non | non | non | non |
-| Remote control, tâches de fond | oui | non | non | non | non | non |
+| | Claude Code | Codex | OpenCode | Copilot CLI | Cursor CLI | Mistral Vibe | Antigravity CLI |
+|---|---|---|---|---|---| --- | --- |
+| Installation | script de Claude Code | `npm install -g @openai/codex` | `npm install -g opencode-ai` | `npm install -g @github/copilot` | script de Cursor | `uv tool install mistral-vibe` | script d’Antigravity |
+| Testé avec | 2.1.283 à 2.1.301 | 0.163.0 | 1.19.3 | 1.0.98 | 2026.10.22 | 3.0.3 | 1.4.9 |
+| Compte | abonnement Claude ou clé API | compte ChatGPT | les fournisseurs connectés à OpenCode, modèles locaux compris | compte GitHub avec Copilot, Free compris | compte Cursor (`agent login`, ou une clé d’API), Free compris | clé d’API Mistral (`vibe --setup`) | compte Google (connexion de son interface) |
+| Plusieurs comptes | oui | oui | non | oui | oui, par clé d’API | oui, par clé d’API | non |
+| Modèles | ceux que Claude Code liste pour chaque compte | ceux que Codex liste pour ton compte | ceux de tes fournisseurs, avec recherche et favoris | ceux que Copilot liste, avec leur multiplicateur | ceux de ton compte, Auto en tête | ceux de sa session | ceux qu’`agy models` liste, l’effort de Gemini à part |
+| Modes | les cinq | les cinq | quatre (pas d’Auto) | les cinq | quatre (pas d’Auto) | quatre (pas d’Auto ; Plan joué par Escouade) | quatre (pas d’Auto) |
+| Ce qui protège | ses permissions | son bac à sable | ses règles de permission | les règles d’Escouade | ses permissions, pour ses commandes | ses permissions ; les règles d’Escouade | ses règles, écrites par Escouade ; demandes une fois le tour fini |
+| Message pendant un tour | attend la fin du tour | entre dans le tour | attend la fin du tour | entre dans le tour | attend la fin du tour | attend la fin du tour | attend la fin du tour |
+| Coût | exact | estimé | exact (0 en local) | exact, en crédits d’IA | non donné | exact | non donné (tokens) |
+| Quota | fenêtres 5 h et 7 jours | fenêtres 5 h et 7 jours (30 jours en offre gratuite) | aucun : budget par jour | crédits du mois | lien vers son tableau de bord | aucun : budget par jour, lien vers la console de Mistral | non lu |
+| Vue terminal | « Vue Claude Code » | « Vue Codex » | « Vue OpenCode » | « Vue Copilot CLI » | « Vue Cursor CLI », suivi limité | « Vue Mistral Vibe » | pas encore |
+| PDF joints | oui | non | non | non | non | non | non |
+| Remote control, tâches de fond | oui | non | non | non | non | non | non |
 
 ## Claude Code
 
@@ -197,10 +197,37 @@ Pour un projet privé, les chemins des autres projets sont refusés à ses outil
 
 Vibe donne le coût et les tokens de chaque tour : la conversation, la carte de l’agent, la barre d’état et les statistiques les montrent, comme pour OpenCode. Il ne dit pas de quota (une clé d’API Mistral est facturée à l’usage) : le coût du jour et un « Budget par jour ($) » en tiennent lieu, et « Usage sur admin.mistral.ai », dans Réglages › Comptes et dans le panneau des quotas, ouvre la console de Mistral. Sa limite de débit (« Rate limit exceeded », après cinq minutes de réessais de Vibe) arrête le tour sur une carte ambre ; l’agent reprend seul une minute plus tard, ou, pour un agent de ticket, continue sur un autre compte Vibe si « Reprendre sur un autre compte un agent de ticket arrêté par la limite » est allumé. Les textes rédigés, quand « Modèle des textes rédigés » est « Mistral Vibe », passent par `vibe -p`, sans aucun outil, en un tour et 0,05 $ au plus. Pas de mode Auto, de PDF joints, de commandes `/` dans Escouade (`/compact` part comme un message), ni de remote control ni de tâches de fond. Il reçoit le serveur MCP d’Escouade par sa session ; l’interrupteur ne le déclare pas encore dans la config de Vibe. La « Vue Mistral Vibe » fait tourner l’agent dans l’interface de Vibe, sur la même session (voir [la vue terminal](claude-code-view#avec-mistral-vibe)).
 
+## Antigravity CLI
+
+### Installation et compte
+
+Installe Antigravity CLI avec son script (`irm https://antigravity.google/cli/install.ps1 | iex` sous Windows, `curl -fsSL https://antigravity.google/cli/install.sh | bash` ailleurs), puis lance `agy` une fois dans un terminal pour te connecter à ton compte Google. Escouade trouve `agy` dans le `PATH`, ou là où son script le pose. Chaque agent a son propre dossier, retiré avec lui, qui tient lieu de dossier personnel à `agy` : ses règles, ses conversations et le serveur MCP d’Escouade y sont gardés, jamais dans ton `~/.gemini`, que Gemini CLI partage. Ta connexion reste celle de la machine ; une clé `GEMINI_API_KEY` de ta machine ne lui est pas passée. Ses mises à jour sont coupées.
+
+### Modèles et modes
+
+Le menu « Modèle » liste les modèles de ton compte (`agy models`) ; pour Gemini, l’effort (Bas, Moyen, Élevé) est son menu « Effort ». Un changement de modèle, d’effort ou de mode prend effet au message suivant : Escouade relance `agy` sur la même conversation.
+
+Antigravity ne demande rien pendant un tour quand Escouade le pilote : ce que ses règles ne permettent pas est refusé sur le moment. Escouade te le demande une fois le tour fini (« Autoriser », « Pour cet agent », « Refuser »), écrit la règle, puis l’agent reprend et le refait, dans le même tour. Ses questions arrivent de même, à la fin du tour, et ta réponse lui est envoyée. Il lit sans demander. Pas de bac à sable.
+
+| Mode | Chez Antigravity CLI |
+|---|---|
+| Demander | Ses écritures passent dans le dossier de l’agent ; ses commandes, ses écritures ailleurs et les outils MCP sont demandés à la fin du tour. |
+| Édits auto | Son mode `accept-edits` ; `git add` et `git commit` passent aussi. |
+| Plan | Son mode `plan` : il étudie et écrit un plan sans rien changer, qui arrive en plan à approuver ; approuvé, Antigravity le met en œuvre. |
+| Bypass | Les règles d’Escouade lui permettent tout, sans rien demander. |
+
+« Pour cet agent » garde la règle pour lui seul et ses reprises. Ses sous-agents passent dans la conversation et le bandeau « Plan ». Un message envoyé pendant un tour attend sa fin. « Stop » arrête le tour ; le message suivant reprend la conversation.
+
+Pour un projet privé, la lecture des chemins des autres projets lui est refusée par ses règles (ce qui refuse aussi l’écriture), même en Bypass, et ce qu’il demande sur eux est refusé d’office. Ses commandes qui les liraient ne sont pas gardées.
+
+### Coût, quota et ce qu’Antigravity ne fait pas
+
+Antigravity donne les tokens de chaque tour, pas leur coût ni son quota : son `/usage` n’est que dans son interface ; « Usage sur antigravity.google », dans Réglages › Comptes et le panneau des quotas, ouvre la page de ses forfaits. Pas encore de vue terminal ni de plusieurs comptes. Pas de mode Auto, d’images ni de PDF joints, de « Dupliquer la conversation », de commandes `/` dans Escouade, ni de remote control ni de tâches de fond. Il reçoit le serveur MCP d’Escouade par la config de son dossier ; l’interrupteur ne le déclare pas encore dans la tienne.
+
 ## Le serveur MCP
 
 Quel que soit leur harness, les agents d’Escouade reçoivent son serveur MCP, chacun avec son propre jeton, quand « Les agents peuvent piloter Escouade » est allumé. Le même interrupteur le déclare dans chaque harness installé, pour que Claude Code, Codex, OpenCode ou Copilot CLI lancés hors d’Escouade, dans un terminal ou leur app, pilotent Escouade : voir [le serveur MCP](mcp).
 
 ## Textes rédigés
 
-Le nom d’un nouvel agent, les messages de commit et les descriptions de pull request proposés sont écrits par le harness de Réglages › Application › « Modèle des textes rédigés » : « Claude Haiku », « Codex (GPT-6-Luna) », un modèle d’OpenCode , « Copilot (GPT-5 mini) » ou « Cursor (Auto) », parmi les harness installés (voir [les textes rédigés](settings-application#textes-rediges)).
+Le nom d’un nouvel agent, les messages de commit et les descriptions de pull request proposés sont écrits par le harness de Réglages › Application › « Modèle des textes rédigés » : « Claude Haiku », « Codex (GPT-6-Luna) », un modèle d’OpenCode , « Copilot (GPT-5 mini) », « Cursor (Auto) », « Mistral Vibe » ou « Gemini 3.8 Flash » (Antigravity CLI), parmi les harness installés (voir [les textes rédigés](settings-application#textes-rediges)).

@@ -1,0 +1,67 @@
+{
+  "about": "Écriture et commande permises par les règles du settings.json : b.txt écrit (son texte inconnu du flux), echo hi lancé, « terminé ».",
+  "agent": {
+    "cwd": "C:\tmpesc269work",
+    "engine": "agy",
+    "mode": "default",
+    "model": "gemini-3.8-flash"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": null,
+    "sessionId": "8851eea7-291e-43fe-8bb4-aa5337407bc4",
+    "status": "done",
+    "tokens": 15075,
+    "touchedFiles": []
+  },
+  "flux": "../../agy/05-tools-allowed-by-rules.jsonl",
+  "items": [
+    {
+      "input": {
+        "file_path": "C:\\tmp\\esc269\\work\\b.txt"
+      },
+      "kind": "tool",
+      "name": "Edit",
+      "parent": null,
+      "result": {
+        "add": 0,
+        "del": 0,
+        "filePath": "C:\\tmp\\esc269\\work\\b.txt",
+        "isError": false,
+        "patch": [],
+        "text": ""
+      },
+      "status": "ok"
+    },
+    {
+      "input": {
+        "command": "echo hi"
+      },
+      "kind": "tool",
+      "name": "Bash",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": "hi"
+      },
+      "status": "ok"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "terminé."
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "agy",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 15075
+    }
+  ]
+}

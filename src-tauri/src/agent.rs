@@ -27,6 +27,7 @@ mod cursor;
 mod cursor_tui;
 mod localcmd;
 // The translation of the minimal fake engine of the conformance bench (`engine/minimal/`).
+mod agy;
 #[cfg(test)]
 mod minimal;
 mod opencode;
@@ -285,6 +286,8 @@ pub struct AgentRt {
     opencode: opencode::OpencodeState,
     /// What the translation of Mistral Vibe keeps between its updates (`agent/vibe.rs`).
     vibe: vibe::VibeState,
+    /// What the translation of Antigravity CLI keeps between its events (`agent/agy.rs`).
+    agy: agy::AgyState,
 }
 
 /// A stream's process linked to claude.ai, and the session it holds there (its bridge id, when
@@ -556,6 +559,7 @@ impl AgentRt {
             cursor: cursor::CursorState::default(),
             opencode: opencode::OpencodeState::default(),
             vibe: vibe::VibeState::default(),
+            agy: agy::AgyState::default(),
         }
     }
 
@@ -651,6 +655,7 @@ impl AgentRt {
         self.cursor = cursor::CursorState::default();
         self.opencode = opencode::OpencodeState::default();
         self.vibe = vibe::VibeState::default();
+        self.agy = agy::AgyState::default();
         // What ran in the process before is gone with it.
         self.interrupt_plan();
     }
