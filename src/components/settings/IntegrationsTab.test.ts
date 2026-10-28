@@ -11,7 +11,7 @@ import IntegrationsTab from './IntegrationsTab.svelte';
 
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
 const opened = vi.hoisted(() => [] as string[]);
-vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn(async (u: string) => void opened.push(u)), openPath: vi.fn() }));
+vi.mock('../../lib/opener', () => ({ openUrl: vi.fn(async (u: string) => void opened.push(u)), openPath: vi.fn() }));
 
 const off = (service: AccountView['service']): AccountView => ({ service, connected: false, label: '' });
 const ACCOUNTS: AccountView[] = [

@@ -544,11 +544,11 @@ pub fn reveal(what: Reveal) -> Result<()> {
             |path| {
                 select_and_again(
                     path,
-                    |p| tauri_plugin_opener::reveal_item_in_dir(p).map_err(|e| anyhow!(e)),
+                    |p| crate::outside::open(crate::outside::What::Reveal(p)),
                     || std::thread::sleep(std::time::Duration::from_secs(1)),
                 )
             },
-            |dir| tauri_plugin_opener::open_path(dir, None::<&str>).map_err(|e| anyhow!(e)),
+            |dir| crate::outside::open(crate::outside::What::Path(dir)),
         )
         .inspect_err(|e| log::warn!("reveal {what:?}: {e:#}"))
     })

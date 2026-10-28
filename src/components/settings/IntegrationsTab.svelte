@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { openUrl } from '@tauri-apps/plugin-opener';
+  import { openUrl } from '../../lib/opener';
   import { COLUMNS } from '../../lib/board';
   import { t } from '../../lib/i18n';
   import Rich from '../../lib/i18n/Rich.svelte';

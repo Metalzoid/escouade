@@ -8,7 +8,7 @@ import { fakeBackend, project, resetApp } from '../../test/ipc';
 import ForgesSection from './ForgesSection.svelte';
 
 const opened = vi.hoisted(() => [] as string[]);
-vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn(async (u: string) => void opened.push(u)), openPath: vi.fn() }));
+vi.mock('../../lib/opener', () => ({ openUrl: vi.fn(async (u: string) => void opened.push(u)), openPath: vi.fn() }));
 
 const CAPS = {
   draft: true,

@@ -1117,29 +1117,26 @@ describe('SettingsModal', () => {
   });
 
   it('opens the website, in the language of the interface, and the Discord server', async () => {
-    const backend = fakeBackend({ 'plugin:opener|open_url': () => null });
+    const backend = fakeBackend({ open_url: () => null });
     render(SettingsModal, { tab: 'about' });
     expect(screen.getByText('Site web')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Ouvrir le site' }));
     await userEvent.click(screen.getByRole('button', { name: 'Rejoindre le Discord' }));
-    expect(backend.called('plugin:opener|open_url').map((c) => c.args.url)).toEqual([
-      'https://escouade.dev/',
-      'https://discord.gg/m3KYtN8gxP',
-    ]);
+    expect(backend.called('open_url').map((c) => c.args.url)).toEqual(['https://escouade.dev/', 'https://discord.gg/m3KYtN8gxP']);
     cleanup();
     setLang('en');
     render(SettingsModal, { tab: 'about' });
     await userEvent.click(screen.getByRole('button', { name: 'Open the website' }));
-    expect(backend.called('plugin:opener|open_url').at(-1)?.args.url).toBe('https://escouade.dev/en/');
+    expect(backend.called('open_url').at(-1)?.args.url).toBe('https://escouade.dev/en/');
     setLang('fr');
   });
 
   it('offers a coffee, on the Stripe page of the language of the interface, in the browser', async () => {
-    const backend = fakeBackend({ 'plugin:opener|open_url': () => null });
+    const backend = fakeBackend({ open_url: () => null });
     render(SettingsModal, { tab: 'about' });
     expect(screen.getByText('Soutenir Escouade')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Offrir un café' }));
-    expect(backend.called('plugin:opener|open_url').map((c) => c.args.url)).toEqual(['https://buy.stripe.com/8x2fZh20z7rM87067200001']);
+    expect(backend.called('open_url').map((c) => c.args.url)).toEqual(['https://buy.stripe.com/8x2fZh20z7rM87067200001']);
     // Said once, in its row: nothing opens by itself.
     expect(screen.queryAllByRole('dialog')).toHaveLength(1);
     cleanup();
@@ -1147,16 +1144,16 @@ describe('SettingsModal', () => {
     render(SettingsModal, { tab: 'about' });
     expect(screen.getByText('Support Escouade')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Buy a coffee' }));
-    expect(backend.called('plugin:opener|open_url').at(-1)?.args.url).toBe('https://buy.stripe.com/00w7sLcFdaDYaf8cvq00000');
+    expect(backend.called('open_url').at(-1)?.args.url).toBe('https://buy.stripe.com/00w7sLcFdaDYaf8cvq00000');
     setLang('fr');
   });
 
   it('says where the local data is, and opens its folder', async () => {
-    const backend = fakeBackend({ data_dir: () => 'C:\\Users\\moi\\.escouade', 'plugin:opener|open_path': () => null });
+    const backend = fakeBackend({ data_dir: () => 'C:\\Users\\moi\\.escouade', open_path: () => null });
     render(SettingsModal, { tab: 'about' });
     expect(await screen.findByText('~/.escouade')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Ouvrir le dossier' }));
-    expect(backend.called('plugin:opener|open_path').map((c) => c.args.path)).toEqual(['C:\\Users\\moi\\.escouade']);
+    expect(backend.called('open_path').map((c) => c.args.path)).toEqual(['C:\\Users\\moi\\.escouade']);
   });
 
   it('keeps the focus inside, from the tab it opens on', async () => {

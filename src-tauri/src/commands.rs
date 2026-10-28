@@ -173,6 +173,24 @@ pub fn subscribe(
     }
 }
 
+/// A link the window opens outside (the system's browser; Windows' under WSLg, `outside`): the
+/// schemes Tauri's opener allowed it, http, https, mailto and tel.
+#[tauri::command(async)]
+pub fn open_url(url: String) -> Res<()> {
+    let scheme = url.split(':').next().unwrap_or("").to_ascii_lowercase();
+    if !["http", "https", "mailto", "tel"].contains(&scheme.as_str()) {
+        return Err(err(anyhow::anyhow!("not a link Escouade opens: {scheme}:")));
+    }
+    crate::outside::open(crate::outside::What::Url(&url)).map_err(err)
+}
+
+/// A file or a folder the window opens outside (its program, the file manager; Windows' under
+/// WSLg, `outside`).
+#[tauri::command(async)]
+pub fn open_path(path: String) -> Res<()> {
+    crate::outside::open(crate::outside::What::Path(std::path::Path::new(&path))).map_err(err)
+}
+
 #[tauri::command]
 pub fn set_ui(core: CoreState, ui: UiState) {
     *core.ui.write() = ui;

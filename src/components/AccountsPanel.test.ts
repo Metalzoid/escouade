@@ -8,7 +8,7 @@ import type { Account, AccountUsage, RateWindow } from '../lib/types';
 import AccountsPanel from './AccountsPanel.svelte';
 
 const opened = vi.hoisted(() => [] as string[]);
-vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn(async (u: string) => void opened.push(u)) }));
+vi.mock('../lib/opener', () => ({ openUrl: vi.fn(async (u: string) => void opened.push(u)) }));
 
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
 const PRO: Account = { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true };

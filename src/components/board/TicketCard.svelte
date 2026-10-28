@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { openUrl } from '@tauri-apps/plugin-opener';
+  import { openUrl } from '../../lib/opener';
   import { accountName, newAgentDefaults, pauseOf } from '../../lib/accounts';
   import {
     APPROVE_LABEL,

@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from '../Icon.svelte';
-  import { openPath } from '@tauri-apps/plugin-opener';
+  import { openPath } from '../../lib/opener';
   import { tick, type Snippet } from 'svelte';
   import { t } from '../../lib/i18n';
   import { anyCan, choosesEngine, engineName, engineOptions } from '../../lib/engines';

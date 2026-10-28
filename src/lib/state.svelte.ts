@@ -1,6 +1,6 @@
 // Global application state (Svelte 5 runes) fed by the backend event channel.
 
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { openUrl } from './opener';
 import { api } from './ipc';
 import { applyConvOps, dropConversation, releaseIdle } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';

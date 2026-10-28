@@ -5,7 +5,7 @@
 // the user lets it (`approveAndTest`; the backend refuses a recipe that was not approved all the same). With isola,
 // what runs is the commands of the worktree's .isola.toml, which the agent can write too: that file is what is shown.
 
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { openUrl } from './opener';
 import { fNum } from './format';
 import { t } from './i18n';
 import { api } from './ipc';

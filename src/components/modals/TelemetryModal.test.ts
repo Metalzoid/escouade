@@ -63,15 +63,15 @@ describe('TelemetryModal', () => {
   });
 
   it('opens the privacy page of the site, in the language of the interface', async () => {
-    const backend = fakeBackend({ 'plugin:opener|open_url': () => null });
+    const backend = fakeBackend({ open_url: () => null });
     render(TelemetryModal);
     await userEvent.click(screen.getByRole('button', { name: 'Ce qui est envoyé, en détail' }));
-    expect(backend.called('plugin:opener|open_url')[0].args.url).toBe('https://escouade.dev/privacy/');
+    expect(backend.called('open_url')[0].args.url).toBe('https://escouade.dev/privacy/');
     setLang('en');
     await tick();
     expect(screen.getByRole('button', { name: 'What is sent, in detail' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'What is sent, in detail' }));
-    expect(backend.called('plugin:opener|open_url')[1].args.url).toBe('https://escouade.dev/en/privacy/');
+    expect(backend.called('open_url')[1].args.url).toBe('https://escouade.dev/en/privacy/');
   });
 
   it('stays open and says why when the answer cannot be saved', async () => {

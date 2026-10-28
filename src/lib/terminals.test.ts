@@ -694,7 +694,7 @@ describe.each([
     const backend = fakeBackend({ term_spawn: () => info, agent_terminal: () => info });
     await open();
     const activate = (uri: string) => termOptions.at(-1)!.linkHandler!.activate(click(), uri, {} as never);
-    return { backend, activate, urls: () => backend.called('plugin:opener|open_url').map((c) => c.args.url) };
+    return { backend, activate, urls: () => backend.called('open_url').map((c) => c.args.url) };
   }
 
   it('open in the system’s browser: the hyperlinks Claude Code writes (OSC 8) and the addresses printed as text', async () => {

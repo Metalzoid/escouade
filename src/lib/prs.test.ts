@@ -21,7 +21,7 @@ import { app } from './state.svelte';
 import { agent, fakeBackend, pullRequest as pr, resetApp } from '../test/ipc';
 
 const { openUrl } = vi.hoisted(() => ({ openUrl: vi.fn(() => Promise.resolve()) }));
-vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl }));
+vi.mock('./opener', () => ({ openUrl }));
 
 const WT = { path: 'C:\\wt\\login', branch: 'escouade/login', baseBranch: 'main', existing: false };
 

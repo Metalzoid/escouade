@@ -98,6 +98,7 @@ mod navigation;
 mod notify;
 #[cfg(test)]
 mod opencode_tests;
+mod outside;
 mod paths;
 mod plan;
 #[cfg(test)]
@@ -490,6 +491,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::subscribe,
             commands::set_ui,
+            commands::open_url,
+            commands::open_path,
             commands::save_settings,
             commands::claude_locate,
             commands::claude_update_status,

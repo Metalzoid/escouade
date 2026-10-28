@@ -1,6 +1,6 @@
 // Links: the window never follows one, and the ones that lead out of the app open in the system's browser.
 
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { openUrl } from './opener';
 import type { ILinkHandler } from '@xterm/xterm';
 import { locale } from './i18n';
 

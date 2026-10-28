@@ -4,7 +4,7 @@
 // A check or a download that fails is retried at the next check; whether the user hears of it is the backend's
 // call (`show`: asked for, or failures in a row for long enough), so a passing network failure stays quiet.
 
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { openUrl } from './opener';
 import { t } from './i18n';
 import { api } from './ipc';
 import { check, UpdateTrouble, type FoundUpdate } from './update-check';

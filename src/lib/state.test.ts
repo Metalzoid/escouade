@@ -1343,8 +1343,8 @@ describe('board', () => {
     expect(app.ui.activeProject).toBe('p2');
     expect(app.boardOn).toBe(true);
     emit({ type: 'openUrl', url: 'https://github.com/acme/demo/compare/main...ticket/dem-1' });
-    await vi.waitFor(() => expect(backend.called('plugin:opener|open_url')).toHaveLength(1));
-    expect(backend.called('plugin:opener|open_url')[0].args.url).toBe('https://github.com/acme/demo/compare/main...ticket/dem-1');
+    await vi.waitFor(() => expect(backend.called('open_url')).toHaveLength(1));
+    expect(backend.called('open_url')[0].args.url).toBe('https://github.com/acme/demo/compare/main...ticket/dem-1');
     expect(app.toasts).toEqual([]);
   });
 
@@ -1360,14 +1360,14 @@ describe('board', () => {
     const { emit, backend } = await start(
       {},
       {
-        'plugin:opener|open_url': () => {
+        open_url: () => {
           throw 'Aucun navigateur';
         },
       },
     );
     emit({ type: 'openUrl', url: 'https://github.com/acme/demo/compare/main...ticket/dem-1' });
     await expect.poll(() => app.toasts.at(-1)).toMatchObject({ kind: 'error', text: expect.stringContaining('Aucun navigateur') });
-    expect(backend.called('plugin:opener|open_url')).toHaveLength(1);
+    expect(backend.called('open_url')).toHaveLength(1);
   });
 
   it('tells whether the ticket of an agent is under way', async () => {

@@ -11,7 +11,7 @@ import { agent, branchInfo, fakeBackend, gitInfo, pullRequest as pr, resetApp } 
 import StatusBar from './StatusBar.svelte';
 
 const { openUrl } = vi.hoisted(() => ({ openUrl: vi.fn(() => Promise.resolve()) }));
-vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl }));
+vi.mock('../lib/opener', () => ({ openUrl }));
 
 const WT = { path: 'C:\\wt\\login', branch: 'escouade/login', baseBranch: 'main', existing: false };
 
