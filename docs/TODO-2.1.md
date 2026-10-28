@@ -35,7 +35,7 @@ Un sixième harness : Mistral Vibe, l'agent de code de Mistral AI dans le termin
 
 **Sur le poste de l'utilisateur** (2026-10-28) : `vibe` 3.0.3 installé en CLI (`~/.local/bin/vibe`) et authentifié. Les essais réels s'y font comme ceux des autres harness : sa config sauvegardée puis rendue à l'octet près, jamais de déconnexion, jamais un jeton lu ni copié.
 
-- [ ] Essais réels d'abord, comme pour Cursor CLI (ESC-24) : ACP (conversation, permissions, questions, plan, modes, modèles), dossier de config isolable, compte et clé d'API, quota ou coût lisibles, déclaration du serveur MCP d'Escouade, hooks, interface en vue terminal ; les réponses notées, les flux gardés dans `tests/fixtures/vibe/`.
+- [x] Essais réels d'abord (ESC-265, 2026-10-28), comme pour Cursor CLI (ESC-24) : ACP (conversation, permissions, questions, plan, modes, modèles), dossier de config isolable, compte et clé d'API, quota ou coût lisibles, déclaration du serveur MCP d'Escouade, hooks, interface en vue terminal ; les réponses notées dans `docs/TODO-1.8.md` (point 0, « Mistral Vibe » : ACP recommandé), les flux gardés dans `tests/fixtures/vibe/`.
 - [ ] L'adaptateur par ACP, en reprenant celui de Cursor CLI (`engine/cursor/`, `agent/cursor.rs`) ; à décider selon l'ordre de « Tout l'externe en plugins » : un harness ACP décrit (PLG-6, ESC-178) plutôt qu'un adaptateur de plus dans le cœur.
 - [ ] Ses comptes, son usage et son coût ; sa vue terminal ; la clôture des projets privés ; le banc des harness, la doc et le site.
 
