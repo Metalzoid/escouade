@@ -54,8 +54,12 @@
 // as [lent] does: the agent of a ticket under way that follows a workflow too. [spec:<project>] (ESC-263): before its first
 // report it keeps the spec as its protocol asks, by Escouade's docs tools (its --mcp-config server): the page
 // paiement/echeances written (« Quatre échéances au plus (<key>). [écart] ») and a decision proposed. In one-shot mode, a page
-// compared to the code (<spec-page>) gets a gap when it says [écart] (none otherwise; [muet]: the model fails), and
-// « Mettre la spec à jour » (<spec-update>) the page without its [écart] and « Mis à jour d’après le code… ».
+// compared to the code (<spec-page>) gets a gap when it says [écart] (none otherwise; [muet]: the model fails).
+// [proposer:<project>] in a message (ESC-261, a discussion of the Docs tab): by the same tools, the page
+// espace-adherent/relances written (« Trois relances par e-mail… »), the page notifications/general changed when it is there,
+// and a decision proposed (« Relances par e-mail seulement »), then « Proposé dans la spec. ». The message of « Mettre la spec à
+// jour » (« (.escouade/spec/<path>.md) ne dit pas ce que fait le code ») makes the spec writer propose that page without its
+// [écart], « Mis à jour d’après le code par le faux claude. » after it (the project named by its instructions).
 // "[worktree <branch>]" in a message goes into a worktree of its own as Claude Code's EnterWorktree does (ESC-161): made
 // under <repository>/.claude/worktrees/<branch with non-alphanumerics replaced by -> on the new branch <branch> (or
 // gone into again), the session goes on there (the `cwd` of its entries), kept in its first folder's project folder.
@@ -414,14 +418,6 @@ if (argv[0] === 'mcp') {
           ]
         : [];
       const result = `Comparé.\n\n\`\`\`json\n${JSON.stringify({ gaps })}\n\`\`\``;
-      process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
-      return;
-    }
-    // « Mettre la spec à jour » (ESC-263): the page as the code has it, its [écart] gone.
-    const updated = input.match(/<spec-update path="([^"]*)"[^>]*>\n([\s\S]*?)\n<\/spec-update>/);
-    if (updated) {
-      const body = `${updated[2].replace(/\s*\[écart\]/g, '')}\n\nMis à jour d’après le code par le faux claude.`;
-      const result = `Voici.\n\n\`\`\`json\n${JSON.stringify({ body })}\n\`\`\``;
       process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
       return;
     }
@@ -963,13 +959,18 @@ function startSession() {
   let longAgent = null;
   const replay = argv.includes('--replay-user-messages');
   const appended = argv.includes('--append-system-prompt') ? (argv[argv.indexOf('--append-system-prompt') + 1] ?? '') : '';
-  // What a copy of an agent is told of its folder, or what every agent is told of the shared memory (ESC-255), is no
-  // ticket's protocol: it plays a plain agent.
+  // What a copy of an agent is told of its folder, what every agent is told of the shared memory (ESC-255) or a discussion
+  // of the Docs tab of its role (ESC-261) is no ticket's protocol: it plays a plain agent.
   const copied = [
     'Cette conversation a été copiée',
     'This conversation was copied',
     'Le projet a une mémoire partagée',
     'The project has a memory shared',
+    // A discussion of the Docs tab (ESC-261): its role, no ticket.
+    'Tu es l’agent rédacteur de spec',
+    'Tu es l’agent produit',
+    'You are the spec writer',
+    'You are the product agent',
   ];
   const sys = copied.some((c) => appended.startsWith(c)) ? '' : appended;
   let remoteSent = false;
@@ -2662,6 +2663,63 @@ function startSession() {
       );
       streamText('Rapport reçu.');
       result();
+      return;
+    }
+    // « Mettre la spec à jour » (ESC-261): the spec writer proposes the page from the code, its [écart] gone.
+    const gapPage = text.match(/\(\.escouade\/spec\/(.+?)\.md\) (?:ne dit pas ce que fait le code|doesn’t say what the code does)/)?.[1];
+    const writerOf = appended.match(/(?:du projet « ([^»]+) »|of the project “([^”]+)”)/);
+    if (gapPage && writerOf) {
+      const project = (writerOf[1] ?? writerOf[2]).trim();
+      (async () => {
+        const read = await escouadeTool('read_spec_page', { project, path: gapPage });
+        const old = JSON.parse(read.content[0].text).body;
+        await escouadeTool('write_spec_page', {
+          project,
+          path: gapPage,
+          body: `${old.replace(/\s*\[écart\]/g, '')}\n\nMis à jour d’après le code par le faux claude.`,
+        });
+      })()
+        .then(() => streamText('Page proposée d’après le code.'))
+        .catch((e) => {
+          process.stderr.write(`mise à jour: ${e.stack}\n`);
+          streamText(`Échec : ${e.message}`);
+        })
+        .finally(() => result());
+      return;
+    }
+    // [proposer:<project>] (ESC-261): what a discussion proposes for the spec, by Escouade's docs tools.
+    const proposeIn = text.match(/\[proposer:([^\]]+)\]/)?.[1];
+    if (proposeIn) {
+      (async () => {
+        await escouadeTool('write_spec_page', {
+          project: proposeIn,
+          path: 'espace-adherent/relances',
+          title: 'Relances',
+          subject: 'Espace adhérent',
+          body: 'Trois relances par e-mail : 30 et 7 jours avant l’échéance, puis 3 jours après.\nUn adhérent peut couper les relances depuis son espace.',
+        });
+        const tree = await escouadeTool('get_spec_tree', { project: proposeIn });
+        if (tree?.content?.[0]?.text?.includes('notifications/general'))
+          await escouadeTool('write_spec_page', {
+            project: proposeIn,
+            path: 'notifications/general',
+            body: 'Les relances d’adhésion sont planifiées chaque nuit.',
+          });
+        await escouadeTool('propose_decision', {
+          project: proposeIn,
+          title: 'Relances par e-mail seulement',
+          context: 'Les SMS demandent un consentement à part.',
+          decision: 'Pas de SMS.',
+          consequences: 'À revoir si le renouvellement baisse.',
+          pages: ['espace-adherent/relances'],
+        });
+      })()
+        .then(() => streamText('Proposé dans la spec.'))
+        .catch((e) => {
+          process.stderr.write(`proposer: ${e.stack}\n`);
+          streamText(`Échec : ${e.message}`);
+        })
+        .finally(() => result());
       return;
     }
     if (text.includes('lire-fichier ') || text.includes('modifier-fichier ')) {

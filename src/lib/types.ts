@@ -621,6 +621,11 @@ export interface EngineCaps {
   usagePage: string | null;
   /** Its accounts but the machine's go by an API key, kept in the keychain (Cursor CLI), rather than a sign-in of their own. */
   accountsByKey: boolean;
+  /**
+   * Escouade can keep it from writing a file or running a command, in any mode: a discussion of the Docs tab runs on it
+   * (ESC-261). Not one that writes the files of its folder without going through Escouade.
+   */
+  readOnly: boolean;
 }
 
 /** The versions of a harness Escouade was tested with. */
@@ -1391,6 +1396,69 @@ export interface Agent {
   terminalId: string | null;
   /** How the last run of that interface ended; null until it ended (the backend puts it back to null when it starts one). */
   tuiExit: TuiExit | null;
+  /** A discussion of the Docs tab (ESC-261): its role, its subject and what it proposes for the spec. Absent for any other agent. */
+  discussion?: Discussion;
+}
+
+/** The role of a discussion of the Docs tab (ESC-261): the spec writer, or the product agent of a brainstorm. */
+export type DiscussionKind = 'discussion' | 'brainstorm';
+
+/** What makes an agent a discussion of the Docs tab (ESC-261). */
+export interface Discussion {
+  kind: DiscussionKind;
+  subject: string;
+  /** The pages it proposes, a change each, not poured yet. */
+  pages: DiscussionPage[];
+  /** The decisions it proposes, not poured yet (no number until poured). */
+  decisions: DocsDecision[];
+  /** What « Verser dans la spec » wrote so far; absent until then. */
+  poured?: DiscussionPoured;
+}
+
+export interface DiscussionPage {
+  path: string;
+  /** The page's text before its first change; null: a new page. */
+  before: string | null;
+  /** The page as it would be written. */
+  page: DocsPage;
+  added: number;
+  removed: number;
+}
+
+export interface DiscussionPoured {
+  /** When it was last poured (ms). */
+  at: number;
+  pages: string[];
+  /** The numbers of the decisions proposed in the register. */
+  decisions: number[];
+}
+
+/** A gap of a page (its index) that a discussion settles: gone from the page once its change is poured. */
+export interface DiscussionGap {
+  page: string;
+  index: number;
+}
+
+/** What a gesture of the spec gives « Nouvelle discussion »: its role, its subject, its first message, the gap it settles. */
+export interface DiscussionPreset {
+  kind: DiscussionKind;
+  subject: string;
+  message?: string;
+  gap?: DiscussionGap;
+}
+
+/** What « Nouvelle discussion » asks for. */
+export interface DiscussionStart {
+  kind: DiscussionKind;
+  subject: string;
+  /** The documents joined, already filed in the drive. */
+  documents: string[];
+  /** The first message, when it is not the subject (a gesture of the spec). */
+  message?: string | null;
+  gap?: DiscussionGap | null;
+  engine?: EngineId | null;
+  account?: string | null;
+  model?: string | null;
 }
 
 /** The end of Claude Code's interface (« Vue Claude Code »), as the backend saw it. */

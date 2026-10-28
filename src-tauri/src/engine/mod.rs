@@ -212,6 +212,9 @@ pub struct Spawn {
     /// Whether its model takes an effort, as the `claude` of its account told it (ESC-124); None:
     /// its harness's rule (`Engine::supports_effort`).
     pub takes_effort: Option<bool>,
+    /// A discussion of the Docs tab (ESC-261): it changes no file and runs no command, in any mode,
+    /// held by its harness itself (`crate::discussion`).
+    pub read_only: bool,
 }
 
 impl Spawn {
@@ -234,6 +237,7 @@ impl Spawn {
             label: format!("agent {}", meta.id),
             account: meta.account.clone(),
             takes_effort: None,
+            read_only: meta.discussion.is_some(),
         }
     }
 }

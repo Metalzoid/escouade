@@ -118,8 +118,10 @@
   {/snippet}
   {#snippet actions()}
     {#if tree}
-      <!-- « Demander à la spec » comes with the discussions (ESC-261). « Comparer au code » here is the whole spec; an open
-        page has its own. -->
+      <button class="btn" onclick={() => app.newDiscussion(project.id, { kind: 'discussion', subject: '' })}
+        ><Icon name="search" size={14} />{t('docs.discussion.ask')}</button
+      >
+      <!-- « Comparer au code » here is the whole spec; an open page has its own. -->
       {#if tree.pages && !page}
         <button class="btn" data-compare="all" disabled={comparing.length > 0} use:tip={t('docs.compare.allTip')} onclick={compareAll}
           ><Icon name="swap" size={14} />{comparing.length
@@ -181,7 +183,17 @@
         </ul>
       {/if}
       <div class="empty-acts">
-        <!-- « Faire écrire une première version par l'agent rédacteur » comes with the discussions (ESC-261). -->
+        <!-- The spec writer writes a first version from the code (ESC-261): a gesture of the user, it costs tokens. -->
+        <button
+          class="btn primary"
+          use:tip={t('docs.discussion.firstSpecTip')}
+          onclick={() =>
+            app.newDiscussion(project.id, {
+              kind: 'discussion',
+              subject: t('docs.discussion.firstSpecSubject'),
+              message: t('docs.discussion.firstSpecMessage'),
+            })}><Icon name="sparkle" size={14} />{t('docs.discussion.firstSpec')}</button
+        >
         <button class="btn" onclick={() => startNew()}><Icon name="edit" size={14} />{t('docs.empty.firstPage')}</button>
       </div>
     </div>

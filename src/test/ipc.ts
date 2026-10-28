@@ -458,6 +458,7 @@ export const BARE_ENGINE: EngineDecl = {
     sandbox: false,
     usagePage: null,
     accountsByKey: false,
+    readOnly: false,
   },
   install: { windows: 'npm install -g @openai/codex', unix: 'npm install -g @openai/codex' },
   models: [

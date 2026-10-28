@@ -1,7 +1,8 @@
 // The spec always up to date (ESC-263), with the fake claude: a ticket that changes how the product behaves keeps the
 // spec as its protocol asks (a page written and a decision left by Escouade's docs tools); validated, its decision is
 // accepted and the pages it touches are compared to the code by the short agent, which finds a gap: on the map of the
-// subjects and on top of the page, with its three buttons. « Mettre la spec à jour » settles it; « Comparer au code »
+// subjects and on top of the page, with its three buttons. « Mettre la spec à jour » opens a discussion with the spec
+// writer (ESC-261), whose page poured settles it; « Comparer au code »
 // on the whole spec finds nothing more. The captures go to ESCOUADE_E2E_SHOTS, dark and light.
 
 import { execFileSync } from 'node:child_process';
@@ -93,9 +94,20 @@ test('a ticket that changes the product keeps the spec, and once validated its p
   await expect(page.locator('.meta .when')).toContainText('Comparée au code');
   await shoot(page, 'page-gap');
 
-  // « Mettre la spec à jour »: the page says what the code does, its gap gone, to be shared.
+  // « Mettre la spec à jour »: a discussion with the spec writer, told the gap (ESC-261); the page it proposes, poured,
+  // says what the code does, its gap gone, to be shared.
   await gaps.getByRole('button', { name: 'Mettre la spec à jour' }).click();
-  await expect(gaps).toHaveCount(0, { timeout: 30_000 });
+  const start = page.getByRole('dialog', { name: 'Nouvelle discussion' });
+  await expect(start.getByRole('radio', { name: /Discussion/ })).toHaveAttribute('aria-checked', 'true');
+  await expect(start.getByRole('textbox').first()).toHaveValue('Mettre à jour « Échéances »');
+  await start.getByRole('button', { name: 'Commencer' }).click();
+  const proposed = page.getByRole('complementary', { name: 'Ce qui ira dans la spec' }).locator('[data-page="paiement/echeances"]');
+  await expect(proposed).toContainText('Mis à jour d’après le code', { timeout: 60_000 });
+  expect(fs.readFileSync(own, 'utf8')).toContain('[écart]');
+  await page.getByRole('button', { name: 'Verser dans la spec' }).click();
+  await expect(proposed).toHaveCount(0);
+  await page.getByRole('button', { name: 'Ouvrir la page' }).click();
+  await expect(page.getByRole('region', { name: 'Un écart avec le code' })).toHaveCount(0);
   await expect(page.locator('.p-body')).toContainText('Mis à jour d’après le code');
   expect(fs.readFileSync(own, 'utf8')).not.toContain('[écart]');
   expect(git('status', '--porcelain')).toContain('.escouade/spec/paiement/echeances.md');

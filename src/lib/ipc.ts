@@ -85,6 +85,8 @@ import type {
   DocsCompared,
   DocsDecision,
   DocsCheck,
+  DiscussionPoured,
+  DiscussionStart,
   DocsDocHit,
   DocsDrive,
   DocsDropped,
@@ -444,8 +446,6 @@ export const api = {
     invoke<DocsPage>('docs_spec_write', { id, path, title, body, subject }),
   /** « Comparer au code » (ESC-263): `pages`, or the whole spec when null; ends with them compared. */
   docsCompare: (id: string, pages: string[] | null) => invoke<DocsCompared>('docs_compare', { id, pages }),
-  /** « Mettre la spec à jour » on gap `index` of a page: the page rewritten to say what the code does there. */
-  docsUpdateFromGap: (id: string, path: string, index: number) => invoke<DocsPage>('docs_update_from_gap', { id, path, index }),
   docsSpecSearch: (id: string, query: string) => invoke<DocsHit[]>('docs_spec_search', { id, query }),
   docsDecisions: (id: string) => invoke<DocsDecision[]>('docs_decisions', { id }),
   docsDecisionPropose: (id: string, number: number | null, decision: Partial<DocsDecision>) =>
@@ -472,6 +472,13 @@ export const api = {
   docsShare: (id: string, message: string | null = null, withCode = false) => invoke<DocsShared>('docs_share', { id, message, withCode }),
   docsShareResolve: (id: string) => invoke<DocsConflict>('docs_share_resolve', { id }),
   docsShareCancel: (id: string) => invoke<void>('docs_share_cancel', { id }),
+  /** « Commencer » of « Nouvelle discussion » (ESC-261): its agent, in the folder of the docs branch, sent its subject. */
+  discussionStart: (id: string, start: DiscussionStart) => invoke<Agent>('discussion_start', { id, start }),
+  /** « Verser dans la spec »: what the discussion proposes, written on the docs branch (nothing committed). */
+  discussionPour: (agent: string) => invoke<DiscussionPoured>('discussion_pour', { agent }),
+  /** Takes a page (its path) or a decision (from 1) out of « Ce qui ira dans la spec ». */
+  discussionDrop: (agent: string, page: string | null, decision: number | null) =>
+    invoke<void>('discussion_drop', { agent, page, decision }),
   /** How a spec the project has (`path`, one of `docsDetectSpec`'s) would be cut by subject (ESC-258): nothing written. */
   docsImportPlan: (id: string, path: string) => invoke<DocsDraft[]>('docs_import_plan', { id, path }),
   /** Writes the pages of `only` (all when null) of that cut; none overwritten. */

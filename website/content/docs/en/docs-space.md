@@ -4,7 +4,7 @@ The Docs tab holds the product’s specification, by subject, with what sets it 
 
 ## The tab
 
-The sidebar has three tabs: “Agents”, “Kanban” and “Docs”. Under “Docs”, three spaces:
+The sidebar has three tabs: “Agents”, “Kanban” and “Docs”. Under “Docs”, “New discussion”, [the discussions](#the-discussions), then three spaces:
 
 - **Specification**: the pages of the spec, with the number of gaps with the code.
 - **Decisions**: the register of the decisions on the product, numbered and dated.
@@ -32,11 +32,28 @@ A page shows its Markdown text formatted and, beside it, its sources (the docume
 
 When the comparison found **gaps with the code**, they are at the top of the page, each with what differs and the files concerned:
 
-- “Update the spec”: an agent reads the code and rewrites the page so that it says what the code does on this point; the gap goes, and the page is among the changes to share.
+- “Update the spec” opens a [discussion](#the-discussions) with the spec writer, told the gap: it reads the code and proposes the page that says what the code does; poured into the spec, the gap goes.
 - “Open a ticket for the code” opens the window of a new ticket, its title and description already written from the gap: the code is what must follow the spec.
 - “See the code” opens the file the gap names in the [editor](editor).
 
 “Edit” opens the page in a simple editor: its title and its text. “Save” writes the file, its header (sources, tickets, decisions, gaps) kept as it is. With the current branch, “Open in the editor” opens the page’s file in Escouade’s editor.
+
+## The discussions
+
+“New discussion”, at the top of the tab (Ctrl+B), lets you talk about the spec with an agent. You choose one of two:
+
+- **Discussion**: the spec writer, to ask the spec or update it simply (“What does the spec say about paying in instalments?”, “Add that the tax receipt goes by email”).
+- **Brainstorm**: a product agent, in the manner of BMAD, that matures an idea: uses and journeys, discovery, compliance and GDPR, what other trades do. It proposes features, spec pages, decisions, and tickets, which it names without making them.
+
+You give a subject. No need to choose documents: the agent has them all, through the index. You can **join new files**: they are filed and indexed by themselves in the Documents. The window’s footer shows the agent’s harness, account and model, the project’s by default, and lets you change them.
+
+They are agents of Escouade like the others: the same conversation, and their questions are answered from the list of agents too. They work in the folder of the docs branch, read the code without ever changing it and only write the docs, through Escouade’s docs tools. Their harness itself keeps them from it, in every mode: Claude Code has its tools that write taken away, Codex only reads in its sandbox, OpenCode and Copilot CLI have their writes and commands refused. Cursor CLI and Mistral Vibe change files without going through Escouade: no discussion runs on them, and the window says so.
+
+The discussions are cards under “New discussion”, each marked “Brainstorm” or “Discussion”, with its state: “Question”, “Answering”, “Draft” (changes proposed not poured yet), “Poured”.
+
+A discussion open shows the conversation on the left, and on the right **“What will go in the spec”**: the changes proposed page by page (a new section, the sentences taken away struck through and the new ones in green) and the decisions proposed. A cross takes a proposal out. **“Pour into the spec”** writes the pages on the docs branch, and the decisions in the register, proposed: they are accepted in one click in the Decisions. Nothing is shared: the status bar says how many changes wait for “Share”.
+
+“Ask the spec”, at the top of the specification, opens a discussion with the spec writer. A project without a spec offers “Write a first spec from the code”: the spec writer reads the code and proposes a first version, filed by subject (it costs tokens, hence the gesture).
 
 ## The spec always up to date
 

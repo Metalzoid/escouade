@@ -14,6 +14,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - The project’s documents have their drive in the Docs tab: folders, drag and drop and a search; a file dropped (PDF, Word, Markdown, text) is read on your machine and filed in the right folder by itself, and each one says whether the agents read it and how many times it is cited.
 - A Docs tab joins Agents and Kanban: the product’s specification, by subject on a map that shows where each subject stands against the code, its pages in a tree, to read, edit and share with the team in one click; a spec the project already has is imported, cut by its titles.
 - The decisions on the product have their register, numbered and dated: where each comes from, what it changed in the spec, and “Accept” in one click; an accepted decision is no longer rewritten, a new one replaces it, and the one a ticket’s agent left is accepted when you approve the ticket.
+- “New discussion” in the Docs tab: discuss the spec with a spec writer agent, or brainstorm with a product agent that thinks about uses, GDPR and what other trades do; what they propose shows page by page and is poured into the spec in one click, without them ever touching the code.
 - The spec follows the code: a ticket’s agent updates the pages it touches and leaves a decision, then, once the ticket is approved, an agent compares those pages to the code and shows the gaps on the map of the subjects and at the top of the page, to settle in one click; “Compare to the code” does it again on demand.
 
 ## [2.0.5] — 2026-10-27

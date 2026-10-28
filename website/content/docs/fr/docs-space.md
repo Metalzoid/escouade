@@ -4,7 +4,7 @@ L’onglet Docs tient la spécification du produit, rangée par sujet, avec ce q
 
 ## L’onglet
 
-La barre latérale a trois onglets : « Agents », « Kanban » et « Docs ». Sous « Docs », trois espaces :
+La barre latérale a trois onglets : « Agents », « Kanban » et « Docs ». Sous « Docs », « Nouvelle discussion », [les discussions](#les-discussions), puis trois espaces :
 
 - **Spécification** : les pages de la spec, avec le nombre d’écarts avec le code.
 - **Décisions** : le registre des décisions sur le produit, numérotées et datées.
@@ -32,11 +32,28 @@ Une page montre son texte Markdown mis en forme et, à côté, ses sources (les 
 
 Quand la comparaison a trouvé **des écarts avec le code**, ils sont en tête de la page, chacun avec ce qui diffère et les fichiers concernés :
 
-- « Mettre la spec à jour » : un agent lit le code et réécrit la page pour qu’elle dise ce que fait le code sur ce point ; l’écart disparaît, et la page fait partie des changements à partager.
+- « Mettre la spec à jour » ouvre une [discussion](#les-discussions) avec l’agent rédacteur, à qui l’écart est dit : il lit le code et propose la page qui dit ce que fait le code ; versée dans la spec, l’écart disparaît.
 - « Ouvrir un ticket pour le code » ouvre la fenêtre d’un nouveau ticket, son titre et sa description déjà écrits depuis l’écart : c’est le code qui doit suivre la spec.
 - « Voir le code » ouvre dans l’[éditeur](editor) le fichier que l’écart nomme.
 
 « Modifier » ouvre la page dans un éditeur simple : son titre et son texte. « Enregistrer » écrit le fichier, son en-tête (sources, tickets, décisions, écarts) gardé tel quel. Avec la branche courante, « Ouvrir dans l’éditeur » ouvre le fichier de la page dans l’éditeur d’Escouade.
+
+## Les discussions
+
+« Nouvelle discussion », en tête de l’onglet (Ctrl+B), fait parler de la spec avec un agent. On choisit l’un des deux :
+
+- **Discussion** : l’agent rédacteur de spec, pour interroger la spec ou la mettre à jour simplement (« Que dit la spec sur le paiement en plusieurs fois ? », « Ajoute que le reçu fiscal part par e-mail »).
+- **Brainstorm** : un agent produit, à la manière de BMAD, qui fait mûrir une idée : usages et parcours, découverte, conformité et RGPD, ce que font d’autres secteurs. Il propose des fonctionnalités, des pages de spec, des décisions, et des tickets, qu’il dit sans les créer.
+
+On donne un sujet. Inutile de choisir des documents : l’agent les a tous, par l’index. On peut **joindre de nouveaux fichiers** : ils sont rangés et indexés seuls dans les Documents. Le pied de la fenêtre montre le harness, le compte et le modèle de l’agent, ceux du projet par défaut, et laisse les changer.
+
+Ce sont des agents d’Escouade comme les autres : la même conversation, et leurs questions se répondent aussi depuis la liste des agents. Ils travaillent dans le dossier de la branche des docs, lisent le code sans jamais le modifier et n’écrivent que les docs, par les outils de docs d’Escouade. Leur harness les en empêche lui-même, dans tous les modes : Claude Code n’a plus ses outils qui écrivent, Codex lit seulement dans son bac à sable, OpenCode et Copilot CLI voient leurs écritures et leurs commandes refusées. Cursor CLI et Mistral Vibe modifient les fichiers sans passer par Escouade : une discussion ne part pas sur eux, et la fenêtre le dit.
+
+Les discussions sont en cartes sous « Nouvelle discussion », chacune marquée « Brainstorm » ou « Discussion », avec son état : « Question », « Répond », « Brouillon » (des changements proposés pas encore versés), « Versé ».
+
+Une discussion ouverte montre la conversation à gauche, et à droite **« Ce qui ira dans la spec »** : les changements proposés page par page (une section nouvelle, les phrases retirées barrées et les nouvelles en vert) et les décisions proposées. Une croix retire une proposition. **« Verser dans la spec »** écrit les pages sur la branche des docs, et les décisions dans le registre, proposées : elles s’acceptent d’un clic dans les Décisions. Rien n’est partagé : la barre d’état dit combien de changements attendent « Partager ».
+
+« Demander à la spec », en tête de la spécification, ouvre une discussion avec l’agent rédacteur. Un projet sans spec propose « Écrire une première spec depuis le code » : l’agent rédacteur lit le code et propose une première version, rangée par sujet (cela coûte des tokens, d’où le geste).
 
 ## La spec toujours à jour
 

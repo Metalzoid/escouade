@@ -30,6 +30,7 @@ import type {
   Agent,
   AgentStatus,
   AutopilotPause,
+  DiscussionPreset,
   DocsConflict,
   FileTree,
   GitInfo,
@@ -125,6 +126,11 @@ export type Modal =
       onCancel?: () => void;
     }
   | { kind: 'rename'; title: string; value: string; onSubmit: (v: string) => void | Promise<void> }
+  /**
+   * « Nouvelle discussion » of the Docs tab (ESC-261), its role and subject given by a gesture of the spec (« Mettre la spec
+   * à jour », « Écrire une première spec ») with the first message it sends.
+   */
+  | { kind: 'newDiscussion'; projectId: string; preset?: DiscussionPreset }
   /** « Ajouter un compte… » (a new Claude account, then its sign-in), or « Se connecter… » for the account `accountId`. */
   /** `back`: the settings' tab it came from and goes back to (Comptes Claude by default). */
   | { kind: 'account'; accountId?: string; back?: SettingsTab; engine?: EngineId; reserveFor?: string }
@@ -367,6 +373,8 @@ class AppState {
   docsSpace = $state<Record<string, DocsSpaceId>>({});
   /** The page of the spec each project shows; none: the map of the subjects. */
   docsPage = $state<Record<string, string | null>>({});
+  /** The discussion (its agent's id) each project's Docs tab shows (ESC-261); none: the space chosen. */
+  docsDiscussion = $state<Record<string, string | null>>({});
   /** A page of the spec just made: it opens to be written. */
   docsEdit = $state<string | null>(null);
   /** Why no ticket of a project's board starts (its target branch has no commit yet, or is gone), by project. */
@@ -1059,10 +1067,24 @@ class AppState {
     this.docs[projectId] = true;
     if (space) this.docsSpace[projectId] = space;
     if (page !== undefined) this.docsPage[projectId] = page;
+    // A space chosen: the discussion open leaves the main area.
+    if (space) this.docsDiscussion[projectId] = null;
     this.selectedTerm[projectId] = null;
     this.selectedLaunch[projectId] = null;
     this.closeEditor(projectId);
     this.persistUi();
+  }
+
+  /** Shows the discussion `agentId` (ESC-261) in its project's Docs tab. */
+  openDiscussion(projectId: string, agentId: string) {
+    this.openDocs(projectId);
+    this.docsDiscussion[projectId] = agentId;
+  }
+
+  /** « Nouvelle discussion » (Ctrl+B in the Docs tab). */
+  newDiscussion(projectId = this.ui.activeProject, preset?: DiscussionPreset) {
+    if (!projectId) return;
+    this.modal = { kind: 'newDiscussion', projectId, preset };
   }
 
   closeDocs(projectId = this.ui.activeProject) {

@@ -178,6 +178,11 @@ export function handleShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
     import('./term-actions').then((m) => m.newTerminal(projectId));
     return true;
   }
+  // « Nouvelle discussion » of the Docs tab (ESC-261).
+  if (k === 'b' && !e.shiftKey && app.docsOn && app.project) {
+    app.newDiscussion(app.project.id);
+    return true;
+  }
   if (k === 'b' && e.shiftKey && !app.split) {
     app.filesOpen = !app.filesOpen;
     return true;

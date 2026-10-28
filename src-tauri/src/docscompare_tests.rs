@@ -1,6 +1,6 @@
 //! The spec compared to the code (ESC-263): what the short agent is told and what is read of its
 //! answer, the pages a ticket touches, a comparison on demand and after a ticket validated (with
-//! the fake claude), « Mettre la spec à jour ».
+//! the fake claude).
 
 use crate::core_tests::harness;
 use crate::docs::{Gap, Page};
@@ -29,11 +29,6 @@ fn the_gaps_are_read_from_the_answer_and_a_prose_is_none() {
     );
     assert_eq!(gaps_from_answer("{\"gaps\": []}"), Some(vec![]));
     assert_eq!(gaps_from_answer("Tout va bien."), None);
-    assert_eq!(
-        body_from_answer("```json\n{\"body\": \"# Page\\n\\nTexte.\"}\n```").as_deref(),
-        Some("# Page\n\nTexte.")
-    );
-    assert_eq!(body_from_answer("{\"body\": \"  \"}"), None);
 }
 
 #[test]
@@ -177,20 +172,6 @@ async fn a_page_compared_on_demand_gets_its_gaps_and_the_time() {
     assert_eq!((all.pages, all.gaps), (2, 1));
     assert!(space.spec_read("paiement/recu").unwrap().gaps.is_empty());
     assert!(comparing(&p.id).is_empty());
-    // « Mettre la spec à jour »: the page says what the code does, its gap gone.
-    let updated = h
-        .core
-        .docs_update_from_gap(&p.id, "paiement/echeances", 0)
-        .await
-        .unwrap();
-    assert!(updated.gaps.is_empty());
-    assert!(updated.body.contains("Mis à jour d’après le code"));
-    assert!(!updated.body.contains("[écart]"));
-    assert!(h
-        .core
-        .docs_update_from_gap(&p.id, "paiement/echeances", 0)
-        .await
-        .is_err());
     // A model that fails: refused, the page as it was.
     space
         .spec_write("paiement/muet", |p| p.body = "[muet]".into())

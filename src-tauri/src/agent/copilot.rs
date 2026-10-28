@@ -569,8 +569,12 @@ impl AgentRt {
     fn cp_safe(&self, r: &Value) -> bool {
         let cwd = &self.meta.cwd;
         let mode = self.meta.mode.as_str();
+        // A discussion (ESC-261) writes nothing: its reads alone go through, the rest comes to
+        // `discussion_answers`, which refuses a write or a command.
+        let discussion = self.meta.discussion.is_some();
         match r["kind"].as_str().unwrap_or_default() {
             "read" => r["path"].as_str().is_some_and(|p| inside(p, cwd)),
+            _ if discussion => false,
             "write" => mode != "plan" && r["fileName"].as_str().is_some_and(|p| inside(p, cwd)),
             "shell" => {
                 let ids: Vec<&str> = r["commands"]

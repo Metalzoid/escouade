@@ -363,7 +363,7 @@ impl CodexProcess {
         // Fenced, its mode's profile (`mode_params`), declared by its process's options
         // (`fence_args`); none in « Sans permissions », whose sandbox is none.
         if p.get("permissions").is_none() {
-            p["sandbox"] = json!(super::sandbox_mode(&s.settings.mode));
+            p["sandbox"] = json!(super::sandbox_mode(s.settings.sandboxed()));
         }
         match &self.start {
             Start::New => {

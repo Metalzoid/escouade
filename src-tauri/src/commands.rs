@@ -3024,20 +3024,6 @@ pub async fn docs_compare(
     core.inner().docs_compare(&id, pages).await.map_err(err)
 }
 
-/// « Mettre la spec à jour » on gap `index` of a page (ESC-263).
-#[tauri::command]
-pub async fn docs_update_from_gap(
-    core: CoreState<'_>,
-    id: String,
-    path: String,
-    index: usize,
-) -> Res<crate::docs::Page> {
-    core.inner()
-        .docs_update_from_gap(&id, &path, index)
-        .await
-        .map_err(err)
-}
-
 /// The spec already in the project (`SPEC.md`, a `docs/` folder…), offered for import.
 #[tauri::command]
 pub async fn docs_detect_spec(core: CoreState<'_>, id: String) -> Res<Vec<crate::docs::Candidate>> {
@@ -3440,4 +3426,36 @@ pub fn claude_memory_offer(
 #[tauri::command(async)]
 pub fn claude_memory_take(core: CoreState, project_id: String, names: Vec<String>) -> Res<Project> {
     core.claude_memory_take(&project_id, &names).map_err(err)
+}
+
+/// « Commencer » of « Nouvelle discussion » (ESC-261): a discussion or a brainstorm of the Docs
+/// tab, its agent in the folder of the docs branch, sent its subject.
+#[tauri::command]
+pub async fn discussion_start(
+    core: CoreState<'_>,
+    id: String,
+    start: crate::discussion::Start,
+) -> Res<AgentView> {
+    let agent = core.discussion_start(&id, start).await.map_err(err)?;
+    core.telemetry
+        .track(Event::AgentCreated { worktree: false });
+    Ok(agent)
+}
+
+/// « Verser dans la spec »: what the discussion `agent` proposes, written on the docs branch.
+#[tauri::command]
+pub async fn discussion_pour(core: CoreState<'_>, agent: String) -> Res<crate::discussion::Poured> {
+    core.discussion_pour(&agent).await.map_err(err)
+}
+
+/// Takes a proposal out of « Ce qui ira dans la spec »: a page, or a decision (from 1).
+#[tauri::command]
+pub fn discussion_drop(
+    core: CoreState,
+    agent: String,
+    page: Option<String>,
+    decision: Option<usize>,
+) -> Res<()> {
+    core.discussion_drop(&agent, page.as_deref(), decision)
+        .map_err(err)
 }

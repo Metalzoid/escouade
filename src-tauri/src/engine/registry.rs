@@ -152,6 +152,10 @@ pub struct EngineCaps {
     /// Its accounts but the machine's go by an API key, kept in the keychain (Cursor CLI), rather
     /// than a sign-in in a folder of their own.
     pub accounts_by_key: bool,
+    /// Escouade can keep it from writing a file or running a command, in any mode
+    /// (`Spawn::read_only`): a discussion of the Docs tab runs on it (ESC-261). Not one that
+    /// writes the files of its folder without going through Escouade (Cursor CLI, Mistral Vibe).
+    pub read_only: bool,
 }
 
 /// The versions of a harness Escouade was tested with, oldest and newest.

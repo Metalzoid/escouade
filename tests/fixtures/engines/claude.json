@@ -31,7 +31,8 @@
     "defaultRefusal": true,
     "sandbox": false,
     "usagePage": null,
-    "accountsByKey": false
+    "accountsByKey": false,
+    "readOnly": true
   },
   "install": {
     "windows": "irm https://claude.ai/install.ps1 | iex",

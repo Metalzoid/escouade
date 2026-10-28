@@ -780,6 +780,8 @@ pub struct AgentOptions {
     pub remote_off: bool,
     /// Works in this folder (where the project's docs are) when it has no worktree of its own.
     pub cwd: Option<String>,
+    /// A discussion of the Docs tab (ESC-261).
+    pub discussion: Option<crate::discussion::Discussion>,
 }
 
 /// What a copy takes of its original, read while no turn of the original ran.
@@ -5467,6 +5469,15 @@ impl<R: Runtime> Core<R> {
         mode: Option<String>,
     ) -> Result<()> {
         let h = self.agent(id)?;
+        // A discussion of the Docs tab stays in a mode that asks before a write (ESC-261).
+        if let Some(m) = mode.as_deref() {
+            if h.lock().meta.discussion.is_some() && !crate::discussion::MODES.contains(&m) {
+                bail!(tr!(
+                    "Une discussion ne modifie jamais le code : elle reste en mode « Demander » ou « Plan ».",
+                    "A discussion never changes the code: it stays in “Ask” or “Plan” mode."
+                ));
+            }
+        }
         let proc = {
             let mut rt = h.lock();
             if let Some(m) = &model {
@@ -5665,6 +5676,7 @@ impl<R: Runtime> Core<R> {
                 }),
             ),
             port_base: o.port_base,
+            discussion: o.discussion.clone(),
             ..Default::default()
         };
         // The one asked for if the settings know it as an account of the agent's harness

@@ -1913,6 +1913,7 @@ impl<R: Runtime> Core<R> {
                     // Set apart from Remote Control by hand for its earlier agent: so is this one.
                     remote_off: t.remote_off,
                     cwd: None,
+                    discussion: None,
                 },
             )
             .await;

@@ -1677,6 +1677,10 @@ pub struct AgentMeta {
     /// them: the only files outside its folders that its `Read` is allowed without asking
     /// (`attachfiles::granted`). The `MAX_GRANTED_FILES` last.
     pub granted_files: Vec<String>,
+    /// A discussion of the Docs tab (ESC-261): its role, its subject and what it proposes for the
+    /// spec. None for any other agent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discussion: Option<crate::discussion::Discussion>,
 }
 
 /// The sign-in an agent waits for (`AgentMeta::sign_in`): its account's, another than `stamp`.

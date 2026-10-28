@@ -42,6 +42,9 @@ mod cursor_tests;
 #[cfg(test)]
 mod cursor_tui_tests;
 mod desktop;
+mod discussion;
+#[cfg(test)]
+mod discussion_tests;
 mod docs;
 #[cfg(test)]
 mod docs_tests;
@@ -522,7 +525,6 @@ pub fn run() {
             commands::refresh_repos,
             commands::docs_spec_tree,
             commands::docs_compare,
-            commands::docs_update_from_gap,
             commands::docs_detect_spec,
             commands::docs_spec_page,
             commands::docs_spec_write,
@@ -546,6 +548,9 @@ pub fn run() {
             commands::docs_import_plan,
             commands::docs_import,
             commands::docs_recent,
+            commands::discussion_start,
+            commands::discussion_pour,
+            commands::discussion_drop,
             commands::get_workflows,
             commands::get_workflow_tracks,
             commands::refresh_workflows,

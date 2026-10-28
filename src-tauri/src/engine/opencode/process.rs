@@ -9,7 +9,7 @@
 //! can come after the next message is sent).
 
 use super::server::{self, Listener, Server};
-use super::{agent_of, rules, split_model, Settings};
+use super::{agent_of, session_rules, split_model, Settings};
 use crate::engine::mcp::{self, Escouade};
 use crate::engine::terminal::Attach;
 use crate::engine::{
@@ -283,7 +283,7 @@ impl Inner {
         let Ok(session) = self.session() else { return };
         let rules = {
             let s = self.state.lock();
-            rules(&s.settings.mode, &s.settings.fence)
+            session_rules(&s.settings)
         };
         self.fire(
             Method::PATCH,
@@ -378,7 +378,7 @@ impl Inner {
     async fn open(self: &Arc<Self>) -> Result<(Value, &'static str)> {
         let rules = {
             let s = self.state.lock();
-            rules(&s.settings.mode, &s.settings.fence)
+            session_rules(&s.settings)
         };
         let new = || json!({ "title": self.title, "permission": rules.clone() });
         let srv = &self.server;

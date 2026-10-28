@@ -8,6 +8,10 @@
 //! of the IPC), and an accepted decision is never rewritten (`docs::rewrites`). Escouade writes the
 //! files and does nothing else with them: nothing is committed nor pushed.
 //!
+//! A discussion of the Docs tab (ESC-261) writes nothing: its pages and decisions are kept on it
+//! as proposals (`discussion.rs`), which « Verser dans la spec » writes; it reads its own pages as
+//! it proposes them.
+//!
 //! The project is named through `resolve::project`, so a private project says nothing of its docs to
 //! the agents of the others (`Sight`).
 
@@ -256,12 +260,44 @@ pub(super) async fn tree<R: Runtime>(
     }))
 }
 
+/// The discussion the caller is (ESC-261), when it is one of the project `project`.
+fn discussion_of<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    project: &Project,
+) -> Option<(String, crate::discussion::Discussion)> {
+    let Caller::Agent(id) = caller else {
+        return None;
+    };
+    let h = core.agent(id).ok()?;
+    let rt = h.lock();
+    let d = rt.meta.discussion.clone()?;
+    (rt.meta.project_id == project.id).then(|| (id.clone(), d))
+}
+
+/// What a discussion's agent is told of what it wrote: a proposal, not in the docs yet.
+fn proposed_note() -> String {
+    tr!(
+        "Proposé dans « Ce qui ira dans la spec » : rien n’est écrit dans les docs tant que l’utilisateur ne l’a pas versé (« Verser dans la spec »).",
+        "Proposed in “What will go in the spec”: nothing is written in the docs until the user pours it (“Pour into the spec”)."
+    )
+}
+
 pub(super) async fn page<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,
     args: SpecPageArgs,
 ) -> Result<String, ToolError> {
-    let (_, space) = open(core, caller, &args.project).await?;
+    let (project, space) = open(core, caller, &args.project).await?;
+    // A discussion reads the page as it proposes it.
+    if let (Some((_, d)), Some(path)) = (
+        discussion_of(core, caller, &project),
+        docs::page_path(&args.path),
+    ) {
+        if let Some(c) = d.page(&path) {
+            return json(&c.page);
+        }
+    }
     json(&space.spec_read(&args.path).map_err(failed)?)
 }
 
@@ -287,7 +323,11 @@ pub(super) async fn write<R: Runtime>(
             .unwrap_or_else(|| "general".into());
         path = format!("{subject}/{path}");
     }
-    let exists = space.spec_read(&path).is_ok();
+    let discussion = discussion_of(core, caller, &project);
+    let proposed = discussion
+        .as_ref()
+        .and_then(|(_, d)| d.page(&path).map(|c| c.page.clone()));
+    let exists = proposed.is_some() || space.spec_read(&path).is_ok();
     // A ticket's agent that writes a page: its ticket among the page's (ESC-263).
     let own = match caller {
         Caller::Agent(id) => core.ticket_key_of_agent(&project.id, id),
@@ -299,39 +339,56 @@ pub(super) async fn write<R: Runtime>(
             "A new page needs its text (body)."
         ))));
     }
-    let (page, added, removed) = space
-        .spec_write(&path, |p| {
-            if let Some(t) = args.title.as_deref().filter(|t| !t.trim().is_empty()) {
-                p.title = t.trim().to_string();
+    let edit = |p: &mut docs::Page| {
+        if let Some(t) = args.title.as_deref().filter(|t| !t.trim().is_empty()) {
+            p.title = t.trim().to_string();
+        }
+        if let Some(s) = args.subject.as_deref().filter(|s| !s.trim().is_empty()) {
+            if !exists {
+                p.subject = s.trim().to_string();
             }
-            if let Some(s) = args.subject.as_deref().filter(|s| !s.trim().is_empty()) {
-                if !exists {
-                    p.subject = s.trim().to_string();
-                }
+        }
+        if let Some(b) = &args.body {
+            if args.append == Some(true) && !p.body.is_empty() {
+                p.body = format!("{}\n\n{}", p.body.trim_end(), b.trim());
+            } else {
+                p.body = b.clone();
             }
-            if let Some(b) = &args.body {
-                if args.append == Some(true) && !p.body.is_empty() {
-                    p.body = format!("{}\n\n{}", p.body.trim_end(), b.trim());
-                } else {
-                    p.body = b.clone();
-                }
+        }
+        if let Some(v) = &args.sources {
+            p.sources = v.clone();
+        }
+        if let Some(v) = &args.tickets {
+            p.tickets = v.clone();
+        }
+        if let Some(v) = &args.decisions {
+            p.decisions = v.clone();
+        }
+        if let Some(k) = &own {
+            if !p.tickets.iter().any(|x| x.eq_ignore_ascii_case(k)) {
+                p.tickets.push(k.clone());
             }
-            if let Some(v) = &args.sources {
-                p.sources = v.clone();
-            }
-            if let Some(v) = &args.tickets {
-                p.tickets = v.clone();
-            }
-            if let Some(v) = &args.decisions {
-                p.decisions = v.clone();
-            }
-            if let Some(k) = &own {
-                if !p.tickets.iter().any(|x| x.eq_ignore_ascii_case(k)) {
-                    p.tickets.push(k.clone());
-                }
-            }
-        })
-        .map_err(failed)?;
+        }
+    };
+    // A discussion's page is kept on it, over the one it already proposes.
+    if let Some((id, _)) = discussion {
+        let before = space.spec_read(&path).ok().map(|p| p.body);
+        let (page, _, _) = space.spec_edit(&path, proposed, edit).map_err(failed)?;
+        let change = core
+            .discussion_edit(&id, |d| d.propose_page(before, page).clone())
+            .map_err(failed)?;
+        return json(&json!({
+            "path": change.path,
+            "title": change.page.title,
+            "subject": change.page.subject,
+            "created": change.before.is_none(),
+            "added": change.added,
+            "removed": change.removed,
+            "proposed": true,
+            "note": proposed_note(),
+        }));
+    }
+    let (page, added, removed) = space.spec_write(&path, edit).map_err(failed)?;
     core.docs_changed(&project.id).await;
     json(&json!({
         "path": page.path,
@@ -455,10 +512,34 @@ pub(super) async fn propose<R: Runtime>(
 ) -> Result<String, ToolError> {
     let (project, space) = open(core, caller, &args.project).await?;
     let mut d = decision_of(args.fields);
+    if let Some((id, _)) = discussion_of(core, caller, &project) {
+        return keep_proposal(core, &id, d);
+    }
     from_ticket(core, caller, &project, &mut d);
     let d = space.decision_propose(args.number, d).map_err(failed)?;
     core.docs_changed(&project.id).await;
     json(&json!({ "number": d.number, "title": d.title, "state": d.state, "date": d.date }))
+}
+
+/// A discussion's decision, kept on it until poured.
+fn keep_proposal<R: Runtime>(core: &Core<R>, id: &str, d: Decision) -> Result<String, ToolError> {
+    if d.title.trim().is_empty() {
+        return Err(failed(anyhow::anyhow!(tr!(
+            "Une décision a un titre.",
+            "A decision needs a title."
+        ))));
+    }
+    let title = d.title.clone();
+    let place = core
+        .discussion_edit(id, |disc| disc.propose_decision(d))
+        .map_err(failed)?;
+    json(&json!({
+        "proposal": place,
+        "title": title,
+        "state": "proposed",
+        "proposed": true,
+        "note": proposed_note(),
+    }))
 }
 
 pub(super) async fn replace<R: Runtime>(
@@ -468,6 +549,19 @@ pub(super) async fn replace<R: Runtime>(
 ) -> Result<String, ToolError> {
     let (project, space) = open(core, caller, &args.project).await?;
     let mut d = decision_of(args.fields);
+    if let Some((id, _)) = discussion_of(core, caller, &project) {
+        // Checked now (an accepted decision only), replaced when poured.
+        let was = space.decision(args.number).map_err(failed)?;
+        if was.state != State::Accepted {
+            return Err(failed(anyhow::anyhow!(tr!(
+                "Seule une décision acceptée se remplace (la n° {} ne l’est pas) : une proposition se révise.",
+                "Only an accepted decision is replaced (number {} is not): a proposal is revised.",
+                args.number
+            ))));
+        }
+        d.supersedes = vec![args.number];
+        return keep_proposal(core, &id, d);
+    }
     from_ticket(core, caller, &project, &mut d);
     let d = space.decision_replace(args.number, d).map_err(failed)?;
     core.docs_changed(&project.id).await;

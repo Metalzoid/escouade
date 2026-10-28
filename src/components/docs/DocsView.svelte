@@ -3,6 +3,7 @@
   import { app } from '../../lib/state.svelte';
   import type { Project } from '../../lib/types';
   import DecisionsSpace from './DecisionsSpace.svelte';
+  import DiscussionView from './DiscussionView.svelte';
   import DocumentsSpace from './DocumentsSpace.svelte';
   import SpecSpace from './SpecSpace.svelte';
 
@@ -13,6 +14,12 @@
 
   const space = $derived(app.docsSpace[project.id] ?? 'spec');
   const pending = $derived(app.docsShare[project.id]?.pending);
+  /** The discussion open (ESC-261), while its agent is there. */
+  const discussion = $derived.by(() => {
+    const id = app.docsDiscussion[project.id];
+    const a = id ? app.agents[id] : undefined;
+    return a?.discussion ? a : null;
+  });
   /** The pages being compared to the code: each one done brings its gaps (ESC-263). */
   const comparing = $derived((app.docsComparing[project.id] ?? []).join('|'));
 
@@ -24,8 +31,10 @@
   });
 </script>
 
-<div class="docs" data-space={space}>
-  {#if space === 'spec'}
+<div class="docs" data-space={discussion ? 'discussion' : space}>
+  {#if discussion}
+    <DiscussionView {project} agent={discussion} />
+  {:else if space === 'spec'}
     <SpecSpace {project} />
   {:else if space === 'decisions'}
     <DecisionsSpace {project} />

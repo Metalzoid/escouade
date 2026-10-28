@@ -939,12 +939,27 @@ impl Space {
     /// Creates or changes a page: what `edit` leaves of the page as it was (an empty one for a new
     /// page) is written. Returns the page and the lines it added and removed.
     pub fn spec_write(&self, rel: &str, edit: impl FnOnce(&mut Page)) -> Result<(Page, u32, u32)> {
+        let (page, added, removed) = self.spec_edit(rel, None, edit)?;
+        let file = self.file(SPEC, &format!("{}.md", page.path))?;
+        self.write(&file, page_write(&page).as_bytes())?;
+        Ok((page, added, removed))
+    }
+
+    /// What `spec_write` would write, without writing it: the page `edit` leaves of `current`
+    /// (a discussion's proposal, ESC-261) or of the page as it is, and the lines it adds and
+    /// removes from it.
+    pub fn spec_edit(
+        &self,
+        rel: &str,
+        current: Option<Page>,
+        edit: impl FnOnce(&mut Page),
+    ) -> Result<(Page, u32, u32)> {
         let path = page_path(rel).ok_or_else(|| bad_page(rel))?;
         let file = self.file(SPEC, &format!("{path}.md"))?;
-        let before = if file.is_file() {
-            Some(page_read(&path, &self.read_text(&file)?))
-        } else {
-            None
+        let before = match current {
+            Some(p) => Some(p),
+            None if file.is_file() => Some(page_read(&path, &self.read_text(&file)?)),
+            None => None,
         };
         let mut page = before.clone().unwrap_or_else(|| Page {
             path: path.clone(),
@@ -961,7 +976,6 @@ impl Space {
         }
         page.body = page.body.trim_end_matches(['\n', '\r']).to_string();
         let (added, removed) = line_delta(before.as_ref().map_or("", |b| &b.body), &page.body);
-        self.write(&file, page_write(&page).as_bytes())?;
         Ok((page, added, removed))
     }
 

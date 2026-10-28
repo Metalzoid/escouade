@@ -710,3 +710,263 @@ async fn agents_find_read_and_cite_the_documents_and_the_drive_counts_it() {
     assert_eq!(all["folders"][0]["path"], "Comptes rendus");
     c.cancel().await.unwrap();
 }
+
+/// A discussion of the Docs tab (ESC-261) as an agent of the project.
+fn put_discussion(
+    h: &crate::core_tests::Harness,
+    p: &crate::model::Project,
+    kind: crate::discussion::Kind,
+) -> String {
+    let a = put_agent(h, p, "relances", 1);
+    h.core.agent(&a.id).unwrap().lock().meta.discussion = Some(crate::discussion::Discussion {
+        kind,
+        subject: "Relance des adhésions".into(),
+        ..Default::default()
+    });
+    a.id
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_discussion_proposes_pages_and_decisions_that_pour_writes() {
+    let h = harness("mcp-docs-discussion");
+    let p = project(&h).await;
+    let spec = std::path::Path::new(&p.path).join(".escouade/spec");
+    // A page that exists, written by the window.
+    let e = external(&h).await;
+    read(
+        &e,
+        "write_spec_page",
+        json!({ "project": p.id, "path": "notifications/general", "title": "Notifications", "body": "Aucune notification n’est planifiée." }),
+    )
+    .await;
+    read(
+        &e,
+        "propose_decision",
+        json!({ "project": p.id, "title": "Une ancienne" }),
+    )
+    .await;
+    e.cancel().await.unwrap();
+    h.core.docs_accept_decision(&p.id, 1).await.unwrap();
+    let before = std::fs::read_to_string(spec.join("notifications/general.md")).unwrap();
+    let id = put_discussion(&h, &p, crate::discussion::Kind::Brainstorm);
+    let c = as_agent(&h, &id).await;
+    let made = read(
+        &c,
+        "write_spec_page",
+        json!({ "project": p.id, "path": "espace-adherent/relances", "title": "Relances", "body": "Trois relances par e-mail." }),
+    )
+    .await;
+    assert_eq!(
+        (
+            made["proposed"].clone(),
+            made["created"].clone(),
+            made["added"].clone()
+        ),
+        (json!(true), json!(true), json!(1))
+    );
+    let changed = read(
+        &c,
+        "write_spec_page",
+        json!({ "project": p.id, "path": "notifications/general", "body": "Les relances d’adhésion sont planifiées chaque nuit." }),
+    )
+    .await;
+    assert_eq!(
+        (changed["added"].clone(), changed["removed"].clone()),
+        (json!(1), json!(1))
+    );
+    // Nothing in the docs yet: the page as it was, no new page.
+    assert!(!spec.join("espace-adherent/relances.md").exists());
+    assert_eq!(
+        std::fs::read_to_string(spec.join("notifications/general.md")).unwrap(),
+        before
+    );
+    // It reads its page as it proposes it, and adds to it.
+    let mine = read(
+        &c,
+        "read_spec_page",
+        json!({ "project": p.id, "path": "espace-adherent/relances" }),
+    )
+    .await;
+    assert_eq!(mine["body"], "Trois relances par e-mail.");
+    read(
+        &c,
+        "write_spec_page",
+        json!({ "project": p.id, "path": "espace-adherent/relances", "body": "Coupables depuis l’espace.", "append": true }),
+    )
+    .await;
+    let proposed = read(
+        &c,
+        "propose_decision",
+        json!({ "project": p.id, "title": "Relances par e-mail seulement", "decision": "Pas de SMS.", "pages": ["espace-adherent/relances"] }),
+    )
+    .await;
+    assert_eq!(
+        (proposed["proposal"].clone(), proposed["proposed"].clone()),
+        (json!(1), json!(true))
+    );
+    // Replacing is checked now: only an accepted decision.
+    let (why, error) = call(
+        &c,
+        "replace_decision",
+        json!({ "project": p.id, "number": 9, "title": "X" }),
+    )
+    .await;
+    assert!(error, "{why}");
+    read(
+        &c,
+        "replace_decision",
+        json!({ "project": p.id, "number": 1, "title": "La nouvelle" }),
+    )
+    .await;
+    c.cancel().await.unwrap();
+    assert_eq!(
+        h.core
+            .docs_space(&p.id, None)
+            .await
+            .unwrap()
+            .decisions()
+            .len(),
+        1
+    );
+    let d = h
+        .core
+        .agent(&id)
+        .unwrap()
+        .lock()
+        .meta
+        .discussion
+        .clone()
+        .unwrap();
+    assert_eq!(d.pages.len(), 2);
+    assert_eq!(
+        d.page("espace-adherent/relances").unwrap().page.body,
+        "Trois relances par e-mail.\n\nCoupables depuis l’espace."
+    );
+    assert_eq!(d.decisions.len(), 2);
+    assert_eq!(d.decisions[0].origin, "brainstorm");
+    assert_eq!(d.decisions[1].supersedes, vec![1]);
+
+    // « Verser dans la spec »: written, the decisions proposed in the register, the discussion emptied.
+    let poured = h.core.discussion_pour(&id).await.unwrap();
+    assert_eq!(
+        poured.pages,
+        vec!["espace-adherent/relances", "notifications/general"]
+    );
+    assert_eq!(poured.decisions, vec![2, 3]);
+    let space = h.core.docs_space(&p.id, None).await.unwrap();
+    assert!(space
+        .spec_read("espace-adherent/relances")
+        .unwrap()
+        .body
+        .ends_with("Coupables depuis l’espace."));
+    assert_eq!(
+        space.spec_read("notifications/general").unwrap().body,
+        "Les relances d’adhésion sont planifiées chaque nuit."
+    );
+    let two = space.decision(2).unwrap();
+    assert_eq!(two.state, crate::docs::State::Proposed);
+    assert_eq!(
+        (two.origin.as_str(), two.origin_ref.as_str()),
+        ("brainstorm", "Relance des adhésions")
+    );
+    // What it changed: its page's lines.
+    assert_eq!(two.changes.len(), 1);
+    assert_eq!(two.changes[0].page, "espace-adherent/relances");
+    assert_eq!(space.decision(3).unwrap().supersedes, vec![1]);
+    let d = h
+        .core
+        .agent(&id)
+        .unwrap()
+        .lock()
+        .meta
+        .discussion
+        .clone()
+        .unwrap();
+    assert!(d.pages.is_empty() && d.decisions.is_empty());
+    assert_eq!(d.poured.unwrap().pages.len(), 2);
+    // Nothing more to pour; nothing committed.
+    assert!(h.core.discussion_pour(&id).await.is_err());
+    let repo = std::path::Path::new(&p.path);
+    assert_eq!(git(repo, &["log", "--oneline", "--all"]).lines().count(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_proposal_taken_out_is_not_poured() {
+    let h = harness("mcp-docs-discussion-drop");
+    let p = project(&h).await;
+    let id = put_discussion(&h, &p, crate::discussion::Kind::Discussion);
+    let c = as_agent(&h, &id).await;
+    for path in ["a/un", "a/deux"] {
+        read(
+            &c,
+            "write_spec_page",
+            json!({ "project": p.id, "path": path, "body": "x" }),
+        )
+        .await;
+    }
+    read(
+        &c,
+        "propose_decision",
+        json!({ "project": p.id, "title": "D" }),
+    )
+    .await;
+    c.cancel().await.unwrap();
+    h.core.discussion_drop(&id, Some("a/un"), Some(1)).unwrap();
+    let poured = h.core.discussion_pour(&id).await.unwrap();
+    assert_eq!(
+        (poured.pages, poured.decisions),
+        (vec!["a/deux".to_string()], vec![])
+    );
+    let space = h.core.docs_space(&p.id, None).await.unwrap();
+    assert!(space.spec_read("a/un").is_err());
+    assert!(space.decisions().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_gap_a_discussion_was_opened_on_goes_when_its_page_is_poured() {
+    let h = harness("mcp-docs-discussion-gap");
+    let p = project(&h).await;
+    let space = h.core.docs_space(&p.id, None).await.unwrap();
+    let gap = |t: &str| crate::docs::Gap {
+        text: t.into(),
+        code: vec!["src/payment.ts".into()],
+    };
+    space
+        .spec_write("paiement/echeances", |pg| {
+            pg.body = "Trois échéances.".into();
+            pg.gaps = vec![gap("Le code en accepte quatre."), gap("Un autre écart.")];
+        })
+        .unwrap();
+    let id = put_discussion(&h, &p, crate::discussion::Kind::Discussion);
+    h.core
+        .discussion_edit(&id, |d| {
+            d.settles = Some(crate::discussion::Settles {
+                page: "paiement/echeances".into(),
+                gap: gap("Le code en accepte quatre."),
+            })
+        })
+        .unwrap();
+    let c = as_agent(&h, &id).await;
+    read(
+        &c,
+        "write_spec_page",
+        json!({ "project": p.id, "path": "paiement/echeances", "body": "Quatre échéances." }),
+    )
+    .await;
+    c.cancel().await.unwrap();
+    h.core.discussion_pour(&id).await.unwrap();
+    let page = space.spec_read("paiement/echeances").unwrap();
+    assert_eq!(page.body, "Quatre échéances.");
+    // The one it settles is gone; the other stays.
+    assert_eq!(page.gaps, vec![gap("Un autre écart.")]);
+    let d = h
+        .core
+        .agent(&id)
+        .unwrap()
+        .lock()
+        .meta
+        .discussion
+        .clone()
+        .unwrap();
+    assert!(d.settles.is_none());
+}

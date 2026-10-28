@@ -13,8 +13,8 @@
 
   // A page of the spec (ESC-258, docs/FACTORY.md « La spécification »): on top its gaps with the code and what settles
   // them, then its Markdown rendered, or written in a simple editor (or the file in Escouade's editor); beside it, its
-  // sources, tickets and decisions. « Comparer au code » and « Mettre la spec à jour » (ESC-263) ask the short agent that
-  // reads the code.
+  // sources, tickets and decisions. « Comparer au code » asks the short agent that reads the code (ESC-263); « Mettre la spec
+  // à jour » opens a discussion with the spec writer on the gap (ESC-261).
   let { project, path, onback }: { project: Project; path: string; onback: () => void } = $props();
 
   let page = $state<DocsPage | null>(null);
@@ -71,20 +71,24 @@
     await load();
   }
 
-  /** « Mettre la spec à jour » on a gap: the page rewritten to say what the code does there, the gap gone. */
-  let updating = $state<number | null>(null);
-  async function update(i: number) {
-    updating = i;
-    const done = await app.run(api.docsUpdateFromGap(project.id, path, i));
-    updating = null;
-    if (!done) return;
-    page = done;
-    app.toast(t('docs.page.updated'));
-    void docsStore.load(project.id);
-  }
-
   function seeCode(g: DocsGap) {
     if (g.code[0]) void app.openEditor({ projectId: project.id, source: 'project', path: g.code[0] });
+  }
+
+  /** « Mettre la spec à jour »: a discussion with the spec writer, told the gap, which proposes the page from the code. */
+  function updateSpec(g: DocsGap, index: number) {
+    if (!page) return;
+    app.newDiscussion(project.id, {
+      kind: 'discussion',
+      gap: { page: path, index },
+      subject: t('docs.discussion.updateSubject', { page: page.title }),
+      message: t('docs.discussion.updateMessage', {
+        page: page.title,
+        path: `.escouade/spec/${path}.md`,
+        gap: g.text,
+        files: g.code.length ? g.code.join(', ') : t('docs.page.noFiles'),
+      }),
+    });
   }
 
   /** « Ouvrir un ticket pour le code »: the ticket's window, its title and description written from the gap. */
@@ -161,8 +165,8 @@
             <p>{g.text}</p>
             {#if g.code.length}<p class="files mono">{g.code.join(' · ')}</p>{/if}
             <div class="g-acts">
-              <button class="btn primary" disabled={updating !== null} use:tip={t('docs.page.updateTip')} onclick={() => update(i)}
-                ><Icon name="edit" size={14} />{updating === i ? t('docs.page.updating') : t('docs.page.update')}</button
+              <button class="btn primary" onclick={() => updateSpec(g, i)}
+                ><Icon name="edit" size={14} />{t('docs.discussion.updateSpec')}</button
               >
               <button class="btn" onclick={() => openTicket(g)}><Icon name="kanban" size={14} />{t('docs.page.openTicket')}</button>
               <button

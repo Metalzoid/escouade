@@ -1382,6 +1382,47 @@ impl AgentRt {
     /// One frame of its process, translated into its conversation by its engine.
     pub fn handle_frame(&mut self, f: &Value, fx: &mut Effects) {
         engine::of(&self.meta).translate(self, f, fx);
+        if self.meta.discussion.is_some() && !self.pending.is_empty() {
+            self.discussion_answers(fx);
+        }
+    }
+
+    /// A discussion of the Docs tab (ESC-261) never changes a file nor runs a command: what it asks
+    /// for that is refused on the spot, whatever its harness; Escouade's own tools (the docs it
+    /// writes) go through without a question. The rest waits for the user, as for any agent.
+    fn discussion_answers(&mut self, fx: &mut Effects) {
+        let answers: Vec<(String, &str)> = self
+            .pending
+            .iter()
+            .filter(|p| p.view.kind == "permission")
+            .filter_map(|p| {
+                let tool = p.view.tool.as_str();
+                if crate::discussion::refused_tool(tool) {
+                    Some((p.item_id.clone(), "deny"))
+                } else if crate::discussion::allowed_tool(tool) {
+                    Some((p.item_id.clone(), "allow"))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if answers.is_empty() {
+            return;
+        }
+        for (id, decision) in answers {
+            // The refusal says itself that Escouade refused, and why.
+            let message = (decision == "deny").then(|| crate::discussion::refusal(i18n::claude()));
+            if let Err(e) = self.answer_permission_by(&id, decision, message, None, fx) {
+                log::warn!(
+                    "agent {}: discussion's answer to {id} not given: {e:#}",
+                    self.meta.id
+                );
+            }
+        }
+        // Nobody is to be called for what was answered.
+        if self.pending.is_empty() {
+            fx.notify = None;
+        }
     }
 }
 

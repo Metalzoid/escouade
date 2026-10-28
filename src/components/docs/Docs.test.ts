@@ -119,9 +119,18 @@ describe('the Docs tab', () => {
     expect(app.docsPage.p1).toBe('paiement/plusieurs-fois');
     const gaps = await screen.findByRole('region', { name: 'Un écart avec le code' });
     expect(gaps).toHaveTextContent('le code accepte 4 échéances');
-    // Its three buttons (ESC-263).
-    for (const name of ['Mettre la spec à jour', 'Ouvrir un ticket pour le code', 'Voir le code'])
-      expect(within(gaps).getByRole('button', { name })).toBeInTheDocument();
+    // « Mettre la spec à jour »: a discussion with the spec writer, told the gap (ESC-261).
+    await userEvent.click(within(gaps).getByRole('button', { name: 'Mettre la spec à jour' }));
+    expect(app.modal).toMatchObject({
+      kind: 'newDiscussion',
+      projectId: 'p1',
+      preset: { kind: 'discussion', subject: 'Mettre à jour « En plusieurs fois »', gap: { page: 'paiement/plusieurs-fois', index: 0 } },
+    });
+    const told = (app.modal as { preset: { message: string } }).preset.message;
+    expect(told).toContain('le code accepte 4 échéances');
+    expect(told).toContain('src/payment.ts');
+    expect(told).toContain('.escouade/spec/paiement/plusieurs-fois.md');
+    app.modal = null;
     expect(screen.getByText('documents/cahier-des-charges.pdf')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Règle' })).toBeInTheDocument();
     // « Ouvrir un ticket pour le code »: the ticket's window, written from the gap.
@@ -131,7 +140,7 @@ describe('the Docs tab', () => {
       projectId: 'p1',
       resume: { title: 'Aligner le code sur la spec : En plusieurs fois' },
     });
-    expect((app.modal as { resume: { description: string } }).resume.description).toContain('src/payment.ts');
+    expect((app.modal as unknown as { resume: { description: string } }).resume.description).toContain('src/payment.ts');
     app.modal = null;
     // Edited in the simple editor, then saved.
     await userEvent.click(screen.getByRole('button', { name: 'Modifier' }));
@@ -144,12 +153,11 @@ describe('the Docs tab', () => {
     expect(await screen.findByText('Quatre échéances.')).toBeInTheDocument();
   });
 
-  it('compares a page or the whole spec to the code, and updates the spec from a gap (ESC-263)', async () => {
+  it('compares a page or the whole spec to the code (ESC-263)', async () => {
     let page = PAGE;
     const b = backend({
       docs_spec_page: () => page,
       docs_compare: () => ({ pages: 1, gaps: 1, failed: 0 }),
-      docs_update_from_gap: () => (page = { ...PAGE, gaps: [], body: 'Quatre échéances.' }),
     });
     render(DocsView, { project: app.projects[0] });
     // On the map: each subject says when it was last compared.
@@ -167,12 +175,7 @@ describe('the Docs tab', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Comparer au code' }));
     await waitFor(() => expect(b.called('docs_compare')).toHaveLength(2));
     expect(b.called('docs_compare')[1].args).toEqual({ id: 'p1', pages: ['paiement/plusieurs-fois'] });
-    // « Mettre la spec à jour »: the page from the code, its gap gone.
-    await userEvent.click(within(gaps).getByRole('button', { name: 'Mettre la spec à jour' }));
-    await waitFor(() => expect(b.called('docs_update_from_gap')).toHaveLength(1));
-    expect(b.called('docs_update_from_gap')[0].args).toEqual({ id: 'p1', path: 'paiement/plusieurs-fois', index: 0 });
-    expect(await screen.findByText('Quatre échéances.')).toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: 'Un écart avec le code' })).toBeNull();
+    expect(gaps).toBeInTheDocument();
   });
 
   it('starts a project without a spec from an empty space that offers the spec it has, then imports its cut', async () => {

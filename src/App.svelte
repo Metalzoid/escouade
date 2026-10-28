@@ -39,6 +39,7 @@
   import { isMulti } from './lib/repos';
   import NewProjectModal from './components/modals/NewProjectModal.svelte';
   import RenameModal from './components/modals/RenameModal.svelte';
+  import NewDiscussionModal from './components/docs/NewDiscussionModal.svelte';
   import SettingsModal from './components/modals/SettingsModal.svelte';
   import TestLaunchModal from './components/modals/TestLaunchModal.svelte';
   import ImportModal from './components/modals/ImportModal.svelte';
@@ -243,6 +244,8 @@
   {#key app.modal}
     <ConfirmModal {...app.modal} />
   {/key}
+{:else if app.modal?.kind === 'newDiscussion'}
+  <NewDiscussionModal projectId={app.modal.projectId} preset={app.modal.preset} />
 {:else if app.modal?.kind === 'rename'}
   <RenameModal title={app.modal.title} value={app.modal.value} onSubmit={app.modal.onSubmit} />
 {:else if app.modal?.kind === 'account'}

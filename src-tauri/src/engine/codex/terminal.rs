@@ -212,10 +212,12 @@ pub(crate) fn tui_args(l: &TerminalLaunch) -> Vec<String> {
     // « Projet privé »: Escouade's profile of its mode, in place of its sandbox (`-s`, which
     // Codex would take over the profile).
     let fence = crate::fence::spelled(l.fence, l.program);
+    // A discussion (ESC-261): read only, whatever its mode.
+    let sandboxed = super::sandboxed(&m.mode, m.discussion.is_some());
     let profile = (!fence.is_empty())
-        .then(|| super::fence_profile(&m.mode))
+        .then(|| super::fence_profile(sandboxed))
         .flatten();
-    match (m.mode.as_str(), profile) {
+    match (sandboxed, profile) {
         ("auto", _) => a.push("--approve-for-me".into()),
         ("bypassPermissions", _) => a.push("--dangerously-bypass-approvals-and-sandbox".into()),
         (_, Some(_)) => a.extend(["-a".into(), "on-request".into()]),

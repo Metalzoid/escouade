@@ -22,6 +22,9 @@
   --frame: color-mix(in oklch, var(--p) 8%, #08090a);
   --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
   --raise: color-mix(in oklch, var(--p) 6%, #15161a);
+  /* The two kinds of discussion of the Docs tab (ESC-261). */
+  --disc: oklch(0.8 0.11 185);
+  --brain: oklch(0.8 0.12 300);
   --raise-2: color-mix(in oklch, var(--p) 6%, #1b1c20);
   --well: color-mix(in oklch, var(--p) 2%, #0a0b0d);
   /* Hairlines, hovers and reliefs are the ink at low alpha: white here, near black in the light theme. */
@@ -147,6 +150,8 @@
   --frame: color-mix(in oklch, var(--p) 7%, #f0f1f3);
   --panel: color-mix(in oklch, var(--p) 2.5%, #fdfdfd);
   --raise: color-mix(in oklch, var(--p) 4%, #f4f5f7);
+  --disc: oklch(0.5 0.1 185);
+  --brain: oklch(0.5 0.16 300);
   --raise-2: color-mix(in oklch, var(--p) 5%, #eceef1);
   --well: color-mix(in oklch, var(--p) 2.5%, #f6f7f9);
   --fg-rgb: 15, 17, 22;

@@ -8,8 +8,8 @@
 //!   it on, by the files' paths and names otherwise, and those that name its ticket.
 //! - **On demand**: a page, or the whole spec (« Comparer au code »).
 //!
-//! « Mettre la spec à jour » on a gap asks the same short agent for the page rewritten to say what
-//! the code does there; written on the branch of the docs, like any change, to be shared.
+//! « Mettre la spec à jour » on a gap opens a discussion with the spec writer (ESC-261,
+//! `discussion.rs`), which proposes the page from the code; its pouring takes the gap away.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{bail, Result};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tauri::Runtime;
 
 use crate::core::Core;
@@ -181,39 +181,6 @@ pub fn keep_code(gaps: &mut [Gap], folder: &Path, fenced: impl Fn(&str) -> bool)
             .filter(|c| seen.insert(c.clone()))
             .collect();
     }
-}
-
-/// « Mettre la spec à jour »: the role of the short agent.
-pub fn update_system(lang: Lang) -> String {
-    tr_in!(
-        lang,
-        "Tu mets à jour une page de la spécification d'un produit pour qu'elle dise ce que fait le code de ce dépôt, \
-         que tu lis sans rien modifier, sur l'écart relevé (et seulement lui). Garde le reste de la page tel quel. \
-         Réponds par un bloc ```json qui contient {{\"body\": \"<la page entière, en Markdown>\"}}.",
-        "You update a page of a product's specification so that it says what the code of this repository does, \
-         which you read without changing anything, on the gap found (and only it). Keep the rest of the page as it is. \
-         Answer with a ```json block that holds {{\"body\": \"<the whole page, in Markdown>\"}}."
-    )
-}
-
-pub fn update_prompt(page: &Page, gap: &Gap) -> String {
-    format!(
-        "<spec-update path=\"{}\" title=\"{}\">\n{}\n</spec-update>\n<gap>\n{}\n{}\n</gap>\n",
-        page.path,
-        page.title.replace('"', "'"),
-        cut(&page.body, MAX_BODY),
-        gap.text,
-        gap.code.join("\n")
-    )
-}
-
-pub fn body_from_answer(answer: &str) -> Option<String> {
-    #[derive(Deserialize)]
-    struct A {
-        body: String,
-    }
-    let a: A = serde_json::from_str(json_of(answer)).ok()?;
-    Some(a.body).filter(|b| !b.trim().is_empty())
 }
 
 // ---------- the pages a ticket touches ----------
@@ -541,46 +508,5 @@ impl<R: Runtime> Core<R> {
                 log::warn!("ticket {key}: its pages not compared: {e:#}");
             }
         });
-    }
-
-    /// « Mettre la spec à jour » on gap `index` of page `path`: the page rewritten by the short agent
-    /// to say what the code does there, the gap gone.
-    pub async fn docs_update_from_gap(
-        self: &Arc<Self>,
-        project_id: &str,
-        path: &str,
-        index: usize,
-    ) -> Result<Page> {
-        let project = self.project(project_id)?;
-        let space = self.docs_space(project_id, None).await?;
-        let page = space.spec_read(path)?;
-        let Some(gap) = page.gaps.get(index).cloned() else {
-            bail!(tr!(
-                "Cet écart n’est plus sur la page.",
-                "This gap is no longer on the page."
-            ));
-        };
-        let lang = self.lang().claude;
-        let answer = self
-            .read_folder(
-                &project.id,
-                &Self::docs_code_folder(&project),
-                &update_system(lang),
-                &update_prompt(&page, &gap),
-                LIMIT,
-            )
-            .await?;
-        let Some(body) = body_from_answer(&answer) else {
-            bail!(tr!(
-                "La réponse de l’agent n’est pas une page.",
-                "The agent’s answer is not a page."
-            ));
-        };
-        let (page, _, _) = space.spec_write(path, |p| {
-            p.body = body;
-            p.gaps.retain(|g| g != &gap);
-        })?;
-        self.docs_changed(project_id).await;
-        Ok(page)
     }
 }

@@ -131,6 +131,15 @@ On donne un sujet. **On ne choisit pas de documents** : l'agent a accès à tous
 - À droite, **« Ce qui ira dans la spec »** : les changements proposés, page par page (sections ajoutées, phrases changées), et les décisions proposées.
 - **« Verser dans la spec »** les écrit sur la branche des docs. Ce n'est pas encore partagé : la barre d'état dit « N changements à partager ».
 
+**Fait (ESC-261, 2026-10-28)** : `discussion.rs`, `components/docs/NewDiscussionModal.svelte` et `DiscussionView.svelte`. Ce que le constructeur a tranché :
+
+- une discussion est un agent marqué `discussion` (rôle, sujet, propositions), sans worktree à lui, dans le dossier de la branche des docs, sa consigne ajoutée à celle de tout agent (mémoire, règle de l'index) ;
+- « sans jamais modifier le code » est tenu par le harness lui-même, dans tous les modes (`Spawn::read_only`, repris à la revue du chef) : Claude Code sans ses outils qui écrivent (`--disallowedTools`), Codex en bac à sable lecture seule, OpenCode avec `edit` et `bash` en `deny`, Copilot CLI sans écriture acceptée par les règles d'Escouade. Cursor CLI et Mistral Vibe écrivent dans leur dossier sans passer par Escouade : pas de discussion sur eux (`discussion::holds`), la fenêtre part sur un autre et le dit. Ce qui reste demandé est répondu sur-le-champ : écriture, commande ou « Permissions » refusées ; outils d'Escouade qui lisent et ceux qui écrivent les docs acceptés ; le reste (créer ou lancer un ticket, écrire à un agent, partager) va à l'utilisateur ;
+- `write_spec_page`, `propose_decision` et `replace_decision` d'une discussion ne touchent pas les docs : ils restent sur la discussion (une page relit sa propre proposition), que « Verser » écrit ; les décisions arrivent au registre **proposées**, l'humain les accepte là ; une croix retire une proposition ;
+- les fichiers joints passent par le drive (`dropDocuments`) avant le départ, et le premier message les nomme ;
+- « Mettre la spec à jour » ouvre une discussion avec l'agent rédacteur, à qui l'écart est dit, à la place de l'agent court d'ESC-263 ; l'écart part de la page quand elle est versée. « Demander à la spec » en tête de la spécification, « Écrire une première spec depuis le code » sur un projet sans spec ;
+- les cartes disent « Question », « Répond », « Brouillon » (des propositions pas versées), « Versé » ou « En pause ».
+
 ### « Planifier » : de la spec aux tickets (décidé le 2026-10-28)
 
 Quand on a fini d'éditer la spec, un bouton **« Planifier »** appelle un **agent planificateur**, qui ajoute au Kanban les tickets nécessaires pour implémenter les modifications. (Il remplace l'idée d'une « Performance Loop » façon BMAD, abandonnée.)
