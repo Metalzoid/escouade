@@ -339,7 +339,7 @@ Notées par l'utilisateur pour plus tard, sans ticket ni étude pour l'instant :
     - l'index tenu à jour quand le code change (worktrees des agents compris) ;
     - les projets privés (ESC-140) et les fichiers interdits (`fence.rs`) ;
     - le lien avec la base vectorielle de la gestion documentaire ci-dessus.
-- [ ] **Overseer.**
+- [ ] **Overseer.** Conçu le 2026-10-28 avec la planification : voir docs/OVERSEER.md.
   - Un agent qu'on lance en dehors de tout projet, à la voix ou non.
   - Il a accès à tous les projets publics, pour les piloter.
   - Les projets privés (ESC-140) restent hors de sa vue.
@@ -347,7 +347,7 @@ Notées par l'utilisateur pour plus tard, sans ticket ni étude pour l'instant :
   - Une loop intégrée à Escouade, façon BMAD.
   - Elle rédige la spec dans l'outil de gestion documentaire ci-dessus.
   - À penser avec les workflows d'un projet (ESC-191 et suivants) et les plugins.
-- [ ] **Planification d'agents.**
+- [ ] **Planification d'agents.** Conçue le 2026-10-28 avec l'Overseer : voir docs/OVERSEER.md.
   - Planifier des tâches qu'Escouade lance seule : à une heure, à intervalle (tous les matins, chaque lundi…), ou à un événement.
   - Exemples : une revue de dépendances, un ticket à reprendre, un rapport.
   - À penser avec le pilote auto du Kanban, les comptes et leurs quotas, et le mode serveur (`docs/REMOTE.md`), pour que ça tourne même quand la fenêtre est fermée.

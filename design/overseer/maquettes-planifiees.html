@@ -1,0 +1,183 @@
+<h2>Les tâches planifiées dans la barre latérale : les deux places</h2>
+<p class="subtitle">Une section « Planifiées » comme « Lancement » et « Terminaux » : le rythme, la prochaine échéance, un interrupteur. À gauche au-dessus des lancements, à droite sous les terminaux. « ＋ » ouvre le formulaire du ticket en mode « Planifier » (dessous).</p>
+
+<style>
+  .esc { --p: oklch(0.72 0.12 250); --frame: color-mix(in oklch, var(--p) 8%, #08090a); --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
+    --raise: color-mix(in oklch, var(--p) 6%, #15161a); --raise2: color-mix(in oklch, var(--p) 6%, #1b1c20); --line: rgba(255,255,255,.075);
+    --line2: rgba(255,255,255,.12); --text: #f7f8f8; --soft: #d0d3d8; --muted: #989da6; --run: oklch(0.79 0.15 155); --wait: oklch(0.84 0.14 82);
+    --add: oklch(0.8 0.13 155); --brand: #35c1bd; --pink: oklch(0.72 0.13 340);
+    font: 12.5px/1.45 Inter, "Segoe UI", system-ui, sans-serif; color: var(--text); background: var(--frame); border-radius: 10px;
+    overflow: hidden; display: grid; grid-template-columns: 46px 268px 1fr; grid-template-rows: 34px 1fr 24px; height: 640px; text-align: left; }
+  .esc * { box-sizing: border-box; }
+  .esc .top { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 0 12px; color: var(--soft); }
+  .esc .top b { color: var(--text); }
+  .esc .top .search { margin: 0 auto; width: 300px; height: 22px; border-radius: 6px; background: var(--raise); color: var(--muted); padding: 3px 10px; font-size: 11.5px; }
+  .esc .rail { display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 6px; }
+  .esc .tile { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; font-weight: 700; font-size: 11px; color: #111; }
+  .esc .side { padding: 6px 10px 8px 4px; display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: hidden; }
+  .esc .tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; background: var(--raise); border-radius: 8px; padding: 3px; gap: 2px; }
+  .esc .tabs span { text-align: center; padding: 4px 0; border-radius: 6px; color: var(--muted); font-weight: 550; }
+  .esc .tabs span.on { background: var(--raise2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line2); }
+  .esc .main { background: var(--panel); border-radius: 10px 0 0 0; border: 1px solid var(--line); border-right: 0; border-bottom: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .esc .status { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 0 12px; color: var(--muted); font-size: 11px; }
+  .esc .status .share { margin-left: auto; color: var(--wait); }
+  .esc .grp { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; margin: 4px 0 0 6px; }
+  .esc .it { display: flex; align-items: center; gap: 7px; padding: 4px 8px; border-radius: 6px; color: var(--soft); white-space: nowrap; overflow: hidden; }
+  .esc .it.on { background: var(--raise2); color: var(--text); }
+  .esc .it .r { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .esc .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--run); }
+  .esc .dot.w { background: var(--wait); } .esc .dot.g { background: var(--muted); } .esc .dot.b { background: var(--brand); }
+  .esc .warn { color: var(--wait); }
+  .esc .ask { height: 26px; border-radius: 7px; background: var(--raise); color: var(--muted); padding: 5px 10px; box-shadow: inset 0 0 0 1px var(--line); }
+  .esc .btn { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: 6px; background: var(--raise2); box-shadow: inset 0 0 0 1px var(--line2); color: var(--text); font-weight: 550; font-size: 11.5px; white-space: nowrap; }
+  .esc .btn.pri { background: #f2f3f5; color: #111; box-shadow: none; }
+  .esc .btn.wbtn { background: oklch(from var(--wait) l c h / .16); box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / .4); color: var(--wait); }
+  .esc .file { display: flex; align-items: center; gap: 7px; padding: 4px 8px; color: var(--soft); }
+  .esc .file i { font-style: normal; font-size: 9.5px; font-weight: 700; padding: 1px 4px; border-radius: 3px; background: var(--raise2); color: var(--muted); }
+  .esc .drop { margin: 2px 6px; padding: 7px; border: 1px dashed var(--line2); border-radius: 7px; color: var(--muted); text-align: center; font-size: 11.5px; }
+  .esc .hd { padding: 14px 22px 10px; border-bottom: 1px solid var(--line); display: flex; align-items: flex-start; gap: 12px; }
+  .esc .hd h4 { margin: 0; font-size: 17px; font-weight: 650; }
+  .esc .crumb { color: var(--muted); font-size: 11.5px; margin-bottom: 3px; }
+  .esc .meta { color: var(--muted); font-size: 11.5px; margin-top: 3px; }
+  .esc .acts { margin-left: auto; display: flex; gap: 6px; }
+  .esc .body { padding: 14px 22px; overflow: hidden; }
+  .esc .drift { border-radius: 8px; padding: 9px 12px; background: oklch(from var(--wait) l c h / .07); box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / .32); margin-bottom: 14px; }
+  .esc .drift b { color: var(--wait); }
+  .esc .drift .row { display: flex; gap: 6px; margin-top: 8px; }
+  .esc code { font: 11.5px "JetBrains Mono", Consolas, monospace; background: var(--raise2); padding: 0 4px; border-radius: 4px; color: var(--soft); }
+  .esc .doc h5 { font-size: 13.5px; margin: 12px 0 4px; font-weight: 650; }
+  .esc .doc p, .esc .doc li { color: var(--soft); margin: 0 0 4px; }
+  .esc .doc ul { margin: 0 0 6px; padding-left: 18px; }
+  .esc .src { display: inline-flex; gap: 4px; align-items: center; font-size: 11px; padding: 1px 7px; border-radius: 10px; background: rgba(255,255,255,.06); color: var(--muted); margin-right: 4px; }
+  .esc .card { border-radius: 9px; padding: 8px 10px; background: rgba(255,255,255,.035); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 3px; }
+  .esc .card.on { background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px var(--line2); }
+  .esc .card .n { display: flex; align-items: center; gap: 7px; font-weight: 650; }
+  .esc .card .n .st { margin-left: auto; font-size: 11px; font-weight: 550; }
+  .esc .card .m { color: var(--muted); font-size: 11.5px; }
+  .esc .split { display: grid; grid-template-columns: 1fr 1fr; min-height: 0; flex: 1; }
+  .esc .conv { padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid var(--line); overflow: hidden; }
+  .esc .me { align-self: flex-end; max-width: 88%; background: var(--raise2); box-shadow: inset 0 0 0 1px var(--line2); border-radius: 9px; padding: 8px 11px; }
+  .esc .ai { color: var(--soft); }
+  .esc .q { border-radius: 8px; padding: 8px 10px; background: oklch(from var(--wait) l c h / .07); box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / .32); display: grid; gap: 6px; }
+  .esc .opt { display: inline-flex; gap: 6px; align-items: center; padding: 3px 8px; border-radius: 6px; background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px var(--line2); font-weight: 550; font-size: 11.5px; }
+  .esc .opt kbd { font: 10px Inter, sans-serif; padding: 0 4px; border-radius: 3px; background: rgba(255,255,255,.1); color: var(--muted); }
+  .esc .compose { margin-top: auto; border-radius: 9px; box-shadow: inset 0 0 0 1px var(--line2); background: var(--raise); padding: 8px 10px; color: var(--muted); }
+  .esc .draft { padding: 14px 18px; overflow: hidden; display: flex; flex-direction: column; gap: 9px; }
+  .esc .draft h6 { margin: 0; font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  .esc .chg { border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line); padding: 8px 10px; }
+  .esc .chg .t { font-weight: 650; margin-bottom: 4px; display: flex; gap: 6px; }
+  .esc .chg .t span { margin-left: auto; color: var(--muted); font-weight: 500; font-size: 11px; }
+  .esc .plus { color: var(--add); } .esc .minus { color: oklch(0.74 0.14 22); text-decoration: line-through; }
+  .esc .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .esc .ch { border-radius: 9px; padding: 10px 12px; background: rgba(255,255,255,.035); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 5px; }
+  .esc .ch.w { box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / .45); }
+  .esc .ch .t { font-weight: 650; display: flex; align-items: center; gap: 6px; }
+  .esc .ch .s { color: var(--soft); font-size: 11.5px; }
+  .esc .ch .f { color: var(--muted); font-size: 11px; display: flex; gap: 8px; }
+  .esc .pill { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 10px; margin-left: auto; }
+  .esc .pill.ok { color: var(--run); background: oklch(from var(--run) l c h / .12); }
+  .esc .pill.w { color: var(--wait); background: oklch(from var(--wait) l c h / .14); }
+  .esc .pill.g { color: var(--muted); background: rgba(255,255,255,.07); }
+  .esc .feed { display: grid; gap: 9px; padding: 0 6px; }
+  .esc .feed div { color: var(--soft); font-size: 11.5px; }
+  .esc .feed div span { display: block; color: var(--muted); font-size: 10.5px; }
+  .esc .health { display: flex; gap: 14px; color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .esc .health b { color: var(--text); }
+</style>
+<style>
+  .esc .sec { display: grid; gap: 2px; }
+  .esc .sec .hd2 { display: flex; align-items: center; gap: 6px; padding: 6px 8px 4px; color: var(--soft); font-weight: 600; font-size: 12px; }
+  .esc .sec .hd2 span { color: var(--muted); font-weight: 500; }
+  .esc .sec .hd2 .r { margin-left: auto; color: var(--muted); }
+  .esc .row2 { display: grid; grid-template-columns: 1fr auto; gap: 1px 8px; padding: 4px 8px; border-radius: 6px; align-items: center; }
+  .esc .row2 .n { color: var(--text); font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .esc .row2 .w { color: var(--muted); font-size: 11px; grid-column: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .esc .row2 .w b { color: var(--brand); font-weight: 600; }
+  .esc .row2.run .w b { color: var(--run); }
+  .esc .row2 .sw { grid-row: 1 / span 2; grid-column: 2; }
+  .esc .sw { width: 26px; height: 15px; border-radius: 8px; background: var(--brand); position: relative; flex: none; }
+  .esc .sw::after { content: ""; position: absolute; right: 2px; top: 2px; width: 11px; height: 11px; border-radius: 50%; background: #fff; }
+  .esc .sw.off { background: rgba(255,255,255,.18); } .esc .sw.off::after { left: 2px; right: auto; }
+  .esc .lrow { display: flex; gap: 8px; padding: 4px 8px; color: var(--soft); }
+  .esc .lrow .r { margin-left: auto; color: var(--run); font-size: 11px; }
+  .esc .sb { width: 300px; padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; background: var(--frame); border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); }
+  .esc .sep { height: 1px; background: var(--line); margin: 2px 0; }
+  .esc .hl { box-shadow: inset 0 0 0 1.5px oklch(from var(--brand) l c h / .7); border-radius: 8px; background: oklch(from var(--brand) l c h / .06); }
+  .esc .cap { color: var(--muted); font-size: 11px; text-align: center; margin-top: 6px; }
+  .esc .form { width: 620px; margin: 22px auto; border-radius: 12px; background: var(--raise); box-shadow: 0 0 0 1px var(--line2), 0 20px 60px rgba(0,0,0,.5); padding: 16px 18px; display: grid; gap: 12px; }
+  .esc .form h4 { margin: 0; font-size: 15px; }
+  .esc .seg { display: inline-flex; background: var(--panel); border-radius: 8px; padding: 3px; box-shadow: inset 0 0 0 1px var(--line); }
+  .esc .seg span { padding: 4px 12px; border-radius: 6px; color: var(--muted); font-weight: 550; font-size: 12px; }
+  .esc .seg span.on { background: var(--raise2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line2); }
+  .esc .frow { display: grid; grid-template-columns: 150px 1fr; gap: 10px; align-items: center; }
+  .esc .frow > span:first-child { color: var(--muted); font-size: 12px; }
+  .esc .inp { height: 28px; border-radius: 7px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line2); padding: 6px 10px; color: var(--soft); font-size: 12px; }
+  .esc .days { display: flex; gap: 4px; }
+  .esc .days span { width: 28px; height: 26px; border-radius: 6px; display: grid; place-items: center; box-shadow: inset 0 0 0 1px var(--line2); color: var(--muted); font-size: 11.5px; font-weight: 600; }
+  .esc .days span.on { background: oklch(from var(--brand) l c h / .18); box-shadow: inset 0 0 0 1px oklch(from var(--brand) l c h / .6); color: var(--text); }
+  .esc .chk { display: flex; gap: 8px; align-items: flex-start; color: var(--soft); font-size: 12px; }
+  .esc .chk i { width: 15px; height: 15px; border-radius: 4px; background: var(--brand); flex: none; margin-top: 1px; display: grid; place-items: center; color: #062; font-style: normal; font-size: 10px; font-weight: 800; }
+  .esc .next { color: var(--muted); font-size: 11.5px; } .esc .next b { color: var(--soft); font-weight: 600; }
+  .esc .mfoot { display: flex; gap: 8px; justify-content: flex-end; align-items: center; } .esc .mfoot .l { margin-right: auto; color: var(--muted); font-size: 11px; }
+  .esc-sec h3 { margin: 26px 0 4px; } .esc-sec p { margin: 0 0 8px; } .esc .shot { margin: 14px 0 28px; }
+</style>
+
+<div class="esc-sec">
+  <h3>1. Deux places possibles dans la barre latérale</h3>
+  <p>Même section dans les deux ; seule sa place change. La ligne verte « en cours » renvoie au ticket que l’échéance a lancé.</p>
+  <div class="esc shot" style="display:flex;gap:40px;justify-content:center;align-items:flex-start;height:auto;padding:22px;background:#0b0c0e">
+    <div>
+      <div class="sb">
+        <div class="tabs"><span>Agents 4</span><span class="on">Kanban 6</span><span>Docs</span></div>
+        <div class="card"><div class="n"><span class="dot"></span>dem-41-relances<span class="st" style="color:var(--run)">En cours</span></div><div class="m">Opus 5.5 · boucle 1/5</div></div>
+        <div class="card"><div class="n"><span class="dot"></span>dem-44-revue-des-dep…<span class="st" style="color:var(--run)">En cours</span></div><div class="m">⏱ planifiée · Sonnet 5.5</div></div>
+        <div class="sep"></div>
+        <div class="sec hl"><div class="hd2">⏱ Planifiées <span>3</span><span class="r">＋</span></div>
+          <div class="row2 run"><span class="n">Revue des dépendances</span><span class="sw"></span><span class="w">Chaque lundi 7:00 · <b>en cours (DEM-44)</b></span></div>
+          <div class="row2"><span class="n">Rapport des erreurs Sentry</span><span class="sw"></span><span class="w">Chaque jour 23:30 · <b>ce soir</b></span></div>
+          <div class="row2" style="opacity:.55"><span class="n">Purge des comptes inactifs</span><span class="sw off"></span><span class="w">Le 1er du mois 9:00 · en pause</span></div>
+        </div>
+        <div class="sep"></div>
+        <div class="sec"><div class="hd2">Lancement <span>2/3</span><span class="r">Tout arrêter</span></div>
+          <div class="lrow">Front<span class="r">en cours</span></div><div class="lrow">API<span class="r">en cours</span></div></div>
+        <div class="sep"></div>
+        <div class="sec"><div class="hd2">Terminaux <span>1</span><span class="r">＋</span></div><div class="lrow">PowerShell <span style="color:var(--muted)">~/dev/portail</span></div></div>
+      </div>
+      <div class="cap">A · au-dessus des lancements</div>
+    </div>
+    <div>
+      <div class="sb">
+        <div class="tabs"><span>Agents 4</span><span class="on">Kanban 6</span><span>Docs</span></div>
+        <div class="card"><div class="n"><span class="dot"></span>dem-41-relances<span class="st" style="color:var(--run)">En cours</span></div><div class="m">Opus 5.5 · boucle 1/5</div></div>
+        <div class="card"><div class="n"><span class="dot"></span>dem-44-revue-des-dep…<span class="st" style="color:var(--run)">En cours</span></div><div class="m">⏱ planifiée · Sonnet 5.5</div></div>
+        <div class="sep"></div>
+        <div class="sec"><div class="hd2">Lancement <span>2/3</span><span class="r">Tout arrêter</span></div>
+          <div class="lrow">Front<span class="r">en cours</span></div><div class="lrow">API<span class="r">en cours</span></div></div>
+        <div class="sep"></div>
+        <div class="sec"><div class="hd2">Terminaux <span>1</span><span class="r">＋</span></div><div class="lrow">PowerShell <span style="color:var(--muted)">~/dev/portail</span></div></div>
+        <div class="sep"></div>
+        <div class="sec hl"><div class="hd2">⏱ Planifiées <span>3</span><span class="r">＋</span></div>
+          <div class="row2 run"><span class="n">Revue des dépendances</span><span class="sw"></span><span class="w">Chaque lundi 7:00 · <b>en cours (DEM-44)</b></span></div>
+          <div class="row2"><span class="n">Rapport des erreurs Sentry</span><span class="sw"></span><span class="w">Chaque jour 23:30 · <b>ce soir</b></span></div>
+          <div class="row2" style="opacity:.55"><span class="n">Purge des comptes inactifs</span><span class="sw off"></span><span class="w">Le 1er du mois 9:00 · en pause</span></div>
+        </div>
+      </div>
+      <div class="cap">B · sous les terminaux</div>
+    </div>
+  </div>
+
+  <h3>2. « ＋ » : le formulaire du ticket, en mode « Planifier »</h3>
+  <p>La même consigne, les mêmes critères, compte, modèle et effort qu’un ticket ; en plus, le rythme. Une expression cron reste possible.</p>
+  <div class="esc shot" style="display:block;height:auto;padding:4px 0;background:var(--frame)">
+    <div class="form">
+      <h4>Nouvelle tâche planifiée</h4>
+      <div class="frow"><span>Titre</span><div class="inp">Revue des dépendances</div></div>
+      <div class="frow"><span>Rythme</span><div class="seg"><span>Chaque jour</span><span class="on">Chaque semaine</span><span>Chaque mois</span><span>Cron</span></div></div>
+      <div class="frow"><span>Jours</span><div class="days"><span class="on">L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div></div>
+      <div class="frow"><span>Heure</span><div class="inp" style="width:90px">07:00</div></div>
+      <div class="frow"><span>Escouade fermé à l’heure dite</span><div class="chk"><i>✓</i><span>Lancer au retour d’Escouade, une seule fois même si plusieurs échéances ont été manquées</span></div></div>
+      <div class="frow"><span></span><div class="next">Jamais deux à la fois : si la précédente tourne encore, l’échéance passe son tour.<br>Prochaines : <b>lun. 3 nov. 7:00</b> · lun. 10 nov. 7:00 · lun. 17 nov. 7:00 · <code>0 7 * * 1</code></div></div>
+      <div class="mfoot"><span class="l">Consigne, critères, compte, modèle et effort : plus bas, comme un ticket</span><span class="btn">Annuler</span><span class="btn pri">Planifier</span></div>
+    </div>
+  </div>
+</div>

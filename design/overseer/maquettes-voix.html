@@ -1,0 +1,135 @@
+<h2>L’Overseer à la voix : quand tu parles, puis quand il te répond</h2>
+<p class="subtitle">La disposition A retenue. Le micro s’ouvre en maintenant Espace (ou par le bouton) ; ce que tu dis s’écrit en direct ; il répond à voix haute et par écrit en même temps.</p>
+<style>
+  .jv { --bg: #121314; --card: rgba(255,255,255,.045); --line: rgba(255,255,255,.08); --line2: rgba(255,255,255,.14); --text: #f4f5f6; --soft: #c9ccd2; --muted: #8f949e;
+    --run: oklch(0.79 0.15 155); --wait: oklch(0.84 0.14 82); --brand: #35c1bd; --done: oklch(0.8 0.13 155);
+    position: relative; height: 640px; border-radius: 12px; overflow: hidden; color: var(--text); text-align: left;
+    font: 12.5px/1.45 Inter, "Segoe UI", system-ui, sans-serif;
+    background: radial-gradient(900px 600px at 50% 45%, rgba(53,193,189,.10), transparent 60%), var(--bg); }
+  .jv * { box-sizing: border-box; }
+  .jv .bar { position: absolute; top: 12px; left: 16px; right: 16px; display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 11.5px; }
+  .jv .bar b { color: var(--text); }
+  .jv .bar .r { margin-left: auto; }
+  .jv kbd { font: 10.5px Inter, sans-serif; padding: 1px 5px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--line2); color: var(--soft); }
+  .jv .orb { border-radius: 50%; background: radial-gradient(circle at 38% 34%, #e9fffe 0, #7fe3df 14%, #35c1bd 42%, #12625f 78%, transparent 80%);
+    box-shadow: 0 0 80px 20px rgba(53,193,189,.25); }
+  .jv .said { color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; text-align: center; }
+  .jv .sub { font-size: 17px; font-weight: 550; text-align: center; color: var(--text); }
+  .jv .heard { border-radius: 10px; background: rgba(255,255,255,.04); box-shadow: inset 0 0 0 1px var(--line); padding: 8px 12px; color: var(--soft); font-size: 11.5px; }
+  .jv .heard b { color: var(--text); font-weight: 600; }
+  .jv .heard .acts { margin-top: 5px; display: grid; gap: 2px; }
+  .jv .heard .acts span::before { content: "✓ "; color: var(--run); }
+  .jv .undo { color: var(--brand); font-weight: 600; margin-left: 6px; }
+  .jv .card { border-radius: 10px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line); padding: 9px 11px; display: grid; gap: 4px; backdrop-filter: blur(6px); }
+  .jv .card .t { display: flex; align-items: center; gap: 7px; font-weight: 600; }
+  .jv .card .m { color: var(--muted); font-size: 11px; display: flex; gap: 8px; }
+  .jv .pdot { width: 8px; height: 8px; border-radius: 3px; flex: none; }
+  .jv .k { font: 600 10.5px "JetBrains Mono", Consolas, monospace; color: var(--soft); }
+  .jv .bar2 { height: 3px; border-radius: 2px; background: rgba(255,255,255,.08); overflow: hidden; }
+  .jv .bar2 i { display: block; height: 100%; background: var(--run); border-radius: 2px; }
+  .jv .card.wait { box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / .45); background: oklch(from var(--wait) l c h / .06); }
+  .jv .card.wait .q { color: var(--wait); font-size: 11.5px; font-weight: 600; }
+  .jv .card.done { opacity: .55; }
+  .jv .pop { border-radius: 16px; padding: 16px 18px; background: linear-gradient(160deg, oklch(from var(--done) l c h / .18), rgba(255,255,255,.05));
+    box-shadow: inset 0 0 0 1.5px oklch(from var(--done) l c h / .6), 0 0 60px oklch(from var(--done) l c h / .28), 0 24px 60px rgba(0,0,0,.5); display: grid; gap: 6px; }
+  .jv .pop .h { display: flex; gap: 8px; align-items: center; font-size: 15px; font-weight: 650; }
+  .jv .pop .ok { color: var(--done); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .jv .pop .b { color: var(--soft); font-size: 12px; }
+  .jv .pop .row { display: flex; gap: 6px; margin-top: 4px; }
+  .jv .chip { font-size: 11px; padding: 3px 9px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line2); color: var(--soft); }
+  .jv .lane h6 { margin: 0 0 8px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; display: flex; gap: 6px; }
+  .jv .lane h6 b { color: var(--text); }
+  .jv .lane { display: grid; gap: 8px; align-content: start; }
+  .jv .stop { display: inline-flex; gap: 6px; align-items: center; padding: 6px 14px; border-radius: 16px; background: #f1ece6; color: #111; font-weight: 600; font-size: 12px; }
+</style>
+<style>
+  .jv .thread { display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+  .jv .msg-me { align-self: flex-end; max-width: 86%; background: rgba(255,255,255,.07); box-shadow: inset 0 0 0 1px var(--line2); border-radius: 12px 12px 4px 12px; padding: 8px 11px; color: var(--text); }
+  .jv .msg-me .via { display: block; color: var(--muted); font-size: 10.5px; margin-top: 3px; }
+  .jv .msg-jv { max-width: 92%; color: var(--soft); display: grid; gap: 6px; }
+  .jv .msg-jv .who { color: var(--brand); font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .jv .acts2 { display: grid; gap: 3px; border-left: 2px solid oklch(from var(--run) l c h / .5); padding-left: 9px; font-size: 11.5px; }
+  .jv .acts2 span::before { content: "✓ "; color: var(--run); }
+  .jv .acts2 a { color: var(--brand); font-weight: 600; margin-left: 6px; }
+  .jv .news { border-radius: 10px; padding: 9px 11px; background: linear-gradient(160deg, oklch(from var(--done) l c h / .14), rgba(255,255,255,.03)); box-shadow: inset 0 0 0 1px oklch(from var(--done) l c h / .5); display: grid; gap: 4px; }
+  .jv .news .ok { color: var(--done); font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .jv .news .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .jv .composer { border-radius: 12px; background: rgba(255,255,255,.05); box-shadow: inset 0 0 0 1px var(--line2); padding: 9px 10px 8px 12px; display: grid; gap: 6px; }
+  .jv .composer .ph { color: var(--muted); }
+  .jv .composer .tools { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 11px; }
+  .jv .composer .tools .mic { margin-left: auto; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: oklch(from var(--brand) l c h / .18); box-shadow: inset 0 0 0 1px oklch(from var(--brand) l c h / .6); color: var(--text); font-size: 13px; }
+  .jv .composer .tools .send { padding: 5px 12px; border-radius: 8px; background: #f2f3f5; color: #111; font-weight: 650; font-size: 11.5px; }
+  .jv .bar { z-index: 3; } .jv .panel { background: rgba(10,11,12,.72); box-shadow: inset 1px 0 0 var(--line); backdrop-filter: blur(10px); }
+</style>
+
+<style>
+  .jv .ring { position:absolute; border-radius:50%; box-shadow: 0 0 0 2px oklch(from var(--brand) l c h / .35); }
+  .jv .orb.listen { background: radial-gradient(circle at 40% 36%, #ffffff 0, #d6fffd 20%, #7fe3df 46%, #1f8c88 80%, transparent 82%); box-shadow: 0 0 110px 34px rgba(127,227,223,.35); }
+  .jv .orb.speak { background: radial-gradient(circle at 38% 34%, #e9fffe 0, #7fe3df 16%, #35c1bd 44%, #12625f 78%, transparent 80%); box-shadow: 0 0 140px 44px rgba(53,193,189,.38); }
+  .jv .live { position:absolute; left:40px; right:40px; text-align:center; font-size:19px; font-weight:560; color:var(--text); }
+  .jv .live .caret { display:inline-block; width:2px; height:20px; background: var(--brand); vertical-align: -3px; margin-left:2px; }
+  .jv .wave { display:flex; align-items:center; gap:3px; height:26px; }
+  .jv .wave i { width:3px; border-radius:2px; background: var(--brand); display:block; }
+  .jv .msg-me.livebub { box-shadow: inset 0 0 0 1px oklch(from var(--brand) l c h / .55); background: oklch(from var(--brand) l c h / .08); }
+  .jv .dim { opacity:.45; }
+</style>
+<div class="options">
+
+  <div class="option" data-choice="parle" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content"><h3>Tu parles</h3><p>L’orbe s’éclaire et ses anneaux battent avec ta voix ; ta phrase s’écrit en grand sous elle et, en même temps, dans le fil. Le champ devient une onde : relâcher Espace envoie, Échap annule. Le reste de l’écran s’efface un peu.</p>
+      <div class="jv" style="margin-top:10px"><div class="bar"><b>Overseer</b><span>· 4 projets · Haiku 5.5</span><span class="r">Consignes · 3 &nbsp; <kbd>Échap</kbd> pour quitter</span></div><div style="position:absolute;left:0;top:0;bottom:0;right:420px">
+          <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:440px;height:440px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)"><div class="live" style="bottom:64px">« Quand la CI de la 2.0.6 est verte, pose le tag et publie, puis<span class="caret"></span></div></div>
+          <div class="ring" style="left:50%;top:50%;width:150px;height:150px;transform:translate(-50%,-50%)"></div><div class="ring" style="left:50%;top:50%;width:196px;height:196px;transform:translate(-50%,-50%);opacity:.5"></div><div class="orb listen" style="position:absolute;left:50%;top:50%;width:112px;height:112px;transform:translate(-50%,-50%)"></div>
+          <div class="said" style="position:absolute;left:0;right:0;top:calc(50% + 66px)">Je t’écoute</div>
+          <div class="card" style="position:absolute;left:60px;top:84px;width:180px"><div class="t"><span class="pdot" style="background:oklch(0.72 0.12 250)"></span><span class="k">DEM-41</span>Relances</div><div class="bar2"><i style="width:18%"></i></div></div>
+          <div class="card" style="position:absolute;left:50%;transform:translateX(-50%);top:54px;width:180px"><div class="t"><span class="pdot" style="background:oklch(0.7 0.13 155)"></span><span class="k">ESC-251</span>Export</div><div class="bar2"><i style="width:50%"></i></div></div>
+          <div class="card" style="position:absolute;right:50px;top:84px;width:180px"><div class="t"><span class="pdot" style="background:oklch(0.72 0.12 250)"></span><span class="k">DEM-31</span>Revue Codex</div><div class="bar2"><i style="width:40%"></i></div></div>
+          <div class="card wait" style="position:absolute;right:26px;top:270px;width:190px"><div class="t"><span class="pdot" style="background:oklch(0.72 0.13 340)"></span><span class="k">WS-12</span>Panier</div><div class="q">30 jours ou 7 ?</div></div>
+          <div class="card wait" style="position:absolute;right:46px;top:356px;width:170px"><div class="t"><span class="pdot" style="background:oklch(0.7 0.13 155)"></span>Release 2.0.6</div><div class="q">Je pose le tag ?</div></div>
+          <div class="card done" style="position:absolute;left:46px;top:330px;width:160px"><div class="t"><span class="k">DEM-38</span>Tarif famille</div></div>
+          <div class="card done" style="position:absolute;left:30px;top:410px;width:160px"><div class="t"><span class="k">ESC-250</span>À propos</div></div>
+          </div>
+        <div class="panel" style="position:absolute;right:0;top:0;bottom:0;width:420px;padding:44px 16px 14px;display:flex;flex-direction:column;gap:10px">
+          <div class="thread" style="flex:1">
+            <div class="msg-me dim">Lance les relances sur le portail, fais relire DEM-31 par Codex, et dis-moi où en est l’export.<span class="via">🎙 dit · 10:41</span></div>
+            <div class="msg-jv dim"><span class="who">Overseer</span>C’est parti. L’export en est à 2 critères sur 4.
+              <div class="acts2"><span>DEM-41 lancé · portail-adherents<a>Annuler</a></span><span>Revue de DEM-31 confiée à Codex<a>Annuler</a></span></div></div>
+            <div class="msg-me livebub">Quand la CI de la 2.0.6 est verte, pose le tag et publie, puis…<span class="via">🎙 en direct · tu parles</span></div>
+          </div>
+          <div class="composer" style="box-shadow: inset 0 0 0 1.5px oklch(from var(--brand) l c h / .7)"><div class="wave"><i style="height:8px"></i><i style="height:14px"></i><i style="height:22px"></i><i style="height:12px"></i><i style="height:26px"></i><i style="height:18px"></i><i style="height:10px"></i><i style="height:24px"></i><i style="height:16px"></i><i style="height:9px"></i><i style="height:20px"></i><i style="height:13px"></i><i style="height:7px"></i><i style="height:17px"></i><i style="height:25px"></i><i style="height:11px"></i><i style="height:19px"></i><i style="height:8px"></i><i style="height:14px"></i><i style="height:22px"></i><i style="height:12px"></i><i style="height:6px"></i><i style="height:15px"></i><i style="height:21px"></i><i style="height:10px"></i></div>
+            <div class="tools"><span>Relâche <kbd>Espace</kbd> pour envoyer</span><span><kbd>Échap</kbd> pour annuler</span><span class="mic" style="background:var(--brand);color:#06302e">🎙</span></div></div>
+        </div></div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="repond" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content"><h3>L’Overseer te répond</h3><p>L’orbe gonfle avec sa voix ; sa phrase passe en sous-titres sous l’orbe et s’écrit dans le fil, avec ce qu’il fait (ici une consigne ajoutée, qu’on peut retirer). Parler ou taper l’interrompt.</p>
+      <div class="jv" style="margin-top:10px"><div class="bar"><b>Overseer</b><span>· 4 projets · Haiku 5.5</span><span class="r">Consignes · 3 &nbsp; <kbd>Échap</kbd> pour quitter</span></div><div style="position:absolute;left:0;top:0;bottom:0;right:420px">
+          <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:440px;height:440px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)"><div class="live" style="bottom:64px;font-size:18px">« C’est noté : je pose le tag et je publie dès que la CI est verte. »</div></div>
+          <div class="orb speak" style="position:absolute;left:50%;top:50%;width:132px;height:124px;transform:translate(-50%,-50%);border-radius:48% 52% 46% 54%"></div>
+          <div class="said" style="position:absolute;left:0;right:0;top:calc(50% + 66px)">L’Overseer te parle</div>
+          <div class="card" style="position:absolute;left:60px;top:84px;width:180px"><div class="t"><span class="pdot" style="background:oklch(0.72 0.12 250)"></span><span class="k">DEM-41</span>Relances</div><div class="bar2"><i style="width:18%"></i></div></div>
+          <div class="card" style="position:absolute;left:50%;transform:translateX(-50%);top:54px;width:180px"><div class="t"><span class="pdot" style="background:oklch(0.7 0.13 155)"></span><span class="k">ESC-251</span>Export</div><div class="bar2"><i style="width:50%"></i></div></div>
+          <div class="card" style="position:absolute;right:50px;top:84px;width:180px"><div class="t"><span class="pdot" style="background:oklch(0.72 0.12 250)"></span><span class="k">DEM-31</span>Revue Codex</div><div class="bar2"><i style="width:40%"></i></div></div>
+          <div class="card wait" style="position:absolute;right:26px;top:270px;width:190px"><div class="t"><span class="pdot" style="background:oklch(0.72 0.13 340)"></span><span class="k">WS-12</span>Panier</div><div class="q">30 jours ou 7 ?</div></div>
+          <div class="card" style="position:absolute;right:46px;top:356px;width:190px"><div class="t"><span class="pdot" style="background:oklch(0.7 0.13 155)"></span>Release 2.0.6</div><div class="q" style="color:var(--run)">Consigne : tag et publication</div></div>
+          <div class="card done" style="position:absolute;left:46px;top:330px;width:160px"><div class="t"><span class="k">DEM-38</span>Tarif famille</div></div>
+          <div class="card done" style="position:absolute;left:30px;top:410px;width:160px"><div class="t"><span class="k">ESC-250</span>À propos</div></div>
+          </div>
+        <div class="panel" style="position:absolute;right:0;top:0;bottom:0;width:420px;padding:44px 16px 14px;display:flex;flex-direction:column;gap:10px">
+          <div class="thread" style="flex:1">
+            <div class="msg-me dim">Lance les relances sur le portail, fais relire DEM-31 par Codex, et dis-moi où en est l’export.<span class="via">🎙 dit · 10:41</span></div>
+            <div class="msg-jv dim"><span class="who">Overseer</span>C’est parti. L’export en est à 2 critères sur 4.
+              <div class="acts2"><span>DEM-41 lancé · portail-adherents<a>Annuler</a></span><span>Revue de DEM-31 confiée à Codex<a>Annuler</a></span></div></div>
+            <div class="msg-me">Quand la CI de la 2.0.6 est verte, pose le tag et publie, puis annonce-le sur Discord.<span class="via">🎙 dit · 11:02</span></div>
+            <div class="msg-jv"><span class="who">Overseer · 🔊 te parle</span>C’est noté : je pose le tag et je publie dès que la CI est verte<span style="display:inline-block;width:2px;height:14px;background:var(--brand);vertical-align:-2px;margin-left:2px"></span>
+              <div class="acts2"><span>Consigne ajoutée : « Release 2.0.6 : tag et publication quand la CI est verte »<a>Retirer</a></span></div></div>
+          </div>
+          <div class="composer"><span class="ph">Demande à l’Overseer…</span>
+            <div class="tools"><span>Parle ou tape pour l’interrompre</span><span class="mic">🎙</span><span class="send">Envoyer</span></div></div>
+        </div></div>
+    </div>
+  </div>
+</div>
