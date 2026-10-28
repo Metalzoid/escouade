@@ -21,7 +21,8 @@
   // every 2 s, then closes the terminal and reads the account's quota. Closed before, the account stays, not signed in.
   // `onclose`: opened over another modal (the assistant « Nouveau projet »), back to it rather than to Réglages › Comptes.
   // Cursor CLI (ESC-43): its machine's account is the sign-in of `agent login`; a new one is its API key, kept in the system's
-  // keychain and given to its processes by CURSOR_API_KEY: no terminal, « Changer la clé… » gives it again.
+  // keychain and given to its processes by CURSOR_API_KEY: no terminal, « Changer la clé… » gives it again. Mistral Vibe
+  // (ESC-267) the same: its machine's account is the key `vibe --setup` kept, a new one its API key, by MISTRAL_API_KEY.
   // `reserveFor` (a private project's settings, ESC-141): the account added is reserved to that project alone, a new one
   // offered first (the machine's is its folder outside Escouade too), and it closes back to that project's settings.
   let {
@@ -51,7 +52,25 @@
       never: 'accounts.modal.cursor.neverShared',
       hint: 'accounts.modal.cursor.signInHint',
     },
+    vibe: {
+      nothing: 'accounts.modal.vibe.nothingToShare',
+      never: 'accounts.modal.vibe.neverShared',
+      hint: 'accounts.modal.vibe.signInHint',
+    },
   };
+  /** What the field of an account's API key says, by harness (Cursor CLI's unless the harness has its own). */
+  const KEY_SAYS: Partial<Record<EngineId, { placeholder: Key; hint: Key; newHint: Key }>> = {
+    vibe: {
+      placeholder: 'accounts.modal.vibe.keyPlaceholder',
+      hint: 'accounts.modal.vibe.keyHint',
+      newHint: 'accounts.modal.vibe.newHintKey',
+    },
+  };
+  const CURSOR_KEY_SAYS = {
+    placeholder: 'accounts.modal.cursor.keyPlaceholder',
+    hint: 'accounts.modal.cursor.keyHint',
+    newHint: 'accounts.modal.newHintKey',
+  } as const;
   const CLAUDE_SAYS = {
     nothing: 'accounts.modal.nothingToShare',
     never: 'accounts.modal.neverShared',
@@ -72,10 +91,11 @@
   /** The harnesses an account may be added to: those found, a menu from two on. */
   const engines = $derived(offered());
   const says = $derived(SAYS[engine] ?? CLAUDE_SAYS);
+  const keySays = $derived(KEY_SAYS[engine] ?? CURSOR_KEY_SAYS);
   let name = $state('');
-  /** The API key of a new Cursor account, or the one given again (ESC-43). */
+  /** The API key of a new Cursor or Vibe account, or the one given again (ESC-43, ESC-267). */
   let key = $state('');
-  /** An account of Cursor other than its machine's: signed in by its key, given here. */
+  /** An account of Cursor or Vibe other than its machine's: signed in by its key, given here. */
   const byKey = $derived(goesByKey(engine) && (!account || !isPrincipal(account)));
 
   /** The machine's account of the harness picked; null until read. */
@@ -257,7 +277,7 @@
     if (!account || !key.trim()) return;
     error = null;
     try {
-      await api.accountCursorKey(account.id, key.trim());
+      await api.accountKey(account.id, key.trim());
       key = '';
       close();
     } catch (e) {
@@ -400,11 +420,11 @@
       type="password"
       autocomplete="off"
       spellcheck="false"
-      placeholder={t('accounts.modal.cursor.keyPlaceholder')}
+      placeholder={t(keySays.placeholder)}
       bind:value={key}
       onkeydown={(e) => e.key === 'Enter' && (account ? saveKey() : create())}
     />
-    <span class="help">{t('accounts.modal.cursor.keyHint')}</span>
+    <span class="help">{t(keySays.hint)}</span>
   </div>
 {/snippet}
 
@@ -454,11 +474,7 @@
         </button>
         <button class="w-radio" role="radio" aria-checked={kind === 'new'} onclick={() => (kind = 'new')}>
           <i class="dot"></i>
-          <span
-            ><b>{t('accounts.modal.newAccount')}</b><span class="d"
-              >{t(byKey ? 'accounts.modal.newHintKey' : 'accounts.modal.newHint')}</span
-            ></span
-          >
+          <span><b>{t('accounts.modal.newAccount')}</b><span class="d">{t(byKey ? keySays.newHint : 'accounts.modal.newHint')}</span></span>
         </button>
       </div>
       {#if kind === 'machine' && machine?.dir}<span class="help">{t('accounts.modal.machineHint', { path: tildify(machine.dir) })}</span

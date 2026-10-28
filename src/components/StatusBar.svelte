@@ -15,7 +15,7 @@
     quotaTip,
     statusEngine,
   } from '../lib/accounts';
-  import { capsOf, engineName, usagePage } from '../lib/engines';
+  import { dayCostStandsIn, engineName } from '../lib/engines';
   import { fAgo, fBytes, fPct, fUsd } from '../lib/format';
   import { t } from '../lib/i18n';
   import Rich from '../lib/i18n/Rich.svelte';
@@ -89,8 +89,9 @@
       tip: string;
       projection: { text: string; level: string } | null;
     } | null = null;
-    // Cursor CLI tells no cost either: nothing stands in for its bars (its usage is on its dashboard, ESC-43).
-    if (capsOf(engine)?.quota === 'none' && !usagePage(engine) && usage) {
+    // Cursor CLI tells no cost either: nothing stands in for its bars (its usage is on its dashboard, ESC-43). Mistral
+    // Vibe tells its cost: its day's stands in (ESC-267).
+    if (dayCostStandsIn(engine) && usage) {
       const cost = usage.todayCost;
       const budget = usage.dailyBudget || null;
       const dayTip = budget

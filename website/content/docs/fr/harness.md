@@ -29,13 +29,13 @@ Quel que soit le harness, l’agent a la même conversation : la réponse et le 
 | Installation | script de Claude Code | `npm install -g @openai/codex` | `npm install -g opencode-ai` | `npm install -g @github/copilot` | script de Cursor | `uv tool install mistral-vibe` |
 | Testé avec | 2.1.283 à 2.1.301 | 0.163.0 | 1.19.3 | 1.0.98 | 2026.10.22 | 3.0.3 |
 | Compte | abonnement Claude ou clé API | compte ChatGPT | les fournisseurs connectés à OpenCode, modèles locaux compris | compte GitHub avec Copilot, Free compris | compte Cursor (`agent login`, ou une clé d’API), Free compris | clé d’API Mistral (`vibe --setup`) |
-| Plusieurs comptes | oui | oui | non | oui | oui, par clé d’API | pas encore |
+| Plusieurs comptes | oui | oui | non | oui | oui, par clé d’API | oui, par clé d’API |
 | Modèles | ceux que Claude Code liste pour chaque compte | ceux que Codex liste pour ton compte | ceux de tes fournisseurs, avec recherche et favoris | ceux que Copilot liste, avec leur multiplicateur | ceux de ton compte, Auto en tête | ceux de sa session |
 | Modes | les cinq | les cinq | quatre (pas d’Auto) | les cinq | quatre (pas d’Auto) | quatre (pas d’Auto ; Plan joué par Escouade) |
 | Ce qui protège | ses permissions | son bac à sable | ses règles de permission | les règles d’Escouade | ses permissions, pour ses commandes | ses permissions ; les règles d’Escouade |
 | Message pendant un tour | attend la fin du tour | entre dans le tour | attend la fin du tour | entre dans le tour | attend la fin du tour | attend la fin du tour |
-| Coût | exact | estimé | exact (0 en local) | exact, en crédits d’IA | non donné | pas encore montré |
-| Quota | fenêtres 5 h et 7 jours | fenêtres 5 h et 7 jours (30 jours en offre gratuite) | aucun : budget par jour | crédits du mois | lien vers son tableau de bord | aucun |
+| Coût | exact | estimé | exact (0 en local) | exact, en crédits d’IA | non donné | exact |
+| Quota | fenêtres 5 h et 7 jours | fenêtres 5 h et 7 jours (30 jours en offre gratuite) | aucun : budget par jour | crédits du mois | lien vers son tableau de bord | aucun : budget par jour, lien vers la console de Mistral |
 | Vue terminal | « Vue Claude Code » | « Vue Codex » | « Vue OpenCode » | « Vue Copilot CLI » | « Vue Cursor CLI », suivi limité | pas encore |
 | PDF joints | oui | non | non | non | non | non |
 | Remote control, tâches de fond | oui | non | non | non | non | non |
@@ -174,6 +174,8 @@ Cursor ne dit ni les tokens ni le coût d’un tour quand Escouade le pilote : l
 
 Installe Mistral Vibe avec `uv tool install mistral-vibe`, puis donne-lui ta clé d’API Mistral avec `vibe --setup` : elle est gardée dans le trousseau du système, et Escouade ne la lit jamais. Escouade trouve son `vibe-acp` dans le `PATH`, ou dans `~/.local/bin` où `uv` le pose. Chaque agent a son `vibe-acp` et son propre dossier `VIBE_HOME`, retiré avec lui : ses règles, ses sessions et la confiance de son dossier y sont gardées, jamais dans ton `~/.vibe`. Ses mises à jour et sa télémétrie y sont coupées.
 
+La clé de `vibe --setup` est « le compte de la machine ». Un autre compte Mistral s’ajoute par sa clé d’API (console.mistral.ai, API Keys) dans Réglages › Comptes : elle est gardée dans le trousseau du système et donnée à ses agents par `MISTRAL_API_KEY`, jamais dans un fichier ni sur une ligne de commande ; « Changer la clé… » la redonne. Un compte sans clé ne démarre rien. « Reprendre sur <compte> » garde la session de l’agent : seule la clé change.
+
 ### Modèles et modes
 
 Le menu « Modèle » liste les modèles que sa session propose. Sa réflexion est l’effort : « Bas » la coupe, « Élevé » la garde. Le modèle, l’effort et le mode changent tout de suite.
@@ -193,7 +195,7 @@ Pour un projet privé, les chemins des autres projets sont refusés à ses outil
 
 ### Coût, quota et ce que Vibe ne fait pas
 
-Vibe donne le coût de chaque tour, mais Escouade ne le montre pas encore, ni de quota : une clé d’API Mistral est facturée à l’usage, sur la console de Mistral. Pas encore de vue terminal ni de deuxième compte. Pas de mode Auto, de PDF joints, de commandes `/` dans Escouade (`/compact` part comme un message), ni de remote control ni de tâches de fond. Il reçoit le serveur MCP d’Escouade par sa session ; l’interrupteur ne le déclare pas encore dans la config de Vibe.
+Vibe donne le coût et les tokens de chaque tour : la conversation, la carte de l’agent, la barre d’état et les statistiques les montrent, comme pour OpenCode. Il ne dit pas de quota (une clé d’API Mistral est facturée à l’usage) : le coût du jour et un « Budget par jour ($) » en tiennent lieu, et « Usage sur admin.mistral.ai », dans Réglages › Comptes et dans le panneau des quotas, ouvre la console de Mistral. Sa limite de débit (« Rate limit exceeded », après cinq minutes de réessais de Vibe) arrête le tour sur une carte ambre ; l’agent reprend seul une minute plus tard, ou, pour un agent de ticket, continue sur un autre compte Vibe si « Reprendre sur un autre compte un agent de ticket arrêté par la limite » est allumé. Les textes rédigés, quand « Modèle des textes rédigés » est « Mistral Vibe », passent par `vibe -p`, sans aucun outil, en un tour et 0,05 $ au plus. Pas encore de vue terminal. Pas de mode Auto, de PDF joints, de commandes `/` dans Escouade (`/compact` part comme un message), ni de remote control ni de tâches de fond. Il reçoit le serveur MCP d’Escouade par sa session ; l’interrupteur ne le déclare pas encore dans la config de Vibe.
 
 ## Le serveur MCP
 

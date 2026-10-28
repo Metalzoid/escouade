@@ -21,9 +21,11 @@ export default defineZone('accounts', {
     signIn: 'Sign in…',
     signInAgain: 'Sign in again…',
     changeKey: 'Change the key…',
-    usage: 'Usage on cursor.com',
+    usage: 'Usage on {site}',
     usageHint:
       '{harness} gives Escouade no usage: its dashboard shows it (the month’s included usage, the reset). A limit reached stops the turn on a card that says so.',
+    usageHintCost:
+      '{harness} gives Escouade what each turn costs, no quota: {site} shows the account’s usage and bill. A rate limit stops the turn on a card that says so, and the agent goes on by itself a minute later.',
     remove: 'Remove',
     add: 'Add an account…',
     none: 'No account',
@@ -137,6 +139,16 @@ export default defineZone('accounts', {
       create: 'Add the account',
       saveKey: 'Save the key',
     },
+    vibe: {
+      nothingToShare: 'Nothing to share: each Vibe agent has a VIBE_HOME of its own, where “For this agent” keeps its rules and sessions.',
+      neverShared:
+        'Mistral Vibe’s key (vibe --setup) is the machine’s: it stays in the system keychain, and a configuration folder doesn’t move it.',
+      signInHint: 'Give your API key in the terminal below: vibe --setup keeps it in the system keychain.',
+      newHintKey: 'An API key of another Mistral account, kept in the system keychain.',
+      keyPlaceholder: 'From console.mistral.ai, API Keys',
+      keyHint:
+        'Kept in the system keychain, given to this account’s agents by MISTRAL_API_KEY, never written in a file nor on a command line. Their turns are billed to that key’s Mistral account; the machine’s account stays the key of vibe --setup.',
+    },
     restart: 'Restart',
     done: 'Done',
   },
@@ -211,7 +223,7 @@ export default defineZone('accounts', {
     label: 'Quota by account',
     noQuota: 'No quota: only what its turns cost counts.',
     usageElsewhere: '{harness} gives Escouade neither its usage nor its cost.',
-    usageLink: 'See the usage on cursor.com',
+    usageLink: 'See the usage on {site}',
     budget: 'Daily budget',
     budgetReset: 'Reset at midnight.',
     projectionNote:

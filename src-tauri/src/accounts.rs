@@ -724,7 +724,7 @@ pub fn launch_env_with(
     // its Principal by the machine's sign-in, never by a key or token of the app's. Never on its
     // command line.
     if account.engine == EngineId::Cursor {
-        let key = cursor_key(account).filter(|_| by_key(account));
+        let key = account_key(account).filter(|_| by_key(account));
         env.extend(
             [CURSOR_TOKEN_VAR, CURSOR_KEY_VAR]
                 .into_iter()
@@ -733,6 +733,14 @@ pub fn launch_env_with(
         );
         if let Some(key) = key {
             env.push((CURSOR_KEY_VAR.to_string(), key));
+        }
+    }
+    // Mistral Vibe (ESC-267): an account added by its key goes by it, before the keychain's and a
+    // key of the app's; its Principal as Vibe goes in the user's terminal (`MISTRAL_API_KEY` when
+    // set, else the key `vibe --setup` kept). Never on its command line.
+    if account.engine == EngineId::Vibe && by_key(account) {
+        if let Some(key) = account_key(account) {
+            env.push((MISTRAL_KEY_VAR.to_string(), key));
         }
     }
     own.into_iter()
@@ -869,34 +877,38 @@ pub fn cursor_signed_in() -> bool {
 pub(crate) const CURSOR_KEY_VAR: &str = "CURSOR_API_KEY";
 const CURSOR_TOKEN_VAR: &str = "CURSOR_AUTH_TOKEN";
 
-/// The API keys of the Cursor accounts, by their folder (unique to each, the tests' too): read from
-/// the keychain at the start (`Core::load_cursor_keys`) and when the user gives one, so that
+/// The variable Mistral Vibe takes its API key from, before its keychain and its `.env` (read in its
+/// code, 3.0.3): an account added by its key goes by it (ESC-267).
+pub(crate) const MISTRAL_KEY_VAR: &str = "MISTRAL_API_KEY";
+
+/// The API keys of the accounts that go by one (Cursor CLI, Mistral Vibe), by their folder (unique to each, the tests' too): read from
+/// the keychain at the start (`Core::load_account_keys`) and when the user gives one, so that
 /// `launch_env` gives each process its own.
-static CURSOR_KEYS: std::sync::LazyLock<
+static ACCOUNT_KEYS: std::sync::LazyLock<
     parking_lot::RwLock<std::collections::HashMap<String, String>>,
 > = std::sync::LazyLock::new(Default::default);
 
-/// The keychain's entry of the API key of the Cursor account `id`.
-pub(crate) fn cursor_key_entry(id: &str) -> String {
-    format!("cursor:{id}")
+/// The keychain's entry of the API key of the account `id` of `engine` (`cursor:<id>`, `vibe:<id>`).
+pub(crate) fn key_entry(engine: EngineId, id: &str) -> String {
+    format!("{}:{id}", engine.as_str())
 }
 
-/// Whether the account is one of Cursor CLI's that goes by its own API key: every one but its
-/// Principal (the machine's sign-in).
+/// Whether the account is one that goes by its own API key: every one of Cursor CLI's and Mistral
+/// Vibe's but their Principal (the machine's sign-in, or the key `vibe --setup` kept).
 pub fn by_key(account: &Account) -> bool {
-    account.engine == EngineId::Cursor && !is_principal(account)
+    matches!(account.engine, EngineId::Cursor | EngineId::Vibe) && !is_principal(account)
 }
 
-/// The API key the Cursor account goes by, as the keychain gave it; None when it has none (yet).
-pub(crate) fn cursor_key(account: &Account) -> Option<String> {
+/// The API key the account goes by, as the keychain gave it; None when it has none (yet).
+pub(crate) fn account_key(account: &Account) -> Option<String> {
     let dir = own_dir(account)?;
-    CURSOR_KEYS.read().get(dir).cloned()
+    ACCOUNT_KEYS.read().get(dir).cloned()
 }
 
 /// The account's API key known (`None`: forgotten) for its processes from now on.
-pub(crate) fn remember_cursor_key(account: &Account, key: Option<&str>) {
+pub(crate) fn remember_key(account: &Account, key: Option<&str>) {
     let Some(dir) = own_dir(account) else { return };
-    let mut keys = CURSOR_KEYS.write();
+    let mut keys = ACCOUNT_KEYS.write();
     match key {
         Some(k) => keys.insert(dir.to_string(), k.to_string()),
         None => keys.remove(dir),
@@ -910,17 +922,24 @@ pub(crate) fn key_hint(key: &str) -> String {
     tr!("clé …{end}", "key …{end}")
 }
 
-/// Why the Cursor account cannot start a process (none but its Principal goes without its key: it
-/// would run as the machine's sign-in, another account); Ok for any other.
-pub(crate) fn cursor_ready(account: &Account) -> Result<()> {
-    if by_key(account) && cursor_key(account).is_none() {
+/// Why the account cannot start a process (none of Cursor's or Vibe's but their Principal goes
+/// without its key: it would run as the machine's, another account); Ok for any other.
+pub(crate) fn key_ready(account: &Account) -> Result<()> {
+    if !by_key(account) || account_key(account).is_some() {
+        return Ok(());
+    }
+    if account.engine == EngineId::Vibe {
         bail!(tr!(
-            "Le compte Cursor « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes, « Changer la clé… ».",
-            "The Cursor account “{name}” has no API key: give it in Settings › Accounts, “Change the key…”.",
+            "Le compte Mistral Vibe « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes, « Changer la clé… ».",
+            "The Mistral Vibe account “{name}” has no API key: give it in Settings › Accounts, “Change the key…”.",
             name = account.name
         ));
     }
-    Ok(())
+    bail!(tr!(
+        "Le compte Cursor « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes, « Changer la clé… ».",
+        "The Cursor account “{name}” has no API key: give it in Settings › Accounts, “Change the key…”.",
+        name = account.name
+    ))
 }
 
 fn copilot_login_in(dir: &Path) -> Option<String> {
@@ -1708,11 +1727,11 @@ impl<R: Runtime> Core<R> {
         Ok(made)
     }
 
-    /// « Clé d’API » of a Cursor account other than its Principal (ESC-43): `key` kept in the
-    /// system's keychain, read back to check, and given to its processes from now on by
-    /// `CURSOR_API_KEY` (never on a command line, never in a file of Escouade's). Its status as it
-    /// then is.
-    pub async fn set_cursor_key(&self, id: &str, key: &str) -> Result<AccountStatus> {
+    /// « Clé d’API » of a Cursor or Mistral Vibe account other than its Principal (ESC-43,
+    /// ESC-267): `key` kept in the system's keychain, read back to check, and given to its
+    /// processes from now on by `CURSOR_API_KEY` or `MISTRAL_API_KEY` (never on a command line,
+    /// never in a file of Escouade's). Its status as it then is.
+    pub async fn set_account_key(&self, id: &str, key: &str) -> Result<AccountStatus> {
         let account = find(&self.settings.read(), id)
             .cloned()
             .ok_or_else(|| unknown(id))?;
@@ -1723,33 +1742,41 @@ impl<R: Runtime> Core<R> {
             ));
         }
         let key = key.trim();
-        if key.len() < 16 || key.chars().any(char::is_whitespace) {
+        let malformed = key.len() < 16 || key.chars().any(char::is_whitespace);
+        if malformed && account.engine == EngineId::Vibe {
+            bail!(tr!(
+                "Ce n’est pas une clé d’API de Mistral : copie-la entière depuis console.mistral.ai, API Keys.",
+                "That isn’t a Mistral API key: copy it whole from console.mistral.ai, API Keys."
+            ));
+        }
+        if malformed {
             bail!(tr!(
                 "Ce n’est pas une clé d’API de Cursor : copie-la entière depuis cursor.com, Settings › API Keys.",
                 "That isn’t a Cursor API key: copy it whole from cursor.com, Settings › API Keys."
             ));
         }
         let store = self.secrets.clone();
-        let (entry, secret) = (cursor_key_entry(id), key.to_string());
+        let (entry, secret) = (key_entry(account.engine, id), key.to_string());
+        let harness = account.engine.as_str();
         tokio::task::spawn_blocking(move || {
             crate::integrations::secrets::keep_secret(&*store, &entry, &secret)
         })
         .await?
         .map_err(|e| {
-            log::warn!("cursor account {id}: the system keychain refused its key: {e:#}");
+            log::warn!("{harness} account {id}: the system keychain refused its key: {e:#}");
             anyhow::anyhow!(tr!(
                 "Le trousseau du système n’a pas gardé la clé : {e:#}",
                 "The system keychain didn’t keep the key: {e:#}"
             ))
         })?;
-        remember_cursor_key(&account, Some(key));
-        log::info!("cursor account {id}: API key given");
+        remember_key(&account, Some(key));
+        log::info!("{} account {id}: API key given", account.engine.as_str());
         Ok(self.status_of(&account).await)
     }
 
-    /// At the start: the keys of the Cursor accounts read from the keychain (`set_cursor_key`).
+    /// At the start: the keys of the Cursor and Vibe accounts read from the keychain (`set_account_key`).
     /// One the keychain does not give leaves its account not signed in, said so in the log.
-    pub(crate) fn load_cursor_keys(&self) {
+    pub(crate) fn load_account_keys(&self) {
         let accounts: Vec<Account> = self
             .settings
             .read()
@@ -1759,11 +1786,15 @@ impl<R: Runtime> Core<R> {
             .cloned()
             .collect();
         for a in accounts {
-            match self.secrets.get(&cursor_key_entry(&a.id)) {
-                Ok(Some(key)) if !key.is_empty() => remember_cursor_key(&a, Some(&key)),
-                Ok(_) => log::warn!("cursor account {}: no API key in the system keychain", a.id),
+            let harness = a.engine.as_str();
+            match self.secrets.get(&key_entry(a.engine, &a.id)) {
+                Ok(Some(key)) if !key.is_empty() => remember_key(&a, Some(&key)),
+                Ok(_) => log::warn!(
+                    "{harness} account {}: no API key in the system keychain",
+                    a.id
+                ),
                 Err(e) => log::warn!(
-                    "cursor account {}: the system keychain did not give its key: {e:#}",
+                    "{harness} account {}: the system keychain did not give its key: {e:#}",
                     a.id
                 ),
             }
@@ -1974,12 +2005,14 @@ impl<R: Runtime> Core<R> {
             self.schedule();
         }
         // Its folder stays on the disk, and with it the entry that holds the server's token.
-        // A Cursor account's key leaves the keychain with it (its folder stays, as any account's).
+        // A Cursor or Vibe account's key leaves the keychain with it (its folder stays, as any
+        // account's).
         if by_key(&gone) {
-            remember_cursor_key(&gone, None);
-            if let Err(e) = self.secrets.delete(&cursor_key_entry(&gone.id)) {
+            remember_key(&gone, None);
+            if let Err(e) = self.secrets.delete(&key_entry(gone.engine, &gone.id)) {
                 log::warn!(
-                    "cursor account {}: the system keychain did not forget its key: {e:#}",
+                    "{} account {}: the system keychain did not forget its key: {e:#}",
+                    gone.engine.as_str(),
                     gone.id
                 );
             }
@@ -2172,10 +2205,14 @@ impl<R: Runtime> Core<R> {
         if let Some(p) = stopped {
             stop_and_wait(&p).await?;
         }
-        let (from_dir, to_dir) = (config_dir(&from, &settings), config_dir(to, &settings));
-        tokio::task::spawn_blocking(move || copy_session(&from_dir, &to_dir, &session))
-            .await
-            .map_err(|e| anyhow::anyhow!(e))??;
+        // Mistral Vibe keeps the session in the agent's own `VIBE_HOME`, whatever its account (only
+        // its key changes): nothing to copy (ESC-267).
+        if from.engine != EngineId::Vibe {
+            let (from_dir, to_dir) = (config_dir(&from, &settings), config_dir(to, &settings));
+            tokio::task::spawn_blocking(move || copy_session(&from_dir, &to_dir, &session))
+                .await
+                .map_err(|e| anyhow::anyhow!(e))??;
+        }
         let resume_at = {
             let mut rt = h.lock();
             rt.meta.account = to.id.clone();
@@ -2330,8 +2367,11 @@ impl<R: Runtime> Core<R> {
             };
         }
         // OpenCode signs in to no account of its own: its providers are its config's. Mistral Vibe's
-        // key is in the keychain, never read (ESC-267 tells more).
-        if matches!(account.engine, EngineId::Opencode | EngineId::Vibe) {
+        // Principal goes by the key `vibe --setup` kept in the keychain, never read: signed in as
+        // far as can be told.
+        if account.engine == EngineId::Opencode
+            || (account.engine == EngineId::Vibe && !by_key(account))
+        {
             let dir = config_dir(account, &settings);
             return AccountStatus {
                 connected: true,
@@ -2342,8 +2382,9 @@ impl<R: Runtime> Core<R> {
         }
         // Cursor CLI: its Principal signed in by `agent login`, the same for all its folders, never
         // read; another account by its API key, kept in the keychain (ESC-43), shown by its end.
-        if account.engine == EngineId::Cursor {
-            let key = cursor_key(account).filter(|_| by_key(account));
+        // Mistral Vibe's added accounts the same (ESC-267).
+        if matches!(account.engine, EngineId::Cursor | EngineId::Vibe) {
+            let key = account_key(account).filter(|_| by_key(account));
             return AccountStatus {
                 connected: if by_key(account) {
                     key.is_some()
@@ -2677,13 +2718,13 @@ mod tests {
         // No key known: none given, the app's emptied.
         let env = launch_env_with(&pro, &all);
         assert!(env.contains(&empty(CURSOR_KEY_VAR)) && env.contains(&empty(CURSOR_TOKEN_VAR)));
-        assert!(cursor_ready(&pro).is_err());
-        remember_cursor_key(&pro, Some("cle-essai-0000000000abcd"));
+        assert!(key_ready(&pro).is_err());
+        remember_key(&pro, Some("cle-essai-0000000000abcd"));
         let env = launch_env_with(&pro, &all);
         assert!(env.contains(&(CURSOR_KEY_VAR.into(), "cle-essai-0000000000abcd".into())));
         assert!(env.contains(&empty(CURSOR_TOKEN_VAR)));
         assert!(!env.contains(&empty(CURSOR_KEY_VAR)));
-        assert!(cursor_ready(&pro).is_ok());
+        assert!(key_ready(&pro).is_ok());
         assert_eq!(key_hint("cle-essai-0000000000abcd"), "clé …abcd");
         // Its folder, as the variable of the harness says.
         assert!(env.contains(&("CURSOR_CONFIG_DIR".into(), pro.config_dir.clone())));
@@ -2692,9 +2733,9 @@ mod tests {
         let env = launch_env_with(&machine, &all);
         assert!(env.contains(&empty(CURSOR_KEY_VAR)) && env.contains(&empty(CURSOR_TOKEN_VAR)));
         assert!(launch_env_with(&machine, &|_| false).is_empty());
-        assert!(cursor_ready(&machine).is_ok() && !by_key(&machine) && by_key(&pro));
-        remember_cursor_key(&pro, None);
-        assert_eq!(cursor_key(&pro), None);
+        assert!(key_ready(&machine).is_ok() && !by_key(&machine) && by_key(&pro));
+        remember_key(&pro, None);
+        assert_eq!(account_key(&pro), None);
     }
 
     #[test]

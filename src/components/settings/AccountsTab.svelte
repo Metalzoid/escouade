@@ -20,13 +20,16 @@
   import {
     byKey as goesByKey,
     capsOf,
+    dayCostStandsIn,
     defaultModelOf,
     effortsOf,
     engineName,
     modelsOf,
     modesOf,
     offered,
+    showsCost,
     usagePage,
+    usageSite,
   } from '../../lib/engines';
   import { EFFORTS, MODES } from '../../lib/models';
   import { fList, fPct, fUsd, tildify } from '../../lib/format';
@@ -215,8 +218,8 @@
     };
   }
 
-  /** A harness without a quota (OpenCode): a budget of the day stands in for it; not for one whose usage is on its own page (Cursor CLI, which tells no cost). */
-  const noQuota = (engine: EngineId) => capsOf(engine)?.quota === 'none' && !usagePage(engine);
+  /** A harness without a quota (OpenCode, Mistral Vibe): a budget of the day stands in for it; not for one whose usage is on its own page only (Cursor CLI, which tells no cost). */
+  const noQuota = (engine: EngineId) => dayCostStandsIn(engine);
 
   /** « Budget par jour ($) » left: empty (or 0) for none; refused, as it was. */
   async function commitBudget(a: Account, input: HTMLInputElement) {
@@ -324,11 +327,15 @@
               </span>
               <span class="quota">
                 {#if a.active && usagePage(g.engine)}
-                  <!-- Neither quota nor cost told to Escouade (Cursor CLI): its dashboard says its usage (ESC-43). -->
+                  <!-- No quota told to Escouade (Cursor CLI, nor its cost, ESC-43; Mistral Vibe, ESC-267): its own page says its usage. -->
                   <button
                     class="btn ghost small usage"
-                    use:tip={t('accounts.tab.usageHint', { harness })}
-                    onclick={() => app.run(openUrl(usagePage(g.engine)!))}><Icon name="ext" size={12} />{t('accounts.tab.usage')}</button
+                    use:tip={t(showsCost({ engine: g.engine }) ? 'accounts.tab.usageHintCost' : 'accounts.tab.usageHint', {
+                      harness,
+                      site: usageSite(g.engine),
+                    })}
+                    onclick={() => app.run(openUrl(usagePage(g.engine)!))}
+                    ><Icon name="ext" size={12} />{t('accounts.tab.usage', { site: usageSite(g.engine) })}</button
                   >
                 {/if}
                 {#each meters as m (m.minutes ?? 'credits')}

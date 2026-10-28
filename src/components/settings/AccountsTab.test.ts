@@ -11,7 +11,18 @@ vi.mock('../../lib/opener', () => ({ openUrl: vi.fn(async (u: string) => void op
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { Account, AccountStatus, ClosedProject } from '../../lib/types';
-import { agent, BARE_ENGINE, CURSOR_ENGINE, CLAUDE_ENGINE, fakeBackend, project, resetApp, SETTINGS, usageOf } from '../../test/ipc';
+import {
+  agent,
+  BARE_ENGINE,
+  CURSOR_ENGINE,
+  CLAUDE_ENGINE,
+  VIBE_ENGINE,
+  fakeBackend,
+  project,
+  resetApp,
+  SETTINGS,
+  usageOf,
+} from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
@@ -248,6 +259,28 @@ describe('AccountsTab', () => {
     // Its key, given again; the machine's signs in by agent login.
     await userEvent.click(within(team).getByRole('button', { name: 'Changer la clé…' }));
     expect(app.modal).toEqual({ kind: 'account', accountId: 'equipe' });
+  });
+
+  it('shows what a Vibe account spent today with its budget, links Mistral’s console and gives its key again (ESC-267)', async () => {
+    const TEAM: Account = { id: 'vibe-equipe', name: 'Équipe', engine: 'vibe', configDir: 'C:\\equipe', claudePath: '', active: true };
+    app.engines = [CLAUDE_ENGINE, VIBE_ENGINE];
+    app.settings = { ...SETTINGS, accounts: [PRINCIPAL, TEAM] };
+    app.usage = { ...app.usage, accounts: [{ ...usageOf('vibe-equipe', {}), todayCost: 0.37 }] };
+    opened.length = 0;
+    backend({
+      account_status: (a: { id: string }) =>
+        a.id === 'vibe-equipe' ? { connected: true, email: 'clé …wxyz', dir: 'C:\\equipe', stamp: null } : status()(a),
+    });
+    render(SettingsModal, { tab: 'accounts' });
+    const team = screen.getAllByRole('listitem', { name: 'Équipe' })[0];
+    expect(await within(team).findByText('Connecté · clé …wxyz')).toBeInTheDocument();
+    // Its cost told, no quota: the day's cost and a budget stand in, and its usage is on Mistral's console.
+    expect(within(team).getByText('0,37 $')).toBeInTheDocument();
+    expect(within(team).getByRole('textbox', { name: 'Budget par jour ($)' })).toBeInTheDocument();
+    await userEvent.click(within(team).getByRole('button', { name: 'Usage sur admin.mistral.ai' }));
+    expect(opened).toEqual(['https://admin.mistral.ai/organization/usage']);
+    await userEvent.click(within(team).getByRole('button', { name: 'Changer la clé…' }));
+    expect(app.modal).toEqual({ kind: 'account', accountId: 'vibe-equipe' });
   });
 
   it('shows what an account of a harness without a quota spent today, in the place of the gauges', async () => {

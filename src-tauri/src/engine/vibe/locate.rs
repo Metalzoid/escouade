@@ -86,6 +86,27 @@ fn acp_of(path: PathBuf) -> PathBuf {
     }
 }
 
+/// The interface `vibe` beside the ACP server `vibe-acp` (its `-p` writes the texts, ESC-267);
+/// any other program as it is (a fake plays both).
+pub(super) fn interface_of(path: &Path) -> PathBuf {
+    let stem = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    if stem != ACP {
+        return path.to_path_buf();
+    }
+    let beside = match path.extension() {
+        Some(ext) => path.with_file_name(format!("vibe.{}", ext.to_string_lossy())),
+        None => path.with_file_name("vibe"),
+    };
+    if beside.is_file() {
+        beside
+    } else {
+        path.to_path_buf()
+    }
+}
+
 /// The program a setting names: `~` for the home folder and, under Windows, its extension left
 /// out.
 fn given(configured: &str, home: Option<&Path>) -> Option<PathBuf> {
@@ -136,6 +157,11 @@ mod tests {
         // Another program (a fake) is taken as it is.
         let fake = dir.join("fake-vibe.cmd");
         assert_eq!(acp_of(fake.clone()), fake);
+        // The texts go to the interface beside the ACP server (ESC-267); a fake plays both.
+        assert_eq!(interface_of(&acp), vibe);
+        assert_eq!(interface_of(&fake), fake);
+        std::fs::remove_file(&vibe).unwrap();
+        assert_eq!(interface_of(&acp), acp);
         if cfg!(windows) {
             // Its extension left out, as a setting may.
             assert_eq!(

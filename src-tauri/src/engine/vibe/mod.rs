@@ -14,6 +14,12 @@
 //! Vibe has no mode Plan: Escouade's is played by its process (`process`), the plan approved on
 //! the card « Plan à approuver ». Its `smart-approve` (a classifier, as Claude Code's Auto) is not
 //! offered: a session of a new `VIBE_HOME` had it once in two in the real runs.
+//!
+//! Its accounts (ESC-267): the machine's goes by the key `vibe --setup` kept (or `MISTRAL_API_KEY`),
+//! another by an API key of its own, kept in the system's keychain and given by `MISTRAL_API_KEY`.
+//! A turn's cost and tokens are what its session's grew by; no quota is told (its usage is on
+//! Mistral's console), and a rate limit ends the turn « limité », resumed a minute later. The texts
+//! written go to its interface's `vibe -p`, without a tool, within a price.
 
 #[cfg(test)]
 pub(crate) mod bench;
@@ -27,8 +33,8 @@ use super::registry::{
     ToldModel,
 };
 use super::{
-    mcp, BoxFuture, Engine, EngineProcess, Escouade, Message, OneShot, PermissionAnswer, Process,
-    Program, Room, Spawn, StartLost, Weight,
+    mcp, BoxFuture, Engine, EngineProcess, Escouade, Message, OneShot, Process, Program, Room,
+    Spawn, StartLost, Weight,
 };
 use crate::agent::{AgentRt, Effects};
 use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL};
@@ -60,6 +66,14 @@ pub(crate) const HOME_VAR: &str = "VIBE_HOME";
 
 /// Its default model, the only one of an account in the real run.
 pub(crate) const DEFAULT: &str = "mistral-medium-3.5";
+
+/// Where an account's usage is seen: Mistral's console (Vibe tells no quota, ESC-267).
+pub(crate) const USAGE_PAGE: &str = "https://admin.mistral.ai/organization/usage";
+
+/// The most a text written may cost (`--max-price`, in dollars): a question of a few words costs
+/// about 0.01 $ (its system prompt weighs 7 500 to 9 000 tokens); Vibe stops after the turn that
+/// passes it.
+const TEXT_MAX_PRICE: &str = "0.05";
 
 /// The models of its menu until a process of the account has listed them.
 const MODELS: [(&str, &str); 1] = [(DEFAULT, "Mistral Medium 3.5")];
@@ -142,13 +156,15 @@ pub fn caps() -> EngineCaps {
         pdf: false,
         // `session/fork` copies all of the session.
         fork: ForkPoint::Turn,
-        resume_other_account: false,
+        // Its session is in the agent's own `VIBE_HOME`, whatever the account (only the key changes).
+        resume_other_account: true,
         mid_turn: MidTurn::Queued,
         slash_commands: false,
+        // No quota told: its usage is on Mistral's console (`usage_page`).
         quota: QuotaKind::None,
         quota_windows: Vec::new(),
-        // Its cost (`usage_update.cost`) comes with its accounts (ESC-267).
-        cost: CostKind::None,
+        // `usage_update.cost`, in dollars (ESC-267).
+        cost: CostKind::Exact,
         // Its interface in a terminal comes with ESC-268.
         terminal_view: false,
         remote_control: false,
@@ -156,8 +172,8 @@ pub fn caps() -> EngineCaps {
         todo_tools: false,
         default_refusal: false,
         sandbox: false,
-        usage_page: None,
-        accounts_by_key: false,
+        usage_page: Some(USAGE_PAGE),
+        accounts_by_key: true,
         read_only: false,
     }
 }
@@ -539,86 +555,69 @@ fn throwaway_home(env: &mut Vec<(String, String)>) -> Result<std::path::PathBuf>
     Ok(home)
 }
 
-/// One question to a process of its own (`vibe-acp`, in its agent `ask`), in a `VIBE_HOME` of its
-/// own removed once answered: its last words. What it asks is refused.
+/// The arguments of `vibe -p` for a text written: no tool (`--enabled-tools` names none it has, so
+/// all are off), one turn, within `TEXT_MAX_PRICE`, its answer alone on its output; its question read
+/// from its input (`-p` without a text).
+pub(crate) fn print_args() -> Vec<String> {
+    [
+        "--enabled-tools",
+        "none",
+        "--max-turns",
+        "1",
+        "--max-price",
+        TEXT_MAX_PRICE,
+        "--output",
+        "text",
+        "-p",
+    ]
+    .map(String::from)
+    .to_vec()
+}
+
+/// The question as `vibe -p` reads it: it takes no system prompt of its own.
+fn print_prompt(system: &str, prompt: &str) -> String {
+    if system.trim().is_empty() {
+        return prompt.to_string();
+    }
+    format!(
+        "<instructions>
+{system}
+</instructions>
+
+{prompt}"
+    )
+}
+
+/// One question to its interface's `vibe -p` (ESC-267), beside the `vibe-acp` found, on the
+/// account's key, in a `VIBE_HOME` of its own removed once answered: what it printed. Vibe stops at
+/// its price (code 3) after its turn: its answer is taken all the same.
 async fn one_shot(ask: OneShot<'_>) -> Result<String> {
     let mut env = ask.env.clone();
     let home = throwaway_home(&mut env)?;
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Option<Value>>();
-    let exit = tx.clone();
-    let opts = process::Opts {
-        program: ask.program,
-        cwd: ask.cwd.to_string_lossy().into_owned(),
-        env,
-        start: super::Start::New,
-        settings: Settings {
-            model: String::new(),
-            effort: "low".into(),
-            mode: "default".into(),
-        },
-        instructions: Some(ask.system.to_string()).filter(|s| !s.trim().is_empty()),
-        escouade: None,
-        fence: Vec::new(),
+    env.push(("VIBE_ENABLE_TELEMETRY".into(), "false".into()));
+    let program = match ask.program {
+        Program::Native(path) => Program::Native(locate::interface_of(&path)),
+        other => other,
     };
-    let p = VibeProcess::spawn(
-        opts,
-        Box::new(move |f| {
-            let _ = tx.send(Some(f));
-        }),
-        Box::new(move |_, _| {
-            let _ = exit.send(None);
-        }),
-    )?;
-    let asked = async {
-        p.initialize().await?;
-        let m = message(ask.prompt, &[])?;
-        p.send_message("", &Message(m))?;
-        let mut text = String::new();
-        while let Some(Some(f)) = rx.recv().await {
-            let update = &f["params"]["update"];
-            match f["method"].as_str().unwrap_or_default() {
-                "session/update" if update["sessionUpdate"] == "agent_message_chunk" => {
-                    text.push_str(update["content"]["text"].as_str().unwrap_or_default());
-                }
-                "session/request_permission" => {
-                    let rid = f["id"].as_str().unwrap_or_default();
-                    let _ = p.answer_permission(
-                        rid,
-                        PermissionAnswer::Deny {
-                            call: String::new(),
-                            message: String::new(),
-                        },
-                    );
-                }
-                "elicitation/create" => {
-                    let rid = f["id"].as_str().unwrap_or_default();
-                    let _ = p.reply(rid, Ok(json!({ "action": "decline" })));
-                }
-                "escouade.prompt_end" => {
-                    if let Some(e) = f["params"]["error"].as_str() {
-                        bail!("{e}");
-                    }
-                    break;
-                }
-                _ => {}
-            }
-        }
-        let text = text.trim().to_string();
-        if text.is_empty() {
-            return Err(anyhow!(tr!(
-                "Mistral Vibe n’a rien répondu",
-                "Mistral Vibe gave no answer"
-            )));
-        }
-        Ok(text)
-    };
-    let got = tokio::time::timeout(ask.limit, asked)
-        .await
-        .unwrap_or_else(|_| Err(anyhow!("Mistral Vibe: no answer in time")));
-    p.kill();
-    p.wait_gone(std::time::Duration::from_secs(5)).await;
+    let question = print_prompt(ask.system, ask.prompt);
+    let out = super::oneshot::run(
+        &program,
+        ask.cwd,
+        &print_args(),
+        &env,
+        &question,
+        "Mistral Vibe",
+    )
+    .await;
     let _ = std::fs::remove_dir_all(&home);
-    got
+    let text = String::from_utf8_lossy(&out?).trim().to_string();
+    if text.is_empty() {
+        bail!(tr!(
+            "Mistral Vibe n’a rien répondu (sa clé d’API, sa limite ?)",
+            "Mistral Vibe gave no answer (its API key, its limit?)"
+        ));
+    }
+    Ok(text)
 }
 
 /// The models of an account none of whose agents runs: a `vibe-acp` of its own, in a `VIBE_HOME`

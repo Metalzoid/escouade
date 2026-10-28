@@ -124,7 +124,7 @@ async fn key_account(h: &Harness, name: &str, key: Option<&str>) -> String {
         }
     });
     if let Some(key) = key {
-        h.core.set_cursor_key(&made.id, key).await.unwrap();
+        h.core.set_account_key(&made.id, key).await.unwrap();
     }
     made.id
 }
@@ -208,10 +208,10 @@ async fn two_cursor_accounts_by_key_and_the_machines_never_mix() {
         .iter()
         .any(|t| t.contains("connexion de la machine")));
     // A key that is none: refused, the one kept left as it was.
-    assert!(h.core.set_cursor_key(&pro, "trop courte").await.is_err());
+    assert!(h.core.set_account_key(&pro, "trop courte").await.is_err());
     assert!(h
         .core
-        .set_cursor_key("principal-cursor", "cle-essai-0000000000000")
+        .set_account_key("principal-cursor", "cle-essai-0000000000000")
         .await
         .is_err());
     // Removed, its key leaves the keychain.

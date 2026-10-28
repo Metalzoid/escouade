@@ -7,11 +7,11 @@
     "model": "mistral-medium-3.5"
   },
   "agentAfter": {
-    "cost": 0.0,
+    "cost": 0.0015504,
     "lastEntry": null,
     "sessionId": "766f2eab-2518-03d7-aefa-2c573986c7fc",
     "status": "done",
-    "tokens": 0,
+    "tokens": 9896,
     "touchedFiles": []
   },
   "flux": "../../vibe/cancel-config-options.jsonl",
@@ -52,7 +52,7 @@
       "text": "ok"
     },
     {
-      "cost": 0.0,
+      "cost": 0.0015504,
       "durationMs": null,
       "engine": "vibe",
       "error": null,
@@ -60,7 +60,7 @@
       "isError": false,
       "kind": "turn",
       "limited": false,
-      "tokens": 0
+      "tokens": 9896
     }
   ]
 }

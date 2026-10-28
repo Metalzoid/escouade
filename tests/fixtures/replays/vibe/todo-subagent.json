@@ -7,11 +7,11 @@
     "model": "mistral-medium-3.5"
   },
   "agentAfter": {
-    "cost": 0.0,
+    "cost": 0.089355,
     "lastEntry": null,
     "sessionId": "2b93ecef-d19a-6589-9c57-a036f4de6a39",
     "status": "done",
-    "tokens": 0,
+    "tokens": 61414,
     "touchedFiles": []
   },
   "flux": "../../vibe/todo-subagent.jsonl",
@@ -72,7 +72,7 @@
       "text": "Step 1: Two todo items recorded.\n\nStep 2: Subagent completed — a.txt has **1 line**.\n\nStep 3: Cannot perform. I do not have an `ask_user_question` tool. My available tools are: bash, edit, read_file, search_tool_functions, run_typescript, skill, todo, unified_harness_scratchpad, wait, write_file, and cron."
     },
     {
-      "cost": 0.0,
+      "cost": 0.089355,
       "durationMs": null,
       "engine": "vibe",
       "error": null,
@@ -80,7 +80,7 @@
       "isError": false,
       "kind": "turn",
       "limited": false,
-      "tokens": 0
+      "tokens": 61414
     }
   ]
 }

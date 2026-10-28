@@ -163,6 +163,8 @@ mod tui_tests;
 mod updates;
 mod usage;
 mod vectors;
+#[cfg(test)]
+mod vibe_tests;
 mod voice;
 mod which;
 mod workflow;
@@ -515,7 +517,7 @@ pub fn run() {
             commands::account_status,
             commands::account_models_refresh,
             commands::engines_found_now,
-            commands::account_cursor_key,
+            commands::account_key,
             commands::account_login,
             commands::set_agent_view,
             commands::agent_terminal,

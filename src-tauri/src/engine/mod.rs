@@ -62,6 +62,8 @@ pub(crate) use opencode::fake_opencode;
 pub use opencode::OPENCODE;
 pub use program::{Launch, Located, Program};
 pub use terminal::TerminalView;
+#[cfg(test)]
+pub(crate) use vibe::bench::fake_vibe;
 pub use vibe::VIBE;
 
 #[cfg(test)]

@@ -36,7 +36,14 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot};
 
-type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value, String>>>>>;
+/// What an error of Vibe says (its `message`).
+fn error_text(e: &Value) -> String {
+    e["message"].as_str().unwrap_or("error").to_string()
+}
+
+/// The requests of the process waiting for Vibe's answer: its result, or its error (`code`,
+/// `message`).
+type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value, Value>>>>>;
 
 /// How long a request of the process to Vibe may take (a prompt aside: a turn is not bounded).
 const REQUEST_LIMIT: Duration = Duration::from_secs(60);
@@ -292,11 +299,7 @@ impl VibeProcess {
         anyhow!(reason)
     }
 
-    fn send(
-        &self,
-        method: &str,
-        params: Value,
-    ) -> Result<oneshot::Receiver<Result<Value, String>>> {
+    fn send(&self, method: &str, params: Value) -> Result<oneshot::Receiver<Result<Value, Value>>> {
         let id = self.id();
         let (tx, rx) = oneshot::channel();
         self.pending.lock().insert(id, tx);
@@ -314,7 +317,7 @@ impl VibeProcess {
         let rx = self.send(method, params)?;
         match tokio::time::timeout(timeout, rx).await {
             Ok(Ok(Ok(v))) => Ok(v),
-            Ok(Ok(Err(e))) => Err(anyhow!("{method}: {e}")),
+            Ok(Ok(Err(e))) => Err(anyhow!("{method}: {}", error_text(&e))),
             Ok(Err(_)) => Err(anyhow!("{method}: dropped")),
             Err(_) => Err(anyhow!("{method}: no answer in time")),
         }
@@ -346,7 +349,7 @@ impl VibeProcess {
             let error = msg.get("error").filter(|e| !e.is_null());
             if let Some(tx) = self.pending.lock().remove(&id) {
                 let _ = tx.send(match error {
-                    Some(e) => Err(e["message"].as_str().unwrap_or("error").to_string()),
+                    Some(e) => Err(e.clone()),
                     None => Ok(msg["result"].clone()),
                 });
             }
@@ -415,10 +418,18 @@ impl VibeProcess {
         }
         {
             let mut s = self.state.lock();
+            let update = &params["update"];
+            // What the session spent so far, told as it opens (before its id is known, or while
+            // it is loaded): where its first turn's cost starts (ESC-267).
+            let opening = s.loading || s.session.is_none();
+            if opening && update["sessionUpdate"] == "usage_update" {
+                drop(s);
+                (self.on_frame)(msg);
+                return;
+            }
             if s.loading || params["sessionId"].as_str() != s.session.as_deref() {
                 return;
             }
-            let update = &params["update"];
             match update["sessionUpdate"].as_str() {
                 Some("tool_call" | "tool_call_update") => {
                     if let Some(id) = update["toolCallId"].as_str() {
@@ -530,9 +541,10 @@ impl VibeProcess {
                     "escouade.prompt_end",
                     json!({ "sessionId": session, "stopReason": r["stopReason"] }),
                 ),
+                // Its code tells a rate limit (`RATE_LIMITED`) from the other errors.
                 Ok(Err(e)) => me.frame(
                     "escouade.prompt_end",
-                    json!({ "sessionId": session, "error": e }),
+                    json!({ "sessionId": session, "error": error_text(&e), "code": e["code"] }),
                 ),
                 Err(_) => return,
             }

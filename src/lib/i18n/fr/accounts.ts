@@ -24,12 +24,15 @@ export default {
     down: 'Descendre {name}',
     signIn: 'Se connecter…',
     signInAgain: 'Se reconnecter…',
-    /** A Cursor account other than the machine's: its API key given again (ESC-43). */
+    /** A Cursor or Mistral Vibe account other than the machine's: its API key given again (ESC-43, ESC-267). */
     changeKey: 'Changer la clé…',
-    /** A harness that tells Escouade neither quota nor cost (Cursor CLI): its dashboard. */
-    usage: 'Usage sur cursor.com',
+    /** A harness that tells Escouade no quota (Cursor CLI, Mistral Vibe): its own page; `{site}`: « cursor.com ». */
+    usage: 'Usage sur {site}',
     usageHint:
       '{harness} ne donne pas son usage à Escouade : son tableau de bord le montre (l’usage inclus du mois, la remise à zéro). Une limite atteinte arrête le tour sur une carte qui le dit.',
+    /** Mistral Vibe (ESC-267): its cost told, its quota not. */
+    usageHintCost:
+      '{harness} donne à Escouade le coût de chaque tour, pas de quota : {site} montre l’usage et la facture du compte. Une limite de débit arrête le tour sur une carte qui le dit, et l’agent reprend seul une minute plus tard.',
     remove: 'Supprimer',
     add: 'Ajouter un compte…',
     /** A harness installed without an account (ESC-128): nothing starts on it. */
@@ -156,6 +159,17 @@ export default {
       create: 'Ajouter le compte',
       saveKey: 'Enregistrer la clé',
     },
+    /** Mistral Vibe (ESC-267): the machine's account is the key of vibe --setup, a new one its API key. */
+    vibe: {
+      nothingToShare: 'Rien à partager : chaque agent Vibe a son propre VIBE_HOME, où « Pour cet agent » garde ses règles et ses sessions.',
+      neverShared:
+        'La clé de Mistral Vibe (vibe --setup) est celle de la machine : elle reste dans le trousseau du système, et un dossier de configuration ne la déplace pas.',
+      signInHint: 'Donne ta clé d’API dans le terminal ci-dessous : vibe --setup la garde dans le trousseau du système.',
+      newHintKey: 'La clé d’API d’un autre compte Mistral, gardée dans le trousseau du système.',
+      keyPlaceholder: 'Sur console.mistral.ai, API Keys',
+      keyHint:
+        'Gardée dans le trousseau du système, donnée aux agents de ce compte par MISTRAL_API_KEY, jamais écrite dans un fichier ni sur une ligne de commande. Leurs tours sont facturés au compte Mistral de cette clé ; le compte de la machine reste la clé de vibe --setup.',
+    },
     restart: 'Relancer',
     done: 'Terminé',
   },
@@ -257,7 +271,7 @@ export default {
     noQuota: 'Pas de quota : seul le coût de ses tours compte.',
     /** Cursor CLI (ESC-43): it tells Escouade neither its quota nor its cost. */
     usageElsewhere: '{harness} ne donne ni son usage ni son coût à Escouade.',
-    usageLink: 'Voir l’usage sur cursor.com',
+    usageLink: 'Voir l’usage sur {site}',
     budget: 'Budget par jour',
     budgetReset: 'Remise à zéro à minuit.',
     projectionNote:

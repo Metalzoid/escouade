@@ -223,7 +223,7 @@ export const api = {
   /** The menu of the models of an account opened: they are read again when a day old (ESC-186), told by `accountModels`. */
   accountModelsRefresh: (id: string) => invoke<void>('account_models_refresh', { id }),
   /** The API key of a Cursor account other than its machine's (ESC-43), kept in the system's keychain; its status as it then is. */
-  accountCursorKey: (id: string, key: string) => invoke<AccountStatus>('account_cursor_key', { id, key }),
+  accountKey: (id: string, key: string) => invoke<AccountStatus>('account_key', { id, key }),
   /** What stopped the account's sign-in before it was signed in, when it is known (its program not found, an installation cut half-way); null otherwise. */
   accountSignInEnded: (id: string) => invoke<string | null>('account_sign_in_ended', { id }),
   /** The account's `claude` in an interactive terminal, to sign in with (written to and killed as a terminal). */

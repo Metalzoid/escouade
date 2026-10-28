@@ -14,6 +14,13 @@
 //   session/cancel;  modèle — says its model, thinking and agent;  confiance — says whether its folder is trusted
 //   (trusted_folders.toml of $VIBE_HOME);  outil escouade <outil> — calls <outil> of Escouade's MCP server, by the entry
 //   `escouade` its session was given (`mcpServers`) and its header, and says its answer.
+//   compte — says the key it runs on (« Compte : clé …<its last four> », « Compte : clé de la machine » without one);
+//   limite — the error -31001 of a rate limit, as Vibe gives it once it has tried again for 5 minutes.
+// Each turn spends 0.0123 $ and 9 393 input tokens (3 200 from the cache), 73 output: its usage_update says what the
+// session spent so far, as Vibe's, and session/load says it again first.
+// `-p` (`vibe -p`, the texts written, ESC-267): its question read from its input, its answer printed alone
+// (« Réponse de Vibe : <its last line> », a name « <two words>-vibe » for a <tache>), its call logged ({print: {argv,
+// home, apiKey, question}}); a refused key prints Vibe's error on stderr, nothing on stdout.
 // MISTRAL_API_KEY=cle-refusee-… : every prompt answers the error -31002 of a key Vibe refuses. Sessions are kept in
 // $VIBE_HOME/logs/session/fake/<id>.json, replayed by session/load and copied by session/fork. Each message, and each
 // launch ({launch: {argv, cwd, home, apiKey, telemetry, autoUpdate}}: the fake values of the tests), goes to
@@ -41,6 +48,25 @@ log({
     autoUpdate: process.env.VIBE_ENABLE_AUTO_UPDATE ?? null,
   },
 });
+if (argv.includes('-p') || argv.includes('--prompt')) {
+  let question = '';
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (d) => (question += d));
+  process.stdin.on('end', () => {
+    log({ print: { argv, home: process.env.VIBE_HOME ?? null, apiKey, question } });
+    if (apiKey?.startsWith('cle-refusee')) {
+      process.stderr.write('Error: Invalid API key (from env var MISTRAL_API_KEY). Please check your API key and try again.\n');
+      process.exit(1);
+    }
+    const task = question.match(/<(tache|task)>\s*([\s\S]*?)\s*<\/\1>/)?.[2];
+    const name = task === undefined ? null : `${(task.toLowerCase().match(/[a-z]+/g) ?? ['tache']).slice(0, 2).join('-')}-vibe`;
+    const key = apiKey ? `clé …${apiKey.slice(-4)}` : 'clé de la machine';
+    const last = question.trim().split('\n').at(-1);
+    process.stdout.write(`${name ?? (last === 'compte' ? `Compte : ${key}` : `Réponse de Vibe : ${last}`)}\n`);
+    process.exit(0);
+  });
+  await new Promise(() => {});
+}
 const sessionsDir = path.join(home, 'logs', 'session', 'fake');
 fs.mkdirSync(sessionsDir, { recursive: true });
 const configFile = path.join(home, 'config.toml');
@@ -98,7 +124,26 @@ let elicitation = false;
 const sessions = new Map();
 const fileOf = (id) => path.join(sessionsDir, `${id}.json`);
 function save(s) {
-  fs.writeFileSync(fileOf(s.id), JSON.stringify({ id: s.id, cwd: s.cwd, history: s.history, model: s.model, thinking: s.thinking }));
+  const kept = { id: s.id, cwd: s.cwd, history: s.history, model: s.model, thinking: s.thinking, spent: s.spent };
+  fs.writeFileSync(fileOf(s.id), JSON.stringify(kept));
+}
+// What a session has spent so far, as Vibe's usage_update says it.
+const NONE_SPENT = { cost: 0, prompt: 0, cached: 0, completion: 0 };
+function usage(s) {
+  const t = s.spent ?? NONE_SPENT;
+  const u = {
+    sessionUpdate: 'usage_update',
+    used: t.prompt + t.completion,
+    size: 202144,
+    _meta: { promptTokens: t.prompt, completionTokens: t.completion, cachedTokens: t.cached, totalTokens: t.prompt + t.completion },
+  };
+  if (t.cost > 0) u.cost = { amount: t.cost, currency: 'USD' };
+  write({ method: 'session/update', params: { sessionId: s.id, update: u } });
+}
+function spend(s) {
+  const t = s.spent ?? NONE_SPENT;
+  s.spent = { cost: t.cost + 0.0123, prompt: t.prompt + 9393, cached: t.cached + 3200, completion: t.completion + 73 };
+  usage(s);
 }
 function opened(s) {
   return {
@@ -204,6 +249,7 @@ async function turn(s, words, cancelled) {
     }
     return;
   }
+  if (words === 'compte') return say(s, `Compte : ${apiKey ? `clé …${apiKey.slice(-4)}` : 'clé de la machine'}`);
   if (words.includes('raisonnement')) {
     think(s, 'Je réfléchis à la question posée.');
     say(s, 'Voici ma réponse réfléchie.');
@@ -423,8 +469,9 @@ function newSession(cwd, mcp, from) {
   };
   sessions.set(s.id, s);
   save(s);
-  // Its usage first, as Vibe sends it.
-  write({ method: 'session/update', params: { sessionId: s.id, update: { sessionUpdate: 'usage_update', used: 0, size: 202144 } } });
+  // Its usage first, as Vibe sends it (a copy's what its original spent).
+  s.spent = from?.spent ?? NONE_SPENT;
+  usage(s);
   return s;
 }
 function loaded(id, cwd, mcp) {
@@ -464,6 +511,7 @@ async function onMessage(msg) {
       const s = loaded(p.sessionId, p.cwd, p.mcpServers);
       if (!s) return error(msg.id, `Session not found: ${p.sessionId}`);
       for (const u of s.history) write({ method: 'session/update', params: { sessionId: s.id, update: u } });
+      usage(s);
       return result(msg.id, opened(s));
     }
     case 'session/fork': {
@@ -516,15 +564,22 @@ async function onMessage(msg) {
       await sleep(40);
       // What it plays is picked by the user's own words: not those of Escouade's blocks before them.
       const own = text.replace(/<(instructions|escouade_plan_mode)>[\s\S]*?<\/\1>\n?/g, '').trim();
+      if (own.includes('limite')) {
+        running = null;
+        save(s);
+        return error(msg.id, `Rate limit exceeded for mistral (model: ${s.model}).`, -31001);
+      }
       try {
         await turn(s, own, () => run.cancelled);
       } finally {
         running = null;
+        spend(s);
         save(s);
       }
+      const t = s.spent;
       return result(msg.id, {
         stopReason: run.cancelled ? 'cancelled' : 'end_turn',
-        usage: { totalTokens: 100, inputTokens: 90, outputTokens: 10, cachedReadTokens: 0 },
+        usage: { totalTokens: t.prompt + t.completion, inputTokens: t.prompt, outputTokens: t.completion, cachedReadTokens: t.cached },
       });
     }
     default:

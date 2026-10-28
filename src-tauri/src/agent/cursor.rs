@@ -42,6 +42,10 @@ pub(crate) struct CursorState {
     /// A recorded stream: the `session/load` under way (its request's id), whose replay is left
     /// out.
     loading: Option<Value>,
+    /// What the turn spent, as Mistral Vibe told it (`agent/vibe.rs`): Cursor tells nothing.
+    pub(super) spent: Option<TurnRow>,
+    /// The turn met Mistral Vibe's rate limit: when it goes on (`agent/vibe.rs`).
+    pub(super) limited_until: Option<i64>,
 }
 
 /// A call's id as Escouade keeps it: Cursor's has a line break in it (`call-…-0\nfc_…_0`).
@@ -801,6 +805,11 @@ impl AgentRt {
             .filter(|_| !interrupted && self.meta.engine != crate::model::EngineId::Vibe);
         let mut error = std::mem::take(&mut self.cursor.error).filter(|_| !interrupted);
         let mut limited = false;
+        // Mistral Vibe's rate limit: « limité », its resume planned.
+        if let Some(at) = self.cursor.limited_until.take().filter(|_| !interrupted) {
+            limited = true;
+            fx.limited = Some(Some(at));
+        }
         if let (Some(refusal), None) = (refused, &error) {
             let by_key =
                 self.meta.account != crate::accounts::principal_id(crate::model::EngineId::Cursor);
@@ -814,6 +823,16 @@ impl AgentRt {
         }
         let failed = error.is_some();
         self.cursor.reports.clear();
+        let spent = self.cursor.spent.take();
+        let (cost, tokens) = spent
+            .as_ref()
+            .map_or((0.0, 0), |r| (r.cost, r.input + r.cache + r.output));
+        if let Some(row) = spent.filter(|_| tokens > 0) {
+            self.meta.tokens += tokens;
+            self.meta.cost += cost;
+            fx.turns.push(row);
+        }
+        // A resume planned is over (the core plans the next one, `fx.limited`).
         if self.meta.resume_at.take().is_some() {
             fx.save = true;
             fx.agent_changed = true;
@@ -841,8 +860,8 @@ impl AgentRt {
         let took = self.active_since.map(|since| (now_ms() - since).max(0));
         let item = json!({
             "kind": "turn", "id": new_id(), "ts": now_ms(), "durationMs": took,
-            // ACP tells neither: nothing is shown of them (`CostKind::None`).
-            "cost": 0.0, "tokens": 0, "isError": failed, "interrupted": interrupted, "error": error, "limited": limited,
+            // Cursor's ACP tells neither: nothing is shown of them (`CostKind::None`); Vibe's both.
+            "cost": cost, "tokens": tokens, "isError": failed, "interrupted": interrupted, "error": error, "limited": limited,
             "engine": self.meta.engine,
         });
         self.append(item, fx);

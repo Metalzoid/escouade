@@ -14,7 +14,9 @@
 //! - the plan of Escouade's mode Plan (`escouade/plan`, its process's own) is the card « Plan à
 //!   approuver », as Cursor's `cursor/create_plan`;
 //! - its mode is set by Escouade alone: its `current_mode_update` is not read (its agent `ask` is
-//!   Escouade's « Demander » and « Plan » both).
+//!   Escouade's « Demander » and « Plan » both);
+//! - its cost and tokens (`usage_update`) are the session's so far: a turn's are what they grew by
+//!   (ESC-267), and its rate limit (`RATE_LIMITED`) ends the turn « limité », its resume planned.
 //!
 //! A recorded stream (`tests/fixtures/vibe/`, one `{"dir": "in" | "out", "msg"}` a line) is read as
 //! it came, the history `session/load` replays left out as the process leaves it out.
@@ -31,7 +33,53 @@ pub(crate) struct VibeState {
     /// out; and the forms asked, by their request, for the answers recorded.
     loading: Option<Value>,
     forms: HashMap<String, Value>,
+    /// What the session had spent when its turn began, and what it has spent so far, as its
+    /// `usage_update` last told it.
+    base: Option<Spent>,
+    last: Spent,
 }
+
+/// What a session of Vibe has spent so far (its `usage_update`, which a `session/load` sends again
+/// with what the session spent before).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub(crate) struct Spent {
+    pub cost: f64,
+    /// Its input tokens, those read from the cache included.
+    pub prompt: u64,
+    pub cached: u64,
+    pub completion: u64,
+}
+
+impl Spent {
+    /// What a `usage_update` says.
+    pub(crate) fn of(u: &Value) -> Spent {
+        let n = |k: &str| u["_meta"][k].as_u64().unwrap_or(0);
+        Spent {
+            cost: u["cost"]["amount"].as_f64().unwrap_or(0.0),
+            prompt: n("promptTokens"),
+            cached: n("cachedTokens"),
+            completion: n("completionTokens"),
+        }
+    }
+
+    /// What was spent from `before` to `self` (none of what a new session counts again).
+    fn since(self, before: Spent) -> Spent {
+        Spent {
+            cost: (self.cost - before.cost).max(0.0),
+            prompt: self.prompt.saturating_sub(before.prompt),
+            cached: self.cached.saturating_sub(before.cached),
+            completion: self.completion.saturating_sub(before.completion),
+        }
+    }
+}
+
+/// Vibe's error of a rate limit (`acp/exceptions.py`, 3.0.3): Vibe has tried again for 5 minutes
+/// already before it gives it.
+const RATE_LIMITED: i64 = -31001;
+
+/// How long after a rate limit the agent goes on: Vibe tells no reset, and Mistral's limits are by
+/// the minute.
+pub(crate) const RATE_RESUME_MS: i64 = 60_000;
 
 /// The tools of Vibe shown otherwise than as calls (or not at all).
 const UNSHOWN: [&str; 3] = ["ui.ask_user_question", "vibe.todo", "search_tool_functions"];
@@ -155,8 +203,36 @@ impl AgentRt {
                 let frame = json!({ "method": "cursor/create_plan", "id": f["id"], "params": { "plan": p["plan"] } });
                 self.cursor_frame(&frame, fx);
             }
+            "escouade.prompt_end" => {
+                self.vb_turn_spent();
+                let mut f = f.clone();
+                if p["code"].as_i64() == Some(RATE_LIMITED) {
+                    self.cursor.limited_until = Some(now_ms() + RATE_RESUME_MS);
+                    f["params"]["error"] = json!(rate_limited(i18n::ui(), p["error"].as_str()));
+                }
+                self.cursor_frame(&f, fx);
+            }
             _ => self.cursor_frame(f, fx),
         }
+    }
+
+    /// The turn over: what the session spent in it, for its turn's card and the stats.
+    fn vb_turn_spent(&mut self) {
+        let base = self.vibe.base.replace(self.vibe.last).unwrap_or_default();
+        let d = self.vibe.last.since(base);
+        let model = if self.meta.model.is_empty() {
+            crate::engine::vibe::DEFAULT.to_string()
+        } else {
+            self.meta.model.clone()
+        };
+        self.cursor.spent = Some(TurnRow {
+            engine: self.meta.engine,
+            model,
+            input: d.prompt.saturating_sub(d.cached),
+            cache: d.cached,
+            output: d.completion,
+            cost: d.cost,
+        });
     }
 
     /// One update of its session.
@@ -209,9 +285,15 @@ impl AgentRt {
                 }
                 self.cursor_frame(&forward(n), fx);
             }
-            // Its mode is Escouade's to set (`ask` is « Demander » and « Plan » both); its usage comes
-            // with ESC-267; the invite it echoes is the conversation's already.
-            "current_mode_update" | "usage_update" | "user_message_chunk" => {}
+            // What the session spent so far; the first told is where its first turn starts.
+            "usage_update" => {
+                let spent = Spent::of(u);
+                self.vibe.base.get_or_insert(spent);
+                self.vibe.last = spent;
+            }
+            // Its mode is Escouade's to set (`ask` is « Demander » and « Plan » both); the invite it
+            // echoes is the conversation's already.
+            "current_mode_update" | "user_message_chunk" => {}
             _ => self.cursor_frame(&forward(u.clone()), fx),
         }
     }
@@ -286,9 +368,9 @@ impl AgentRt {
                     let end = json!({ "method": "escouade.prompt_end", "params": msg["result"] });
                     self.vibe_frame(&end, fx);
                 } else if msg["error"].is_object() && !msg["id"].is_null() {
-                    // A prompt refused (an API key refused, say).
+                    // A prompt refused (an API key refused, a rate limit, say).
                     let end = json!({ "method": "escouade.prompt_end", "params": {
-                        "error": msg["error"]["message"],
+                        "error": msg["error"]["message"], "code": msg["error"]["code"],
                     } });
                     self.vibe_frame(&end, fx);
                 } else if msg["method"].is_string() {
@@ -302,6 +384,16 @@ impl AgentRt {
             _ => {}
         }
     }
+}
+
+/// What the card of a turn stopped by Vibe's rate limit says (`said`: Vibe's own words).
+fn rate_limited(lang: crate::i18n::Lang, said: Option<&str>) -> String {
+    let said = said.unwrap_or("Rate limit exceeded");
+    tr_in!(
+        lang,
+        "Limite de débit de Mistral atteinte : {said}",
+        "Mistral’s rate limit reached: {said}"
+    )
 }
 
 #[cfg(test)]

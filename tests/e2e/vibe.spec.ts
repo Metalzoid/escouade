@@ -190,3 +190,69 @@ test.describe('an agent on Mistral Vibe', () => {
     await expect(page.getByText('Long travail fini.')).toHaveCount(0);
   });
 });
+
+// ESC-267: a second Mistral Vibe account is an API key, kept in the system keychain (the sandbox's entries, apart from
+// the user's) and given to its agents by MISTRAL_API_KEY, never on their command line nor in a file of Escouade's; what a
+// turn costs is what its session's cost grew by; a rate limit ends the turn « limité », its resume planned.
+test.describe('a Mistral Vibe account added by its API key', () => {
+  test.use({ appEnv: { ESCOUADE_VIBE: FAKE_VIBE } });
+
+  test('is added by its name and key, shows its cost and links its usage, and its agents run as that key', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const settings = page.getByRole('dialog', { name: 'Réglages' });
+    await settings.getByRole('tab', { name: 'Comptes' }).click();
+    await settings.getByRole('button', { name: 'Ajouter un compte Mistral Vibe…' }).click();
+    const modal = page.getByRole('dialog', { name: 'Ajouter un compte Mistral Vibe' });
+    // The machine's is there already: a new one, by its key.
+    await expect(modal.getByRole('radio', { name: /Un nouveau compte/ })).toBeChecked();
+    await modal.getByRole('textbox', { name: 'Nom' }).fill('Équipe');
+    await modal.getByLabel('Clé d’API').fill('cle-mistral-e2e-0000wxyz');
+    await expect(modal.getByLabel('Clé d’API')).toHaveAttribute('placeholder', 'Sur console.mistral.ai, API Keys');
+    await shots(page, 'account-key');
+    await modal.getByRole('button', { name: 'Ajouter le compte' }).click();
+    const list = settings.getByRole('list', { name: 'Comptes Mistral Vibe' });
+    const team = list.getByRole('listitem', { name: 'Équipe' });
+    await expect(team).toContainText('Connecté · clé …wxyz');
+    await expect(team.getByRole('button', { name: 'Changer la clé…' })).toBeVisible();
+    await expect(team.getByRole('button', { name: 'Usage sur admin.mistral.ai' })).toBeVisible();
+    await expect(team.getByRole('textbox', { name: 'Budget par jour ($)' })).toBeVisible();
+    expect(fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8')).not.toContain('cle-mistral');
+    // The machine's account off: new Vibe agents go to the key's.
+    const machine = list.getByRole('listitem', { name: 'Principal' });
+    await machine.getByRole('switch', { name: 'Actif' }).click();
+    await expect(machine.getByRole('switch', { name: 'Actif' })).toHaveAttribute('aria-checked', 'false');
+    await page.keyboard.press('Escape');
+    await newVibeAgent(page);
+    await send(page, 'compte');
+    await expect(page.getByText('Compte : clé …wxyz')).toBeVisible();
+    const launch = agentLaunch(app);
+    expect(launch.apiKey).toBe('cle-mistral-e2e-0000wxyz');
+    expect(launch.argv.join(' ')).not.toContain('cle-mistral');
+    // Its turn's cost and tokens, as the fake's session grew by them.
+    await expect(page.locator('main.conv').getByText('0,012 $').first()).toBeVisible();
+    await send(page, 'encore');
+    await expect(page.getByText('Vibe a reçu : encore')).toBeVisible();
+    await expect(page.locator('main.conv').getByText('0,012 $')).toHaveCount(2);
+    await shots(page, 'turn-cost');
+    // The day's cost of the account, in Réglages › Comptes.
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    await settings.getByRole('tab', { name: 'Comptes' }).click();
+    await expect(team).toContainText('0,025 $');
+    await team.scrollIntoViewIfNeeded();
+    await shots(page, 'accounts');
+  });
+
+  test('ends a turn stopped by Mistral’s rate limit on a card that says it, its resume planned', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    await newVibeAgent(page);
+    await send(page, 'limite');
+    const card = page.locator('.card.error.limit');
+    await expect(card).toContainText('Limite de débit de Mistral atteinte');
+    await expect(card).toContainText('Rate limit exceeded for mistral');
+    await expect(card).toContainText('Reprise automatique');
+    await shots(page, 'rate-limit');
+  });
+});

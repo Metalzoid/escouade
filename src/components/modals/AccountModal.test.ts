@@ -21,7 +21,7 @@ vi.mock('../../lib/terminals', () => ({
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { Account, AccountStatus } from '../../lib/types';
-import { BARE_ENGINE, CURSOR_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp, SETTINGS } from '../../test/ipc';
+import { BARE_ENGINE, CURSOR_ENGINE, CLAUDE_ENGINE, VIBE_ENGINE, fakeBackend, resetApp, SETTINGS } from '../../test/ipc';
 import AccountModal from './AccountModal.svelte';
 
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
@@ -195,7 +195,7 @@ describe('AccountModal', () => {
         account_shareable: () => [],
         account_machine: () => ({ found: true, added: true, connected: true, signsIn: true, email: null, dir: '' }),
         account_create: () => KEYED,
-        account_cursor_key: () => KEPT,
+        account_key: () => KEPT,
       });
       render(AccountModal, { engine: 'cursor' });
       expect(await screen.findByRole('dialog', { name: 'Ajouter un compte Cursor CLI' })).toBeInTheDocument();
@@ -210,9 +210,9 @@ describe('AccountModal', () => {
       expect(add).toBeDisabled();
       await userEvent.type(key, 'cle-essai-0000000000abcd');
       await userEvent.click(add);
-      await waitFor(() => expect(b.called('account_cursor_key')).toHaveLength(1));
+      await waitFor(() => expect(b.called('account_key')).toHaveLength(1));
       expect(b.called('account_create')[0].args).toEqual({ name: 'Équipe', share: [], mode: 'link', engine: 'cursor' });
-      expect(b.called('account_cursor_key')[0].args).toEqual({ id: 'equipe', key: 'cle-essai-0000000000abcd' });
+      expect(b.called('account_key')[0].args).toEqual({ id: 'equipe', key: 'cle-essai-0000000000abcd' });
       expect(term.opened).toEqual([]);
       expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
     });
@@ -221,7 +221,7 @@ describe('AccountModal', () => {
       app.settings.accounts = [PRINCIPAL, KEYED];
       let n = 0;
       const b = backend([KEPT], {
-        account_cursor_key: () => (n++ === 0 ? Promise.reject('Ce n’est pas une clé d’API de Cursor') : KEPT),
+        account_key: () => (n++ === 0 ? Promise.reject('Ce n’est pas une clé d’API de Cursor') : KEPT),
       });
       render(AccountModal, { accountId: 'equipe' });
       expect(await screen.findByRole('dialog', { name: 'Clé d’API du compte « Équipe »' })).toBeInTheDocument();
@@ -232,7 +232,47 @@ describe('AccountModal', () => {
       expect(app.modal).toEqual({ kind: 'account' });
       await userEvent.clear(screen.getByLabelText('Clé d’API'));
       await userEvent.type(screen.getByLabelText('Clé d’API'), 'cle-essai-0000000000abcd{Enter}');
-      await waitFor(() => expect(b.called('account_cursor_key')).toHaveLength(2));
+      await waitFor(() => expect(b.called('account_key')).toHaveLength(2));
+      expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
+    });
+  });
+
+  describe('a Mistral Vibe account by its API key (ESC-267)', () => {
+    const KEYED: Account = {
+      ...PRO,
+      id: 'vibe-equipe',
+      name: 'Équipe',
+      engine: 'vibe',
+      configDir: 'C:\\Users\\ada\\.escouade\\vibe\\equipe',
+    };
+    const KEPT: AccountStatus = { connected: true, email: 'clé …wxyz', dir: KEYED.configDir, stamp: null };
+
+    beforeEach(() => {
+      app.engines = [CLAUDE_ENGINE, VIBE_ENGINE];
+      app.enginesFound = ['claude', 'vibe'];
+    });
+
+    it('adds a new one by its name and its Mistral key, kept in the keychain: no terminal', async () => {
+      const b = backend([OUT], {
+        account_shareable: () => [],
+        account_machine: () => ({ found: true, added: true, connected: true, signsIn: true, email: null, dir: '' }),
+        account_create: () => KEYED,
+        account_key: () => KEPT,
+      });
+      render(AccountModal, { engine: 'vibe' });
+      expect(await screen.findByRole('dialog', { name: 'Ajouter un compte Mistral Vibe' })).toBeInTheDocument();
+      expect(screen.getByText('La clé d’API d’un autre compte Mistral, gardée dans le trousseau du système.')).toBeInTheDocument();
+      const key = screen.getByLabelText('Clé d’API');
+      expect(key).toHaveAttribute('type', 'password');
+      expect(key).toHaveAttribute('placeholder', 'Sur console.mistral.ai, API Keys');
+      expect(screen.getByText(/donnée aux agents de ce compte par MISTRAL_API_KEY/)).toBeInTheDocument();
+      await userEvent.type(screen.getByRole('textbox', { name: 'Nom' }), 'Équipe');
+      await userEvent.type(key, 'cle-mistral-000000000wxyz');
+      await userEvent.click(screen.getByRole('button', { name: 'Ajouter le compte' }));
+      await waitFor(() => expect(b.called('account_key')).toHaveLength(1));
+      expect(b.called('account_create')[0].args).toEqual({ name: 'Équipe', share: [], mode: 'link', engine: 'vibe' });
+      expect(b.called('account_key')[0].args).toEqual({ id: 'vibe-equipe', key: 'cle-mistral-000000000wxyz' });
+      expect(term.opened).toEqual([]);
       expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
     });
   });

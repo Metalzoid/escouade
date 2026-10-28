@@ -7,11 +7,11 @@
     "model": "mistral-medium-3.5"
   },
   "agentAfter": {
-    "cost": 0.0,
+    "cost": 0.01692,
     "lastEntry": null,
     "sessionId": "a1b25e41-1ec4-2435-53a6-ca854b85ce77",
     "status": "done",
-    "tokens": 0,
+    "tokens": 20224,
     "touchedFiles": []
   },
   "flux": "../../vibe/question-elicitation.jsonl",
@@ -59,7 +59,7 @@
       "text": "red"
     },
     {
-      "cost": 0.0,
+      "cost": 0.01692,
       "durationMs": null,
       "engine": "vibe",
       "error": null,
@@ -67,7 +67,7 @@
       "isError": false,
       "kind": "turn",
       "limited": false,
-      "tokens": 0
+      "tokens": 20224
     }
   ]
 }

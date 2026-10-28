@@ -3,12 +3,13 @@
 Escouade's visible changes, version by version, in English. The notes of each GitHub release and the English Discord channel take the section of its version; the French notes, those of the in-app update included, are in [CHANGELOG.md](CHANGELOG.md), which also holds the versions before 1.8.2.
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
-- Mistral Vibe becomes a sixth harness: its agents converse, ask their permissions and their questions in Escouade, with its models, its modes and a Plan mode played by Escouade.
 
 ## [Unreleased]
 
 ### New
 
+- Mistral Vibe becomes a sixth harness: its agents converse, ask their permissions and their questions in Escouade, with its models, its modes and a Plan mode played by Escouade.
+- Mistral Vibe has several accounts, each by its Mistral API key, and shows what each turn costs, in the conversation, the status bar and the statistics; at its rate limit, the agent goes on by itself a minute later.
 - A code index, offered when a project is added and in its settings, lets agents find code faster and for fewer tokens, with nothing leaving the machine; the statistics show what it saved, in tokens and dollars.
 - A project’s agents share a working memory, whatever their harness: they note in it the project’s ways of doing and its pitfalls, and Escouade offers once to bring in what Claude Code had remembered.
 - The project’s documents have their drive in the Docs tab: folders, drag and drop and a search; a file dropped (PDF, Word, Markdown, text) is read on your machine and filed in the right folder by itself, and each one says whether the agents read it and how many times it is cited.

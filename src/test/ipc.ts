@@ -477,6 +477,19 @@ export const CURSOR_ENGINE: EngineDecl = {
   caps: { ...BARE_ENGINE.caps, usagePage: 'https://cursor.com/dashboard?tab=usage', accountsByKey: true },
 };
 
+/** Mistral Vibe as the tests see it (ESC-267): no quota, its cost told, its usage on Mistral's console, its accounts by API key. */
+export const VIBE_ENGINE: EngineDecl = {
+  ...BARE_ENGINE,
+  id: 'vibe',
+  name: 'Mistral Vibe',
+  caps: {
+    ...BARE_ENGINE.caps,
+    cost: 'exact',
+    usagePage: 'https://admin.mistral.ai/organization/usage',
+    accountsByKey: true,
+  },
+};
+
 /** Claude Code's two windows of a reading, the shorthand of the tests: `fiveHour` and `sevenDay`, as before 1.8. */
 export interface ClaudeWindows {
   fiveHour?: RateWindow | null;

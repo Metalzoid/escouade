@@ -49,7 +49,22 @@ export function usagePage(engine: EngineId | null | undefined): string | undefin
   return capsOf(engine)?.usagePage ?? undefined;
 }
 
-/** Whether an account of `engine` other than its machine's goes by an API key rather than a sign-in (Cursor CLI, ESC-43). */
+/** The site of `usagePage(engine)`, as its link names it (« cursor.com », « admin.mistral.ai »). */
+export function usageSite(engine: EngineId | null | undefined): string {
+  const page = usagePage(engine);
+  return page ? new URL(page).hostname : '';
+}
+
+/**
+ * Whether the day's cost of an account of `engine` stands in for a quota (and its « Budget par jour ($) »): a harness
+ * without a quota that tells what its turns cost (OpenCode; Mistral Vibe, its usage page beside, ESC-267). Not Cursor CLI,
+ * whose usage is on its own page only.
+ */
+export function dayCostStandsIn(engine: EngineId | null | undefined): boolean {
+  return capsOf(engine)?.quota === 'none' && (!usagePage(engine) || showsCost({ engine }));
+}
+
+/** Whether an account of `engine` other than its machine's goes by an API key rather than a sign-in (Cursor CLI, ESC-43; Mistral Vibe, ESC-267). */
 export function byKey(engine: EngineId | null | undefined): boolean {
   return !!capsOf(engine)?.accountsByKey;
 }
