@@ -14,6 +14,20 @@ fn space(name: &str) -> (Space, PathBuf) {
     (Space::new(&root, Some(text)), root)
 }
 
+/// One folder however it is spelt: git answers `C:/…/runneradmin/…`, the temporary folder
+/// `C:…RUNNER~1…`.
+fn same(a: &Path, b: &Path) -> bool {
+    crate::paths::same_folder(&a.to_string_lossy(), &b.to_string_lossy())
+}
+
+/// Removes a link to a folder made by `make_dir_link`: a file for Unix, a folder for Windows.
+fn remove_dir_link(link: &Path) {
+    #[cfg(unix)]
+    std::fs::remove_file(link).unwrap();
+    #[cfg(windows)]
+    std::fs::remove_dir(link).unwrap();
+}
+
 fn proposal(title: &str) -> Decision {
     Decision {
         title: title.into(),
@@ -382,7 +396,7 @@ fn a_link_in_the_docs_is_never_followed_and_nothing_leaves_the_project() {
             !outside.join("a").exists(),
             "nothing written through the link"
         );
-        std::fs::remove_dir(root.join(".escouade/spec")).unwrap();
+        remove_dir_link(&root.join(".escouade/spec"));
     }
     // A subject folder that is a link.
     std::fs::create_dir_all(root.join(".escouade/spec")).unwrap();
@@ -393,7 +407,7 @@ fn a_link_in_the_docs_is_never_followed_and_nothing_leaves_the_project() {
             .spec_write("paiement/nouveau", |p| p.body = "x".into())
             .is_err());
         assert!(!outside.join("nouveau.md").exists());
-        std::fs::remove_dir(root.join(".escouade/spec/paiement")).unwrap();
+        remove_dir_link(&root.join(".escouade/spec/paiement"));
     }
     // A page that is a link to a file outside.
     std::fs::create_dir_all(root.join(".escouade/spec/a")).unwrap();
@@ -414,12 +428,12 @@ fn a_link_in_the_docs_is_never_followed_and_nothing_leaves_the_project() {
         assert!(s.document_add("", "x.md", b"x").is_err());
         assert!(s.document_text("secret.md", 0, 10).is_err());
         assert!(!outside.join("x.md").exists());
-        std::fs::remove_dir(root.join(".escouade/documents")).unwrap();
+        remove_dir_link(&root.join(".escouade/documents"));
     }
     if make_dir_link(&outside, &root.join(".escouade/decisions")) {
         assert!(s.decisions().is_empty());
         assert!(s.decision_propose(None, proposal("x")).is_err());
-        std::fs::remove_dir(root.join(".escouade/decisions")).unwrap();
+        remove_dir_link(&root.join(".escouade/decisions"));
     }
     // `.escouade` itself a link.
     let real = root.join("real-escouade");
@@ -494,7 +508,7 @@ async fn with_the_current_branch_the_docs_are_where_the_caller_works() {
     assert!(p.docs_branch.is_empty());
     // The window: the project's folder.
     let s = h.core.docs_space(&p.id, None).await.unwrap();
-    assert_eq!(s.root, repo);
+    assert!(same(&s.root, &repo), "{:?} {:?}", s.root, repo);
     // An agent in a folder of its own: its folder, so a ticket's spec follows its branch.
     let wt = h.dir.join("wt");
     std::fs::create_dir_all(&wt).unwrap();
@@ -511,13 +525,13 @@ async fn with_the_current_branch_the_docs_are_where_the_caller_works() {
         std::sync::Arc::new(parking_lot::Mutex::new(rt)),
     );
     let s = h.core.docs_space(&p.id, Some(&meta.id)).await.unwrap();
-    assert_eq!(s.root, wt);
+    assert!(same(&s.root, &wt), "{:?} {:?}", s.root, wt);
     s.spec_write("a/b", |p| p.body = "x".into()).unwrap();
     assert!(wt.join(".escouade/spec/a/b.md").is_file());
     assert!(!repo.join(".escouade").exists());
     // An agent of another project does not take the folder of this one's agent.
     let other = h.core.docs_space(&p.id, Some("inconnu")).await.unwrap();
-    assert_eq!(other.root, repo);
+    assert!(same(&other.root, &repo), "{:?} {:?}", other.root, repo);
 }
 
 #[tokio::test]
@@ -530,7 +544,7 @@ async fn a_fixed_branch_has_a_worktree_of_its_own_that_escouade_never_merges() {
     assert_eq!(p.docs_branch, "docs");
     let s = h.core.docs_space(&p.id, None).await.unwrap();
     // A worktree of its own, in Escouade's data, not in the project.
-    assert_ne!(s.root, repo);
+    assert!(!same(&s.root, &repo), "{:?} {:?}", s.root, repo);
     assert!(
         s.root.starts_with(h.core.data.project_files(&p.id)),
         "{:?}",
@@ -550,7 +564,7 @@ async fn a_fixed_branch_has_a_worktree_of_its_own_that_escouade_never_merges() {
     assert!(!repo.join(".escouade").exists());
     // The same worktree the next time.
     let again = h.core.docs_space(&p.id, None).await.unwrap();
-    assert_eq!(again.root, s.root);
+    assert!(same(&again.root, &s.root), "{:?} {:?}", again.root, s.root);
     assert_eq!(
         again.spec_read("paiement/echeances").unwrap().body,
         "Trois échéances."
@@ -576,7 +590,7 @@ async fn a_fixed_branch_has_a_worktree_of_its_own_that_escouade_never_merges() {
     // Back to the current branch: the docs are where the caller works again.
     let p = set_docs_branch(&h, &p.id, "");
     let back = h.core.docs_space(&p.id, None).await.unwrap();
-    assert_eq!(back.root, repo);
+    assert!(same(&back.root, &repo), "{:?} {:?}", back.root, repo);
 }
 
 #[tokio::test]
@@ -587,12 +601,12 @@ async fn a_fixed_branch_already_checked_out_is_used_where_it_is() {
     // The branch of the docs is the one checked out (`main` itself).
     let p = set_docs_branch(&h, &p.id, &current);
     let s = h.core.docs_space(&p.id, None).await.unwrap();
-    assert_eq!(s.root, repo);
+    assert!(same(&s.root, &repo), "{:?} {:?}", s.root, repo);
     // A branch that exists on the remote only is made from it.
     git(&repo, &["branch", "wiki"]);
     let p = set_docs_branch(&h, &p.id, "wiki");
     let s = h.core.docs_space(&p.id, None).await.unwrap();
-    assert_ne!(s.root, repo);
+    assert!(!same(&s.root, &repo), "{:?} {:?}", s.root, repo);
     assert_eq!(git(&s.root, &["rev-parse", "--abbrev-ref", "HEAD"]), "wiki");
     // Its folder gone: made again.
     let gone = s.root.clone();
