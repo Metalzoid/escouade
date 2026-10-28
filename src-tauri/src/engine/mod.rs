@@ -19,6 +19,7 @@ mod program;
 pub mod registry;
 pub mod terminal;
 pub mod userconfig;
+pub(crate) mod vibe;
 
 #[cfg(test)]
 pub(crate) mod bench;
@@ -61,6 +62,7 @@ pub(crate) use opencode::fake_opencode;
 pub use opencode::OPENCODE;
 pub use program::{Launch, Located, Program};
 pub use terminal::TerminalView;
+pub use vibe::VIBE;
 
 #[cfg(test)]
 pub(crate) use claude::{
@@ -99,13 +101,14 @@ pub fn of(meta: &AgentMeta) -> &'static dyn Engine {
     by_id(meta.engine)
 }
 
-/// The engine `id` names: the five harnesses are written.
+/// The engine `id` names: the six harnesses are written.
 pub fn by_id(id: EngineId) -> &'static dyn Engine {
     match id {
         EngineId::Codex => &CODEX,
         EngineId::Opencode => &OPENCODE,
         EngineId::Copilot => &COPILOT,
         EngineId::Cursor => &CURSOR,
+        EngineId::Vibe => &VIBE,
         EngineId::Claude => &CLAUDE,
         #[cfg(test)]
         EngineId::Bench => &minimal::MINIMAL,
@@ -134,6 +137,7 @@ pub fn by_name(id: EngineId) -> &'static str {
         EngineId::Copilot => "Copilot CLI",
         EngineId::Cursor => "Cursor CLI",
         EngineId::Opencode => "OpenCode",
+        EngineId::Vibe => "Mistral Vibe",
         #[cfg(test)]
         EngineId::Bench => "Minimal",
     }

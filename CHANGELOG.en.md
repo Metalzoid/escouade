@@ -3,6 +3,7 @@
 Escouade's visible changes, version by version, in English. The notes of each GitHub release and the English Discord channel take the section of its version; the French notes, those of the in-app update included, are in [CHANGELOG.md](CHANGELOG.md), which also holds the versions before 1.8.2.
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
+- Mistral Vibe becomes a sixth harness: its agents converse, ask their permissions and their questions in Escouade, with its models, its modes and a Plan mode played by Escouade.
 
 ## [Unreleased]
 

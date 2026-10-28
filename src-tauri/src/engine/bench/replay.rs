@@ -108,6 +108,7 @@ pub(crate) fn replay(engine: &dyn Engine, flux: &str, agent: &Value, conv: &Path
         crate::model::EngineId::Copilot
             | crate::model::EngineId::Opencode
             | crate::model::EngineId::Cursor
+            | crate::model::EngineId::Vibe
     );
     let items = rt
         .conv

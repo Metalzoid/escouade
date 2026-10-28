@@ -183,11 +183,17 @@ impl AgentRt {
             let resumed = self.meta.session_id.is_some();
             self.reset_plan(fx);
             if resumed && start == "new" {
+                // Mistral Vibe, whose translation this is too (`agent/vibe.rs`), says its own name.
+                let who = if self.meta.engine == crate::model::EngineId::Vibe {
+                    "Vibe"
+                } else {
+                    "Cursor"
+                };
                 self.notice(
                     "warn",
                     tr!(
-                        "La session Cursor n’a pas pu être reprise : nouvelle session (contexte vidé)",
-                        "The Cursor session couldn’t be resumed: new session (context cleared)"
+                        "La session {who} n’a pas pu être reprise : nouvelle session (contexte vidé)",
+                        "The {who} session couldn’t be resumed: new session (context cleared)"
                     ),
                     fx,
                 );
@@ -790,7 +796,9 @@ impl AgentRt {
             self.cu_close(&who, fx);
         }
         let interrupted = std::mem::take(&mut self.interrupted);
-        let refused = crate::engine::cursor::refusal(&self.turn_text).filter(|_| !interrupted);
+        // Cursor's refusals are its texts: none for Mistral Vibe, whose errors are ACP's.
+        let refused = crate::engine::cursor::refusal(&self.turn_text)
+            .filter(|_| !interrupted && self.meta.engine != crate::model::EngineId::Vibe);
         let mut error = std::mem::take(&mut self.cursor.error).filter(|_| !interrupted);
         let mut limited = false;
         if let (Some(refusal), None) = (refused, &error) {

@@ -95,6 +95,11 @@ pub(crate) trait Target: Sync {
     fn model(&self) -> Option<String> {
         None
     }
+    /// The mode its agent is in for `scenario`, when not « Demander »: Mistral Vibe plans in
+    /// Escouade's mode Plan only (it has none of its own).
+    fn mode(&self, _scenario: Scenario) -> Option<&'static str> {
+        None
+    }
 }
 
 /// Plays every scenario that applies to the engine of `target`, each in a folder of its own under
@@ -126,7 +131,11 @@ fn prompt(target: &dyn Target, scenario: Scenario) -> String {
 
 async fn play(target: &dyn Target, scenario: Scenario, dir: &Path) {
     let text = || prompt(target, scenario);
-    let mut run = Run::start(target, dir, meta_of(target, dir), scenario).await;
+    let mut meta = meta_of(target, dir);
+    if let Some(mode) = target.mode(scenario) {
+        meta.mode = mode.to_string();
+    }
+    let mut run = Run::start(target, dir, meta, scenario).await;
     match scenario {
         Scenario::Text => {
             let end = run.turn(&text()).await;

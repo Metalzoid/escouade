@@ -1,6 +1,6 @@
 # Protocoles des harness — notes d'implémentation
 
-Escouade fait tourner ses agents sur cinq harness : Claude Code, Codex, OpenCode, GitHub Copilot CLI et Cursor CLI. Ce document dit, pour chacun, ce qu'Escouade lance, ce qu'elle envoie et ce qu'elle lit, d'après des essais réels. Ce que l'utilisateur en voit est dans docs/SPEC.md, « Harness » ; l'interface commune du code, dans docs/ENGINES.md.
+Escouade fait tourner ses agents sur six harness : Claude Code, Codex, OpenCode, GitHub Copilot CLI, Cursor CLI et Mistral Vibe. Ce document dit, pour chacun, ce qu'Escouade lance, ce qu'elle envoie et ce qu'elle lit, d'après des essais réels. Ce que l'utilisateur en voit est dans docs/SPEC.md, « Harness » ; l'interface commune du code, dans docs/ENGINES.md.
 
 | Sujet | Claude Code | Codex | OpenCode | Copilot CLI |
 |---|---|---|---|---|
@@ -914,6 +914,37 @@ Repris le 2026-10-25 après les essais réels d'ESC-24 (docs/TODO-1.8.md, point 
 ### Ce qui n'est pas pris en charge
 
 Le mode Auto d'Escouade et `ask`, le quota lu, la vue terminal (ESC-49), « Dupliquer », les PDF joints, « Reprendre sur <compte> », les commandes `/`, Remote Control, les tâches de fond. Ses écritures ne demandent rien (essayé), si bien qu'une écriture n'a de carte que si Cursor la soumet. Les hooks et skills de Claude Code de l'utilisateur tournent sous Cursor : un hook qui refuse une écriture la bloque sans carte, et l'outil, fini sans diff, se dit en échec. Cette extensibilité reste comme l'utilisateur l'a réglée (décidé : comme pour les agents Claude Code d'Escouade, qui ont les mêmes hooks).
+
+## Mistral Vibe (ACP, ESC-266)
+
+Après les essais réels d'ESC-265 (docs/TODO-1.8.md, point 0, « Mistral Vibe » ; flux dans `tests/fixtures/vibe/`). Code : `src-tauri/src/engine/vibe/` (lancement, client ACP) et `src-tauri/src/agent/vibe.rs` (traduction : les messages de Vibe mis dans la forme de ceux de Cursor, puis la traduction de Cursor). Testé avec la 3.0.3.
+
+### Lancement
+
+- **Programme** : celui du réglage (`vibe` y donne le `vibe-acp` d'à côté), sinon `vibe-acp` du `PATH`, sinon `~/.local/bin/vibe-acp(.exe)` (où le pose `uv tool install mistral-vibe`), sinon le dossier de l'outil de `uv`. Sans argument ; `--version` rend `vibe-acp 3.0.3`.
+- **Environnement** : `VIBE_HOME` vers le dossier de l'agent (`<données>/agent-homes/<agent>`, `Engine::agent_home_var`), qui garde ses règles « Pour cet agent » (`config.toml`), ses sessions (`logs/session/`) et la confiance de son dossier, qu'Escouade y écrit (`trusted_folders.toml`, `trusted = ['<dossier>']`, chemin Windows en antislashs) ; `VIBE_ENABLE_TELEMETRY`, `VIBE_ENABLE_AUTO_UPDATE` et `VIBE_ENABLE_UPDATE_CHECKS` à `false`. La clé d'API (trousseau du système, ou `MISTRAL_API_KEY`) n'est ni lue ni déplacée.
+- **Projet privé** : les chemins des autres projets, et tout ce qui est dessous, dans la `denylist` de `[tools.read_file]`, `[tools.write_file]` et `[tools.edit]` du `config.toml` de l'agent (motifs de `fnmatch` sur le chemin absolu ; lu dans le code de la 3.0.3 : un chemin qui y répond est `NEVER`), retirés quand il n'y en a plus, le reste du fichier gardé. L'agent `auto-approve` passe outre (`ToolGate.BYPASS`, lu et essayé) : avec une clôture, le Bypass d'Escouade garde Vibe dans son agent `ask`, dont les règles d'Escouade acceptent toutes les demandes sauf celles qui nomment un chemin de la clôture. Essayé (`real_vibe`) : en Bypass, la lecture d'un fichier de la clôture finit en échec, son contenu jamais lu.
+- **Arrêt** : son entrée fermée, il est tué 2 s après s'il est encore là (`close_input`), avec tout son arbre (Job).
+
+### Hôte → CLI
+
+- `initialize` (ACP 1, `clientCapabilities.elicitation.form` pour avoir les questions, ni `fs` ni `terminal`) ; une autre version d'ACP est refusée avec sa raison.
+- `session/new` (`cwd`, `mcpServers` : l'entrée HTTP `escouade` avec `Authorization: Bearer <jeton>`), `session/load` pour reprendre (une session introuvable en donne une neuve, dite dans la conversation ; l'historique rejoué n'est pas remonté), `session/fork` pour « Dupliquer la conversation » (toute la session : la copie se fait sur un agent au repos).
+- `session/set_mode` : `ask` pour Demander et Plan, `accept-edits` pour Édits auto, `auto-approve` pour Bypass (`ask` avec une clôture). `session/set_config_option` `model` (un modèle que la session ne propose pas est laissé à celui de Vibe) et `thinking` (`off` pour l'effort « Bas », `high` sinon), à chaque démarrage et à chaud.
+- `session/prompt` : le texte, les images, les fichiers texte en texte ; les consignes ajoutées dans un bloc `<instructions>` devant le premier message d'une session neuve. En Plan, chaque message a devant lui un bloc `<escouade_plan_mode>` (étudier, proposer un plan, ne rien modifier, finir par le plan). Un message envoyé pendant un tour attend sa fin dans le process.
+- `session/cancel` : le prompt finit `cancelled` (« Interrompu »).
+
+### CLI → hôte
+
+- `session/update` : `agent_thought_chunk` (le raisonnement, et le récit entre deux outils) et `agent_message_chunk` (la réponse), `tool_call` et `tool_call_update` par leur `kind`, comme Cursor, leur nom propre dans `_meta.tool_name` : `agents.spawn` → `Task` (son `task`), `mcp_<serveur>.<outil>` → `mcp__<serveur>__<outil>`, un outil à lui (`skill`, `run_typescript`…) sous son nom ; `vibe.todo`, `ui.ask_user_question` et `search_tool_functions` ne sont pas montrés en appels (le `plan`, la carte de question). Les fichiers nommés depuis le dossier (`b.txt`) sont rendus absolus ; le diff d'une écriture, donné par son `tool_call`, est gardé pour son résultat ; `rawOutput.returncode` dit l'échec d'une commande. `plan` va au bandeau Plan. `current_mode_update`, `usage_update` et `user_message_chunk` ne sont pas lus.
+- `session/request_permission` : son `toolCall` ne porte que son `toolCallId` ; l'appel tel que son `tool_call` l'a dit y est remis (commande, fichier, diff) avant la clôture et la carte. Carte « Autoriser » (`allow_once`), « Pour cet agent » (`allow_always_permanent`, écrit dans le `config.toml` de l'agent) et « Refuser » (`reject_once`). **Un refus coupe le tour** (`session/cancel`) : Vibe réessaierait la commande sous d'autres formes (neuf fois dans l'essai) ; un mot de l'utilisateur part ensuite comme message. Les règles d'Escouade répondent sans carte comme pour Cursor (écritures dans le dossier hors Plan, `git add`/`git commit` en Édits auto, tout en Bypass) ; en Plan, une écriture est refusée d'office.
+- `elicitation/create` : une carte de question, ses questions par leurs clés (`q0`…), choix par `oneOf` (`items.anyOf` pour plusieurs) ; la réponse `{action: "accept", content: {q0: <valeur>}}`, plusieurs choix en liste, une réponse écrite telle quelle.
+- **Plan** (`escouade/plan`, requête du process lui-même) : en Plan, un tour qui finit `end_turn` sur des mots les donne en « Plan à approuver » au lieu de finir ; approuvé, le mode passe à Demander (ou Édits auto) et un message (« The plan is approved: carry it out now. ») continue le même tour ; renvoyé avec un mot, le mot part et la planification continue ; sans mot, le tour finit.
+- **Fin du tour** : la réponse à `session/prompt` (`end_turn` ou `cancelled`) ; une erreur (`-31002`, clé refusée…) finit le tour en erreur avec son message. Coût et tokens (`usage_update.cost`, `usage`) : ESC-267.
+
+### Ce qui n'est pas pris en charge
+
+Le mode Auto (`smart-approve`, absent d'une session sur deux dans les essais), le quota et le coût (ESC-267), la vue terminal (ESC-268), plusieurs comptes (ESC-267), les PDF joints, « Reprendre sur <compte> », les commandes `/` dans le Composer (`/compact` part comme un message, que l'ACP de Vibe lit), Remote Control, les tâches de fond, la déclaration du serveur MCP dans la config de l'utilisateur.
 
 ## Serveur MCP d'Escouade
 

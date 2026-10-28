@@ -25,6 +25,15 @@ describe('Dropdown', () => {
     expect(trigger).toHaveAttribute('data-tip', 'Modèle : Opus');
   });
 
+  it('says a value none of its options has by the label it is given, else as it is', () => {
+    const effort = { caption: 'Effort', options: [{ value: 'low', label: 'Bas' }] };
+    const { unmount } = render(Dropdown, props({ ...effort, value: 'medium', shownLabel: 'Moyen' }));
+    expect(screen.getByRole('button', { name: 'Effort : Moyen' })).toBeInTheDocument();
+    unmount();
+    render(Dropdown, props({ ...effort, value: 'medium' }));
+    expect(screen.getByRole('button', { name: 'Effort : medium' })).toBeInTheDocument();
+  });
+
   it('keeps the title it is given', () => {
     render(Dropdown, props({ title: 'Changer de modèle' }));
     expect(screen.getByRole('button', { name: 'Modèle : Opus' })).toHaveAttribute('data-tip', 'Changer de modèle');

@@ -1,9 +1,9 @@
 # The harnesses
 
-A harness is the program that runs an agent: Claude Code, Codex, OpenCode, GitHub Copilot CLI or Cursor CLI. This page compares them, then tells for each one how to install it, its account, its models, its modes and what protects it, its cost and quota, its terminal view and what it doesn’t do.
+A harness is the program that runs an agent: Claude Code, Codex, OpenCode, GitHub Copilot CLI, Cursor CLI or Mistral Vibe. This page compares them, then tells for each one how to install it, its account, its models, its modes and what protects it, its cost and quota, its terminal view and what it doesn’t do.
 
 > [!NOTE]
-> Codex, OpenCode and Copilot CLI have been there since Escouade 1.8, Cursor CLI since 2.0.1; Claude Code from the start.
+> Codex, OpenCode and Copilot CLI have been there since Escouade 1.8, Cursor CLI since 2.0.1, Mistral Vibe since the version after 2.0.5; Claude Code from the start.
 
 ## Choosing a harness
 
@@ -24,21 +24,21 @@ Whatever the harness, the agent has the same conversation: the answer and the re
 
 ## Comparison
 
-| | Claude Code | Codex | OpenCode | Copilot CLI | Cursor CLI |
-|---|---|---|---|---|---|
-| Installation | Claude Code’s script | `npm install -g @openai/codex` | `npm install -g opencode-ai` | `npm install -g @github/copilot` | Cursor’s script |
-| Tested with | 2.1.283 to 2.1.301 | 0.163.0 | 1.19.3 | 1.0.98 | 2026.10.22 |
-| Account | Claude subscription or API key | ChatGPT account | the providers connected to OpenCode, local models included | GitHub account with Copilot, Free included | Cursor account (`agent login`, or an API key), Free included |
-| Several accounts | yes | yes | no | yes | yes, by API key |
-| Models | those Claude Code lists for each account | those Codex lists for your account | your providers’, with search and favorites | those Copilot lists, with their multiplier | your account’s, Auto first |
-| Modes | all five | all five | four (no Auto) | all five | four (no Auto) |
-| What protects | its permissions | its sandbox | its permission rules | Escouade’s rules | its permissions, for its commands |
-| Message during a turn | waits for the end of the turn | enters the turn | waits for the end of the turn | enters the turn | waits for the end of the turn |
-| Cost | exact | estimated | exact (0 when local) | exact, in AI credits | not told |
-| Quota | 5-hour and 7-day windows | 5-hour and 7-day windows (30 days on the free plan) | none: daily budget | monthly credits | a link to its dashboard |
-| Terminal view | “Claude Code view” | “Codex view” | “OpenCode view” | “Copilot CLI view” | “Cursor CLI view”, limited following |
-| Attached PDFs | yes | no | no | no | no |
-| Remote control, background tasks | yes | no | no | no | no |
+| | Claude Code | Codex | OpenCode | Copilot CLI | Cursor CLI | Mistral Vibe |
+|---|---|---|---|---|---| --- |
+| Installation | Claude Code’s script | `npm install -g @openai/codex` | `npm install -g opencode-ai` | `npm install -g @github/copilot` | Cursor’s script | `uv tool install mistral-vibe` |
+| Tested with | 2.1.283 to 2.1.301 | 0.163.0 | 1.19.3 | 1.0.98 | 2026.10.22 | 3.0.3 |
+| Account | Claude subscription or API key | ChatGPT account | the providers connected to OpenCode, local models included | GitHub account with Copilot, Free included | Cursor account (`agent login`, or an API key), Free included | Mistral API key (`vibe --setup`) |
+| Several accounts | yes | yes | no | yes | yes, by API key | not yet |
+| Models | those Claude Code lists for each account | those Codex lists for your account | your providers’, with search and favorites | those Copilot lists, with their multiplier | your account’s, Auto first | its session’s |
+| Modes | all five | all five | four (no Auto) | all five | four (no Auto) | four (no Auto; Plan played by Escouade) |
+| What protects | its permissions | its sandbox | its permission rules | Escouade’s rules | its permissions, for its commands | its permissions; Escouade’s rules |
+| Message during a turn | waits for the end of the turn | enters the turn | waits for the end of the turn | enters the turn | waits for the end of the turn | waits for the end of the turn |
+| Cost | exact | estimated | exact (0 when local) | exact, in AI credits | not told | not shown yet |
+| Quota | 5-hour and 7-day windows | 5-hour and 7-day windows (30 days on the free plan) | none: daily budget | monthly credits | a link to its dashboard | none |
+| Terminal view | “Claude Code view” | “Codex view” | “OpenCode view” | “Copilot CLI view” | “Cursor CLI view”, limited following | not yet |
+| Attached PDFs | yes | no | no | no | no | no |
+| Remote control, background tasks | yes | no | no | no | no | no |
 
 ## Claude Code
 
@@ -167,6 +167,33 @@ The Claude Code skills, commands, agents and hooks of your account and of the pr
 ### Cost, quota and what Cursor doesn’t do
 
 Cursor tells neither the tokens nor the cost of a turn when Escouade drives it: the conversation shows none, and the statistics count its turns and their length. Nor does it tell its usage of the month: no bar in the status bar, but “Usage on cursor.com” in Settings › Accounts and in the quota panel, which opens its dashboard. A limit reached (“Upgrade your plan to continue”) stops the turn on an amber card that says so, with, when there is one, the account or harness to go on with. No “Duplicate the conversation” (Cursor doesn’t copy a session), no attached PDFs, no `/` commands in Escouade (to compact its context, type `/summarize` in its terminal view), no remote control or background tasks. It gets Escouade’s MCP server through its session; the switch doesn’t declare it in Cursor’s config yet. The “Cursor CLI view” runs the agent in Cursor’s interface, with a limited following (see [the terminal view](claude-code-view#with-cursor-cli)).
+
+## Mistral Vibe
+
+### Installation and account
+
+Install Mistral Vibe with `uv tool install mistral-vibe`, then give it your Mistral API key with `vibe --setup`: it is kept in the system’s keychain, and Escouade never reads it. Escouade finds its `vibe-acp` on the `PATH`, or in `~/.local/bin` where `uv` puts it. Each agent has its `vibe-acp` and its own `VIBE_HOME` folder, removed with it: its rules, its sessions and the trust of its folder are kept there, never in your `~/.vibe`. Its updates and its telemetry are turned off there.
+
+### Models and modes
+
+The “Model” menu lists the models its session offers. Its thinking is the effort: “Low” turns it off, “High” keeps it. The model, effort and mode change at once.
+
+Vibe has no sandbox. It reads without asking; its commands off its list (`cat`, `ls`, `git status`… go through), its writes and MCP tools ask.
+
+| Mode | With Mistral Vibe |
+|---|---|
+| Ask | Its `ask` agent: its writes go through in the agent’s folder and ask elsewhere, with their diff; its commands off its list and MCP tools ask. |
+| Accept edits | Its `accept-edits` agent: its writes go through without asking, even outside the folder. |
+| Plan | Vibe has none: Escouade asks it to study and propose a plan, refuses its writes, and its last words come as a plan to approve; approved, Vibe carries it out in the same turn. |
+| Bypass | Its `auto-approve` agent: it does everything without asking. |
+
+A request of Vibe has “Allow”, “For this agent” and “Deny”: “For this agent” keeps the rule in the agent’s `VIBE_HOME`, for it alone and its resumes. A refusal stops the turn: Vibe would otherwise try the same command again under other forms. Its questions, its tasks and its subagents go to the conversation and the “Plan” banner. A message sent during a turn waits for its end. “Duplicate the conversation” copies its whole session.
+
+For a private project, the other projects’ paths are refused to its read and write tools by the agent’s config, and Escouade refuses right away what it asks about them. In Bypass, Vibe then stays in its `ask` agent, whose rest Escouade accepts, so that these refusals hold: its `auto-approve` would override them.
+
+### Cost, quota and what Vibe doesn’t do
+
+Vibe tells the cost of each turn, but Escouade doesn’t show it yet, nor a quota: a Mistral API key is billed by use, on Mistral’s console. No terminal view nor second account yet. No Auto mode, attached PDFs, `/` commands in Escouade (`/compact` goes as a message), remote control or background tasks. It gets Escouade’s MCP server through its session; the switch doesn’t declare it in Vibe’s config yet.
 
 ## The MCP server
 

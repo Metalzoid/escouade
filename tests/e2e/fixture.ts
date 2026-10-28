@@ -20,6 +20,8 @@ const FAKE_OPENCODE = path.join(ROOT, 'tests', 'fixtures', 'fake-opencode.cmd');
 const FAKE_COPILOT = path.join(ROOT, 'tests', 'fixtures', 'fake-copilot.cmd');
 /** The fake `agent acp` of Cursor CLI (tests/fixtures/fake-cursor.mjs), for a test that runs agents on Cursor CLI. */
 const FAKE_CURSOR = path.join(ROOT, 'tests', 'fixtures', 'fake-cursor.cmd');
+/** The fake `vibe-acp` of Mistral Vibe (tests/fixtures/fake-vibe.mjs), for a test that runs agents on Mistral Vibe. */
+const FAKE_VIBE = path.join(ROOT, 'tests', 'fixtures', 'fake-vibe.cmd');
 
 export interface App {
   /** The window of the app: a new one after each `restart()` (read `app.page` again, do not keep the old one). */
@@ -270,6 +272,7 @@ const FAKE_OF: Record<string, string> = {
   opencode: 'ESCOUADE_OPENCODE',
   copilot: 'ESCOUADE_COPILOT',
   cursor: 'ESCOUADE_CURSOR',
+  vibe: 'ESCOUADE_VIBE',
 };
 
 /**
@@ -394,6 +397,10 @@ export const test = base.extend<{
       // Its folder of the workspaces (`~/.cursor/projects`: transcripts and trust of its interface, « Vue Cursor CLI »), a
       // folder of the test's, never the user's.
       ESCOUADE_CURSOR_PROJECTS: path.join(root, 'cursor-projects'),
+      // The same for Mistral Vibe (`appEnv: { ESCOUADE_VIBE: FAKE_VIBE }`): never the machine's; each agent has its own
+      // VIBE_HOME in the app's data, never the user's ~/.vibe.
+      ESCOUADE_VIBE: 'none',
+      FAKE_VIBE_LOG: path.join(root, 'fake-vibe.jsonl'),
       ...appEnv,
     };
     // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
@@ -549,4 +556,4 @@ export async function send(page: Page, text: string) {
   await box.press('Enter');
 }
 
-export { expect, FAKE, FAKE_CODEX, FAKE_COPILOT, FAKE_CURSOR, FAKE_OPENCODE };
+export { expect, FAKE, FAKE_CODEX, FAKE_COPILOT, FAKE_CURSOR, FAKE_OPENCODE, FAKE_VIBE };

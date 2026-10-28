@@ -147,7 +147,8 @@ const MODELS_KEPT_MS: i64 = 24 * 3600 * 1000;
 
 /// Whether the models of an account of `engine` are read by account, without an agent: Claude
 /// Code's (`initialize`, ESC-124), and since ESC-186 Codex's (`model/list`), Copilot CLI's
-/// (`models.list`), Cursor CLI's (`cursor/list_available_models`) and OpenCode's (`opencode models`).
+/// (`models.list`), Cursor CLI's (`cursor/list_available_models`) and OpenCode's (`opencode models`); since
+/// ESC-266 Mistral Vibe's (the `configOptions` of a `session/new`).
 fn reads_account_models(engine: EngineId) -> bool {
     matches!(
         engine,
@@ -156,6 +157,7 @@ fn reads_account_models(engine: EngineId) -> bool {
             | EngineId::Copilot
             | EngineId::Cursor
             | EngineId::Opencode
+            | EngineId::Vibe
     )
 }
 

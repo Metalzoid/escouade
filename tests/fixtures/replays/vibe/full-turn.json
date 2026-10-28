@@ -1,0 +1,137 @@
+{
+  "about": "Un tour de Mistral Vibe 3.0.3 (Mistral Medium 3.5, agent ask) : raisonnement, lecture de a.txt, git status --short sans demande (liste de Vibe), écriture de b.txt demandée par son seul toolCallId puis accordée une fois, avec le diff de son tool_call ; réponse « done ».",
+  "agent": {
+    "cwd": "<ESSAI>\\work1",
+    "engine": "vibe",
+    "mode": "default",
+    "model": "mistral-medium-3.5"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": null,
+    "sessionId": "6fef71c6-4e62-2f63-6499-5f91b842880e",
+    "status": "done",
+    "tokens": 0,
+    "touchedFiles": ["<ESSAI>/work1/b.txt"]
+  },
+  "flux": "../../vibe/full-turn.jsonl",
+  "items": [
+    {
+      "images": 0,
+      "kind": "user",
+      "queued": false,
+      "text": "Do these in order, tersely: 1) read a.txt, 2) run the shell command 'git status --short', 3) create b.txt containing 'bonjour'. Then say done."
+    },
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": "The user wants me to perform three tasks in order:\n1. Read a.txt\n2. Run the shell command 'git status --short'\n3. Create b.txt containing 'bonjour'\n\nThen say \"done\".\n\nI need to do these sequentially. Let me start with reading a.txt."
+    },
+    {
+      "input": {
+        "file_path": "<ESSAI>\\work1/<ESSAI>\\work1\\a.txt"
+      },
+      "kind": "tool",
+      "name": "Read",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": "hi"
+      },
+      "status": "ok"
+    },
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": "a.txt contains \"hi\\n\". Now I need to run 'git status --short'."
+    },
+    {
+      "input": {
+        "command": "git status --short"
+      },
+      "kind": "tool",
+      "name": "Bash",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": ""
+      },
+      "status": "ok"
+    },
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": "git status --short returned no output (empty). Now I need to create b.txt containing 'bonjour'."
+    },
+    {
+      "input": {
+        "file_path": "<ESSAI>\\work1/<ESSAI>\\work1\\b.txt"
+      },
+      "kind": "tool",
+      "name": "Write",
+      "parent": null,
+      "result": {
+        "add": 1,
+        "del": 0,
+        "filePath": "<ESSAI>\\work1/<ESSAI>\\work1\\b.txt",
+        "isError": false,
+        "patch": [
+          {
+            "lines": ["+bonjour"],
+            "newStart": 1,
+            "oldStart": 0
+          }
+        ],
+        "text": "bonjour"
+      },
+      "status": "ok"
+    },
+    {
+      "alwaysScope": "agent",
+      "canAlways": true,
+      "decision": "allow",
+      "defaultNo": false,
+      "description": null,
+      "input": {
+        "file_path": "<ESSAI>\\work1/b.txt"
+      },
+      "kind": "permission",
+      "patch": [
+        {
+          "lines": ["+bonjour"],
+          "newStart": 1,
+          "oldStart": 0
+        }
+      ],
+      "reason": null,
+      "toolName": "Write",
+      "toolUseId": "effect-048343d6-3b68-5ed1-b44c-3e09423f313a"
+    },
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": "All three tasks are complete:\n1. Read a.txt - it contains \"hi\"\n2. Ran git status --short - no changes\n3. Created b.txt with content \"bonjour\"\n\nNow I need to say \"done\"."
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "done"
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "vibe",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 0
+    }
+  ]
+}

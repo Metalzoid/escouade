@@ -3,6 +3,7 @@
 Les changements visibles d'Escouade, version par version. Les notes de la mise à jour intégrée et du salon Discord en français reprennent la section de sa version ; celles de chaque release GitHub et du salon en anglais, sa section de [CHANGELOG.en.md](CHANGELOG.en.md), en anglais.
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
+- Mistral Vibe devient un sixième harness : ses agents conversent, demandent leurs permissions et posent leurs questions dans Escouade, avec ses modèles, ses modes et un mode Plan joué par Escouade.
 
 ## [Non publié]
 

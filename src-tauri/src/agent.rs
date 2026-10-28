@@ -32,6 +32,7 @@ mod minimal;
 mod opencode;
 pub mod sidechain;
 mod transcript;
+mod vibe;
 
 pub use transcript::HookOutcome;
 
@@ -281,6 +282,8 @@ pub struct AgentRt {
     cursor: cursor::CursorState,
     /// What the translation of OpenCode keeps between its events (`agent/opencode.rs`).
     opencode: opencode::OpencodeState,
+    /// What the translation of Mistral Vibe keeps between its updates (`agent/vibe.rs`).
+    vibe: vibe::VibeState,
 }
 
 /// A stream's process linked to claude.ai, and the session it holds there (its bridge id, when
@@ -551,6 +554,7 @@ impl AgentRt {
             copilot: copilot::CopilotState::default(),
             cursor: cursor::CursorState::default(),
             opencode: opencode::OpencodeState::default(),
+            vibe: vibe::VibeState::default(),
         }
     }
 
@@ -645,6 +649,7 @@ impl AgentRt {
         self.copilot = copilot::CopilotState::default();
         self.cursor = cursor::CursorState::default();
         self.opencode = opencode::OpencodeState::default();
+        self.vibe = vibe::VibeState::default();
         // What ran in the process before is gone with it.
         self.interrupt_plan();
     }

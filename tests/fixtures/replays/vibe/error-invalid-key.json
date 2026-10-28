@@ -1,0 +1,43 @@
+{
+  "about": "Mistral Vibe 3.0.3 avec une fausse clé d’API : session/prompt répond l’erreur -31002, le tour finit en erreur.",
+  "agent": {
+    "cwd": "<ESSAI>\\work1",
+    "engine": "vibe",
+    "mode": "default",
+    "model": "mistral-medium-3.5"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": null,
+    "sessionId": "7b5feaee-7d37-e707-30fb-53ae8a50416c",
+    "status": "error",
+    "tokens": 0,
+    "touchedFiles": []
+  },
+  "flux": "../../vibe/error-invalid-key.jsonl",
+  "items": [
+    {
+      "images": 0,
+      "kind": "user",
+      "queued": false,
+      "text": "Say: ok"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "Couldn't load your connectors: Failed to load connectors (HTTP 401). Their tools are unavailable in this session."
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "vibe",
+      "error": "Invalid API key (from env var MISTRAL_API_KEY). Please check your API key and try again.",
+      "interrupted": false,
+      "isError": true,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 0
+    }
+  ]
+}

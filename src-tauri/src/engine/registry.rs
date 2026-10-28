@@ -23,6 +23,7 @@ pub fn all() -> Vec<&'static dyn Engine> {
         &super::COPILOT,
         &super::OPENCODE,
         &super::CURSOR,
+        &super::VIBE,
     ]
 }
 

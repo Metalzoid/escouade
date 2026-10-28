@@ -101,6 +101,16 @@ pub fn store(engine: EngineId) -> Store {
             dirs: &[],
             login: &["login"],
         },
+        // Mistral Vibe: its API key is the machine's (the system's keychain, set by `vibe --setup`),
+        // not moved by its folder, and each agent has a `VIBE_HOME` of its own
+        // (`Engine::agent_home_var`); its accounts come with ESC-267.
+        EngineId::Vibe => Store {
+            home: ".vibe",
+            var: crate::engine::vibe::HOME_VAR,
+            files: &[],
+            dirs: &[],
+            login: &["--setup"],
+        },
         // One account in 1.8: OpenCode's own config (ESC-45), its providers connected by it.
         EngineId::Opencode => Store {
             home: ".config/opencode",
@@ -2319,8 +2329,9 @@ impl<R: Runtime> Core<R> {
                 dir: dir.to_string_lossy().into_owned(),
             };
         }
-        // OpenCode signs in to no account of its own: its providers are its config's.
-        if account.engine == EngineId::Opencode {
+        // OpenCode signs in to no account of its own: its providers are its config's. Mistral Vibe's
+        // key is in the keychain, never read (ESC-267 tells more).
+        if matches!(account.engine, EngineId::Opencode | EngineId::Vibe) {
             let dir = config_dir(account, &settings);
             return AccountStatus {
                 connected: true,

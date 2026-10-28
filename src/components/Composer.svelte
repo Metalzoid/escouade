@@ -737,6 +737,7 @@
           caption={t('composer.bar.effort')}
           value={effortOk ? agent.effort : ''}
           options={effortsOf(agent, EFFORTS).map((ef) => ({ value: ef.value, label: ef.label, detail: ef.title }))}
+          shownLabel={EFFORTS.find((ef) => ef.value === agent.effort)?.label}
           open={menu === 'effort'}
           showCaption={!tight}
           disabled={!effortOk}
