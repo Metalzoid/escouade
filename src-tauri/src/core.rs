@@ -5458,7 +5458,8 @@ impl<R: Runtime> Core<R> {
         by: Option<&str>,
     ) -> Result<()> {
         self.with_agent(id, |rt, fx| {
-            rt.answer_permission_by(request_id, decision, message, by, fx)
+            let auto = self.takes_auto(rt.meta.engine, &rt.meta.account, &rt.meta.model);
+            rt.answer_permission_in(request_id, decision, message, by, auto, fx)
         })
     }
 
@@ -5488,7 +5489,7 @@ impl<R: Runtime> Core<R> {
                 rt.meta.effort = e.clone();
             }
             if let Some(m) = &mode {
-                rt.meta.mode = m.clone();
+                rt.meta.set_mode(m);
             }
             rt.proc.clone()
         };
@@ -5694,7 +5695,12 @@ impl<R: Runtime> Core<R> {
         let defaults = accounts::defaults(accounts::find(&settings, &meta.account), engine);
         meta.model = self.model_for(engine, o.model.unwrap_or(defaults.model));
         meta.effort = o.effort.unwrap_or(defaults.effort);
-        meta.mode = o.mode.unwrap_or(defaults.mode);
+        meta.mode = o.mode.unwrap_or_else(|| defaults.mode.clone());
+        // Started in Plan: its plan approved, it goes on in its mode of departure, the ticket's or
+        // the board's (`o.mode`), else its account's, else the app's (ESC-277).
+        if meta.mode == "plan" {
+            meta.plan_from = Some(defaults.mode).filter(|m| m != "plan");
+        }
         let conversations = self.data.conversations();
         // A copy's conversation is written first: when it cannot be, nothing was made for it.
         if let Some(c) = &o.copy_of {

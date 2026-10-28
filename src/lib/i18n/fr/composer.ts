@@ -86,6 +86,8 @@ export default {
     keepPlanningMessage: 'Continue à planifier : le plan ne me convient pas encore.',
     allow: 'Autoriser',
     approvePlan: 'Approuver le plan',
+    /** After « Approuver le plan »: the mode its work resumes in (ESC-277), `{mode}` its label (« Auto »). */
+    resumesIn: 'Le travail reprendra en mode {mode}',
     always: 'Toujours autoriser',
     /** Allowed for the rest of the session, the same request (Codex: `acceptForSession`). */
     forSession: 'Pour cette session',

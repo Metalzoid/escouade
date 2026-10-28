@@ -910,7 +910,19 @@ impl EngineProcess for ClaudeProcess {
 
     fn answer_permission(&self, request_id: &str, answer: PermissionAnswer) -> Result<()> {
         let response = match answer {
-            PermissionAnswer::Allow { call, input } => allowed(&call, input),
+            PermissionAnswer::Allow {
+                call,
+                input,
+                resume,
+            } => {
+                let mut r = allowed(&call, input);
+                // A plan approved: Claude Code would leave Plan for `default` (ESC-277).
+                if let Some(mode) = resume {
+                    r["updatedPermissions"] =
+                        json!([{ "type": "setMode", "mode": mode, "destination": "session" }]);
+                }
+                r
+            }
             PermissionAnswer::Always { call, input, rules } => {
                 let mut r = allowed(&call, input);
                 r["updatedPermissions"] = rules;

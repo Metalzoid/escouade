@@ -126,8 +126,7 @@ impl AgentRt {
             }
             "escouade.mode" => {
                 if let Some(mode) = p["mode"].as_str() {
-                    if self.meta.mode != mode {
-                        self.meta.mode = mode.to_string();
+                    if self.meta.set_mode(mode) {
                         fx.agent_changed = true;
                         fx.save = true;
                     }

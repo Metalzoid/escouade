@@ -104,8 +104,7 @@ impl AgentRt {
             // « Shift+Tab » in the interface: the agent's mode is the one it shows.
             "permission-mode" => {
                 if let Some(mode) = e["permissionMode"].as_str() {
-                    if self.meta.mode != mode {
-                        self.meta.mode = mode.to_string();
+                    if self.meta.set_mode(mode) {
                         fx.agent_changed = true;
                         fx.save = true;
                     }

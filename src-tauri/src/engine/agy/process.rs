@@ -715,14 +715,19 @@ impl AgyProcess {
         }
     }
 
-    /// The plan answered: approved, carried out in « Demander » (or « Accepter les modifications »
-    /// for « Toujours »), its program started again on that mode; sent back with words, planned
-    /// again; without, the turn ends.
+    /// The plan answered: approved, carried out in the mode the agent was in before Plan (ESC-277,
+    /// `AgentMeta::plan_resume`; « Accepter les modifications » for « Toujours »), its program
+    /// started again on that mode; sent back with words, planned again; without, the turn ends.
     fn answer_plan(self: &Arc<Self>, answer: PermissionAnswer) -> Result<()> {
         let session = self.state.lock().session.clone();
         let (mode, text) = match answer {
-            PermissionAnswer::Allow { .. } => (Some("default"), super::PLAN_GO.to_string()),
-            PermissionAnswer::Always { .. } => (Some("acceptEdits"), super::PLAN_GO.to_string()),
+            PermissionAnswer::Allow { resume, .. } => (
+                Some(resume.unwrap_or_else(|| "default".into())),
+                super::PLAN_GO.to_string(),
+            ),
+            PermissionAnswer::Always { .. } => {
+                (Some("acceptEdits".to_string()), super::PLAN_GO.to_string())
+            }
             PermissionAnswer::Deny { message, .. } => (None, message),
         };
         if mode.is_none() && !worded(&text) {
@@ -732,7 +737,7 @@ impl AgyProcess {
         if let Some(mode) = mode {
             {
                 let mut s = self.state.lock();
-                s.settings.mode = mode.to_string();
+                s.settings.mode = mode.clone();
                 s.stale = true;
             }
             self.frame(

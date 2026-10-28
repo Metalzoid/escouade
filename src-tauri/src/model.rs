@@ -1555,7 +1555,12 @@ pub struct AgentMeta {
     pub engine: EngineId,
     pub model: String,
     pub effort: String,
+    /// Changed by `set_mode`, which keeps `plan_from`.
     pub mode: String,
+    /// The mode its work resumes in once a plan is approved (ESC-277): the one it was in when it
+    /// went into Plan, or its mode of departure when it started in it. None: the app's, `auto`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan_from: Option<String>,
     pub session_id: Option<String>,
     /// The latest entry of its session's main chain (the uuid of its latest assistant message),
     /// saved with the end of each turn: where a copy made now forks its session.
@@ -1717,6 +1722,39 @@ pub struct HandedFrom {
 pub const MAX_GRANTED_FILES: usize = 200;
 
 impl AgentMeta {
+    /// Its mode is now `mode`, however it changed (the menu, its harness, Escouade): going into
+    /// Plan, the mode it leaves is kept for the plan's approval (`plan_resume`). False when it was
+    /// already in it.
+    pub fn set_mode(&mut self, mode: &str) -> bool {
+        if self.mode == mode {
+            return false;
+        }
+        if mode == "plan" && !self.mode.is_empty() {
+            self.plan_from = Some(self.mode.clone());
+        }
+        self.mode = mode.to_string();
+        true
+    }
+
+    /// The mode its work resumes in when its plan is approved (« Approuver le plan »): the one it
+    /// was in before Plan, else the app's mode of new agents (`auto`); its own when it is not in
+    /// Plan; never `plan`, and `default` for `auto` on a model that has no auto mode (`takes_auto`).
+    pub fn plan_resume(&self, takes_auto: bool) -> String {
+        let mode = if !self.mode.is_empty() && self.mode != "plan" {
+            self.mode.as_str()
+        } else {
+            self.plan_from
+                .as_deref()
+                .filter(|m| !m.is_empty() && *m != "plan")
+                .unwrap_or("auto")
+        };
+        if mode == "auto" && !takes_auto {
+            "default".into()
+        } else {
+            mode.into()
+        }
+    }
+
     /// Remembers that the user joined the file `claude_path` (as Claude Code reads it) by its own
     /// path: its `Read` of exactly that file is allowed from now on. Joined again, it only moves to
     /// the end; past `MAX_GRANTED_FILES` the oldest go.
@@ -2687,6 +2725,44 @@ mod tests {
             id: id.into(),
             text: t.into(),
         }
+    }
+
+    #[test]
+    fn a_plan_approved_resumes_in_the_mode_before_plan_never_in_ask_by_default() {
+        let mut a = AgentMeta {
+            mode: "auto".into(),
+            ..Default::default()
+        };
+        // Auto → Plan (by the menu or by its harness): Auto again once approved.
+        assert!(a.set_mode("plan"));
+        assert!(!a.set_mode("plan"));
+        assert_eq!(a.plan_from.as_deref(), Some("auto"));
+        assert_eq!(a.plan_resume(true), "auto");
+        // A model with no auto mode (Claude Code's Haiku 4.5): « Demander ».
+        assert_eq!(a.plan_resume(false), "default");
+        // Bypass only where it was.
+        a.set_mode("bypassPermissions");
+        a.set_mode("plan");
+        assert_eq!(a.plan_resume(true), "bypassPermissions");
+        // Out of Plan without Escouade knowing it went in: its own mode.
+        a.set_mode("acceptEdits");
+        assert_eq!(a.plan_resume(true), "acceptEdits");
+        // In Plan with nothing kept (saved before ESC-277): the app's mode of new agents.
+        let old = AgentMeta {
+            mode: "plan".into(),
+            ..Default::default()
+        };
+        assert_eq!(old.plan_resume(true), "auto");
+        // Its Plan's mode of departure never `plan`.
+        let odd = AgentMeta {
+            mode: "plan".into(),
+            plan_from: Some("plan".into()),
+            ..Default::default()
+        };
+        assert_eq!(odd.plan_resume(true), "auto");
+        // Saved and read again, with its mode kept.
+        let v = serde_json::to_value(&a).unwrap();
+        assert_eq!(v["planFrom"], "bypassPermissions");
     }
 
     #[test]

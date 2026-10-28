@@ -51,7 +51,7 @@
   import { shortBranch } from '../lib/branches';
   import { buffers, lossNotice } from '../lib/editor/buffers.svelte';
   import { menu, type MenuItem } from '../lib/menu.svelte';
-  import { modelLabel, MODES } from '../lib/models';
+  import { modeLabel, modelLabel, MODES, planResume } from '../lib/models';
   import { planView } from '../lib/plan';
   import { cardNext, cardStep } from '../lib/workflow-view';
   import { workflows } from '../lib/workflows.svelte';
@@ -971,7 +971,9 @@
                 <p class="clip">
                   {req.kind === 'question'
                     ? req.questions.map((x) => x.question).join(' · ')
-                    : `${req.tool}${req.arg ? ` ${req.arg.split('\n')[0]}` : ''}`}
+                    : req.tool === 'ExitPlanMode'
+                      ? t('stats.overview.proposesPlanThen', { engine: speakerOf(a.engine), mode: modeLabel(planResume(a)) })
+                      : `${req.tool}${req.arg ? ` ${req.arg.split('\n')[0]}` : ''}`}
                 </p>
                 <button
                   class="in-conv"

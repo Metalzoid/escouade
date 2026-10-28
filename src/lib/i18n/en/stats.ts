@@ -89,6 +89,7 @@ export default defineZone('stats', {
     readInConversation: 'Read it in the conversation before answering.',
     tooLong: 'Too long to read here: read it and answer in the conversation.',
     proposesPlan: '{engine} suggests a plan',
+    proposesPlanThen: '{engine} suggests a plan · resumes in {mode}',
     waitsForAnswer: '{engine} is waiting for your answer',
     waitsInTerminal: 'Waiting for your answer in Claude Code’s interface',
   },

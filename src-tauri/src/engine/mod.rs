@@ -306,8 +306,13 @@ pub struct Message(pub(crate) Value);
 /// The answer to a permission the agent asks (`call` is the tool call it is about).
 #[derive(Debug, Clone, PartialEq)]
 pub enum PermissionAnswer {
-    /// Allowed once, with `input` (the tool's, maybe changed).
-    Allow { call: String, input: Value },
+    /// Allowed once, with `input` (the tool's, maybe changed). A plan approved: its work goes on
+    /// in the mode `resume` (`AgentMeta::plan_resume`, ESC-277), `default` without one.
+    Allow {
+        call: String,
+        input: Value,
+        resume: Option<String>,
+    },
     /// Allowed, and the `rules` the engine suggested kept for the rest of the session.
     Always {
         call: String,

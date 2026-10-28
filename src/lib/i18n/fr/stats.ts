@@ -97,6 +97,8 @@ export default {
     readInConversation: 'À lire dans la conversation avant de répondre.',
     tooLong: 'Trop long pour être lu ici : lis-la et réponds dans la conversation.',
     proposesPlan: '{engine} propose un plan',
+    /** Its plan approved, its work resumes in `{mode}` (ESC-277). */
+    proposesPlanThen: '{engine} propose un plan · reprendra en {mode}',
     waitsForAnswer: '{engine} attend ta réponse',
     waitsInTerminal: 'Attend ta réponse dans l’interface de Claude Code',
   },

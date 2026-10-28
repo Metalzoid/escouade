@@ -971,3 +971,42 @@ async fn a_claude_of_wsl_gets_its_arguments_folder_and_variables_in_linux() {
     assert_eq!(code, Some(126), "{said}");
     assert!(said.contains("/nowhere/c/"), "{said}");
 }
+
+/// « Approuver le plan » (ESC-277): Claude Code goes on in the mode the agent was in before Plan,
+/// told by a `setMode` of the answer (the fake goes out of Plan in it, else in `default`, as Claude
+/// Code does); « Approuver et accepter les édits » in acceptEdits; Haiku 4.5, which has no auto
+/// mode, in `default`.
+#[tokio::test]
+async fn an_approved_plan_resumes_in_the_mode_before_plan() {
+    for (model, decision, want) in [
+        ("sonnet", "allow", "auto"),
+        ("sonnet", "always", "acceptEdits"),
+        ("claude-haiku-4-5", "allow", "default"),
+    ] {
+        let dir = temp_dir(&format!("plan-resume-{decision}-{model}"));
+        let h = new_agent(&dir);
+        h.lock().meta.model = model.into();
+        let proc = spawn(&h, &dir.join("log.jsonl"));
+        // Auto, then Plan (as Claude Code's `permissionMode` tells it).
+        h.lock().meta.set_mode("plan");
+        send(&h, &proc, "exit plan");
+        wait_for(&h, "the plan", |rt| rt.meta.status == AgentStatus::Waiting).await;
+        h.lock()
+            .answer_permission_by("req_plan", decision, None, None, &mut Effects::default())
+            .unwrap();
+        // Its mode at once, before Claude Code tells it.
+        assert_eq!(h.lock().meta.mode, want, "{model} {decision}");
+        wait_for(&h, "turn end", |rt| rt.meta.status == AgentStatus::Done).await;
+        assert_eq!(
+            h.lock().meta.mode,
+            want,
+            "as the fake says, {model} {decision}"
+        );
+        assert!(items(&h).iter().any(|i| i["text"]
+            == if want == "acceptEdits" {
+                "Plan approuvé (édits acceptés)."
+            } else {
+                "Plan approuvé."
+            }));
+    }
+}

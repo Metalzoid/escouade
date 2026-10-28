@@ -7111,6 +7111,23 @@ async fn an_agent_made_for_a_ticket_has_its_branch_from_a_base_and_the_projects_
         ),
         ("opus", "max", "plan")
     );
+    // Started in Plan: its plan approved, it goes on in its account's mode of new agents
+    // (ESC-277), never in « Demander » by default.
+    h.set_settings(|s| s.accounts[0].default_mode = "bypassPermissions".into());
+    let b = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                mode: Some("plan".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(b.meta.account, h.core.settings.read().accounts[0].id);
+    assert_eq!(b.meta.plan_from.as_deref(), Some("bypassPermissions"));
+    assert_eq!(b.meta.plan_resume(true), "bypassPermissions");
     assert_eq!(
         (
             a.meta.ticket_id.as_deref(),

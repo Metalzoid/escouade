@@ -2951,8 +2951,11 @@ function startSession() {
       toolResult(p.tuid, r.behavior === 'allow' ? 'contenu du fichier' : `Refusé : ${r.message}`);
       streamText(`${p.tool} : ${r.behavior}`);
     } else if (r.behavior === 'allow' && p.plan) {
+      // As Claude Code: out of Plan in the mode its answer sets (`setMode`), else `default` (ESC-277).
+      const mode = (r.updatedPermissions ?? []).find((u) => u.type === 'setMode')?.mode ?? 'default';
+      out({ type: 'system', subtype: 'status', status: null, permissionMode: mode, session_id: sessionId });
       toolResult(p.tuid, 'Plan approuvé');
-      streamText(r.updatedPermissions ? 'Plan approuvé (édits acceptés).' : 'Plan approuvé.');
+      streamText(mode === 'acceptEdits' ? 'Plan approuvé (édits acceptés).' : 'Plan approuvé.');
     } else if (r.behavior === 'allow') {
       toolResult(p.tuid, 'build supprimé', { tool_use_result: { stdout: 'build supprimé', stderr: '', interrupted: false } });
       streamText(r.updatedPermissions ? 'Commande exécutée (règle enregistrée).' : 'Commande exécutée.');

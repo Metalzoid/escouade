@@ -970,13 +970,17 @@ impl EngineProcess for CopilotProcess {
             // The plan approved: its work starts, its edits accepted with « Pour cette session »;
             // sent back, the planning goes on with what the user said.
             let (response, mode) = match &answer {
-                PermissionAnswer::Allow { .. } => (
-                    json!({ "approved": true, "selectedAction": "interactive" }),
-                    Some("default"),
-                ),
+                // Its agent in the mode it resumes in: `autopilot` for « Auto » (ESC-277).
+                PermissionAnswer::Allow { resume, .. } => {
+                    let mode = resume.clone().unwrap_or_else(|| "default".into());
+                    (
+                        json!({ "approved": true, "selectedAction": agent_mode(&mode) }),
+                        Some(mode),
+                    )
+                }
                 PermissionAnswer::Always { .. } => (
                     json!({ "approved": true, "selectedAction": "interactive", "autoApproveEdits": true }),
-                    Some("acceptEdits"),
+                    Some("acceptEdits".to_string()),
                 ),
                 PermissionAnswer::Deny { message, .. } => {
                     (json!({ "approved": false, "feedback": message }), None)
@@ -995,10 +999,15 @@ impl EngineProcess for CopilotProcess {
                 response,
             );
             if let Some(mode) = mode {
-                self.state.lock().settings.mode = mode.to_string();
+                self.state.lock().settings.mode = mode.clone();
                 let session = self.session()?;
                 // Told on a task of its own: the answer is given with the agent held, which its
-                // frames need.
+                // frames need. Without permissions, Copilot is told so too (its answer unread).
+                if permission_mode(&mode) != "manual" {
+                    self.write(&json!({ "jsonrpc": "2.0", "id": self.id(),
+                        "method": "session.permissions.setMode",
+                        "params": { "sessionId": session, "mode": permission_mode(&mode) } }))?;
+                }
                 let on_frame = self.on_frame.clone();
                 tokio::spawn(async move {
                     on_frame(json!({ "method": "escouade.mode", "params": {

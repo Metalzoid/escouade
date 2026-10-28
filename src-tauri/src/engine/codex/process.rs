@@ -691,8 +691,8 @@ impl EngineProcess for CodexProcess {
         if super::is_plan_approval(request_id) {
             let lang = i18n::claude();
             let text = match answer {
-                PermissionAnswer::Allow { .. } => {
-                    self.state.lock().settings.mode = "default".into();
+                PermissionAnswer::Allow { resume, .. } => {
+                    self.state.lock().settings.mode = resume.unwrap_or_else(|| "default".into());
                     implement_plan(lang)
                 }
                 PermissionAnswer::Always { .. } => {

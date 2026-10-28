@@ -166,6 +166,14 @@ async fn play(target: &dyn Target, scenario: Scenario, dir: &Path) {
             assert_eq!(item["kind"], "permission");
             assert_eq!(item["toolName"], tool, "{item}");
             assert_eq!(run.rt.meta.status, AgentStatus::Waiting);
+            // A plan approved goes on in the mode the agent was in before Plan, never in
+            // « Demander » (ESC-277): its harness is set in it, and says so.
+            let resume = (scenario == Scenario::PlanMode).then(|| {
+                let want = resume_mode(run.engine, &run.rt.meta.model);
+                run.rt.meta.set_mode(want);
+                run.rt.meta.set_mode("plan");
+                want
+            });
             let mut fx = Effects::default();
             run.rt
                 .answer_permission_by(&asked, "allow", None, None, &mut fx)
@@ -174,6 +182,11 @@ async fn play(target: &dyn Target, scenario: Scenario, dir: &Path) {
             let end = run.until_end().await;
             assert!(matches!(end, TurnEnd::Finished(_)), "{end:?}");
             assert_eq!(run.item(&asked).unwrap()["decision"], "allow");
+            if let Some(want) = resume {
+                // What its harness says of its mode may come after the turn's end.
+                run.linger(Duration::from_millis(800)).await;
+                assert_eq!(run.rt.meta.mode, want, "the mode its plan resumes in");
+            }
             if scenario == Scenario::Approval {
                 run.expect_item(|i| {
                     i["kind"] == "tool" && i["name"] == "Bash" && i["status"] == "ok"
@@ -299,6 +312,17 @@ async fn play(target: &dyn Target, scenario: Scenario, dir: &Path) {
     run.stop().await;
 }
 
+/// The mode an agent of `engine` on `model` is put in before its Plan, by the PlanMode scenario:
+/// « Auto » where it takes it, else another of its modes but « Demander ».
+fn resume_mode(engine: &dyn Engine, model: &str) -> &'static str {
+    let offered = |id: &str| engine.caps().modes.iter().any(|m| m.id == id);
+    ["auto", "acceptEdits", "bypassPermissions"]
+        .into_iter()
+        .filter(|m| *m != "auto" || engine.supports_auto(model))
+        .find(|m| offered(m))
+        .expect("a mode besides « Demander » and Plan")
+}
+
 /// A new agent of `target` in `dir`, on its model.
 fn meta_of(target: &dyn Target, dir: &Path) -> AgentMeta {
     let mut m = meta(dir);
@@ -416,6 +440,18 @@ impl Run {
         let before = self.ends.len();
         self.until("the end of the turn", |r| r.ends.get(before).cloned())
             .await
+    }
+
+    /// Translates what the process says for `time`.
+    async fn linger(&mut self, time: Duration) {
+        let deadline = Instant::now() + time;
+        while let Ok(Some(Heard::Frame(frame))) =
+            tokio::time::timeout_at(deadline.into(), self.heard.recv()).await
+        {
+            let mut fx = Effects::default();
+            self.engine.translate(&mut self.rt, &frame, &mut fx);
+            self.absorb(fx);
+        }
     }
 
     /// Translates what the process says until `pred` gives something.

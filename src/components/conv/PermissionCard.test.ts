@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
@@ -98,6 +99,37 @@ describe('PermissionCard', () => {
     const args = backend.called('answer_permission')[0].args;
     expect(args.decision).toBe('deny');
     expect(args.message).toMatch(/planifier/);
+  });
+
+  it('says in which mode the work resumes once the plan is approved: the one before Plan, never « Demander » by default (ESC-277)', async () => {
+    const backend = fakeBackend();
+    resetApp({ agents: [agent({ id: 'a1', engine: 'claude', model: 'sonnet', mode: 'plan', planFrom: 'auto' })] });
+    app.engines = [CLAUDE_ENGINE];
+    render(PermissionCard, {
+      item: item({ toolName: 'ExitPlanMode', input: { plan: '## Plan' } }),
+      agentId: 'a1',
+      pending: true,
+      cwd: 'C:\code',
+    });
+    const approve = screen.getByRole('button', { name: /^Approuver le plan · Auto/ });
+    await userEvent.hover(within(approve).getByText('· Auto'));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Le travail reprendra en mode Auto');
+    await userEvent.unhover(approve);
+    // « Approuver et accepter les édits » keeps its own words.
+    expect(screen.getByRole('button', { name: /^Approuver et accepter les édits/ })).toBeInTheDocument();
+    // Without permissions only where it was; the button follows the agent, without a reload.
+    app.agents.a1 = { ...app.agents.a1, planFrom: 'bypassPermissions' };
+    await tick();
+    expect(screen.getByRole('button', { name: /^Approuver le plan · Bypass/ })).toBeInTheDocument();
+    // Left before Plan without one (saved before ESC-277): the app’s mode of new agents, Auto.
+    app.agents.a1 = { ...app.agents.a1, planFrom: undefined };
+    await tick();
+    expect(screen.getByRole('button', { name: /^Approuver le plan · Auto/ })).toBeInTheDocument();
+    // A model without the auto mode (Haiku 4.5): « Demander », as the backend sets it.
+    app.agents.a1 = { ...app.agents.a1, model: 'claude-haiku-4-5', planFrom: 'auto' };
+    await tick();
+    await userEvent.click(screen.getByRole('button', { name: /^Approuver le plan · Demander/ }));
+    expect(backend.called('answer_permission')[0].args.decision).toBe('allow');
   });
 
   it('summarizes the decision once answered', () => {

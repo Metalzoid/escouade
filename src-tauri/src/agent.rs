@@ -1235,6 +1235,22 @@ impl AgentRt {
         by: Option<&str>,
         fx: &mut Effects,
     ) -> Result<()> {
+        let auto = engine::of(&self.meta).supports_auto(&self.meta.model);
+        self.answer_permission_in(request_id, decision, message, by, auto, fx)
+    }
+
+    /// `answer_permission_by`, `takes_auto` saying whether its model takes the mode `auto`
+    /// (`Core::takes_auto`): a plan approved goes on in the mode it was in before Plan
+    /// (`AgentMeta::plan_resume`, ESC-277), which its card and its Composer show at once.
+    pub fn answer_permission_in(
+        &mut self,
+        request_id: &str,
+        decision: &str,
+        message: Option<String>,
+        by: Option<&str>,
+        takes_auto: bool,
+        fx: &mut Effects,
+    ) -> Result<()> {
         let proc = self
             .proc
             .clone()
@@ -1258,10 +1274,12 @@ impl AgentRt {
             message
         };
         let call = p.tool_use_id.clone();
+        let plan = p.view.tool == "ExitPlanMode";
         let answer = match decision {
             "allow" => PermissionAnswer::Allow {
                 call,
                 input: p.input.clone(),
+                resume: plan.then(|| self.meta.plan_resume(takes_auto)),
             },
             "always" => PermissionAnswer::Always {
                 call,
@@ -1282,7 +1300,20 @@ impl AgentRt {
                 }
             }
         };
+        let resumed = match &answer {
+            PermissionAnswer::Allow {
+                resume: Some(mode), ..
+            } => Some(mode.clone()),
+            PermissionAnswer::Always { .. } if plan => Some("acceptEdits".to_string()),
+            _ => None,
+        };
         proc.answer_permission(request_id, answer)?;
+        // Its mode now, without waiting for its harness to tell it (the Composer follows).
+        if let Some(mode) = resumed {
+            if self.meta.set_mode(&mode) {
+                fx.save = true;
+            }
+        }
         let mut patch = json!({ "decision": decision, "message": message });
         answered_by(&mut patch, by);
         self.patch(&p.item_id, patch, fx);

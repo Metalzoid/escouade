@@ -100,8 +100,7 @@ impl AgentRt {
             "thread/started" => self.codex_thread_started(&p["thread"], fx),
             "thread/settings/updated" if own => {
                 if let Some(mode) = codex_mode_of(&p["threadSettings"], &self.meta.mode) {
-                    if self.meta.mode != mode {
-                        self.meta.mode = mode.to_string();
+                    if self.meta.set_mode(mode) {
                         fx.agent_changed = true;
                         fx.save = true;
                     }
@@ -616,6 +615,7 @@ impl AgentRt {
                     let allowed = PermissionAnswer::Allow {
                         call: call.clone(),
                         input: json!({ "command": command }),
+                        resume: None,
                     };
                     if self
                         .proc

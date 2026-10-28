@@ -708,22 +708,27 @@ impl VibeProcess {
             .to_string();
         let me = self.self_arc()?;
         let (mode, text) = match answer {
-            PermissionAnswer::Allow { .. } => (Some("default"), super::PLAN_GO.to_string()),
-            PermissionAnswer::Always { .. } => (Some("acceptEdits"), super::PLAN_GO.to_string()),
+            PermissionAnswer::Allow { resume, .. } => (
+                Some(resume.unwrap_or_else(|| "default".into())),
+                super::PLAN_GO.to_string(),
+            ),
+            PermissionAnswer::Always { .. } => {
+                (Some("acceptEdits".to_string()), super::PLAN_GO.to_string())
+            }
             PermissionAnswer::Deny { message, .. } => (None, message),
         };
         if mode.is_none() && text.trim().is_empty() {
             me.end_held(&session);
             return Ok(());
         }
-        if let Some(mode) = mode {
-            self.state.lock().settings.mode = mode.to_string();
+        if let Some(mode) = &mode {
+            self.state.lock().settings.mode = mode.clone();
         }
         // Set and sent on a task of its own: the answer is given with the agent held, which its
         // frames need.
         tokio::spawn(async move {
             if let Some(mode) = mode {
-                if let Err(e) = me.apply_mode(&session, mode).await {
+                if let Err(e) = me.apply_mode(&session, &mode).await {
                     log::warn!("vibe: mode {mode} not set after the plan: {e:#}");
                 }
                 me.frame(

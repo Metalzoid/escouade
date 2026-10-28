@@ -729,12 +729,17 @@ impl EngineProcess for OpencodeProcess {
         if super::is_plan_approval(request_id) {
             let lang = i18n::claude();
             let (text, mode) = match answer {
-                PermissionAnswer::Allow { .. } => (implement_plan(lang), Some("default")),
-                PermissionAnswer::Always { .. } => (implement_plan(lang), Some("acceptEdits")),
+                PermissionAnswer::Allow { resume, .. } => (
+                    implement_plan(lang),
+                    Some(resume.unwrap_or_else(|| "default".into())),
+                ),
+                PermissionAnswer::Always { .. } => {
+                    (implement_plan(lang), Some("acceptEdits".to_string()))
+                }
                 PermissionAnswer::Deny { message, .. } => (message, None),
             };
             if let Some(mode) = mode {
-                self.inner.state.lock().settings.mode = mode.to_string();
+                self.inner.state.lock().settings.mode = mode.clone();
                 self.inner.set_rules();
                 let session = self.inner.session().unwrap_or_default();
                 // After the answer: the core holds the agent's lock while it answers.

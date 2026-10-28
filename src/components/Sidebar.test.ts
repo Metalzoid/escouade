@@ -3037,6 +3037,21 @@ describe('Sidebar of the 2.0 design (ESC-73)', () => {
       expect(screen.getByRole('button', { name: /tests-e2e/ }).querySelector('.a-ask')).toHaveTextContent('Bash rm -rf build');
     });
 
+    it('says of a plan, read in its conversation, the mode its work resumes in (ESC-277)', () => {
+      app.agents.a2 = {
+        ...app.agents.a2,
+        engine: 'claude',
+        mode: 'plan',
+        planFrom: 'auto',
+        requests: [{ ...ask, kind: 'permission', tool: 'ExitPlanMode', arg: '## Plan', questions: [] }],
+      };
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      expect(screen.getByRole('button', { name: /tests-e2e/ }).querySelector('.a-ask')).toHaveTextContent(
+        'Claude propose un plan · reprendra en Auto',
+      );
+    });
+
     it('gives the focus to the card Ctrl+J asks for', async () => {
       fakeBackend();
       render(Sidebar, { project: project() });

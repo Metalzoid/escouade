@@ -170,8 +170,7 @@ impl AgentRt {
     }
 
     fn cu_set_mode(&mut self, mode: &str, fx: &mut Effects) {
-        if self.meta.mode != mode {
-            self.meta.mode = mode.to_string();
+        if self.meta.set_mode(mode) {
             fx.agent_changed = true;
             fx.save = true;
         }
@@ -573,6 +572,7 @@ impl AgentRt {
             let allowed = PermissionAnswer::Allow {
                 call: call.clone(),
                 input: Value::Null,
+                resume: None,
             };
             if self
                 .proc

@@ -23,6 +23,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### Fixes
 
+- “Approve the plan” resumes in the mode the agent was in before Plan, Auto for instance, instead of “Ask”, with every harness; the button says which mode.
 - A ticket launched by hand starts even past “Pause above quota”: that threshold now holds back the autopilot alone.
 - Under WSLg, links, files and folders open in Windows, instead of doing nothing.
 

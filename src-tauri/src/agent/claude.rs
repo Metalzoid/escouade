@@ -73,8 +73,7 @@ impl AgentRt {
             }
             "status" => {
                 if let Some(mode) = f["permissionMode"].as_str() {
-                    if self.meta.mode != mode {
-                        self.meta.mode = mode.to_string();
+                    if self.meta.set_mode(mode) {
                         fx.agent_changed = true;
                         fx.save = true;
                     }
@@ -950,6 +949,7 @@ impl AgentRt {
                     let allowed = PermissionAnswer::Allow {
                         call: tool_use_id.clone(),
                         input: input.clone(),
+                        resume: None,
                     };
                     if self
                         .proc

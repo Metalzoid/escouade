@@ -878,7 +878,7 @@ impl<R: Runtime> Core<R> {
             rt.meta.fork_of = None;
             rt.meta.fork_at = None;
             rt.meta.model = model;
-            rt.meta.mode = mode;
+            rt.meta.set_mode(&mode);
             if !to.supports_effort(&rt.meta.model) {
                 rt.meta.effort = String::new();
             } else if !to.efforts().contains(&rt.meta.effort.as_str()) {

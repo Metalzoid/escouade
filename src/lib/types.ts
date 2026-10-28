@@ -1295,6 +1295,8 @@ export interface Agent {
   model: string;
   effort: string;
   mode: string;
+  /** The mode its work resumes in once a plan is approved (`planResume`, ESC-277): the one before Plan. */
+  planFrom?: string;
   sessionId: string | null;
   /** The latest entry of its session (the uuid of its latest assistant message): where a copy made now forks it. */
   lastEntry: string | null;

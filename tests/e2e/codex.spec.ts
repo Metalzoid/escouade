@@ -274,7 +274,7 @@ test.describe('an agent on Codex', () => {
     await expect(plan).toContainText('Script de la date');
     await plan.getByRole('button', { name: 'Approuver le plan' }).click();
     await expect(page.getByText('Plan mis en œuvre.')).toBeVisible();
-    // Its work in the mode left for it, « Demander ».
+    // Its work out of Plan, in the mode it was in before it (ESC-277): Codex's collaboration mode `default`.
     const last = requests(app, 'turn/start').at(-1)!.params;
     expect(last.collaborationMode.mode).toBe('default');
     expect(last.input[0].text).toBe('Mets le plan en œuvre.');

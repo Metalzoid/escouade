@@ -23,6 +23,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Corrections
 
+- « Approuver le plan » reprend dans le mode d’avant le Plan, Auto par exemple, et non plus en « Demander », avec chaque harness ; le bouton dit ce mode.
 - Un ticket lancé à la main part même au-delà de « Pause au-delà du quota » : ce seuil ne retient plus que le pilote auto.
 - Sous WSLg, les liens, les fichiers et les dossiers s’ouvrent dans Windows, au lieu de ne rien faire.
 
