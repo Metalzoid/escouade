@@ -846,6 +846,8 @@ pub struct Core<R: Runtime = Wry> {
     /// The accounts whose models are being read (`read_account_models`): one reading at a time.
     models_reading: Mutex<HashSet<String>>,
     pub git: GitService,
+    /// The projects' code indexes (`codeindex`).
+    pub(crate) codeindex: crate::codeindex::Service,
     pub git_cache: RwLock<HashMap<String, GitInfo>>,
     pub pty: PtyManager,
     spawn_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
@@ -1546,6 +1548,7 @@ pub(crate) fn blank_project(path: &str) -> Project {
         workflow_fixes: Vec::new(),
         workflows_auto_read: true,
         workflows_in_repo: true,
+        code_index: false,
     }
 }
 
@@ -1763,6 +1766,7 @@ impl<R: Runtime> Core<R> {
             me: me.clone(),
             telemetry,
             stats: Stats::open(&data.stats_db()),
+            codeindex: crate::codeindex::Service::new(data.clone()),
             app,
             data,
             hub: Hub::default(),
@@ -2442,6 +2446,8 @@ impl<R: Runtime> Core<R> {
             self.hub.emit(UiEvent::Agent { agent: v });
         }
         if !fx.turns.is_empty() {
+            // The end of a turn: the code it changed is read by the index (ESC-251).
+            self.code_index_event(project_id);
             self.stats
                 .record_turns(&self.account_of(id), id, project_id, &fx.turns);
             {
@@ -8088,6 +8094,8 @@ impl<R: Runtime> Core<R> {
         // lock, which it holds while it adds the ticket, so a ticket it adds before this is dropped
         // here, and none is added after.
         let tickets = self.drop_project_tickets(id);
+        // Recomputed from the files: not kept with a closed project.
+        self.codeindex.delete(id);
         if erase {
             // Nothing of it stays, not even a history a stop left half way (see `closed_list`).
             let tickets: Vec<String> = tickets.iter().map(|t| t.id.clone()).collect();
@@ -8919,7 +8927,7 @@ impl<R: Runtime> Core<R> {
                     Err(e) => failed.push(format!("{} : {e:#}", crate::repos::label(&repo))),
                 }
             }
-            self.git.refresh(project_id);
+            self.git_event(project_id);
             if !failed.is_empty() {
                 bail!(failed.join("\n"));
             }
@@ -8927,7 +8935,7 @@ impl<R: Runtime> Core<R> {
         }
         let done = git::commit_paths(&root, &files, message).await;
         // Even after a refusal: a hook may have changed files (a formatter) before saying no.
-        self.git.refresh(project_id);
+        self.git_event(project_id);
         done?;
         git::text(&root, &["rev-parse", "--short", "HEAD"]).await
     }
@@ -8975,6 +8983,14 @@ impl<R: Runtime> Core<R> {
             .clone()
     }
 
+    /// A git event of the project (a commit, a branch left): its code index reads what changed.
+    fn git_event(&self, project_id: &str) {
+        self.git.refresh(project_id);
+        if let Some(me) = self.me.upgrade() {
+            me.code_index_event(project_id);
+        }
+    }
+
     /// Refreshes the git state of every project in the repository at `root`.
     async fn refresh_repo(&self, root: &str) {
         let projects: Vec<(String, String)> = self
@@ -8985,7 +9001,7 @@ impl<R: Runtime> Core<R> {
             .collect();
         for (id, _) in projects {
             if self.project_roots_of(&id).await.iter().any(|r| r == root) {
-                self.git.refresh(&id);
+                self.git_event(&id);
             }
         }
     }

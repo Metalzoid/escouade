@@ -754,6 +754,11 @@ pub struct Project {
     /// comes back to the front and a file read changed. Off: by « Relire » alone.
     #[serde(default = "crate::model::yes")]
     pub workflows_auto_read: bool,
+    /// « Index du code » (ESC-251): the project's code cut into symbols and links, in a database
+    /// of this machine (`codeindex`), for the agents to find code with for less. Off by default;
+    /// off, nothing is read and the database is erased.
+    #[serde(default)]
+    pub code_index: bool,
 }
 
 impl Project {

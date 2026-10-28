@@ -20,6 +20,9 @@ mod clipboard;
 mod closed;
 #[cfg(test)]
 mod closed_tests;
+mod codeindex;
+#[cfg(test)]
+mod codeindex_tests;
 #[cfg(test)]
 mod codex_tests;
 #[cfg(test)]
@@ -522,6 +525,8 @@ pub fn run() {
             commands::create_project,
             commands::update_project,
             commands::set_project_logo,
+            commands::get_code_index,
+            commands::set_code_index,
             commands::project_logo,
             commands::read_logo,
             commands::shared_trust,

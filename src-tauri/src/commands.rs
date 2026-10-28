@@ -724,6 +724,22 @@ pub fn set_project_logo(core: CoreState, id: String, path: Option<String>) -> Re
     core.set_project_logo(&id, path.as_deref()).map_err(err)
 }
 
+/// « Index du code » of a project (ESC-251): whether it is on, and what the index holds.
+#[tauri::command(async)]
+pub fn get_code_index(core: CoreState, id: String) -> Res<crate::codeindex::CodeIndexInfo> {
+    core.code_index_info(&id).map_err(err)
+}
+
+/// Turns « Index du code » on (the project is read at once) or off (its database is erased).
+#[tauri::command]
+pub async fn set_code_index(
+    core: CoreState<'_>,
+    id: String,
+    enabled: bool,
+) -> Res<crate::codeindex::CodeIndexInfo> {
+    core.set_code_index(&id, enabled).await.map_err(err)
+}
+
 /// The project's logo for its tile, as a `data:` URL; null when it has none.
 #[tauri::command(async)]
 pub fn project_logo(core: CoreState, id: String) -> Option<String> {

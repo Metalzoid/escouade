@@ -390,6 +390,12 @@ impl DataDir {
         self.0.join("projects").join(name)
     }
 
+    /// The code index of a project (`codeindex`): recomputed from its files, of this machine,
+    /// never in the project.
+    pub fn code_index_db(&self, project_id: &str) -> PathBuf {
+        self.project_files(project_id).join("code-index.db")
+    }
+
     /// The embedding model's folder (`vectors`, ESC-252): downloaded once for every project, of this machine.
     #[allow(dead_code)] // no caller until the Docs tickets
     pub fn vectors_model(&self, model_id: &str) -> PathBuf {

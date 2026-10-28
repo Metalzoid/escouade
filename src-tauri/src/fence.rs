@@ -325,6 +325,34 @@ pub(crate) fn compute(g: &Ground) -> Fence {
 }
 
 impl<R: tauri::Runtime> crate::core::Core<R> {
+    /// What the files of project `id` keep out of its index: the fence of its own agents, as the
+    /// projects are now (`compute`, with no agent). Nothing without a private project.
+    pub(crate) fn project_fence(&self, id: &str) -> Fence {
+        let projects = self.projects.read().clone();
+        if !projects.iter().any(|p| p.private) {
+            return Fence::default();
+        }
+        let sides = projects
+            .iter()
+            .map(|p| Side {
+                id: p.id.clone(),
+                private: p.private,
+                folders: vec![PathBuf::from(&p.path), p.worktrees_root()],
+                data: Vec::new(),
+            })
+            .collect();
+        let settings = self.settings.read().clone();
+        let (homes, files) = homes(&settings);
+        compute(&Ground {
+            own: id.to_string(),
+            projects: sides,
+            data_root: self.data.root().to_path_buf(),
+            keep: Vec::new(),
+            homes,
+            files,
+        })
+    }
+
     /// The fence of the agent `id` as the projects are now (`compute`); none for an agent the
     /// core does not have.
     pub(crate) fn agent_fence(&self, id: &str) -> Fence {

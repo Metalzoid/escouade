@@ -761,6 +761,8 @@ export interface Project {
   workflowsAutoRead?: boolean;
   /** « Où garder la configuration des workflows » (ESC-195): in the repository (`.escouade/workflows/`, by default) or on this machine. Absent from a project of the window’s tests made before it. */
   workflowsInRepo?: boolean;
+  /** « Index du code » (ESC-251): off unless turned on, by `get_code_index` / `set_code_index` (no screen yet). */
+  codeIndex?: boolean;
 }
 
 /** What tells a step added by hand (ESC-195): a command typed, a subagent launched, a file written. */
