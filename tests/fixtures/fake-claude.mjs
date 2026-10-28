@@ -51,7 +51,11 @@
 // history), [tenace] a process that lasts 5 s once its input is closed, [rien] no file written (nothing
 // to merge), [dans:api] its file written in that folder instead (each one named; ESC-169); by default criterion n is
 // met from loop n on. "faits-workflow: [...]" in its ticket (ESC-197) plays those facts first, then holds its turn 10 min
-// as [lent] does: the agent of a ticket under way that follows a workflow too.
+// as [lent] does: the agent of a ticket under way that follows a workflow too. [spec:<project>] (ESC-263): before its first
+// report it keeps the spec as its protocol asks, by Escouade's docs tools (its --mcp-config server): the page
+// paiement/echeances written (« Quatre échéances au plus (<key>). [écart] ») and a decision proposed. In one-shot mode, a page
+// compared to the code (<spec-page>) gets a gap when it says [écart] (none otherwise; [muet]: the model fails), and
+// « Mettre la spec à jour » (<spec-update>) the page without its [écart] and « Mis à jour d’après le code… ».
 // "[worktree <branch>]" in a message goes into a worktree of its own as Claude Code's EnterWorktree does (ESC-161): made
 // under <repository>/.claude/worktrees/<branch with non-alphanumerics replaced by -> on the new branch <branch> (or
 // gone into again), the session goes on there (the `cwd` of its entries), kept in its first folder's project folder.
@@ -384,6 +388,40 @@ if (argv[0] === 'mcp') {
       });
       if (input.includes('[invente]')) workflows.push({ id: 'inconnu|x', steps: [], transitions: [] });
       const result = `Voici.\n\n\`\`\`json\n${JSON.stringify({ workflows })}\n\`\`\``;
+      process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
+      return;
+    }
+    // A page of the spec compared to the code (ESC-263): a gap when its text says [écart], on the first file of code of the
+    // folder it reads (else its first file) and one outside of it; none otherwise. [muet] in it: the model fails.
+    const compared = input.match(/<spec-page path="([^"]*)"[^>]*>\n([\s\S]*?)\n<\/spec-page>/);
+    if (compared) {
+      if (compared[2].includes('[muet]')) {
+        process.stderr.write('model unavailable\n');
+        process.exit(1);
+      }
+      const files = fs
+        .readdirSync(process.cwd(), { withFileTypes: true })
+        .filter((e) => e.isFile() && !e.name.startsWith('.'))
+        .map((e) => e.name)
+        .sort();
+      const first = files.find((f) => /\.(ts|rs|js|py)$/.test(f)) ?? files[0];
+      const gaps = compared[2].includes('[écart]')
+        ? [
+            {
+              text: 'La page dit quatre échéances ; le code en accepte encore trois au plus.',
+              code: [first, '../dehors.txt'].filter(Boolean),
+            },
+          ]
+        : [];
+      const result = `Comparé.\n\n\`\`\`json\n${JSON.stringify({ gaps })}\n\`\`\``;
+      process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
+      return;
+    }
+    // « Mettre la spec à jour » (ESC-263): the page as the code has it, its [écart] gone.
+    const updated = input.match(/<spec-update path="([^"]*)"[^>]*>\n([\s\S]*?)\n<\/spec-update>/);
+    if (updated) {
+      const body = `${updated[2].replace(/\s*\[écart\]/g, '')}\n\nMis à jour d’après le code par le faux claude.`;
+      const result = `Voici.\n\n\`\`\`json\n${JSON.stringify({ body })}\n\`\`\``;
       process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
       return;
     }
@@ -919,6 +957,8 @@ function startSession() {
   let slowTimer = null;
   let floodTimer = null;
   let asked = false;
+  // The spec kept once ([spec:<project>], ESC-263).
+  let specKept = false;
   // The subagent of "sous-agent long" while it runs, until a `stop_task` of its task: { task, call, description }.
   let longAgent = null;
   const replay = argv.includes('--replay-user-messages');
@@ -1065,6 +1105,47 @@ function startSession() {
     });
   }
 
+  // Escouade's tools, called as Claude Code would through the server its --mcp-config file names.
+  async function escouadeTool(name, args) {
+    const file = argv[argv.indexOf('--mcp-config') + 1];
+    const server = JSON.parse(fs.readFileSync(file, 'utf8')).mcpServers.escouade;
+    let session = null;
+    const post = async (body) => {
+      const headers = { ...server.headers, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' };
+      if (session) headers['Mcp-Session-Id'] = session;
+      const r = await fetch(server.url, { method: 'POST', headers, body: JSON.stringify(body) });
+      session = r.headers.get('mcp-session-id') ?? session;
+      const t = await r.text();
+      return t ? JSON.parse(t.startsWith('{') ? t : (t.match(/^data: (.*)$/m)?.[1] ?? 'null')) : null;
+    };
+    await post({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'fake-claude', version: '1' } },
+    });
+    await post({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    const done = await post({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } });
+    if (done?.error || done?.result?.isError) throw new Error(`${name}: ${JSON.stringify(done)}`);
+    return done?.result;
+  }
+
+  async function keepSpec(project, key) {
+    await escouadeTool('write_spec_page', {
+      project,
+      path: 'paiement/echeances',
+      title: 'Échéances',
+      body: `# Échéances\n\nQuatre échéances au plus (${key}). [écart]`,
+    });
+    await escouadeTool('propose_decision', {
+      project,
+      title: `Quatre échéances (${key})`,
+      context: 'Les clients demandent une échéance de plus.',
+      decision: 'Quatre échéances au plus.',
+      consequences: 'L’échéancier change.',
+    });
+  }
+
   function ticketTurn(text) {
     const key = sys.match(/ticket ([A-Z]+-\d+)/)?.[1] ?? 'TIC-0';
     const count = Number(sys.match(/(?:Critères d'acceptation|Acceptance criteria) \((\d+)\)/)?.[1] ?? 1);
@@ -1082,6 +1163,16 @@ function startSession() {
     if (all.includes('[lent]')) {
       streamText('Je commence…');
       slowTimer = setTimeout(() => result(), 30_000);
+      return;
+    }
+    // [spec:<project>] (ESC-263): a ticket that changes how the product behaves keeps the spec, as its protocol asks,
+    // once: the page paiement/echeances written and a decision left by Escouade's docs tools.
+    const specProject = all.match(/\[spec:([^\]]+)\]/)?.[1];
+    if (specProject && !specKept) {
+      specKept = true;
+      keepSpec(specProject, key)
+        .catch((e) => process.stderr.write(`spec: ${e.stack}\n`))
+        .finally(() => ticketTurn(text));
       return;
     }
     const file = `${key.toLowerCase()}.txt`;

@@ -22,6 +22,8 @@ export default {
     drafts: { one: '{n} brouillon', other: '{n} brouillons' },
     compared: 'comparée au code {when}',
     neverCompared: 'pas encore comparée au code',
+    subjectCompared: 'comparé au code {when}',
+    subjectNeverCompared: 'pas encore comparé au code',
     newPage: 'Nouvelle page',
     treeLabel: 'Pages de la spécification',
     mapLabel: 'Sujets de la spécification',
@@ -32,6 +34,19 @@ export default {
     unsharedMark: 'à partager',
     unsharedTip: 'Modifiée ici, pas encore partagée avec l’équipe',
     openSubject: 'Ouvrir le sujet {name}',
+  },
+
+  // « Comparer au code » (ESC-263): a short agent reads the code and says where the spec says otherwise.
+  compare: {
+    all: 'Comparer au code',
+    allTip: 'Un agent lit le code et relève où chaque page dit autre chose (des tokens, page par page)',
+    page: 'Comparer au code',
+    pageTip: 'Un agent lit le code et relève où cette page dit autre chose',
+    running: { one: 'Comparaison… ({count} page)', other: 'Comparaison… ({count} pages)' },
+    runningOne: 'Comparaison au code…',
+    done: { one: '{count} page comparée', other: '{count} pages comparées' },
+    noGap: 'aucun écart',
+    failed: { one: '{count} page pas comparée', other: '{count} pages pas comparées' },
   },
 
   moved: {
@@ -55,6 +70,10 @@ export default {
     gaps: { one: 'Un écart avec le code', other: '{count} écarts avec le code' },
     openTicket: 'Ouvrir un ticket pour le code',
     seeCode: 'Voir le code',
+    update: 'Mettre la spec à jour',
+    updateTip: 'Un agent lit le code et réécrit la page pour qu’elle dise ce que fait le code sur ce point',
+    updating: 'Mise à jour…',
+    updated: 'Page mise à jour d’après le code : elle fait partie des changements à partager.',
     noCode: 'La comparaison n’a pas dit quels fichiers',
     ticketTitle: 'Aligner le code sur la spec : {page}',
     ticketDescription:

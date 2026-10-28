@@ -46,6 +46,9 @@ mod docs;
 #[cfg(test)]
 mod docs_tests;
 mod docsbranch;
+mod docscompare;
+#[cfg(test)]
+mod docscompare_tests;
 mod docsdrive;
 #[cfg(test)]
 mod docsdrive_tests;
@@ -58,6 +61,9 @@ mod docsimport_tests;
 mod docsshare;
 #[cfg(test)]
 mod docsshare_tests;
+mod docsticket;
+#[cfg(test)]
+mod docsticket_tests;
 mod engine;
 #[cfg(test)]
 mod engines_tests;
@@ -512,6 +518,8 @@ pub fn run() {
             commands::inspect_folder,
             commands::refresh_repos,
             commands::docs_spec_tree,
+            commands::docs_compare,
+            commands::docs_update_from_gap,
             commands::docs_detect_spec,
             commands::docs_spec_page,
             commands::docs_spec_write,

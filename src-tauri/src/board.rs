@@ -1510,6 +1510,21 @@ fn more(lang: Lang) -> &'static str {
 
 /// The protocol around `criteria`, already joined, in `lang`: with the reserved ports and the
 /// recipe asked for them, or isola's services when `isola` runs the worktree's.
+/// What a ticket's agent is told of the spec (ESC-263): a ticket that changes how the product
+/// behaves updates the pages it touches and leaves a decision, by Escouade's docs tools, before it
+/// is handed in.
+pub fn spec_rule(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "Si ce ticket change le comportement du produit, tiens la spec à jour avant de le rendre : \
+         mets à jour les pages qu'il touche (search_spec, read_spec_page puis write_spec_page d'Escouade) \
+         et laisse une décision qui dit ce qui a changé et pourquoi (propose_decision), acceptée à la validation du ticket.",
+        "If this ticket changes how the product behaves, keep the spec up to date before handing it in: \
+         update the pages it touches (Escouade's search_spec, read_spec_page then write_spec_page) \
+         and leave a decision that says what changed and why (propose_decision), accepted when the ticket is approved."
+    )
+}
+
 fn protocol(lang: Lang, t: &Ticket, criteria: &str, ports: Option<u16>, isola: bool) -> String {
     let mut p = tr_in!(
         lang,
@@ -1541,6 +1556,10 @@ fn protocol(lang: Lang, t: &Ticket, criteria: &str, ports: Option<u16>, isola: b
         title = one_line(&t.title, 200),
         n = t.criteria.len(),
     );
+    // The spec always up to date (ESC-263, docs/FACTORY.md): asked, never checked (nothing stops the
+    // validation); the docs tools write where the docs live, the fixed branch at the validation.
+    p.push(' ');
+    p.push_str(&spec_rule(lang));
     if let Some(base) = ports {
         let (end, web) = (base.saturating_add(9), base.saturating_add(1));
         p.push_str(&tr_in!(

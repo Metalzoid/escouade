@@ -165,6 +165,15 @@ Quand on a fini d'éditer la spec, un bouton **« Planifier »** appelle un **ag
 - **Choix du chef** : tous les écrits de spec et de décisions passent par les outils MCP de docs d'Escouade, qui écrivent là où vivent les docs. Avec la branche courante, c'est la branche du ticket (la spec suit le code dans la même fusion) ; avec une branche fixe, les changements de spec d'un ticket sont versés sur la branche des docs **quand le ticket est validé**, pour que la spec ne décrive jamais un comportement pas encore fusionné.
 - **L'écran montre les écarts** : « comparée au code il y a 2 h », « 1 écart ». La comparaison tourne **après chaque ticket validé**, sur les pages qu'il touche, et à la demande (voir les réponses de l'utilisateur, plus bas).
 
+**Fait (ESC-263, 2026-10-28)** : `docsticket.rs`, `docscompare.rs`. Ce que le constructeur a tranché :
+
+- la consigne de chaque ticket (`board::spec_rule`, dans `protocol`) le demande toujours, en nommant les outils de docs ; une page écrite par l'agent d'un ticket prend sa clé dans ses tickets, comme une décision prend son origine ;
+- avec une branche fixe, l'agent d'un ticket (en cours ou à tester) lit et écrit une copie de la spec et des décisions de la branche (`ticket-docs/<clé>/` du dossier système, avec la copie d'origine à côté), les documents restant ceux de la branche ; à la validation, seul ce que le ticket a changé est versé (ce que l'équipe a écrit entre-temps reste ; à page égale, celle du ticket l'emporte), une décision nouvelle dont le numéro a été pris entre-temps prend le suivant ; la copie part avec un ticket supprimé ;
+- la comparaison est un agent court en lecture seule (`Weight::Reading`, le harness de « Modèle des textes rédigés »), une page à la fois, 5 min au plus chacune ; il reçoit la page et, l'index allumé, les fichiers que l'index lui rapproche ; il répond un JSON d'écarts, gardés seulement sur des fichiers du projet présents et hors clôture ;
+- les pages touchées par un ticket : celles qu'il a écrites, celles qui le citent, puis celles qui nomment un fichier qu'il a changé (chemin, ou nom pas trop commun) ou un symbole de ces fichiers (par l'index) ; 12 au plus. Elle tourne seulement quand le ticket est fusionné (« Valider et merger ») : poussé ou en PR, le code n'est pas encore là où la spec est comparée ;
+- « Comparer au code » sur toute la spec : 40 pages au plus, les moins récemment comparées d'abord ;
+- « Mettre la spec à jour » sur un écart : le même agent court réécrit la page sur ce point, l'écart retiré (en attendant l'agent rédacteur des discussions, ESC-261).
+
 ## Ce qui reste au constructeur
 
 - Les noms et le nombre exact des outils MCP (index, mémoire, docs), et leurs réponses.

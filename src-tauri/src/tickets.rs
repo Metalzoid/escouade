@@ -1059,6 +1059,8 @@ impl<R: Runtime> Core<R> {
             }
         }
         remove_images(self.data.ticket_dir(id)).await;
+        // The copy of the docs its agent wrote on a fixed branch, never poured (ESC-263).
+        self.docs_drop_ticket(&t.project_id, &t.key);
         for ticket in freed {
             self.hub.emit(UiEvent::Ticket { ticket });
         }
@@ -2649,6 +2651,13 @@ impl<R: Runtime> Core<R> {
                 return Ok(());
             }
         }
+        // What it changed, for the pages of the spec it touches (ESC-263), read before the commit and
+        // the merge, against where its branch left the target.
+        let changed = if wt.is_multi() {
+            Vec::new()
+        } else {
+            crate::docscompare::changed_files(&wt.path, &target).await
+        };
         // The decisions its agent left are accepted by this validation (docs/FACTORY.md), before
         // the commit, so they are merged with the ticket. One that cannot be written stops nothing.
         match self
@@ -2780,6 +2789,24 @@ impl<R: Runtime> Core<R> {
             x.cost = cost;
             Ok(())
         })?;
+        // Validated: on a fixed branch of the docs, the spec and decisions its agent wrote are poured
+        // there now, never before; then the pages it touches are compared to the code, once merged.
+        let poured = match self.docs_pour_ticket(&project.id, &t.key).await {
+            Ok(p) => p,
+            Err(e) => {
+                log::warn!(
+                    "ticket {}: its docs not poured on the docs branch: {e:#}",
+                    t.key
+                );
+                None
+            }
+        };
+        if poured.is_some() {
+            self.docs_changed(&project.id).await;
+        }
+        if s.action == "merge" && !nothing {
+            self.docs_after_ticket(&project.id, &t.key, changed, poured);
+        }
         if s.action != "keep" {
             // Done whatever becomes of its agent: its work went where it was sent, and "Réessayer"
             // on it would have nothing left to do.

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  comparedLine,
   documentCitation,
   draftsBySubject,
   fileBadge,
@@ -8,6 +9,7 @@ import {
   folderDepth,
   folderTrail,
   hasChildren,
+  latestCompared,
   readState,
   visibleFolders,
   findPage,
@@ -170,5 +172,25 @@ describe('the drive of the documents', () => {
     expect(readState({ reads: 0, cited: 0, readable: true })).toBe('unread');
     expect(readState({ reads: 0, cited: 0, readable: false })).toBe('noText');
     expect(documentCitation('Comptes rendus/a.md')).toBe('documents/Comptes rendus/a.md');
+  });
+});
+
+describe('the comparison to the code (ESC-263)', () => {
+  it('takes the latest comparison of the pages, none when never compared', () => {
+    expect(
+      latestCompared([
+        pg('a/b', { compared: '2026-10-28T08:00:00Z' }),
+        pg('a/c', { compared: '2026-10-28T10:00:00Z' }),
+        pg('a/d', { compared: 'pas une date' }),
+      ]),
+    ).toBe(Date.parse('2026-10-28T10:00:00Z'));
+    expect(latestCompared([pg('a/b')])).toBeNull();
+    expect(latestCompared([])).toBeNull();
+  });
+
+  it('says what a comparison did: its pages, their gaps, those it could not compare', () => {
+    expect(comparedLine({ pages: 1, gaps: 1, failed: 0 })).toBe('1 page comparée · 1 écart');
+    expect(comparedLine({ pages: 3, gaps: 0, failed: 0 })).toBe('3 pages comparées · aucun écart');
+    expect(comparedLine({ pages: 2, gaps: 4, failed: 1 })).toBe('2 pages comparées · 4 écarts · 1 page pas comparée');
   });
 });

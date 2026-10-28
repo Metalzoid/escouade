@@ -2992,7 +2992,32 @@ pub async fn docs_spec_tree(core: CoreState<'_>, id: String) -> Res<Value> {
         "pages": pages,
         "subjects": subjects,
         "existingSpec": if pages == 0 { space.detect() } else { Vec::new() },
+        "comparing": crate::docscompare::comparing(&id),
     }))
+}
+
+/// « Comparer au code » (ESC-263): `pages`, or the whole spec when None. Ends with them compared.
+#[tauri::command]
+pub async fn docs_compare(
+    core: CoreState<'_>,
+    id: String,
+    pages: Option<Vec<String>>,
+) -> Res<crate::docscompare::Compared> {
+    core.inner().docs_compare(&id, pages).await.map_err(err)
+}
+
+/// « Mettre la spec à jour » on gap `index` of a page (ESC-263).
+#[tauri::command]
+pub async fn docs_update_from_gap(
+    core: CoreState<'_>,
+    id: String,
+    path: String,
+    index: usize,
+) -> Res<crate::docs::Page> {
+    core.inner()
+        .docs_update_from_gap(&id, &path, index)
+        .await
+        .map_err(err)
 }
 
 /// The spec already in the project (`SPEC.md`, a `docs/` folder…), offered for import.

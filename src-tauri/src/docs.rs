@@ -673,6 +673,10 @@ pub struct Space {
     pub root: PathBuf,
     /// Where the text extracted from the documents is kept (Escouade's folder); None: not kept.
     pub text_dir: Option<PathBuf>,
+    /// The folder that holds the `documents/` of this space when they live elsewhere (ESC-263: the
+    /// copy a ticket's agent writes its spec in, on a fixed branch, reads and adds documents on
+    /// that branch); None: under `root`.
+    pub documents_root: Option<PathBuf>,
 }
 
 fn is_link(p: &Path) -> bool {
@@ -742,12 +746,17 @@ impl Space {
         Self {
             root: root.into(),
             text_dir,
+            documents_root: None,
         }
     }
 
     /// `.escouade/<sub>`, refused when it (or `.escouade`) is a link or leaves the project.
     pub fn dir(&self, sub: &str) -> Result<PathBuf> {
-        let dir = self.root.join(ROOT).join(sub);
+        let root = match &self.documents_root {
+            Some(other) if sub == DOCUMENTS => other,
+            _ => &self.root,
+        };
+        let dir = root.join(ROOT).join(sub);
         if let Some(why) = unsafe_dir(&dir) {
             bail!(why);
         }
@@ -810,9 +819,40 @@ impl Space {
         Ok(String::from_utf8_lossy(&std::fs::read(path)?).into_owned())
     }
 
+    // ----- the files as they are (ESC-263: a ticket's copy, poured at its validation) -----
+
+    /// The Markdown files under `.escouade/<sub>` (the spec or the decisions): relative, with `/`.
+    pub(crate) fn md_files(&self, sub: &str) -> Vec<String> {
+        let Ok(dir) = self.dir(sub) else {
+            return Vec::new();
+        };
+        walk(&dir, md_name, MAX_FILES)
+            .into_iter()
+            .map(|(rel, _)| rel)
+            .collect()
+    }
+
+    pub(crate) fn raw_read(&self, sub: &str, rel: &str) -> Result<String> {
+        let file = self.file(sub, rel)?;
+        self.read_text(&file)
+    }
+
+    pub(crate) fn raw_write(&self, sub: &str, rel: &str, text: &str) -> Result<()> {
+        let file = self.file(sub, rel)?;
+        self.write(&file, text.as_bytes())
+    }
+
+    pub(crate) fn raw_remove(&self, sub: &str, rel: &str) -> Result<()> {
+        let file = self.file(sub, rel)?;
+        if file.is_file() {
+            std::fs::remove_file(file)?;
+        }
+        Ok(())
+    }
+
     // ----- spec -----
 
-    fn pages(&self) -> Vec<Page> {
+    pub(crate) fn pages(&self) -> Vec<Page> {
         let Ok(dir) = self.dir(SPEC) else {
             return Vec::new();
         };

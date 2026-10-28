@@ -22,6 +22,8 @@ export default defineZone('docs', {
     drafts: { one: '{n} draft', other: '{n} drafts' },
     compared: 'compared to the code {when}',
     neverCompared: 'not compared to the code yet',
+    subjectCompared: 'compared to the code {when}',
+    subjectNeverCompared: 'not compared to the code yet',
     newPage: 'New page',
     treeLabel: 'Pages of the specification',
     mapLabel: 'Subjects of the specification',
@@ -32,6 +34,19 @@ export default defineZone('docs', {
     unsharedMark: 'to share',
     unsharedTip: 'Changed here, not shared with the team yet',
     openSubject: 'Open the subject {name}',
+  },
+
+  // “Compare to the code” (ESC-263): a short agent reads the code and says where the spec says otherwise.
+  compare: {
+    all: 'Compare to the code',
+    allTip: 'An agent reads the code and notes where each page says otherwise (tokens, page by page)',
+    page: 'Compare to the code',
+    pageTip: 'An agent reads the code and notes where this page says otherwise',
+    running: { one: 'Comparing… ({count} page)', other: 'Comparing… ({count} pages)' },
+    runningOne: 'Comparing to the code…',
+    done: { one: '{count} page compared', other: '{count} pages compared' },
+    noGap: 'no gap',
+    failed: { one: '{count} page not compared', other: '{count} pages not compared' },
   },
 
   moved: {
@@ -55,6 +70,10 @@ export default defineZone('docs', {
     gaps: { one: 'One gap with the code', other: '{count} gaps with the code' },
     openTicket: 'Open a ticket for the code',
     seeCode: 'See the code',
+    update: 'Update the spec',
+    updateTip: 'An agent reads the code and rewrites the page so that it says what the code does on this point',
+    updating: 'Updating…',
+    updated: 'Page updated from the code: it is among the changes to share.',
     noCode: 'The comparison didn’t say which files',
     ticketTitle: 'Align the code with the spec: {page}',
     ticketDescription:

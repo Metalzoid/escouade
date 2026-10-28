@@ -4,6 +4,8 @@
   import { fAgo, fSize } from '../../lib/format';
   import { docsStore } from '../../lib/docs.svelte';
   import {
+    comparedLine,
+    latestCompared,
     movedLines,
     newPagePath,
     pageState,
@@ -83,6 +85,17 @@
     openPage(path);
   }
 
+  /** « Comparer au code » (ESC-263): every page, by the short agent that reads the code; their gaps come back on the
+   * map as each one is done. */
+  const comparing = $derived(app.docsComparing[project.id] ?? []);
+  async function compareAll() {
+    app.docsComparing[project.id] = ['*'];
+    const done = await app.run(api.docsCompare(project.id, null));
+    if (app.docsComparing[project.id]?.[0] === '*') app.docsComparing[project.id] = [];
+    if (done) app.toast(comparedLine(done));
+    await docsStore.load(project.id);
+  }
+
   /** The spec the project has, whose cut is being looked at before an import. */
   let importing = $state<DocsCandidate | null>(null);
 </script>
@@ -105,7 +118,15 @@
   {/snippet}
   {#snippet actions()}
     {#if tree}
-      <!-- « Demander à la spec » comes with the discussions (ESC-261). -->
+      <!-- « Demander à la spec » comes with the discussions (ESC-261). « Comparer au code » here is the whole spec; an open
+        page has its own. -->
+      {#if tree.pages && !page}
+        <button class="btn" data-compare="all" disabled={comparing.length > 0} use:tip={t('docs.compare.allTip')} onclick={compareAll}
+          ><Icon name="swap" size={14} />{comparing.length
+            ? t('docs.compare.running', { count: comparing.length })
+            : t('docs.compare.all')}</button
+        >
+      {/if}
       <button class="btn primary" onclick={() => startNew()}><Icon name="plus" size={14} />{t('docs.spec.newPage')}</button>
     {/if}
   {/snippet}
@@ -219,6 +240,7 @@
           {#each tree.subjects as s (s.name)}
             {@const st = subjectState(s)}
             {@const n = subjectCounts(s)}
+            {@const at = latestCompared(s.pages)}
             <li>
               <button
                 class="card {st}"
@@ -238,6 +260,13 @@
                   <span>{t('docs.count.tickets', { count: n.tickets })}</span>
                   <span>{t('docs.count.decisions', { count: n.decisions })}</span>
                 </span>
+                <span class="c-when" data-compared={at ?? null}
+                  >{s.pages.some((p) => comparing.includes(p.path))
+                    ? t('docs.compare.runningOne')
+                    : at
+                      ? t('docs.spec.subjectCompared', { when: fAgo(at / 1000, app.now) })
+                      : t('docs.spec.subjectNeverCompared')}</span
+                >
               </button>
             </li>
           {/each}
@@ -517,6 +546,10 @@
     gap: 4px 14px;
     color: var(--dim);
     font-size: 12.5px;
+  }
+  .c-when {
+    color: var(--dim);
+    font-size: 12px;
   }
   .card.moved {
     align-items: center;

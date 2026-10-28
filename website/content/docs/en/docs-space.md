@@ -32,10 +32,20 @@ A page shows its Markdown text formatted and, beside it, its sources (the docume
 
 When the comparison found **gaps with the code**, they are at the top of the page, each with what differs and the files concerned:
 
+- “Update the spec”: an agent reads the code and rewrites the page so that it says what the code does on this point; the gap goes, and the page is among the changes to share.
 - “Open a ticket for the code” opens the window of a new ticket, its title and description already written from the gap: the code is what must follow the spec.
 - “See the code” opens the file the gap names in the [editor](editor).
 
 “Edit” opens the page in a simple editor: its title and its text. “Save” writes the file, its header (sources, tickets, decisions, gaps) kept as it is. With the current branch, “Open in the editor” opens the page’s file in Escouade’s editor.
+
+## The spec always up to date
+
+The spec follows the code in two ways.
+
+- **The tickets’ agents keep it.** Each ticket’s instructions ask its agent, when the ticket changes how the product behaves, to update the pages it touches and to leave a decision that says what changed and why, before handing it in. Nothing stops the approval: the review is where it shows. With the current branch, those changes go in the ticket’s branch and are merged with its code. With a [fixed branch](#the-docs-branch), they wait in a copy Escouade keeps, and are poured on the docs branch **only when the ticket is approved**: the spec never tells of a behavior not merged yet. What the team wrote on the branch meanwhile stays.
+- **The comparison to the code.** After each ticket approved and merged, a short agent reads the code, changing nothing, and compares the pages the ticket touches: those it changed, those that name it, and those that talk of its files or their symbols (by the [code index](code-index) when it is on). What it finds shows on the map of the subjects (“1 gap”, “compared to the code 2 h ago”) and at the top of the page.
+
+“Compare to the code” does it on demand: at the top of the specification for every page (40 at most, those compared longest ago first), or at the top of a page for that page alone. Each page compared costs tokens, on the account and harness of “Model for written texts”.
 
 ## The decisions
 

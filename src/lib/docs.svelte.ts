@@ -30,6 +30,8 @@ class DocsStore {
     if (this.#asked[projectId] !== n) return;
     if (tree.status === 'fulfilled') {
       this.tree[projectId] = tree.value;
+      const comparing = tree.value.comparing ?? [];
+      if ((app.docsComparing[projectId] ?? []).join('|') !== comparing.join('|')) app.docsComparing[projectId] = comparing;
       delete this.error[projectId];
     } else {
       this.error[projectId] = String(tree.reason);

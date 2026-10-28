@@ -373,6 +373,8 @@ class AppState {
   boardIssues = $state<Record<string, string>>({});
   /** What each project's docs have to share (ESC-257), by project id: the status bar says « N changements à partager ». */
   docsShare = $state<Record<string, { pending: number; conflict: DocsConflict | null }>>({});
+  /** The pages of each project being compared to the code (ESC-263). */
+  docsComparing = $state<Record<string, string[]>>({});
   /** Why no ticket of any board starts for now (a quota window, a usage limit), as the backend says. */
   autopilotPause = $state<AutopilotPause | null>(null);
   /** The same for the paused projects that prefer an account, by project (they wait for that account alone). */
@@ -680,6 +682,9 @@ class AppState {
         break;
       case 'docsShare':
         this.docsShare[e.projectId] = { pending: e.pending, conflict: e.conflict };
+        break;
+      case 'docsCompared':
+        this.docsComparing[e.projectId] = e.comparing;
         break;
       case 'boardIssue':
         if (e.issue) this.boardIssues[e.projectId] = e.issue;

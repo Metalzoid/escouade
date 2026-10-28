@@ -2285,6 +2285,8 @@ export type UiEvent =
   | { type: 'voice'; voice: VoiceEvent }
   /** What a project's docs have to share (the changes not shared yet), and the conflict a « Partager » stopped on. */
   | { type: 'docsShare'; projectId: string; pending: number; conflict: DocsConflict | null }
+  /** The pages of a project being compared to the code (ESC-263), told when one starts or ends. */
+  | { type: 'docsCompared'; projectId: string; comparing: string[] }
   /** Lines a step of the setup of an agent's worktree wrote since the last event, `total` counting all it wrote; a step starts with none. */
   | ({ type: 'setupOutput'; agentId: string } & SetupOutput);
 
@@ -2714,6 +2716,16 @@ export interface DocsTree {
   subjects: DocsSubject[];
   /** Only when the spec has no page. */
   existingSpec: DocsCandidate[];
+  /** The pages being compared to the code now (ESC-263). */
+  comparing?: string[];
+}
+
+/** What a « Comparer au code » did (ESC-263). */
+export interface DocsCompared {
+  pages: number;
+  gaps: number;
+  failed: number;
+  error?: string;
 }
 
 export interface DocsHit {

@@ -8,6 +8,8 @@
 //!   Escouade's data (`DataDir::project_files`), or the folder where git already has that branch
 //!   checked out. Escouade writes the files there and does nothing else with the branch: it never
 //!   merges it anywhere (the team does, or the branch is `main`), and never commits nor pushes.
+//!   A ticket's agent works on a copy of it, poured on the branch when its ticket is validated
+//!   (`docsticket`, ESC-263).
 //!
 //! The text extracted from the documents is kept in the data folder too (`Space::text_dir`).
 
@@ -76,10 +78,12 @@ impl<R: Runtime> Core<R> {
         if branch.is_empty() {
             return Ok(Space::new(self.docs_current(&project, agent), text));
         }
-        Ok(Space::new(
-            self.docs_worktree(&project, &branch).await?,
-            text,
-        ))
+        let fixed = Space::new(self.docs_worktree(&project, &branch).await?, text);
+        // A ticket's agent works on a copy, poured on the branch when its ticket is validated.
+        match agent.and_then(|a| self.ticket_key_of_agent(&project.id, a)) {
+            Some(key) => self.docs_ticket_space(&project.id, &key, fixed),
+            None => Ok(fixed),
+        }
     }
 
     /// The folder the branch checked out where the caller works holds: the agent's own (a worktree

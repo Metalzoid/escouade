@@ -140,7 +140,7 @@ test('the Docs tab imports the spec found, shows its subjects, a page and its ga
   await expect(gaps).toContainText('le code accepte 4 échéances');
   await expect(gaps.getByRole('button', { name: 'Ouvrir un ticket pour le code' })).toBeVisible();
   await expect(gaps.getByRole('button', { name: 'Voir le code' })).toBeEnabled();
-  await expect(page.getByRole('button', { name: 'Mettre la spec à jour' })).toHaveCount(0);
+  await expect(gaps.getByRole('button', { name: 'Mettre la spec à jour' })).toBeVisible();
   await expect(page.locator('.p-body strong', { hasText: 'au plus' })).toBeVisible();
   await expect(page.locator('.sources')).toContainText('docs/SPEC.md');
   await shoot(page, 'page');

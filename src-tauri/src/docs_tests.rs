@@ -16,7 +16,7 @@ fn space(name: &str) -> (Space, PathBuf) {
 
 /// One folder however it is spelt: git answers `C:/…/runneradmin/…`, the temporary folder
 /// `C:…RUNNER~1…`.
-fn same(a: &Path, b: &Path) -> bool {
+pub(crate) fn same(a: &Path, b: &Path) -> bool {
     crate::paths::same_folder(&a.to_string_lossy(), &b.to_string_lossy())
 }
 
@@ -28,7 +28,7 @@ fn remove_dir_link(link: &Path) {
     std::fs::remove_dir(link).unwrap();
 }
 
-fn proposal(title: &str) -> Decision {
+pub(crate) fn proposal(title: &str) -> Decision {
     Decision {
         title: title.into(),
         context: "Les clients payent en plusieurs fois.".into(),
@@ -491,7 +491,7 @@ fn a_spec_the_project_already_has_is_offered_as_a_candidate() {
     }
 }
 
-fn set_docs_branch(
+pub(crate) fn set_docs_branch(
     h: &crate::core_tests::Harness,
     id: &str,
     branch: &str,

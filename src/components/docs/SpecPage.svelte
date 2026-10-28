@@ -5,6 +5,7 @@
   import { t } from '../../lib/i18n';
   import { fAgo } from '../../lib/format';
   import { docsStore } from '../../lib/docs.svelte';
+  import { comparedLine } from '../../lib/docs';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import { tip } from '../../lib/tip';
@@ -12,7 +13,8 @@
 
   // A page of the spec (ESC-258, docs/FACTORY.md « La spécification »): on top its gaps with the code and what settles
   // them, then its Markdown rendered, or written in a simple editor (or the file in Escouade's editor); beside it, its
-  // sources, tickets and decisions. « Mettre la spec à jour » needs the discussions (ESC-261): not shown until then.
+  // sources, tickets and decisions. « Comparer au code » and « Mettre la spec à jour » (ESC-263) ask the short agent that
+  // reads the code.
   let { project, path, onback }: { project: Project; path: string; onback: () => void } = $props();
 
   let page = $state<DocsPage | null>(null);
@@ -55,6 +57,29 @@
     page = done;
     editing = false;
     app.toast(t('docs.page.saved'));
+    void docsStore.load(project.id);
+  }
+
+  /** This page being compared to the code, here or after a ticket (ESC-263). */
+  const comparing = $derived((app.docsComparing[project.id] ?? []).some((p) => p === path || p === '*'));
+  async function compare() {
+    app.docsComparing[project.id] = [...(app.docsComparing[project.id] ?? []), path];
+    const done = await app.run(api.docsCompare(project.id, [path]));
+    app.docsComparing[project.id] = (app.docsComparing[project.id] ?? []).filter((p) => p !== path);
+    if (done) app.toast(comparedLine(done));
+    await docsStore.load(project.id);
+    await load();
+  }
+
+  /** « Mettre la spec à jour » on a gap: the page rewritten to say what the code does there, the gap gone. */
+  let updating = $state<number | null>(null);
+  async function update(i: number) {
+    updating = i;
+    const done = await app.run(api.docsUpdateFromGap(project.id, path, i));
+    updating = null;
+    if (!done) return;
+    page = done;
+    app.toast(t('docs.page.updated'));
     void docsStore.load(project.id);
   }
 
@@ -120,6 +145,9 @@
               ><Icon name="code" size={14} />{t('docs.page.inEditor')}</button
             >
           {/if}
+          <button class="btn ghost" data-compare="page" disabled={comparing} use:tip={t('docs.compare.pageTip')} onclick={compare}
+            ><Icon name="swap" size={14} />{comparing ? t('docs.compare.runningOne') : t('docs.compare.page')}</button
+          >
           <button class="btn" onclick={() => (editing = true)}><Icon name="edit" size={14} />{t('docs.page.edit')}</button>
         {/if}
       </div>
@@ -133,7 +161,9 @@
             <p>{g.text}</p>
             {#if g.code.length}<p class="files mono">{g.code.join(' · ')}</p>{/if}
             <div class="g-acts">
-              <!-- « Mettre la spec à jour » comes with the discussions (ESC-261). -->
+              <button class="btn primary" disabled={updating !== null} use:tip={t('docs.page.updateTip')} onclick={() => update(i)}
+                ><Icon name="edit" size={14} />{updating === i ? t('docs.page.updating') : t('docs.page.update')}</button
+              >
               <button class="btn" onclick={() => openTicket(g)}><Icon name="kanban" size={14} />{t('docs.page.openTicket')}</button>
               <button
                 class="btn ghost"
@@ -159,10 +189,12 @@
       </div>
       <aside class="meta">
         {#if page.draft}<p class="draft">{t('docs.page.draft')}</p>{/if}
-        <p class="when">
-          {page.compared && !Number.isNaN(Date.parse(page.compared))
-            ? t('docs.page.compared', { when: fAgo(Date.parse(page.compared) / 1000, app.now) })
-            : t('docs.page.neverCompared')}
+        <p class="when" data-compared={page.compared || null}>
+          {comparing
+            ? t('docs.compare.runningOne')
+            : page.compared && !Number.isNaN(Date.parse(page.compared))
+              ? t('docs.page.compared', { when: fAgo(Date.parse(page.compared) / 1000, app.now) })
+              : t('docs.page.neverCompared')}
         </p>
         <h4>{t('docs.page.sources')}</h4>
         {#if page.sources.length}

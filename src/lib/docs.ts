@@ -1,6 +1,7 @@
 // The Docs tab (ESC-258, docs/FACTORY.md § 3): what its screens tell of the spec, worked out from what the backend reads
 // in `.escouade/` of the branch of the docs.
-import type { DocsMoved, DocsPageInfo, DocsSubject, DocsTree } from './types';
+import { t } from './i18n';
+import type { DocsCompared, DocsMoved, DocsPageInfo, DocsSubject, DocsTree } from './types';
 
 /** The three spaces of the tab. */
 export type DocsSpaceId = 'spec' | 'decisions' | 'documents';
@@ -32,20 +33,26 @@ export function subjectCounts(s: DocsSubject) {
   };
 }
 
-/** What the head of the spec says: its pages up to date, its gaps, its drafts, and when it was last compared to the code. */
-export function specSummary(tree: DocsTree) {
-  const pages = tree.subjects.flatMap((s) => s.pages);
-  const compared = pages
+/** The latest comparison of the pages to the code, in milliseconds since the epoch; null: never compared. */
+export function latestCompared(pages: DocsPageInfo[]): number | null {
+  const at = pages
     .map((p) => Date.parse(p.compared))
     .filter((n) => !Number.isNaN(n))
     .sort((a, b) => b - a)[0];
+  return at ?? null;
+}
+
+/** What the head of the spec says: its pages up to date, its gaps, its drafts, and when it was last compared to the code. */
+export function specSummary(tree: DocsTree) {
+  const pages = tree.subjects.flatMap((s) => s.pages);
+  const compared = latestCompared(pages);
   return {
     pages: pages.length,
     ok: pages.filter((p) => pageState(p) === 'ok').length,
     gaps: pages.reduce((n, p) => n + p.gaps, 0),
     drafts: pages.filter((p) => p.draft).length,
     /** Milliseconds since the epoch of the latest comparison; null: never compared. */
-    compared: compared ?? null,
+    compared,
   };
 }
 
@@ -170,4 +177,14 @@ export function readState(f: { reads: number; cited: number; readable: boolean }
 /** The window's path of a document, as a page of the spec cites it: `documents/<path>`. */
 export function documentCitation(path: string): string {
   return `documents/${path}`;
+}
+
+/** What a « Comparer au code » says once done (ESC-263): the pages compared, their gaps, those that could not be. */
+export function comparedLine(done: DocsCompared): string {
+  const parts = [
+    t('docs.compare.done', { count: done.pages }),
+    done.gaps ? t('docs.count.gaps', { count: done.gaps }) : t('docs.compare.noGap'),
+  ];
+  if (done.failed) parts.push(t('docs.compare.failed', { count: done.failed }));
+  return parts.join(' · ');
 }

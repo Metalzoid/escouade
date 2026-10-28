@@ -2624,6 +2624,12 @@ pub enum UiEvent {
         pending: u32,
         conflict: Option<crate::docsshare::Conflict>,
     },
+    /// The pages of a project being compared to the code (ESC-263), told when one starts or ends.
+    #[serde(rename_all = "camelCase")]
+    DocsCompared {
+        project_id: String,
+        comparing: Vec<String>,
+    },
 }
 
 pub fn now_ms() -> i64 {

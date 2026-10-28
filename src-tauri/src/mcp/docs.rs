@@ -17,7 +17,7 @@ use super::tools::ToolError;
 use super::Caller;
 use crate::core::Core;
 use crate::docs::{self, Change, Decision, Space, State};
-use crate::model::{Column, Project};
+use crate::model::Project;
 use serde::Deserialize;
 use serde_json::json;
 use tauri::Runtime;
@@ -288,6 +288,11 @@ pub(super) async fn write<R: Runtime>(
         path = format!("{subject}/{path}");
     }
     let exists = space.spec_read(&path).is_ok();
+    // A ticket's agent that writes a page: its ticket among the page's (ESC-263).
+    let own = match caller {
+        Caller::Agent(id) => core.ticket_key_of_agent(&project.id, id),
+        _ => None,
+    };
     if !exists && args.body.as_deref().is_none_or(|b| b.trim().is_empty()) {
         return Err(failed(anyhow::anyhow!(tr!(
             "Une page nouvelle a besoin de son texte (body).",
@@ -319,6 +324,11 @@ pub(super) async fn write<R: Runtime>(
             }
             if let Some(v) = &args.decisions {
                 p.decisions = v.clone();
+            }
+            if let Some(k) = &own {
+                if !p.tickets.iter().any(|x| x.eq_ignore_ascii_case(k)) {
+                    p.tickets.push(k.clone());
+                }
             }
         })
         .map_err(failed)?;
@@ -431,16 +441,7 @@ fn decision_of(f: DecisionFields) -> Decision {
 /// accepts it (`docs_accept_ticket_decisions`).
 fn from_ticket<R: Runtime>(core: &Core<R>, caller: &Caller, project: &Project, d: &mut Decision) {
     let Caller::Agent(id) = caller else { return };
-    let key = core
-        .tickets
-        .read()
-        .iter()
-        .find(|t| {
-            t.agent_id.as_deref() == Some(id.as_str())
-                && t.project_id == project.id
-                && matches!(t.column, Column::Doing | Column::Review)
-        })
-        .map(|t| t.key.clone());
+    let key = core.ticket_key_of_agent(&project.id, id);
     if let Some(key) = key {
         d.origin = "ticket".into();
         d.origin_ref = key;

@@ -6661,6 +6661,28 @@ impl<R: Runtime> Core<R> {
         .await
     }
 
+    /// `read_project` in `cwd` (a folder of `project_id`'s), within `limit` (ESC-263: the
+    /// comparison of the spec to the code).
+    pub(crate) async fn read_folder(
+        &self,
+        project_id: &str,
+        cwd: &Path,
+        system: &str,
+        prompt: &str,
+        limit: Duration,
+    ) -> Result<String> {
+        self.ask_harness(Ask {
+            weight: Weight::Reading,
+            cwd,
+            system,
+            prompt,
+            limit,
+            agent: None,
+            project: Some(project_id),
+        })
+        .await
+    }
+
     pub(crate) async fn auto_name(self: &Arc<Self>, id: &str, prompt: &str) {
         match self.generate_name(id, prompt).await {
             Ok(Some(slug)) => {

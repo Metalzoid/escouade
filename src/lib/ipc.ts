@@ -82,6 +82,7 @@ import type {
   Workflow,
   WorkflowTrack,
   DocsCandidate,
+  DocsCompared,
   DocsDecision,
   DocsCheck,
   DocsDocHit,
@@ -441,6 +442,10 @@ export const api = {
   /** `subject`: the name the page's subject is shown under (a new page's), left as it is when null. */
   docsSpecWrite: (id: string, path: string, title: string | null, body: string | null, subject: string | null = null) =>
     invoke<DocsPage>('docs_spec_write', { id, path, title, body, subject }),
+  /** « Comparer au code » (ESC-263): `pages`, or the whole spec when null; ends with them compared. */
+  docsCompare: (id: string, pages: string[] | null) => invoke<DocsCompared>('docs_compare', { id, pages }),
+  /** « Mettre la spec à jour » on gap `index` of a page: the page rewritten to say what the code does there. */
+  docsUpdateFromGap: (id: string, path: string, index: number) => invoke<DocsPage>('docs_update_from_gap', { id, path, index }),
   docsSpecSearch: (id: string, query: string) => invoke<DocsHit[]>('docs_spec_search', { id, query }),
   docsDecisions: (id: string) => invoke<DocsDecision[]>('docs_decisions', { id }),
   docsDecisionPropose: (id: string, number: number | null, decision: Partial<DocsDecision>) =>

@@ -32,10 +32,20 @@ Une page montre son texte Markdown mis en forme et, à côté, ses sources (les 
 
 Quand la comparaison a trouvé **des écarts avec le code**, ils sont en tête de la page, chacun avec ce qui diffère et les fichiers concernés :
 
+- « Mettre la spec à jour » : un agent lit le code et réécrit la page pour qu’elle dise ce que fait le code sur ce point ; l’écart disparaît, et la page fait partie des changements à partager.
 - « Ouvrir un ticket pour le code » ouvre la fenêtre d’un nouveau ticket, son titre et sa description déjà écrits depuis l’écart : c’est le code qui doit suivre la spec.
 - « Voir le code » ouvre dans l’[éditeur](editor) le fichier que l’écart nomme.
 
 « Modifier » ouvre la page dans un éditeur simple : son titre et son texte. « Enregistrer » écrit le fichier, son en-tête (sources, tickets, décisions, écarts) gardé tel quel. Avec la branche courante, « Ouvrir dans l’éditeur » ouvre le fichier de la page dans l’éditeur d’Escouade.
+
+## La spec toujours à jour
+
+La spec suit le code de deux façons.
+
+- **Les agents des tickets la tiennent.** La consigne de chaque ticket demande à son agent, quand le ticket change le comportement du produit, de mettre à jour les pages qu’il touche et de laisser une décision qui dit ce qui a changé et pourquoi, avant de le rendre. Rien ne bloque la validation : c’est à la revue de le voir. Avec la branche courante, ces changements partent dans la branche du ticket et se fusionnent avec son code. Avec une [branche fixe](#la-branche-des-docs), ils attendent dans une copie tenue par Escouade, et ne sont versés sur la branche des docs **qu’à la validation du ticket** : la spec ne décrit jamais un comportement pas encore fusionné. Ce que l’équipe a écrit entre-temps sur la branche reste.
+- **La comparaison au code.** Après chaque ticket validé et fusionné, un agent court lit le code, sans rien modifier, et compare les pages que le ticket touche : celles qu’il a modifiées, celles qui le citent, et celles qui parlent de ses fichiers ou de leurs symboles (par l’[index du code](code-index) s’il est allumé). Ce qu’il relève s’affiche sur la carte des sujets (« 1 écart », « comparé au code il y a 2 h ») et en haut de la page.
+
+« Comparer au code » le fait à la demande : en tête de la spécification pour toutes les pages (40 au plus, les moins récemment comparées d’abord), ou en tête d’une page pour elle seule. Chaque page comparée coûte des tokens, sur le compte et le harness de « Modèle des textes rédigés ».
 
 ## Les décisions
 
