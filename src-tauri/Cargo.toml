@@ -16,7 +16,10 @@ ort-dynamic = ["ort/load-dynamic"]
 
 [lib]
 name = "escouade_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# The app and its bins link the rlib alone. The staticlib and cdylib of Tauri's template are for iOS and Android,
+# which Escouade does not target: the debug cdylib's program database had grown past the MSVC linker's limit
+# (LNK1140, 2026-10-28).
+crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -136,6 +139,12 @@ tauri-plugin-notification = "2"
 whisper-rs = { version = "0.16", features = ["log_backend", "metal"] }
 # The integrations' secrets in the Keychain.
 keyring = { version = "3.6", features = ["apple-native"] }
+
+# The dependencies keep their line tables only (backtraces still say where), Escouade its full debug info: with
+# everything in full, the program database of the debug build went over the MSVC linker's limit (LNK1140, 2026-10-28,
+# when the drive's PDF and Word readers came in).
+[profile.dev.package."*"]
+debug = "line-tables-only"
 
 [profile.release]
 codegen-units = 1
