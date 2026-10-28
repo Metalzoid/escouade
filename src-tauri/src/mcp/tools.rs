@@ -1459,7 +1459,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Propose a decision about the product: a new proposal (state proposed, the next number), or the revision of a proposal still open (number). It is not decided until a human accepts it in the window, and an accepted decision is never rewritten: replace_decision replaces it. Give it a title, its context, what is decided and what follows, where it comes from and the spec pages it changed (changes, from write_spec_page). Nothing is committed nor pushed.",
+        description = "Propose a decision about the product: a new proposal (state proposed, the next number), or the revision of a proposal still open (number). It is not decided until a human accepts it in the window (the agent of a ticket: when its ticket is validated; its decisions say they come from it), and an accepted decision is never rewritten: replace_decision replaces it. Give it a title, its context, what is decided and what follows, where it comes from and the spec pages it changed (changes, from write_spec_page). Nothing is committed nor pushed.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,

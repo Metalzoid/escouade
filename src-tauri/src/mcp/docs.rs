@@ -17,7 +17,7 @@ use super::tools::ToolError;
 use super::Caller;
 use crate::core::Core;
 use crate::docs::{self, Change, Decision, Space, State};
-use crate::model::Project;
+use crate::model::{Column, Project};
 use serde::Deserialize;
 use serde_json::json;
 use tauri::Runtime;
@@ -427,15 +427,35 @@ fn decision_of(f: DecisionFields) -> Decision {
     }
 }
 
+/// The decision a ticket's agent leaves comes from its ticket, in this project: its validation
+/// accepts it (`docs_accept_ticket_decisions`).
+fn from_ticket<R: Runtime>(core: &Core<R>, caller: &Caller, project: &Project, d: &mut Decision) {
+    let Caller::Agent(id) = caller else { return };
+    let key = core
+        .tickets
+        .read()
+        .iter()
+        .find(|t| {
+            t.agent_id.as_deref() == Some(id.as_str())
+                && t.project_id == project.id
+                && matches!(t.column, Column::Doing | Column::Review)
+        })
+        .map(|t| t.key.clone());
+    if let Some(key) = key {
+        d.origin = "ticket".into();
+        d.origin_ref = key;
+    }
+}
+
 pub(super) async fn propose<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,
     args: ProposeDecisionArgs,
 ) -> Result<String, ToolError> {
     let (project, space) = open(core, caller, &args.project).await?;
-    let d = space
-        .decision_propose(args.number, decision_of(args.fields))
-        .map_err(failed)?;
+    let mut d = decision_of(args.fields);
+    from_ticket(core, caller, &project, &mut d);
+    let d = space.decision_propose(args.number, d).map_err(failed)?;
     core.docs_changed(&project.id).await;
     json(&json!({ "number": d.number, "title": d.title, "state": d.state, "date": d.date }))
 }
@@ -446,9 +466,9 @@ pub(super) async fn replace<R: Runtime>(
     args: ReplaceDecisionArgs,
 ) -> Result<String, ToolError> {
     let (project, space) = open(core, caller, &args.project).await?;
-    let d = space
-        .decision_replace(args.number, decision_of(args.fields))
-        .map_err(failed)?;
+    let mut d = decision_of(args.fields);
+    from_ticket(core, caller, &project, &mut d);
+    let d = space.decision_replace(args.number, d).map_err(failed)?;
     core.docs_changed(&project.id).await;
     json(&json!({
         "number": d.number,

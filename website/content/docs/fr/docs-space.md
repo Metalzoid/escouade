@@ -37,6 +37,20 @@ Quand la comparaison a trouvé **des écarts avec le code**, ils sont en tête d
 
 « Modifier » ouvre la page dans un éditeur simple : son titre et son texte. « Enregistrer » écrit le fichier, son en-tête (sources, tickets, décisions, écarts) gardé tel quel. Avec la branche courante, « Ouvrir dans l’éditeur » ouvre le fichier de la page dans l’éditeur d’Escouade.
 
+## Les décisions
+
+L’espace Décisions est un registre, pas un document : une ligne par décision sur le produit, la plus récente en tête, avec son numéro, son titre, d’où elle vient (un brainstorm, une discussion, un ticket, un document), son état, ce qu’elle a changé dans la spec et sa date. En tête : combien de décisions sont acceptées, proposées et remplacées. Le menu « Toutes » filtre le registre par état.
+
+Un clic sur une ligne ouvre son détail à droite : le contexte, la décision, ses conséquences, les pages de la spec qu’elle a changées (avec les lignes ajoutées et retirées ; un clic ouvre la page), ses liens (tickets, origine, documents), et ce qu’elle remplace ou ce qui la remplace.
+
+- **Proposée** : un agent, ou quelqu’un de l’équipe, la propose ; elle ne vaut décision qu’une fois acceptée. « Accepter », sur sa ligne ou dans son détail, l’accepte d’un clic, à ton nom.
+- **Acceptée** : elle ne se réécrit plus. Pour revenir dessus, « La remplacer » propose une nouvelle décision qui la remplace.
+- **Remplacée** : la nouvelle décision a été acceptée ; l’ancienne reste dans le registre, telle quelle, et dit par laquelle.
+
+« Proposer une décision » en écrit une à la main : son titre, son contexte, la décision, ses conséquences, et la décision acceptée qu’elle remplace s’il y en a une.
+
+Les agents proposent leurs décisions par le [serveur MCP](mcp). Celle que laisse l’agent d’un ticket est acceptée quand tu valides le ticket : elle part dans le même commit que son code. Chaque décision est un fichier de `.escouade/decisions/`, numéroté (`0014-tarif-famille.md`), qui se partage avec les autres docs.
+
 ## Importer une spec existante
 
 Un projet sans spec part d’un espace vide. Si Escouade trouve une spec dans le projet (un `SPEC.md` à la racine ou dans `docs/`, un dossier `spec` ou `specs`, un dossier `docs/` de fichiers Markdown), il la propose :

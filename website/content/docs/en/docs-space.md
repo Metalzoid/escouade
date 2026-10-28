@@ -37,6 +37,20 @@ When the comparison found **gaps with the code**, they are at the top of the pag
 
 “Edit” opens the page in a simple editor: its title and its text. “Save” writes the file, its header (sources, tickets, decisions, gaps) kept as it is. With the current branch, “Open in the editor” opens the page’s file in Escouade’s editor.
 
+## The decisions
+
+The Decisions space is a register, not a document: a row per decision on the product, the latest first, with its number, its title, where it comes from (a brainstorm, a discussion, a ticket, a document), its state, what it changed in the spec and its date. On top: how many decisions are accepted, proposed and superseded. The “All” menu filters the register by state.
+
+A click on a row opens its detail on the right: the context, the decision, its consequences, the spec pages it changed (with the lines added and removed; a click opens the page), its links (tickets, origin, documents), and what it replaces or what replaces it.
+
+- **Proposed**: an agent, or someone of the team, proposes it; it is a decision only once accepted. “Accept”, on its row or in its detail, accepts it in one click, in your name.
+- **Accepted**: it is no longer rewritten. To go back on it, “Replace it” proposes a new decision that replaces it.
+- **Superseded**: the new decision was accepted; the old one stays in the register, as it was, and says by which.
+
+“Propose a decision” writes one by hand: its title, its context, the decision, its consequences, and the accepted decision it replaces if there is one.
+
+The agents propose their decisions through the [MCP server](mcp). The one a ticket’s agent leaves is accepted when you approve the ticket: it goes in the same commit as its code. Each decision is a file of `.escouade/decisions/`, numbered (`0014-family-rate.md`), shared with the other docs.
+
 ## Importing an existing spec
 
 A project without a spec starts from an empty space. When Escouade finds a spec in the project (a `SPEC.md` at the root or in `docs/`, a `spec` or `specs` folder, a `docs/` folder of Markdown files), it offers it:

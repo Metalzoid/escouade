@@ -692,3 +692,68 @@ async fn a_large_file_asks_for_a_confirmation_before_it_goes_in_the_repository()
         .await
         .is_err());
 }
+
+#[tokio::test]
+async fn the_decision_a_tickets_agent_left_is_accepted_when_the_ticket_is_validated() {
+    let h = harness("docs-ticket-accept");
+    let (p, repo) = h.project(false).await;
+    {
+        let mut projects = h.core.projects.write();
+        projects
+            .iter_mut()
+            .find(|x| x.id == p.id)
+            .unwrap()
+            .user_name = "Léa".into();
+    }
+    let (t, wt) = crate::tickets_tests::reviewed(&h, &p.id, "Fichier [ok]").await;
+    // Where its agent writes the docs: its own worktree (the branch of the docs is the current one).
+    let agent = t.agent_id.clone().unwrap();
+    let s = h.core.docs_space(&p.id, Some(&agent)).await.unwrap();
+    assert!(same(&s.root, &wt), "{:?} {:?}", s.root, wt);
+    let mut own = proposal("Trois échéances");
+    own.origin = "ticket".into();
+    own.origin_ref = t.key.clone();
+    s.decision_propose(None, own).unwrap();
+    // Another ticket's, and one of a brainstorm, wait for a human.
+    let mut other = proposal("Relances par e-mail");
+    other.origin = "ticket".into();
+    other.origin_ref = "DEM-99".into();
+    s.decision_propose(None, other).unwrap();
+    s.decision_propose(None, proposal("Tarif famille")).unwrap();
+    h.core.ticket_approve(&t.id).await.unwrap();
+    assert_eq!(h.ticket(&t.id).column, crate::model::Column::Done);
+    // Merged with the ticket, accepted by the one who validated it.
+    let merged = h.core.docs_space(&p.id, None).await.unwrap();
+    assert!(same(&merged.root, &repo));
+    let states: Vec<(u32, State, String)> = merged
+        .decisions()
+        .into_iter()
+        .map(|d| (d.number, d.state, d.accepted_by))
+        .collect();
+    assert_eq!(
+        states,
+        vec![
+            (1, State::Accepted, "Léa".to_string()),
+            (2, State::Proposed, String::new()),
+            (3, State::Proposed, String::new()),
+        ]
+    );
+    // In the commit of the ticket, not left to share.
+    assert_eq!(git(&repo, &["status", "--porcelain"]), "");
+}
+
+#[test]
+fn a_decision_from_the_window_needs_only_its_fields() {
+    // « Proposer une décision » sends a title and its parts, nothing of its number, state or links.
+    let d: Decision = serde_json::from_value(serde_json::json!({
+        "title": "Tarif famille",
+        "context": "Les familles paient plein tarif.",
+        "decision": "-20 % dès le troisième membre.",
+        "consequences": "",
+    }))
+    .unwrap();
+    assert_eq!(
+        (d.title.as_str(), d.state, d.number, d.supersedes.len()),
+        ("Tarif famille", State::Proposed, 0, 0)
+    );
+}

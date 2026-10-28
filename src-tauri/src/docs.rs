@@ -411,8 +411,9 @@ pub struct Change {
     pub removed: u32,
 }
 
+/// Read from the window with only the fields it sends (« Proposer une décision »).
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct Decision {
     pub number: u32,
     pub title: String,

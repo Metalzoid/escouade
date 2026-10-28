@@ -2649,6 +2649,19 @@ impl<R: Runtime> Core<R> {
                 return Ok(());
             }
         }
+        // The decisions its agent left are accepted by this validation (docs/FACTORY.md), before
+        // the commit, so they are merged with the ticket. One that cannot be written stops nothing.
+        match self
+            .docs_accept_ticket_decisions(&project.id, &agent_id, &t.key)
+            .await
+        {
+            Ok(n) if !n.is_empty() => {
+                log::info!("ticket {}: decisions {n:?} accepted", t.key);
+                self.docs_changed(&project.id).await;
+            }
+            Ok(_) => {}
+            Err(e) => log::warn!("ticket {}: its decisions not accepted: {e:#}", t.key),
+        }
         // The files copied from the project into the worktree (`.env`…), the list the copy took:
         // never committed, merged or pushed. Git ignores them, so only an agent that forced one in
         // could; checked all the same.

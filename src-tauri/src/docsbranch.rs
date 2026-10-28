@@ -151,6 +151,31 @@ impl<R: Runtime> Core<R> {
             .decision_accept(number, &by)
     }
 
+    /// The ticket `key` validated: the proposals its agent left (origin `ticket`, its key) are
+    /// accepted, in the name of the one who validates, where that agent wrote them (its worktree,
+    /// committed and merged with the ticket, or the fixed branch's). The numbers accepted.
+    pub async fn docs_accept_ticket_decisions(
+        &self,
+        project_id: &str,
+        agent_id: &str,
+        key: &str,
+    ) -> Result<Vec<u32>> {
+        let project = self.project(project_id)?;
+        let space = self.docs_space(project_id, Some(agent_id)).await?;
+        let by = self.me_in(&project).name;
+        let mut done = Vec::new();
+        for d in space.decisions() {
+            if d.state == crate::docs::State::Proposed
+                && d.origin == "ticket"
+                && d.origin_ref.eq_ignore_ascii_case(key)
+            {
+                space.decision_accept(d.number, &by)?;
+                done.push(d.number);
+            }
+        }
+        Ok(done)
+    }
+
     /// A file the user chose put in the drive of the docs. A file over 50 MB asks to be
     /// confirmed (`confirmed`) first: it goes in the repository, and git keeps every version.
     pub async fn docs_add_file(

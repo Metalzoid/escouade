@@ -22,10 +22,13 @@
     return n === undefined ? '' : String(n);
   }
 
-  /** The dot of a space: the spec in the colour of a gap when it has one. */
+  /** The dot of a space: the spec in the colour of a gap when it has one, the decisions when one waits to be accepted. */
   function tone(id: DocsSpaceId) {
     if (id === 'spec') return summary?.gaps ? 'gap' : summary?.pages ? 'ok' : 'none';
-    if (id === 'decisions') return docsStore.decisions[project.id]?.length ? 'ok' : 'none';
+    if (id === 'decisions') {
+      const list = docsStore.decisions[project.id] ?? [];
+      return list.some((d) => d.state === 'proposed') ? 'gap' : list.length ? 'ok' : 'none';
+    }
     return 'none';
   }
 </script>

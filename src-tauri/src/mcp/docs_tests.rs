@@ -5,9 +5,10 @@
 
 use super::private_tests::make_private;
 use super::tools_tests::{
-    as_agent, call, external, other_project, project, put_agent, read, refused,
+    as_agent, call, external, link, other_project, project, put, put_agent, read, refused, ticket,
 };
 use crate::core_tests::{git, harness};
+use crate::model::Column;
 use serde_json::json;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -594,4 +595,41 @@ async fn code_not_pushed_is_published_by_the_tool_only_with_with_code() {
     .await;
     assert_eq!(done["kind"], "done");
     assert_ne!(git(&remote, &["rev-parse", "main"]), before);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_tickets_agent_proposes_its_decisions_as_its_tickets() {
+    let h = harness("mcp-docs-ticket-origin");
+    let p = project(&h).await;
+    let t = put(&h, ticket(&p, "DEM-1", "Le sien", Column::Doing, 1));
+    let worker = put_agent(&h, &p, "dem-1-le-sien", 1);
+    link(&h, &worker.id, &t.id);
+    let c = as_agent(&h, &worker.id).await;
+    // Whatever origin it gives: it comes from its ticket, which accepts it once validated.
+    read(
+        &c,
+        "propose_decision",
+        json!({ "project": p.id, "title": "Trois échéances", "origin": "brainstorm" }),
+    )
+    .await;
+    let d = read(&c, "read_decision", json!({ "project": p.id, "number": 1 })).await;
+    assert_eq!(
+        (d["origin"].clone(), d["originRef"].clone()),
+        (json!("ticket"), json!("DEM-1"))
+    );
+    c.cancel().await.unwrap();
+    // Claude outside Escouade, or an agent without a ticket, says where it comes from itself.
+    let e = external(&h).await;
+    read(
+        &e,
+        "propose_decision",
+        json!({ "project": p.id, "title": "Tarif famille", "origin": "brainstorm", "originRef": "Tarif famille" }),
+    )
+    .await;
+    let d = read(&e, "read_decision", json!({ "project": p.id, "number": 2 })).await;
+    assert_eq!(
+        (d["origin"].clone(), d["originRef"].clone()),
+        (json!("brainstorm"), json!("Tarif famille"))
+    );
+    e.cancel().await.unwrap();
 }
