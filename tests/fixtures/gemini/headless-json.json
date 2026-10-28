@@ -1,0 +1,91 @@
+{
+ "session_id": "1fa29b0b-12bc-47ef-bfd7-e00a748593de",
+ "response": "ok",
+ "stats": {
+  "models": {
+   "gemini-3.5-flash-lite": {
+    "api": {
+     "totalRequests": 1,
+     "totalErrors": 0,
+     "totalLatencyMs": 9,
+     "errorsByType": {}
+    },
+    "tokens": {
+     "input": 10,
+     "prompt": 10,
+     "candidates": 5,
+     "total": 15,
+     "cached": 0,
+     "thoughts": 0,
+     "tool": 0
+    },
+    "roles": {
+     "utility_router": {
+      "totalRequests": 1,
+      "totalErrors": 0,
+      "totalLatencyMs": 9,
+      "tokens": {
+       "input": 10,
+       "prompt": 10,
+       "candidates": 5,
+       "total": 15,
+       "cached": 0,
+       "thoughts": 0,
+       "tool": 0
+      }
+     }
+    }
+   },
+   "gemini-3.1-pro-preview": {
+    "api": {
+     "totalRequests": 1,
+     "totalErrors": 0,
+     "totalLatencyMs": 9,
+     "errorsByType": {}
+    },
+    "tokens": {
+     "input": 1200,
+     "prompt": 1200,
+     "candidates": 20,
+     "total": 1220,
+     "cached": 0,
+     "thoughts": 0,
+     "tool": 0
+    },
+    "roles": {
+     "main": {
+      "totalRequests": 1,
+      "totalErrors": 0,
+      "totalLatencyMs": 9,
+      "tokens": {
+       "input": 1200,
+       "prompt": 1200,
+       "candidates": 20,
+       "total": 1220,
+       "cached": 0,
+       "thoughts": 0,
+       "tool": 0
+      }
+     }
+    }
+   }
+  },
+  "tools": {
+   "totalCalls": 0,
+   "totalSuccess": 0,
+   "totalFail": 0,
+   "totalDurationMs": 0,
+   "totalDecisions": {
+    "accept": 0,
+    "reject": 0,
+    "modify": 0,
+    "auto_accept": 0
+   },
+   "byName": {}
+  },
+  "files": {
+   "totalLinesAdded": 0,
+   "totalLinesRemoved": 0
+  }
+ }
+}

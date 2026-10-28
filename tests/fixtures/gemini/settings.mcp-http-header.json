@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "escouade": {
+      "url": "http://127.0.0.1:4122/mcp",
+      "type": "http",
+      "headers": {
+        "Authorization": "Bearer $ESC_TOKEN"
+      }
+    }
+  }
+}

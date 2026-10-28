@@ -1,0 +1,13 @@
+[[rule]]
+toolName = ["read_file", "write_file", "replace", "list_directory", "glob", "grep_search"]
+argsPattern = 'secret\.key|\.env'
+decision = "deny"
+priority = 900
+denyMessage = "Fichier interdit par Escouade"
+
+[[rule]]
+toolName = "run_shell_command"
+commandRegex = '.*(secret\.key|\.env).*'
+decision = "deny"
+priority = 900
+denyMessage = "Fichier interdit par Escouade"

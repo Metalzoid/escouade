@@ -1,0 +1,14 @@
+# gemini -p "dis ok" sans compte, GEMINI_CLI_HOME jetable ; code de sortie 41 (FATAL_AUTHENTICATION_ERROR) dans les trois formats
+
+## -o text et -o stream-json (stderr, stdout vide)
+Please set an Auth method in your C:\tmp\esc273\home1\.gemini\settings.json or specify one of the following environment variables before running: GEMINI_API_KEY, GOOGLE_GENAI_USE_VERTEXAI, GOOGLE_GENAI_USE_GCA
+
+## -o json (stderr, stdout vide)
+{
+  "session_id": "2019de76-e6b6-45d5-8db2-9d74104795b6",
+  "error": {
+    "type": "Error",
+    "message": "Please set an Auth method in your C:\\tmp\\esc273\\home1\\.gemini\\settings.json or specify one of the following environment variables before running: GEMINI_API_KEY, GOOGLE_GENAI_USE_VERTEXAI, GOOGLE_GENAI_USE_GCA",
+    "code": 41
+  }
+}
