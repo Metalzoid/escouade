@@ -222,6 +222,10 @@ The “Start from a blank project” switch (“The history stays in Settings �
 > [!NOTE]
 > A project closed before this version has already lost its history: there is nothing to get back for it.
 
+## Code index
+
+The “Code index” group turns the project’s [code index](code-index) on (**Index this project**, off by default): it says what the index saves, that everything stays on the machine, and what it holds. For a private project, it says what stays out of the index. **Search by meaning** downloads the vectors’ model, with its progress and **Cancel**.
+
 ## Shared memory
 
 The “Shared memory” group lists what the project’s agents noted in its [shared memory](shared-memory): each memory, its kind and its description; a click shows its text. “Forget”, then “Confirm forgetting”, deletes its file from `.escouade/memory/`.

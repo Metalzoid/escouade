@@ -2611,6 +2611,11 @@ pub enum UiEvent {
     Voice {
         voice: crate::voice::VoiceEvent,
     },
+    /// The download of the vectors' model (ESC-254): bytes so far, of `total`.
+    VectorsDownload {
+        done: u64,
+        total: u64,
+    },
     /// What a project's docs have to share (ESC-257): the changes not shared yet, and the conflict
     /// a « Partager » stopped on, if any.
     #[serde(rename_all = "camelCase")]

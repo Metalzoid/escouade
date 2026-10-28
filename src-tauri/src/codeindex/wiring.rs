@@ -16,6 +16,10 @@ use tauri::Runtime;
 pub struct CodeIndexInfo {
     pub enabled: bool,
     pub status: Status,
+    /// The folders of the project's own that its fence leaves out of the index (ESC-254): those of
+    /// another project inside it, of the other side of a private project. Relative to the project,
+    /// with `/`.
+    pub excluded: Vec<String>,
 }
 
 impl<R: Runtime> Core<R> {
@@ -116,9 +120,21 @@ impl<R: Runtime> Core<R> {
 
     pub fn code_index_info(&self, project_id: &str) -> Result<CodeIndexInfo> {
         let project = self.project(project_id)?;
+        let root = PathBuf::from(&project.path);
+        let mut excluded: Vec<String> = self
+            .project_fence(project_id)
+            .paths()
+            .iter()
+            .filter_map(|p| p.strip_prefix(&root).ok())
+            .map(|rel| rel.to_string_lossy().replace('\\', "/"))
+            .filter(|rel| !rel.is_empty())
+            .collect();
+        excluded.sort();
+        excluded.dedup();
         Ok(CodeIndexInfo {
             enabled: project.code_index,
             status: self.codeindex.status(project_id),
+            excluded,
         })
     }
 

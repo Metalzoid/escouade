@@ -420,6 +420,7 @@ export const fr: Catalog = {
       'docs-space': 'L’espace Docs',
       workflows: 'Les workflows',
       'shared-memory': 'Mémoire partagée',
+      'code-index': 'Index du code',
       mcp: 'Le serveur MCP',
       accounts: 'Plusieurs comptes',
       usage: 'Quotas et coût',

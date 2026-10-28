@@ -850,6 +850,8 @@ pub struct Core<R: Runtime = Wry> {
     pub git: GitService,
     /// The projects' code indexes (`codeindex`).
     pub(crate) codeindex: crate::codeindex::Service,
+    /// The download of the vectors' model under way (ESC-254), by its flag to call it off.
+    pub(crate) vectors_download: Mutex<Option<Arc<std::sync::atomic::AtomicBool>>>,
     pub git_cache: RwLock<HashMap<String, GitInfo>>,
     pub pty: PtyManager,
     spawn_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
@@ -1811,6 +1813,7 @@ impl<R: Runtime> Core<R> {
                     .collect(),
             ),
             models_reading: Mutex::default(),
+            vectors_download: Mutex::default(),
             git,
             git_cache: RwLock::default(),
             pty: PtyManager::default(),

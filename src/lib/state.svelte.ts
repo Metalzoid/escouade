@@ -334,6 +334,8 @@ class AppState {
   gitTick = $state(0);
   /** Each project's shared memory changed this many times (ESC-255): its settings' list reads it again. */
   memoryTicks = $state<Record<string, number>>({});
+  /** The download of the vectors' model under way (ESC-254): bytes so far, of `total`; null when none is. */
+  vectorsProgress = $state<{ done: number; total: number } | null>(null);
   update = $state<UpdateInfo | null>(null);
   /** When the automatic restart for the update comes (the backend warned of it), if one is planned. */
   restartAt = $state<number | null>(null);
@@ -695,6 +697,9 @@ class AppState {
         break;
       case 'memory':
         this.memoryTicks[e.projectId] = (this.memoryTicks[e.projectId] ?? 0) + 1;
+        break;
+      case 'vectorsDownload':
+        this.vectorsProgress = { done: e.done, total: e.total };
         break;
       case 'git':
         this.git[e.projectId] = e.git;

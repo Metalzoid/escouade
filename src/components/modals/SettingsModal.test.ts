@@ -1447,6 +1447,7 @@ describe('SettingsModal in English', () => {
       'Worktrees',
       'Launch',
       '.escouade.yml',
+      'Code index',
       'Shared memory',
       'Shared Kanban',
       'Danger zone',

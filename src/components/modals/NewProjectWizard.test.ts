@@ -317,6 +317,42 @@ describe('the new project’s assistant', () => {
     expect(be.called('create_agent')).toHaveLength(0);
   });
 
+  it('offers the code index in the summary, off, says what it does and that it stays here, and turns it on once made (ESC-254)', async () => {
+    const be = backend({ set_code_index: () => ({ enabled: true, status: { files: 3 }, excluded: [] }) });
+    render(NewProjectModal);
+    await typePath();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
+    const offer = document.querySelector('[data-wizard-code-index]') as HTMLElement;
+    expect(within(offer).getByText(/trouvent le code plus vite et pour moins de tokens/)).toBeInTheDocument();
+    expect(within(offer).getByText(/Tout reste sur cette machine/)).toBeInTheDocument();
+    // Not a private project: nothing said of one.
+    expect(within(offer).queryByText(/Projet privé/)).toBeNull();
+    const sw = within(offer).getByRole('switch', { name: 'Indexer le code' });
+    expect(sw).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(sw);
+    await userEvent.click(screen.getByRole('switch', { name: 'Créer un premier agent' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Créer le projet' }));
+    await waitFor(() => expect(app.modal).toBeNull());
+    await waitFor(() => expect(be.called('set_code_index')[0]?.args).toEqual({ id: 'new', enabled: true }));
+  });
+
+  it('leaves the code index off unless asked, and says what a private project keeps to itself', async () => {
+    const be = backend();
+    render(NewProjectModal);
+    await typePath();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: /Compte/ }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Projet privé' }));
+    await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
+    const offer = document.querySelector('[data-wizard-code-index]') as HTMLElement;
+    expect(within(offer).getByText(/son index ne sert qu’à ses propres agents/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('switch', { name: 'Créer un premier agent' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Créer le projet' }));
+    await waitFor(() => expect(app.modal).toBeNull());
+    expect(be.called('set_code_index')).toHaveLength(0);
+  });
+
   it('says a repository without commit, and makes its first commit', async () => {
     let commits = 0;
     const be = backend({

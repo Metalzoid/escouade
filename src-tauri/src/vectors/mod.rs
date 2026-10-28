@@ -11,6 +11,7 @@ pub mod embed;
 mod eval;
 pub mod index;
 pub mod model;
+pub mod wiring;
 
 #[cfg(test)]
 mod tests;

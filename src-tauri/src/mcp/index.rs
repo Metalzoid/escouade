@@ -160,12 +160,18 @@ fn answered<R: Runtime, T: serde::Serialize>(
     answer: Answer<T>,
 ) -> Result<String, ToolError> {
     let s = &answer.saving;
+    // Priced at the model the agent last ran on, else its setting (ESC-254).
+    let model = core
+        .agent(&a.agent)
+        .map(|h| h.lock().meta.model.clone())
+        .unwrap_or_default();
     core.stats.record_index(
         &a.agent,
         &a.project.id,
         tool,
         s.files_tokens,
         s.answer_tokens,
+        &model,
     );
     let summary = if s.files == 0 {
         tr!(

@@ -854,7 +854,10 @@ mod core {
             let mut projects = h.core.projects.write();
             projects.iter_mut().find(|x| x.id == v.id).unwrap().private = true;
         }
-        h.core.set_code_index(&p.id, true).await.unwrap();
+        let info = h.core.set_code_index(&p.id, true).await.unwrap();
+        // The settings say which of its folders is left out (ESC-254); the private one leaves out nothing of its own.
+        assert_eq!(info.excluded, ["vault"]);
+        assert!(h.core.code_index_info(&v.id).unwrap().excluded.is_empty());
         let r = h.core.code_index(&p.id, None).await.unwrap();
         assert_eq!(r.search("public_fn", 3, None).unwrap().result.len(), 1);
         assert!(r

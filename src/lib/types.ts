@@ -763,8 +763,52 @@ export interface Project {
   workflowsAutoRead?: boolean;
   /** « Où garder la configuration des workflows » (ESC-195): in the repository (`.escouade/workflows/`, by default) or on this machine. Absent from a project of the window’s tests made before it. */
   workflowsInRepo?: boolean;
-  /** « Index du code » (ESC-251): off unless turned on, by `get_code_index` / `set_code_index` (no screen yet). */
+  /** « Index du code » (ESC-251): off unless turned on, by `get_code_index` / `set_code_index` (Réglages › Projets, ESC-254). */
   codeIndex?: boolean;
+}
+
+/** What a project's code index holds (ESC-251). */
+export interface CodeIndexStatus {
+  files: number;
+  symbols: number;
+  links: number;
+  /** Worktrees with a delta. */
+  worktrees: number;
+  /** The database's size on the disk. */
+  bytes: number;
+  /** When the project's folder was last read, in ms; 0 for never. */
+  indexedAt: number;
+}
+
+/** « Index du code » of a project, as its settings read it (ESC-254). */
+export interface CodeIndexInfo {
+  enabled: boolean;
+  status: CodeIndexStatus;
+  /** Its own folders its fence leaves out (another project inside it), relative, with `/`. */
+  excluded: string[];
+}
+
+/** The vectors' model of « Recherche par le sens » (ESC-254): one for every project of this machine. */
+export interface VectorsModelInfo {
+  id: string;
+  license: string;
+  size: number;
+  /** What is on the disk toward it (a download cut keeps its part). */
+  have: number;
+  downloaded: boolean;
+  downloading: boolean;
+}
+
+/** What the code index saved over the statistics' period, for a project (ESC-254). */
+export interface IndexSaving {
+  agentId: string;
+  projectId: string;
+  calls: number;
+  filesTokens: number;
+  answerTokens: number;
+  savedTokens: number;
+  /** At the input price of the model each agent ran on, in USD. */
+  savedCost: number;
 }
 
 /** What tells a step added by hand (ESC-195): a command typed, a subagent launched, a file written. */
@@ -2204,6 +2248,7 @@ export type UiEvent =
   | { type: 'agentRemoved'; id: string; projectId: string }
   | { type: 'conv'; agentId: string; ops: ConvOp[] }
   | { type: 'memory'; projectId: string }
+  | { type: 'vectorsDownload'; done: number; total: number }
   | { type: 'git'; projectId: string; git: GitInfo }
   | { type: 'usage'; usage: Usage }
   | { type: 'focus'; projectId: string; agentId: string | null }
@@ -2407,6 +2452,8 @@ export interface StatsView {
   accounts: string[];
   /** Every harness that ever ran a turn (ids), whichever period or harness the view is for. */
   engines: string[];
+  /** What the code index saved over the period, per project (ESC-254); absent from a view of the window's tests made before it. */
+  indexByProject?: IndexSaving[];
 }
 
 /** What a harness ran over the period. */

@@ -738,6 +738,30 @@ pub fn get_index_savings(core: CoreState, project: Option<String>) -> serde_json
     serde_json::json!({ "byAgent": by(true), "byProject": by(false) })
 }
 
+/// « Recherche par le sens » (ESC-254): the vectors' model, whether it is downloaded.
+#[tauri::command(async)]
+pub fn vectors_model(core: CoreState) -> crate::vectors::wiring::VectorsModelInfo {
+    core.vectors_model_info()
+}
+
+/// Downloads the vectors' model (its progress in `UiEvent::VectorsDownload`); « Annuler » ends it with what came kept.
+#[tauri::command]
+pub async fn vectors_model_download(
+    core: CoreState<'_>,
+) -> Res<crate::vectors::wiring::VectorsModelInfo> {
+    core.vectors_model_download().await.map_err(err)
+}
+
+#[tauri::command]
+pub fn vectors_model_cancel(core: CoreState) {
+    core.vectors_model_cancel();
+}
+
+#[tauri::command(async)]
+pub fn vectors_model_delete(core: CoreState) -> Res<crate::vectors::wiring::VectorsModelInfo> {
+    core.vectors_model_delete().map_err(err)
+}
+
 /// Turns « Index du code » on (the project is read at once) or off (its database is erased).
 #[tauri::command]
 pub async fn set_code_index(

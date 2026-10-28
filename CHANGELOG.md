@@ -8,6 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- Un index du code, proposé à l’ajout d’un projet et dans ses réglages, fait trouver le code aux agents plus vite et pour moins de tokens, sans que rien ne quitte la machine ; les statistiques montrent ce qu’il a fait économiser, en tokens et en dollars.
 - Les agents d’un projet partagent une mémoire de travail, quel que soit leur harness : ils y notent les façons de faire et les écueils du projet, et Escouade propose une fois d’y reprendre ce que Claude Code avait retenu.
 - Un onglet Docs rejoint Agents et Kanban : la spécification du produit, rangée par sujet sur une carte qui montre où chaque sujet en est face au code, ses pages dans un arbre, à lire, modifier et partager d’un clic avec l’équipe ; une spec que le projet a déjà s’importe découpée par ses titres.
 - Les décisions sur le produit ont leur registre, numéroté et daté : d’où vient chacune, ce qu’elle a changé dans la spec, et « Accepter » d’un clic ; une décision acceptée ne se réécrit plus, une nouvelle la remplace, et celle laissée par l’agent d’un ticket est acceptée quand tu le valides.

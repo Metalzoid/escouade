@@ -44,6 +44,8 @@ export class WizardForm {
   done = $state<StepId[]>([]);
   firstAgent = $state(true);
   model = $state('');
+  /** « Indexer le code » (ESC-254): offered, off unless turned on; set once the project is made (a new one only). */
+  codeIndex = $state(false);
   /** The project to copy is being checked in the new folder: what is taken by default is not known yet. */
   copying = $state(false);
   /** « Remplir automatiquement » running, for the worktrees or the launch. */

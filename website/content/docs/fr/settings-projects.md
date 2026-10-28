@@ -222,6 +222,10 @@ L’interrupteur « Partir d’un projet vierge » (« L’historique reste d
 > [!NOTE]
 > Un projet fermé avant cette version a déjà perdu son historique : il n’y a rien à retrouver pour lui.
 
+## Index du code
+
+Le groupe « Index du code » allume l’[index du code](code-index) du projet (**Indexer ce projet**, coupé par défaut) : il dit ce que l’index fait gagner, que tout reste sur la machine, et ce qu’il contient. Pour un projet privé, il dit ce qui reste hors de l’index. **Recherche par le sens** télécharge le modèle des vecteurs, avec sa progression et **Annuler**.
+
 ## Mémoire partagée
 
 Le groupe « Mémoire partagée » liste ce que les agents du projet ont noté dans sa [mémoire partagée](shared-memory) : chaque souvenir, sa sorte et sa description ; un clic montre son texte. « Oublier », puis « Confirmer l’oubli », supprime son fichier de `.escouade/memory/`.
