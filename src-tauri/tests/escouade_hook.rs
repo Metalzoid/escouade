@@ -144,3 +144,28 @@ fn the_event_its_argument_names_goes_in_the_query() {
     assert!(got.ends_with(event), "{got}");
     assert!(!got.contains("gho_not_a_token"), "{got}");
 }
+
+#[test]
+fn the_context_escouade_answers_is_written_for_the_harness() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/hook", listener.local_addr().unwrap());
+    let advice = r#"{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"use index_search"}}"#;
+    let served = std::thread::spawn(move || {
+        let (mut s, _) = listener.accept().unwrap();
+        s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        let mut buf = [0u8; 4096];
+        let _ = s.read(&mut buf);
+        let _ = write!(
+            s,
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{advice}",
+            advice.len()
+        );
+    });
+    let mut c = program();
+    c.env(TOKEN_VAR, "tok").env(URL_VAR, &url);
+    let out = run(c, br#"{"hook_event_name":"PreToolUse","tool_name":"Grep"}"#);
+    served.join().unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), advice);
+    assert!(out.stderr.is_empty());
+}

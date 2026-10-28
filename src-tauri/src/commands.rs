@@ -730,6 +730,14 @@ pub fn get_code_index(core: CoreState, id: String) -> Res<crate::codeindex::Code
     core.code_index_info(&id).map_err(err)
 }
 
+/// What the code index saved the agents (ESC-253), per agent and per project: the tokens of the files
+/// its answers draw on, against the answers'. `project` narrows it to one project.
+#[tauri::command(async)]
+pub fn get_index_savings(core: CoreState, project: Option<String>) -> serde_json::Value {
+    let by = |agent| core.stats.index_savings(agent, project.as_deref());
+    serde_json::json!({ "byAgent": by(true), "byProject": by(false) })
+}
+
 /// Turns « Index du code » on (the project is read at once) or off (its database is erased).
 #[tauri::command]
 pub async fn set_code_index(

@@ -26,6 +26,11 @@ CREATE TABLE IF NOT EXISTS prompts (
   engine TEXT NOT NULL DEFAULT 'claude'
 );
 CREATE INDEX IF NOT EXISTS prompts_ts ON prompts(ts);
+CREATE TABLE IF NOT EXISTS index_savings (
+  id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, agent_id TEXT NOT NULL, project_id TEXT NOT NULL,
+  tool TEXT NOT NULL, files_tokens INTEGER NOT NULL, answer_tokens INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS index_savings_agent ON index_savings(agent_id);
 ";
 
 /// What an older database lacks to be read as `SCHEMA` says, with the default its lines take.
@@ -115,6 +120,20 @@ pub struct EngineShare {
     pub cost: f64,
     pub turns: u64,
     pub agents: u64,
+}
+
+/// What the code index saved, summed (ESC-253): per agent (`agent_id` set) or per project.
+#[derive(Debug, Clone, Serialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexSaving {
+    /// The agent; empty in a per-project sum.
+    pub agent_id: String,
+    pub project_id: String,
+    pub calls: u64,
+    /// What reading the files the answers draw on would have cost, in estimated tokens.
+    pub files_tokens: u64,
+    pub answer_tokens: u64,
+    pub saved_tokens: u64,
 }
 
 /// What the statistics are narrowed to: one account, one harness, or both (none: everything).
@@ -244,6 +263,55 @@ impl Stats {
                 log::warn!("stats insert failed: {e}");
             }
         }
+    }
+
+    /// An answer of the code index to `agent_id` (empty for a client outside Escouade): what the
+    /// files it draws on would have cost, against its own size.
+    pub fn record_index(
+        &self,
+        agent_id: &str,
+        project_id: &str,
+        tool: &str,
+        files_tokens: u64,
+        answer_tokens: u64,
+    ) {
+        let guard = self.conn.lock();
+        if let Some(c) = guard.as_ref() {
+            let _ = c.execute(
+                "INSERT INTO index_savings (ts, agent_id, project_id, tool, files_tokens, answer_tokens) VALUES (?1,?2,?3,?4,?5,?6)",
+                params![now_ms(), agent_id, project_id, tool, files_tokens as i64, answer_tokens as i64],
+            );
+        }
+    }
+
+    /// What the index saved, per agent (`by_agent`) or per project, `project_id` narrowing it to
+    /// one project. Each answer counts for what it saved, never below nothing.
+    pub fn index_savings(&self, by_agent: bool, project_id: Option<&str>) -> Vec<IndexSaving> {
+        let guard = self.conn.lock();
+        let Some(c) = guard.as_ref() else {
+            return Vec::new();
+        };
+        let key = if by_agent { "agent_id" } else { "''" };
+        let sql = format!(
+            "SELECT {key}, project_id, COUNT(*), SUM(files_tokens), SUM(answer_tokens),
+                    SUM(MAX(files_tokens - answer_tokens, 0))
+             FROM index_savings WHERE (?1 IS NULL OR project_id = ?1)
+             GROUP BY {key}, project_id ORDER BY 6 DESC"
+        );
+        let Ok(mut stmt) = c.prepare(&sql) else {
+            return Vec::new();
+        };
+        let rows = stmt.query_map(params![project_id], |r| {
+            Ok(IndexSaving {
+                agent_id: r.get(0)?,
+                project_id: r.get(1)?,
+                calls: r.get::<_, i64>(2)? as u64,
+                files_tokens: r.get::<_, i64>(3)? as u64,
+                answer_tokens: r.get::<_, i64>(4)? as u64,
+                saved_tokens: r.get::<_, i64>(5)? as u64,
+            })
+        });
+        rows.map(|r| r.flatten().collect()).unwrap_or_default()
     }
 
     pub fn record_prompt(&self, account: &str, engine: &str, agent_id: &str, project_id: &str) {

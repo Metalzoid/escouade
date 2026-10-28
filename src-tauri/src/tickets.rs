@@ -1817,6 +1817,35 @@ impl<R: Runtime> Core<R> {
         })
     }
 
+    /// The instructions added to a ticket's agent: its protocol, within the room its harness gives
+    /// it, then the code index's rule when the project has turned the index on (the room is kept
+    /// for it first, so the criteria give way before the rule does).
+    pub(crate) fn ticket_instructions(
+        &self,
+        project: &Project,
+        lang: i18n::Lang,
+        t: &Ticket,
+        ports: Option<u16>,
+        isola: bool,
+    ) -> String {
+        let engine = crate::engine::by_id(t.engine.unwrap_or(project.engine()));
+        let rule = project
+            .code_index
+            .then(|| crate::codeindex::hint::rule(lang));
+        let room = engine.instructions_room().map(|r| crate::engine::Room {
+            max: r
+                .max
+                .saturating_sub(rule.as_deref().map_or(0, |x| (r.weigh)(&format!(" {x}")))),
+            weigh: r.weigh,
+        });
+        let mut p = board::protocol_prompt_for(lang, t, ports, isola, room);
+        if let Some(rule) = rule {
+            p.push(' ');
+            p.push_str(&rule);
+        }
+        p
+    }
+
     /// The ticket's agent: its worktree on `<prefix><key>` (`ticket/<key>`) from the target branch, its block of
     /// ports (none when isola runs the project's services), the protocol appended to its system
     /// prompt; then, its worktree set up, its first message.
@@ -1865,15 +1894,8 @@ impl<R: Runtime> Core<R> {
                     mode: Some(mode),
                     name: Some(board::ticket_agent_name(t)),
                     worktree: new_branch,
-                    // Within the room its harness gives it.
-                    append_prompt: Some(board::protocol_prompt_for(
-                        lang,
-                        t,
-                        ports,
-                        isola,
-                        crate::engine::by_id(t.engine.unwrap_or(project.engine()))
-                            .instructions_room(),
-                    )),
+                    // Within the room its harness gives it, the code index's rule included.
+                    append_prompt: Some(self.ticket_instructions(project, lang, t, ports, isola)),
                     ticket_id: Some(t.id.clone()),
                     port_base: ports,
                     select: false,

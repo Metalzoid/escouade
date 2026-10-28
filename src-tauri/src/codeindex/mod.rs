@@ -18,16 +18,17 @@
 //! **Private projects**: the files `fence` refuses are never listed, read nor indexed
 //! (`Target::fence`).
 
-// The API is served by the MCP tools of another ticket: until they come, only the tests call it.
+// A few parts of the API (the statuses, some counts) are read by the tests only.
 #![allow(dead_code)]
 
 mod api;
+pub mod hint;
 mod lang;
 mod scan;
 mod store;
 mod wiring;
 
-pub use api::Reader;
+pub use api::{Answer, Reader};
 #[cfg(test)]
 pub(crate) use lang::{Parsed, Sym};
 pub use scan::Refresh;

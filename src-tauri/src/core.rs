@@ -5632,8 +5632,12 @@ impl<R: Runtime> Core<R> {
                 && o.ticket_id.is_none()
                 && crate::engine::by_id(engine).attaches(),
             remote_off: o.remote_off || o.copy_of.as_ref().is_some_and(|c| c.remote_off),
-            ticket_id: o.ticket_id,
-            append_prompt: o.append_prompt,
+            ticket_id: o.ticket_id.clone(),
+            // The code index's rule, for an agent that has no ticket's protocol (which carries it).
+            append_prompt: o.append_prompt.or_else(|| {
+                (project.code_index && o.ticket_id.is_none())
+                    .then(|| crate::codeindex::hint::rule(self.lang().claude))
+            }),
             port_base: o.port_base,
             ..Default::default()
         };

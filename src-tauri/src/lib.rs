@@ -534,6 +534,7 @@ pub fn run() {
             commands::set_project_logo,
             commands::get_code_index,
             commands::set_code_index,
+            commands::get_index_savings,
             commands::project_logo,
             commands::read_logo,
             commands::shared_trust,

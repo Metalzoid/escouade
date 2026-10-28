@@ -96,6 +96,24 @@ impl<R: Runtime> Core<R> {
         });
     }
 
+    /// What the hook of an agent's view answers a search for a symbol (`hint`): None when the
+    /// project has not turned the index on, the harness cannot read it, or the search is for a text.
+    pub(crate) fn index_hint(
+        &self,
+        agent_id: &str,
+        hook: &serde_json::Value,
+    ) -> Option<serde_json::Value> {
+        let (project_id, engine) = {
+            let h = self.agent(agent_id).ok()?;
+            let m = h.lock().meta.clone();
+            (m.project_id, m.engine)
+        };
+        if !self.project(&project_id).ok()?.code_index {
+            return None;
+        }
+        super::hint::reply(engine, self.lang().claude, hook)
+    }
+
     pub fn code_index_info(&self, project_id: &str) -> Result<CodeIndexInfo> {
         let project = self.project(project_id)?;
         Ok(CodeIndexInfo {

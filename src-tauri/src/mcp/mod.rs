@@ -29,6 +29,9 @@ mod http;
 mod images;
 #[cfg(test)]
 mod images_tests;
+mod index;
+#[cfg(test)]
+mod index_tests;
 pub(crate) mod install;
 #[cfg(test)]
 mod install_tests;

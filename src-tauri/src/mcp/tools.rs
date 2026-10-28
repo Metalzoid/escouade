@@ -43,6 +43,7 @@ use super::background;
 use super::docs;
 use super::files;
 use super::images;
+use super::index;
 use super::read;
 use super::wait;
 use super::workflow;
@@ -1132,6 +1133,91 @@ impl<R: Runtime> Tools<R> {
         let result = workflow::get(&ctx.core, &ctx.caller, &args.project).await;
         let asked = summary(&[("project", Some(&args.project))]);
         ctx.reply("get_workflow", &asked, result)
+    }
+
+    #[tool(
+        description = "Search the code index of a project for symbols (functions, methods, classes, types, constants, fields, Markdown headings): the words of a name, a doc or a path, by prefix, the best first, each with its kind, holder, file, lines, signature and doc. Every answer says what it saved (saving: the tokens of the files it draws on, read whole, against its own; summary says it in words). Prefer it to grep or to reading files when you look for a symbol, a notion or a link between symbols; keep grep for a text or a string. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn index_search(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<index::SearchArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("query", Some(&args.query)),
+        ]);
+        let result = index::search(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("index_search", &asked, result)
+    }
+
+    #[tool(
+        description = "Get the context of a task from the code index in one call: the entry points (symbols to start from), the symbols they are linked to and the code of the entry points. Tell the task in words. Every answer says what it saved (saving: the tokens of the files it draws on, read whole, against its own; summary says it in words). Prefer it to grep or to reading files when you look for a symbol, a notion or a link between symbols; keep grep for a text or a string. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn index_context(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<index::ContextArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("task", Some(&args.task)),
+        ]);
+        let result = index::context(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("index_context", &asked, result)
+    }
+
+    #[tool(
+        description = "Who calls a function, method or class, from the code index: its definitions and its callers (file, line, the symbol that calls). Every answer says what it saved (saving: the tokens of the files it draws on, read whole, against its own; summary says it in words). Prefer it to grep or to reading files when you look for a symbol, a notion or a link between symbols; keep grep for a text or a string. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn index_callers(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<index::CallArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("name", Some(&args.name)),
+        ]);
+        let result = index::callers(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("index_callers", &asked, result)
+    }
+
+    #[tool(
+        description = "What a function, method or class calls, from the code index: the definitions of what it calls in the project, and the names left (the language's, libraries'). Every answer says what it saved (saving: the tokens of the files it draws on, read whole, against its own; summary says it in words). Prefer it to grep or to reading files when you look for a symbol, a notion or a link between symbols; keep grep for a text or a string. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn index_callees(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<index::CallArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("name", Some(&args.name)),
+        ]);
+        let result = index::callees(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("index_callees", &asked, result)
+    }
+
+    #[tool(
+        description = "What a change would touch, from the code index: the symbols of a name or of a file, their callers followed up to depth levels, the types that extend or implement them, the files that import them, and every file touched. Every answer says what it saved (saving: the tokens of the files it draws on, read whole, against its own; summary says it in words). Prefer it to grep or to reading files when you look for a symbol, a notion or a link between symbols; keep grep for a text or a string. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn index_impact(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<index::ImpactArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("target", Some(&args.target)),
+        ]);
+        let result = index::impact(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("index_impact", &asked, result)
     }
 
     #[tool(

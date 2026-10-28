@@ -2581,8 +2581,8 @@ async fn answer<R: Runtime>(
     core: &Weak<Core<R>>,
     port: u16,
 ) -> Response<Full<Bytes>> {
-    let reply = |status: StatusCode, body: &'static str| {
-        let mut r = Response::new(Full::new(Bytes::from_static(body.as_bytes())));
+    let reply = |status: StatusCode, body: &str| {
+        let mut r = Response::new(Full::new(Bytes::from(body.to_string())));
         *r.status_mut() = status;
         r.headers_mut().insert(
             header::CONTENT_TYPE,
@@ -2628,9 +2628,14 @@ async fn answer<R: Runtime>(
     if let (Some(event), Some(map)) = (event, hook.as_object_mut()) {
         map.insert(EVENT_KEY.into(), Value::String(event));
     }
+    // A search for a symbol is answered with a line that points to the code index: context only,
+    // never a decision (`codeindex::hint`).
+    let advice = core
+        .index_hint(&agent, &hook)
+        .map_or_else(|| "{}".to_string(), |v| v.to_string());
     // Off the connection: the interface does not wait for what Escouade makes of it.
     tauri::async_runtime::spawn_blocking(move || core.on_tui_hook(&agent, hook));
-    reply(StatusCode::OK, "{}")
+    reply(StatusCode::OK, &advice)
 }
 
 #[cfg(test)]

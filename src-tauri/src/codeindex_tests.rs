@@ -970,4 +970,85 @@ mod events {
         }
         assert_eq!(after, before + 2);
     }
+
+    // ---- the rule in the agents' instructions (ESC-253) ----
+
+    #[tokio::test]
+    async fn the_agents_instructions_carry_the_rule_only_when_the_index_is_on() {
+        use crate::core::AgentOptions;
+        use crate::engine::{escaped_len, Engine, PROTOCOL_BUDGET};
+        use crate::model::{Criterion, Ticket};
+        let h = harness("ci-rule");
+        let r = repo(&h.dir.join("proj"));
+        let p = h
+            .core
+            .create_project(
+                &r.to_string_lossy(),
+                "proj",
+                "oklch(0.7 0.1 200)",
+                false,
+                None,
+                true,
+            )
+            .await
+            .unwrap();
+        // An agent with no ticket: no instructions at all while the index is off.
+        let plain = h
+            .core
+            .create_agent_with(&p.id, AgentOptions::default())
+            .await
+            .unwrap();
+        assert_eq!(plain.meta.append_prompt, None);
+        h.core.set_code_index(&p.id, true).await.unwrap();
+        let on = h
+            .core
+            .create_agent_with(&p.id, AgentOptions::default())
+            .await
+            .unwrap();
+        let rule = on.meta.append_prompt.clone().unwrap();
+        for tool in [
+            "index_search",
+            "index_context",
+            "index_callers",
+            "index_callees",
+            "index_impact",
+        ] {
+            assert!(rule.contains(tool), "{tool} in {rule}");
+        }
+        assert!(rule.contains("grep"));
+
+        // A ticket's protocol keeps its room: the rule is in, the criteria give way, and nothing
+        // is added when the index is off.
+        let long = "critère très long ".repeat(12);
+        let t = Ticket {
+            key: "ESC-1".into(),
+            title: "Un ticket".into(),
+            criteria: (0..40)
+                .map(|i| Criterion {
+                    text: format!("{i} {long}"),
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        };
+        let project = h.core.project(&p.id).unwrap();
+        let with = h
+            .core
+            .ticket_instructions(&project, crate::i18n::Lang::Fr, &t, None, false);
+        assert!(with.contains("index_search") && with.contains("ESC-1"));
+        assert!(!with.contains('\n'));
+        assert!(
+            escaped_len(&with) <= PROTOCOL_BUDGET,
+            "{}",
+            escaped_len(&with)
+        );
+        let _ = crate::engine::CLAUDE.instructions_room();
+        h.core.set_code_index(&p.id, false).await.unwrap();
+        let project = h.core.project(&p.id).unwrap();
+        let without = h
+            .core
+            .ticket_instructions(&project, crate::i18n::Lang::Fr, &t, None, false);
+        assert!(!without.contains("index_search"));
+        assert!(without.contains("ESC-1"));
+    }
 }
