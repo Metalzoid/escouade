@@ -9,6 +9,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Nouveautés
 
 - Les agents d’un projet partagent une mémoire de travail, quel que soit leur harness : ils y notent les façons de faire et les écueils du projet, et Escouade propose une fois d’y reprendre ce que Claude Code avait retenu.
+- Un onglet Docs rejoint Agents et Kanban : la spécification du produit, rangée par sujet sur une carte qui montre où chaque sujet en est face au code, ses pages dans un arbre, à lire, modifier et partager d’un clic avec l’équipe ; une spec que le projet a déjà s’importe découpée par ses titres.
 
 ## [2.0.5] — 2026-10-27
 

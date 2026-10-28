@@ -14,6 +14,7 @@
   import { createWarmer } from './lib/warm';
   import { offerClaudeMemory } from './lib/memory';
   import Board from './components/board/Board.svelte';
+  import DocsView from './components/docs/DocsView.svelte';
   import TicketForm from './components/board/TicketForm.svelte';
   import MergedBranchesModal from './components/branches/MergedBranchesModal.svelte';
   import NewBranchModal from './components/branches/NewBranchModal.svelte';
@@ -113,6 +114,7 @@
     void app.runCommand;
     void app.editorOn;
     void app.boardOn;
+    void app.docsOn;
     void app.ui.view;
     app.markSeen();
   });
@@ -168,6 +170,10 @@
         {#if app.boardOn}
           {#key project.id}
             <Board {project} />
+          {/key}
+        {:else if app.docsOn}
+          {#key project.id}
+            <DocsView {project} />
           {/key}
         {:else if app.editorOn}
           {#key project.id}

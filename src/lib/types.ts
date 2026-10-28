@@ -2592,7 +2592,20 @@ export interface DocsPage {
   decisions: number[];
   /** When it was last compared to the code (ISO 8601); empty: never. */
   compared: string;
+  /** What the last comparison found the code does otherwise (ESC-258). */
+  gaps: DocsGap[];
+  /** Not settled yet. */
+  draft: boolean;
+  /** Its place in its subject (0: by name). */
+  order: number;
   body: string;
+}
+
+/** A gap between a page of the spec and the code (ESC-258). */
+export interface DocsGap {
+  text: string;
+  /** The files of the code concerned, relative to the project. */
+  code: string[];
 }
 
 export interface DocsPageInfo {
@@ -2601,11 +2614,42 @@ export interface DocsPageInfo {
   compared: string;
   tickets: string[];
   decisions: number[];
+  /** How many gaps with the code its last comparison found. */
+  gaps: number;
+  draft: boolean;
 }
 
 export interface DocsSubject {
+  /** Its folder under `spec/`. */
   name: string;
+  /** The name it is shown under. */
+  title: string;
   pages: DocsPageInfo[];
+}
+
+/** A page as an import of an existing spec would write it (ESC-258). */
+export interface DocsDraft {
+  path: string;
+  subject: string;
+  title: string;
+  source: string;
+  lines: number;
+  /** A page of that path is already there: left alone. */
+  exists: boolean;
+}
+
+export interface DocsImported {
+  written: string[];
+  skipped: string[];
+}
+
+/** A committed change of the spec (« Ce qui a bougé »). */
+export interface DocsMoved {
+  /** Seconds since the epoch. */
+  when: number;
+  author: string;
+  message: string;
+  pages: string[];
 }
 
 /** A spec the project already has (`SPEC.md`, a `docs/` folder…), offered for import. */

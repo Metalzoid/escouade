@@ -89,6 +89,9 @@ import type {
   DocsShared,
   DocsConflict,
   DocsTree,
+  DocsDraft,
+  DocsImported,
+  DocsMoved,
 } from './types';
 
 /**
@@ -420,8 +423,9 @@ export const api = {
   docsSpecTree: (id: string) => invoke<DocsTree>('docs_spec_tree', { id }),
   docsDetectSpec: (id: string) => invoke<DocsCandidate[]>('docs_detect_spec', { id }),
   docsSpecPage: (id: string, path: string) => invoke<DocsPage>('docs_spec_page', { id, path }),
-  docsSpecWrite: (id: string, path: string, title: string | null, body: string | null) =>
-    invoke<DocsPage>('docs_spec_write', { id, path, title, body }),
+  /** `subject`: the name the page's subject is shown under (a new page's), left as it is when null. */
+  docsSpecWrite: (id: string, path: string, title: string | null, body: string | null, subject: string | null = null) =>
+    invoke<DocsPage>('docs_spec_write', { id, path, title, body, subject }),
   docsSpecSearch: (id: string, query: string) => invoke<DocsHit[]>('docs_spec_search', { id, query }),
   docsDecisions: (id: string) => invoke<DocsDecision[]>('docs_decisions', { id }),
   docsDecisionPropose: (id: string, number: number | null, decision: Partial<DocsDecision>) =>
@@ -439,6 +443,11 @@ export const api = {
   docsShare: (id: string, message: string | null = null, withCode = false) => invoke<DocsShared>('docs_share', { id, message, withCode }),
   docsShareResolve: (id: string) => invoke<DocsConflict>('docs_share_resolve', { id }),
   docsShareCancel: (id: string) => invoke<void>('docs_share_cancel', { id }),
+  /** How a spec the project has (`path`, one of `docsDetectSpec`'s) would be cut by subject (ESC-258): nothing written. */
+  docsImportPlan: (id: string, path: string) => invoke<DocsDraft[]>('docs_import_plan', { id, path }),
+  /** Writes the pages of `only` (all when null) of that cut; none overwritten. */
+  docsImport: (id: string, path: string, only: string[] | null = null) => invoke<DocsImported>('docs_import', { id, path, only }),
+  docsRecent: (id: string) => invoke<DocsMoved[]>('docs_recent', { id }),
   gitLog: (projectId: string, agentId: string | null, repo: string | null = null) =>
     invoke<GitLog>('git_log', { projectId, agentId, ...inRepo(repo) }),
   gitShow: (projectId: string, hash: string, repo: string | null = null) =>

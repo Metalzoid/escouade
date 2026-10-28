@@ -211,7 +211,25 @@ pub struct Page {
     pub decisions: Vec<u32>,
     /// When it was last compared to the code (ISO 8601); empty: never.
     pub compared: String,
+    /// What the last comparison found the code does otherwise (ESC-258): written by the
+    /// comparison, shown on top of the page. Left out of the header when there is none.
+    pub gaps: Vec<Gap>,
+    /// A draft: not settled yet (a brainstorm's, a page begun). Left out of the header when not.
+    pub draft: bool,
+    /// Its place among the pages of its subject, then the subject's among the others (an import
+    /// keeps the order of the spec it came from); 0: by name, after those placed.
+    pub order: u32,
     pub body: String,
+}
+
+/// A gap between a page and the code (ESC-258): what the code does otherwise, and where.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Gap {
+    /// What differs, in words (« La spec dit 3 fois au plus ; le code accepte 4 échéances »).
+    pub text: String,
+    /// The files of the code concerned, relative to the project, with `/`.
+    pub code: Vec<String>,
 }
 
 pub fn page_write(p: &Page) -> String {
@@ -220,17 +238,25 @@ pub fn page_write(p: &Page) -> String {
     } else {
         front_value(&p.compared)
     };
-    front_write(
-        &[
-            ("title", front_value(&p.title)),
-            ("subject", front_value(&p.subject)),
-            ("sources", front_value(&p.sources)),
-            ("tickets", front_value(&p.tickets)),
-            ("decisions", front_value(&p.decisions)),
-            ("compared", compared),
-        ],
-        &p.body,
-    )
+    let mut lines = vec![
+        ("title", front_value(&p.title)),
+        ("subject", front_value(&p.subject)),
+        ("sources", front_value(&p.sources)),
+        ("tickets", front_value(&p.tickets)),
+        ("decisions", front_value(&p.decisions)),
+        ("compared", compared),
+    ];
+    // Written only when set: a page without them reads as it always did.
+    if !p.gaps.is_empty() {
+        lines.push(("gaps", front_value(&p.gaps)));
+    }
+    if p.draft {
+        lines.push(("draft", "true".into()));
+    }
+    if p.order > 0 {
+        lines.push(("order", p.order.to_string()));
+    }
+    front_write(&lines, &p.body)
 }
 
 /// A page from its file's text. A file without a header (written by hand) is a page too: its
@@ -260,6 +286,18 @@ pub fn page_read(path: &str, text: &str) -> Page {
                 tickets: strs_of(&h, "tickets"),
                 decisions: nums_of(&h, "decisions"),
                 compared: str_of(&h, "compared"),
+                gaps: h
+                    .get("gaps")
+                    .and_then(|v| serde_json::from_value::<Vec<Gap>>(v.clone()).ok())
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|g| !g.text.trim().is_empty())
+                    .collect(),
+                draft: matches!(h.get("draft"), Some(serde_json::Value::Bool(true))),
+                order: h
+                    .get("order")
+                    .and_then(|v| v.as_u64())
+                    .map_or(0, |n| n.min(u32::MAX as u64) as u32),
                 body,
             }
         }
@@ -308,13 +346,19 @@ pub struct PageInfo {
     pub compared: String,
     pub tickets: Vec<String>,
     pub decisions: Vec<u32>,
+    /// How many gaps with the code its last comparison found.
+    pub gaps: u32,
+    pub draft: bool,
 }
 
 /// The pages of a subject.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Subject {
+    /// Its folder under `spec/`.
     pub name: String,
+    /// The name it is shown under: the `subject` its pages give, else its folder.
+    pub title: String,
     pub pages: Vec<PageInfo>,
 }
 
@@ -759,31 +803,61 @@ impl Space {
     }
 
     /// The pages by subject (the first folder of their path), in order.
+    /// Pages and subjects placed by their `order` first (an import keeps its spec's), then by name.
     pub fn spec_tree(&self) -> Vec<Subject> {
-        let mut subjects: Vec<Subject> = Vec::new();
+        // Each subject with the smallest order of its pages (0 counts as unplaced).
+        let mut subjects: Vec<(u32, Subject, Vec<u32>)> = Vec::new();
         for p in self.pages() {
             let name = if p.path.contains('/') {
                 p.path.split('/').next().unwrap_or_default().to_string()
             } else {
                 p.subject.clone()
             };
+            let rank = if p.order == 0 { u32::MAX } else { p.order };
+            let title = p.subject.trim().to_string();
             let info = PageInfo {
                 path: p.path,
                 title: p.title,
                 compared: p.compared,
                 tickets: p.tickets,
                 decisions: p.decisions,
+                gaps: p.gaps.len() as u32,
+                draft: p.draft,
             };
-            match subjects.iter_mut().find(|s| s.name == name) {
-                Some(s) => s.pages.push(info),
-                None => subjects.push(Subject {
-                    name,
-                    pages: vec![info],
-                }),
+            match subjects.iter_mut().find(|(_, s, _)| s.name == name) {
+                Some((r, s, ranks)) => {
+                    *r = (*r).min(rank);
+                    if s.title == s.name && !title.is_empty() {
+                        s.title = title;
+                    }
+                    s.pages.push(info);
+                    ranks.push(rank);
+                }
+                None => subjects.push((
+                    rank,
+                    Subject {
+                        title: if title.is_empty() {
+                            name.clone()
+                        } else {
+                            title
+                        },
+                        name,
+                        pages: vec![info],
+                    },
+                    vec![rank],
+                )),
             }
         }
-        subjects.sort_by(|a, b| a.name.cmp(&b.name));
+        subjects.sort_by(|a, b| (a.0, &a.1.name).cmp(&(b.0, &b.1.name)));
         subjects
+            .into_iter()
+            .map(|(_, mut s, ranks)| {
+                let mut both: Vec<(u32, PageInfo)> = ranks.into_iter().zip(s.pages).collect();
+                both.sort_by(|a, b| (a.0, &a.1.path).cmp(&(b.0, &b.1.path)));
+                s.pages = both.into_iter().map(|(_, p)| p).collect();
+                s
+            })
+            .collect()
     }
 
     pub fn spec_read(&self, rel: &str) -> Result<Page> {

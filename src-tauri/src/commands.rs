@@ -2997,12 +2997,16 @@ pub async fn docs_spec_write(
     path: String,
     title: Option<String>,
     body: Option<String>,
+    subject: Option<String>,
 ) -> Res<crate::docs::Page> {
     let space = core.docs_space(&id, None).await.map_err(err)?;
     let written = space
         .spec_write(&path, |p| {
             if let Some(t) = title.filter(|t| !t.trim().is_empty()) {
                 p.title = t.trim().to_string();
+            }
+            if let Some(s) = subject.filter(|s| !s.trim().is_empty()) {
+                p.subject = s.trim().to_string();
             }
             if let Some(b) = body {
                 p.body = b;
@@ -3158,6 +3162,42 @@ pub async fn docs_share_resolve(
 #[tauri::command]
 pub async fn docs_share_cancel(core: CoreState<'_>, id: String) -> Res<()> {
     core.docs_share_cancel(&id).await.map_err(err)
+}
+
+/// How the spec found at `path` (one of `docs_detect_spec`'s) would be cut into pages: nothing written.
+#[tauri::command]
+pub async fn docs_import_plan(
+    core: CoreState<'_>,
+    id: String,
+    path: String,
+) -> Res<Vec<crate::docsimport::Draft>> {
+    core.docs_space(&id, None)
+        .await
+        .and_then(|s| s.import_plan(&path))
+        .map_err(err)
+}
+
+/// « Importer », once the user agreed to the cut: the pages of `only` (all when left out), none overwritten.
+#[tauri::command]
+pub async fn docs_import(
+    core: CoreState<'_>,
+    id: String,
+    path: String,
+    only: Option<Vec<String>>,
+) -> Res<crate::docsimport::Imported> {
+    let out = core
+        .docs_space(&id, None)
+        .await
+        .and_then(|s| s.import(&path, only.as_deref()))
+        .map_err(err);
+    core.docs_changed(&id).await;
+    out
+}
+
+/// « Ce qui a bougé »: the last committed changes of the spec.
+#[tauri::command]
+pub async fn docs_recent(core: CoreState<'_>, id: String) -> Res<Vec<crate::docsshare::Moved>> {
+    core.docs_recent(&id).await.map_err(err)
 }
 
 #[cfg(test)]

@@ -10,6 +10,7 @@ import { fileSearches } from './editor/search.svelte';
 import { ancestors, movedPath } from './editor/tree';
 import { trees } from './editor/trees.svelte';
 import { bgRow } from './bgtasks';
+import type { DocsSpaceId } from './docs';
 import { basename, isAbsPath, relPath } from './format';
 import { setLang, t } from './i18n';
 import { dictation } from './dictation.svelte';
@@ -358,6 +359,14 @@ class AppState {
   tickets = $state<Record<string, Ticket>>({});
   /** Projects whose board fills the main area (not saved). */
   board = $state<Record<string, boolean>>({});
+  /** Projects whose Docs tab (ESC-258) fills the main area, in place of the agents and the board (not saved). */
+  docs = $state<Record<string, boolean>>({});
+  /** The space of the Docs tab each project shows: the spec, the decisions or the documents. */
+  docsSpace = $state<Record<string, DocsSpaceId>>({});
+  /** The page of the spec each project shows; none: the map of the subjects. */
+  docsPage = $state<Record<string, string | null>>({});
+  /** A page of the spec just made: it opens to be written. */
+  docsEdit = $state<string | null>(null);
   /** Why no ticket of a project's board starts (its target branch has no commit yet, or is gone), by project. */
   boardIssues = $state<Record<string, string>>({});
   /** What each project's docs have to share (ESC-257), by project id: the status bar says « N changements à partager ». */
@@ -375,6 +384,8 @@ class AppState {
   project = $derived(this.projects.find((p) => p.id === this.ui.activeProject) ?? null);
   /** The board of the project on screen is shown. */
   boardOn = $derived(this.ui.view === 'project' && !!this.project && !!this.board[this.project.id]);
+  /** The Docs tab of the project on screen is shown (ESC-258). */
+  docsOn = $derived(this.ui.view === 'project' && !!this.project && !!this.docs[this.project.id] && !this.board[this.project.id]);
   /** The editor of the project on screen is open, and on screen: the statistics hide it. */
   editorOn = $derived(this.ui.view === 'project' && !!(this.project && this.editor[this.project.id]?.on));
   split = $derived(this.ui.layout === 'split');
@@ -974,6 +985,7 @@ class AppState {
     this.selectedTerm[a.projectId] = null;
     this.selectedLaunch[a.projectId] = null;
     this.board[a.projectId] = false;
+    this.docs[a.projectId] = false;
     const ed = this.editor[a.projectId];
     if (ed?.on) {
       ed.source = a.worktree ? a.id : 'project';
@@ -991,6 +1003,7 @@ class AppState {
     if (id) {
       this.selectedLaunch[p.id] = null;
       this.board[p.id] = false;
+      this.docs[p.id] = false;
       this.closeEditor(p.id);
     }
   }
@@ -1002,6 +1015,7 @@ class AppState {
     if (commandId) {
       this.selectedTerm[p.id] = null;
       this.board[p.id] = false;
+      this.docs[p.id] = false;
       this.closeEditor(p.id);
     }
   }
@@ -1012,6 +1026,7 @@ class AppState {
     this.ui.activeProject = projectId;
     this.ui.view = 'project';
     this.board[projectId] = true;
+    this.docs[projectId] = false;
     this.selectedTerm[projectId] = null;
     this.selectedLaunch[projectId] = null;
     this.closeEditor(projectId);
@@ -1020,6 +1035,28 @@ class AppState {
 
   closeBoard(projectId = this.ui.activeProject) {
     if (projectId) this.board[projectId] = false;
+  }
+
+  /**
+   * Shows the Docs tab of a project (ESC-258), on `space` when given (and on `page` of the spec), in place of the agents,
+   * the board, a terminal, a launch log and the editor.
+   */
+  openDocs(projectId = this.ui.activeProject, space?: DocsSpaceId, page?: string | null) {
+    if (!projectId) return;
+    this.ui.activeProject = projectId;
+    this.ui.view = 'project';
+    this.board[projectId] = false;
+    this.docs[projectId] = true;
+    if (space) this.docsSpace[projectId] = space;
+    if (page !== undefined) this.docsPage[projectId] = page;
+    this.selectedTerm[projectId] = null;
+    this.selectedLaunch[projectId] = null;
+    this.closeEditor(projectId);
+    this.persistUi();
+  }
+
+  closeDocs(projectId = this.ui.activeProject) {
+    if (projectId) this.docs[projectId] = false;
   }
 
   /** A project as the backend now has it (its board settings, mostly). */
@@ -1069,6 +1106,7 @@ class AppState {
     this.ui.activeProject = projectId;
     this.ui.view = 'project';
     this.board[projectId] = false;
+    this.docs[projectId] = false;
     this.selectedTerm[projectId] = null;
     this.selectedLaunch[projectId] = null;
     // Always work through the stored `$state` proxies, not the raw objects the `??=` expressions return:
@@ -1208,6 +1246,7 @@ class AppState {
     if (this.ui.activeProject === id) this.ui.activeProject = this.projects[0]?.id ?? null;
     delete this.editor[id];
     delete this.board[id];
+    delete this.docs[id];
     delete this.boardIssues[id];
     buffers.closeProject(id);
     trees.closeProject(id);
@@ -1316,6 +1355,7 @@ class AppState {
     const next = list[(idx + 1) % list.length];
     if (this.ui.view !== 'project' || this.ui.activeProject !== next.projectId) this.selectProject(next.projectId);
     this.board[next.projectId] = false;
+    this.docs[next.projectId] = false;
     this.cardFocus = { id: next.id, n: this.cardFocus.n + 1 };
   }
 

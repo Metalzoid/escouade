@@ -8,6 +8,7 @@ import branches from './branches';
 import common from './common';
 import composer from './composer';
 import conv from './conv';
+import docs from './docs';
 import editor from './editor';
 import errors from './errors';
 import format from './format';
@@ -39,6 +40,7 @@ export const fr = {
   integrations,
   boardSettings,
   board,
+  docs,
   stats,
   nav,
   git,

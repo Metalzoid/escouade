@@ -9,6 +9,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### New
 
 - A project’s agents share a working memory, whatever their harness: they note in it the project’s ways of doing and its pitfalls, and Escouade offers once to bring in what Claude Code had remembered.
+- A Docs tab joins Agents and Kanban: the product’s specification, by subject on a map that shows where each subject stands against the code, its pages in a tree, to read, edit and share with the team in one click; a spec the project already has is imported, cut by its titles.
 
 ## [2.0.5] — 2026-10-27
 

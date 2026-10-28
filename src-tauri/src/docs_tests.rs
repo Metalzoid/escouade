@@ -52,7 +52,10 @@ fn a_page_reads_back_as_it_was_written() {
         decisions: vec![3, 7],
         compared: "2026-10-28T10:00:00+02:00".into(),
         body: "# Reçu\n\nLe reçu part par e-mail.\n\n---\n\n- un : deux\n- trois".into(),
+        ..Default::default()
     };
+    // Without gaps, draft nor order, the header has none of them (a page reads as it always did).
+    assert!(!page_write(&p).contains("gaps:") && !page_write(&p).contains("draft:"));
     let text = page_write(&p);
     assert!(text.starts_with("---\ntitle: "), "{text}");
     assert_eq!(page_read("paiement/recu-fiscal", &text), p);

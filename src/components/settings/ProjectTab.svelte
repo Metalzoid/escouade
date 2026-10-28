@@ -26,6 +26,7 @@
   import Switch from './Switch.svelte';
   import WorkflowSection from './WorkflowSection.svelte';
   import WorktreeBaseField from './WorktreeBaseField.svelte';
+  import DocsBranchField from './DocsBranchField.svelte';
   import { tip } from '../../lib/tip';
   import { repoLabel } from '../../lib/repos';
   import { SHARED_DIR } from '../../lib/sharing';
@@ -497,6 +498,9 @@
   </Row>
   <Row label={t('settings.project.commit')} desc={t('settings.project.commitDesc')} shared="git.commit_mode">
     <Chips label={t('settings.project.commit')} options={COMMIT_MODES} bind:value={draft.commitMode} />
+  </Row>
+  <Row label={t('docs.branch.label')} desc={t('docs.branch.desc')} wide>
+    <DocsBranchField bind:value={draft.docsBranch} />
   </Row>
 </Group>
 

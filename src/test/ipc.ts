@@ -362,6 +362,11 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.attention = {};
   app.tickets = Object.fromEntries((over.tickets ?? []).map((t) => [t.id, t]));
   app.board = {};
+  app.docs = {};
+  app.docsSpace = {};
+  app.docsPage = {};
+  app.docsEdit = null;
+  app.docsShare = {};
   app.boardIssues = {};
   app.setupOutput = {};
   app.relaunched = {};

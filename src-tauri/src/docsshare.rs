@@ -578,3 +578,70 @@ impl<R: Runtime> Core<R> {
         Ok(())
     }
 }
+
+/// A change of the spec already committed (ESC-258, « Ce qui a bougé » of the spec's map): who,
+/// when, what it said and the pages it touched.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Moved {
+    /// Seconds since the epoch.
+    pub when: i64,
+    pub author: String,
+    pub message: String,
+    /// The pages (`subject/page`) it touched.
+    pub pages: Vec<String>,
+}
+
+/// The last `limit` commits that touched the spec, newest first. A folder with no commit yet has none.
+pub async fn recent(dir: &str, limit: usize) -> Vec<Moved> {
+    let n = limit.to_string();
+    let Ok(out) = git::run(
+        dir,
+        &[
+            "log",
+            "-n",
+            &n,
+            "--format=%x1e%at%x1f%an%x1f%s",
+            "--name-only",
+            "--",
+            ".escouade/spec",
+        ],
+    )
+    .await
+    else {
+        return Vec::new();
+    };
+    parse_recent(&String::from_utf8_lossy(&out))
+}
+
+/// `recent`'s reading of `git log`.
+pub fn parse_recent(text: &str) -> Vec<Moved> {
+    text.split('\u{1e}')
+        .filter_map(|rec| {
+            let mut lines = rec.lines();
+            let head = lines.next()?;
+            let mut f = head.split('\u{1f}');
+            let when = f.next()?.trim().parse().ok()?;
+            let author = f.next().unwrap_or_default().to_string();
+            let message = f.next().unwrap_or_default().to_string();
+            let pages = lines
+                .filter_map(|l| l.trim().strip_prefix(".escouade/spec/"))
+                .filter_map(|l| l.strip_suffix(".md"))
+                .map(str::to_string)
+                .collect();
+            Some(Moved {
+                when,
+                author,
+                message,
+                pages,
+            })
+        })
+        .collect()
+}
+
+impl<R: Runtime> Core<R> {
+    /// The last changes of the project's spec that were committed.
+    pub async fn docs_recent(&self, project_id: &str) -> Result<Vec<Moved>> {
+        Ok(recent(&self.docs_dir(project_id).await?, 6).await)
+    }
+}
