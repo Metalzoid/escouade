@@ -20,7 +20,7 @@ async function watch(page: Page) {
     const fetch = window.fetch.bind(window);
     window.fetch = (input, init) => {
       const command = decodeURIComponent(String(input instanceof Request ? input.url : input));
-      if (command.includes('plugin:opener|open_url')) {
+      if (command.includes('open_url')) {
         w.esc101Opened.push(JSON.parse(String(init?.body ?? '{}')).url);
         // As Tauri's own answer.
         return Promise.resolve(new Response('null', { headers: { 'Content-Type': 'application/json', 'Tauri-Response': 'ok' } }));
