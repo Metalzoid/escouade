@@ -165,6 +165,8 @@ mod usage;
 mod vectors;
 #[cfg(test)]
 mod vibe_tests;
+#[cfg(test)]
+mod vibe_tui_tests;
 mod voice;
 mod which;
 mod workflow;

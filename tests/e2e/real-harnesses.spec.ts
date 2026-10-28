@@ -1,9 +1,9 @@
 // The real trial of each harness before a release (ESC-52): the app (debug build, data of the test's) drives the real
-// Claude Code, Codex, OpenCode and Copilot CLI of the machine, on the accounts it has. Each harness takes a small ticket in
+// Claude Code, Codex, OpenCode, Copilot CLI and Mistral Vibe of the machine, on the accounts it has. Each harness takes a small ticket in
 // a worktree up to its commit and its merge, and an agent of its shows its terminal view; then an agent on Claude Code
 // whose quota is spent (simulated: tests/fixtures/real-claude-quota.mjs) goes on on Codex (ESC-88).
 //
-// Skipped unless ESCOUADE_E2E_REAL names what to try (`claude,codex,opencode,copilot,handover`): each costs real usage.
+// Skipped unless ESCOUADE_E2E_REAL names what to try (`claude,codex,opencode,copilot,vibe,handover`): each costs real usage.
 // What each needs (docs/TODO-1.8.md, chapter 1, « Tests ») :
 // - claude: Claude Code signed in as the user's own (Principal: no CLAUDE_CONFIG_DIR), ESCOUADE_REAL_CLAUDE its program;
 //   on Haiku. What it writes in ~/.claude for the test's folders is taken out at the end.
@@ -14,6 +14,9 @@
 // - copilot: ESCOUADE_REAL_COPILOT, signed in by the user (`copilot login`, ~/.copilot, the token in the system's keychain):
 //   its config.json and mcp-config.json are put back as they were at the end, the sessions of the trial taken out of its
 //   session-state, and what it adds to %LOCALAPPDATA%\copilot.
+// - vibe: ESCOUADE_REAL_VIBE (its vibe-acp, 3.0.3 or later; its interface `vibe` beside it), its API key set by the user
+//   (`vibe --setup`, in the system's keychain, never read): each agent has a VIBE_HOME of its own; ~/.vibe is checked and
+//   put back byte for byte at the end (ESC-268).
 // ESCOUADE_E2E_REAL_OUT: a folder kept for the screenshots (the terminals are drawn on a canvas).
 // Run it with TMP and TEMP outside of %TEMP% (Codex accepts nothing by itself in a folder of %TEMP%), Claude Code's own
 // variables unset (CLAUDECODE…) when it is run from Claude Code.
@@ -25,7 +28,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
 import { addProject, expect, send, test, type App } from './fixture';
-import { keepClaude, keepCodex, keepCopilot } from './real-keep';
+import { keepClaude, keepCodex, keepCopilot, keepVibe } from './real-keep';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const WANTED = new Set((process.env.ESCOUADE_E2E_REAL ?? '').split(',').map((s) => s.trim()));
@@ -38,8 +41,14 @@ const QUOTA = path.join(ROOT, 'tests', 'fixtures', 'real-claude-quota.cmd');
 /** Up to half an hour for a ticket: a local model is slow. */
 const LONG = 30 * 60_000;
 
-type Harness = 'claude' | 'codex' | 'opencode' | 'copilot';
-const NAMES: Record<Harness, string> = { claude: 'Claude Code', codex: 'Codex', opencode: 'OpenCode', copilot: 'Copilot CLI' };
+type Harness = 'claude' | 'codex' | 'opencode' | 'copilot' | 'vibe';
+const NAMES: Record<Harness, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  opencode: 'OpenCode',
+  copilot: 'Copilot CLI',
+  vibe: 'Mistral Vibe',
+};
 
 let shot = 0;
 /** A screenshot kept in OUT, for what the canvas of a terminal shows. */
@@ -80,6 +89,11 @@ function realEnv(h: Harness | 'handover'): Record<string, string> {
     // The user's own ~/.copilot, signed in (Principal): no token of the environment's.
     for (const k of ['COPILOT_HOME', 'GH_TOKEN', 'GITHUB_TOKEN', 'COPILOT_GITHUB_TOKEN']) env[k] = undefined;
   }
+  if (h === 'vibe') {
+    env.ESCOUADE_VIBE = process.env.ESCOUADE_REAL_VIBE;
+    // Its key from the system's keychain, as the user set it: none of the environment's.
+    for (const k of ['VIBE_HOME', 'MISTRAL_API_KEY']) env[k] = undefined;
+  }
   return env as Record<string, string>;
 }
 
@@ -92,7 +106,7 @@ function realSettings(h: Harness | 'handover', root: string): Record<string, unk
   if (h === 'claude') s.claudePath = process.env.ESCOUADE_REAL_CLAUDE;
   if (h === 'handover') s.claudePath = QUOTA;
   // The texts (commit messages…) written by the harness tried, Claude Code apart (Haiku).
-  if (h === 'codex' || h === 'copilot') s.writerEngine = h;
+  if (h === 'codex' || h === 'copilot' || h === 'vibe') s.writerEngine = h;
   if (h === 'opencode') {
     s.writerEngine = 'opencode';
     s.writerModel = `ollama/${MODEL}`;
@@ -157,6 +171,8 @@ const TRUST: Record<Harness, string[]> = {
   opencode: [],
   // « Yes, and remember this folder » second.
   copilot: ['ArrowDown', 'Enter'],
+  // None: Escouade writes the trust of the agent's folder in its VIBE_HOME.
+  vibe: [],
 };
 
 /**
@@ -288,7 +304,7 @@ async function copilotAccount(page: Page) {
 
 // ---------- the trials ----------
 
-for (const h of ['claude', 'codex', 'opencode', 'copilot'] as const) {
+for (const h of ['claude', 'codex', 'opencode', 'copilot', 'vibe'] as const) {
   test.describe(`the real ${NAMES[h]}`, () => {
     test.skip(!WANTED.has(h), `ESCOUADE_E2E_REAL does not name ${h}`);
     test.setTimeout(2 * LONG);
@@ -304,9 +320,12 @@ for (const h of ['claude', 'codex', 'opencode', 'copilot'] as const) {
     });
 
     test(`takes a ticket up to its merge, and shows its terminal view`, async ({ app }) => {
-      const back = [h === 'claude' && keepClaude(), h === 'codex' && keepCodex(), h === 'copilot' && keepCopilot()].filter(
-        Boolean,
-      ) as (() => void)[];
+      const back = [
+        h === 'claude' && keepClaude(),
+        h === 'codex' && keepCodex(),
+        h === 'copilot' && keepCopilot(),
+        h === 'vibe' && keepVibe(),
+      ].filter(Boolean) as (() => void)[];
       try {
         await snap(app.page, `${h}-start`);
         await addProject(app.page, app.repo, { firstAgent: false });

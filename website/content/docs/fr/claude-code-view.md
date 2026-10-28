@@ -121,6 +121,18 @@ Un agent sur Cursor CLI a aussi sa vue : le bouton s’appelle « Vue Cursor CL
 - **Interrompre** envoie `Ctrl+C`, comme dans l’interface.
 - **Ce qui n’est pas suivi dans cette vue** : le bandeau « Plan », les sous-agents, les permissions et les questions en attente, le résultat des outils, les tokens.
 
+## Avec Mistral Vibe
+
+Un agent sur Mistral Vibe a aussi sa vue : le bouton s’appelle « Vue Mistral Vibe » et lance l’interface de Vibe (`vibe`) dans le dossier de l’agent, avec son modèle et son mode, dans le `VIBE_HOME` de l’agent. Les deux vues partagent la même session : l’interface la reprend (`vibe --resume`) avec tout son historique, et son `vibe-acp` la reprend au retour dans la vue Escouade, sans rien perdre ni rien relayer. Ce qui change par rapport à Claude Code :
+
+- **Le suivi.** Escouade lit le journal de la session, là où Vibe la garde (`logs/session/unified/<session>/journal/` du `VIBE_HOME` de l’agent), d’un segment au suivant : tes messages, ses réponses, ses outils et leur fin, l’autorisation ou la question qu’il attend, et la fin de chaque tour. La carte de l’agent dit quand il travaille, quand il attend ta réponse dans le terminal, et quand il a fini. Ses hooks (`pre_tool`, `post_tool`, `post_agent`) lancent `escouade-hook`, installée avec l’app, qui dit à Escouade la session où l’interface travaille ; ils sont écrits dans le `VIBE_HOME` de l’agent à l’ouverture de la vue et retirés au retour, jamais dans ton `~/.vibe`.
+- **Une session pas encore écrite.** Vibe ne garde une session qu’après un premier message : celle d’un agent qui n’a encore rien dit n’est pas reprise, l’interface en ouvre une nouvelle, et ses hooks la donnent à l’agent.
+- **Le serveur MCP d’Escouade** passe par les variables de l’interface (`VIBE_MCP_SERVERS`, et le jeton dans une autre variable), jamais sur sa ligne de commande ni dans un fichier.
+- **La confiance du dossier.** Escouade l’écrit dans le `VIBE_HOME` de l’agent : Vibe ne pose pas la question.
+- **Les modes.** « Demander » lance son agent `ask`, « Édits auto » `accept-edits`, « Bypass » `auto-approve` ; « Plan » demande, comme « Demander », Vibe n’ayant pas de mode plan. Pour un projet privé, les chemins des autres projets restent refusés à ses outils de fichiers, et « Bypass » reste en `ask`.
+- **Interrompre** envoie `Échap`, comme dans l’interface.
+- **Ce qui n’est pas suivi dans cette vue** : le bandeau « Plan », le coût et les tokens, la réflexion (réglée par `/thinking` dans l’interface).
+
 ## Sous Windows avec WSL
 
 Quand Claude Code est installé dans WSL, Escouade le lance par `wsl.exe` (voir [les réglages des harness](settings-claude-code)). Le suivi en direct de la vue Claude Code demande alors le réseau miroir de WSL : sans lui, les hooks de l’interface n’atteignent pas l’app. Les réglages le signalent sous le chemin de `claude` (« Le réseau de WSL est en NAT… »). Pour passer en mode miroir, ajoute ceci à `%UserProfile%\.wslconfig`, puis lance `wsl --shutdown` :

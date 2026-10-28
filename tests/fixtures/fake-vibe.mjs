@@ -21,7 +21,7 @@
 // `-p` (`vibe -p`, the texts written, ESC-267): its question read from its input, its answer printed alone
 // (« Réponse de Vibe : <its last line> », a name « <two words>-vibe » for a <tache>), its call logged ({print: {argv,
 // home, apiKey, question}}); a refused key prints Vibe's error on stderr, nothing on stdout.
-// MISTRAL_API_KEY=cle-refusee-… : every prompt answers the error -31002 of a key Vibe refuses. Sessions are kept in
+// With --agent, it is its interface `vibe` (fake-vibe-tui.mjs). MISTRAL_API_KEY=cle-refusee-… : every prompt answers the error -31002 of a key Vibe refuses. Sessions are kept in
 // $VIBE_HOME/logs/session/fake/<id>.json, replayed by session/load and copied by session/fork. Each message, and each
 // launch ({launch: {argv, cwd, home, apiKey, telemetry, autoUpdate}}: the fake values of the tests), goes to
 // $FAKE_VIBE_LOG when set.
@@ -33,6 +33,12 @@ const argv = process.argv.slice(2);
 if (argv.includes('--version') || argv.includes('-v')) {
   console.log(`vibe-acp ${process.env.FAKE_VIBE_VERSION || '3.0.3'}`);
   process.exit(0);
+}
+if (argv.includes('--agent')) {
+  // Its interface (« Vue Vibe », started with its agent): fake-vibe-tui.mjs, which ends the process itself.
+  const { tui } = await import('./fake-vibe-tui.mjs');
+  tui(argv);
+  await new Promise(() => {});
 }
 const logFile = process.env.FAKE_VIBE_LOG;
 const log = (entry) => logFile && fs.appendFileSync(logFile, JSON.stringify(entry) + '\n');
@@ -126,6 +132,15 @@ const fileOf = (id) => path.join(sessionsDir, `${id}.json`);
 function save(s) {
   const kept = { id: s.id, cwd: s.cwd, history: s.history, model: s.model, thinking: s.thinking, spent: s.spent };
   fs.writeFileSync(fileOf(s.id), JSON.stringify(kept));
+  // Vibe's store keeps a session once something was said in it (an empty one is not kept): its journal, where its
+  // interface resumes it (fake-vibe-tui.mjs).
+  if (s.history.length) {
+    const journal = path.join(home, 'logs', 'session', 'unified', s.id, 'journal');
+    if (!fs.existsSync(journal)) {
+      fs.mkdirSync(journal, { recursive: true });
+      fs.writeFileSync(path.join(journal, '0000000000000001.jsonl'), '');
+    }
+  }
 }
 // What a session has spent so far, as Vibe's usage_update says it.
 const NONE_SPENT = { cost: 0, prompt: 0, cached: 0, completion: 0 };

@@ -121,6 +121,18 @@ An agent on Cursor CLI has its view too: the button is called “Cursor CLI view
 - **Interrupting** sends `Ctrl+C`, as in the interface.
 - **Not tracked in this view**: the “Plan” banner, subagents, permissions and questions waiting, tool results, tokens.
 
+## With Mistral Vibe
+
+An agent on Mistral Vibe has its view too: the button is called “Mistral Vibe view” and starts Vibe’s interface (`vibe`) in the agent’s folder, with its model and mode, in the agent’s `VIBE_HOME`. Both views share the same session: the interface resumes it (`vibe --resume`) with all its history, and its `vibe-acp` resumes it back in the Escouade view, with nothing lost and nothing to relay. What differs from Claude Code:
+
+- **Following.** Escouade reads the session’s journal, where Vibe keeps it (`logs/session/unified/<session>/journal/` of the agent’s `VIBE_HOME`), from one segment to the next: your messages, its replies, its tools and their end, the permission or question it waits for, and the end of each turn. The agent’s card says when it works, when it waits for your answer in the terminal, and when it’s done. Its hooks (`pre_tool`, `post_tool`, `post_agent`) run `escouade-hook`, installed with the app, which tells Escouade the session the interface works in; they’re written in the agent’s `VIBE_HOME` when the view opens and taken away on the way back, never in your `~/.vibe`.
+- **A session not written yet.** Vibe keeps a session only after a first message: an agent that said nothing yet isn’t resumed, the interface opens a new session, and its hooks give it to the agent.
+- **Escouade’s MCP server** goes through the interface’s variables (`VIBE_MCP_SERVERS`, and the token in another variable), never on its command line nor in a file.
+- **Folder trust.** Escouade writes it in the agent’s `VIBE_HOME`: Vibe doesn’t ask.
+- **Modes.** “Ask” starts its `ask` agent, “Accept edits” `accept-edits`, “Bypass” `auto-approve`; “Plan” asks, as “Ask” does, Vibe having no plan mode. For a private project, the other projects’ paths stay refused to its file tools, and “Bypass” stays in `ask`.
+- **Interrupting** sends `Esc`, as in the interface.
+- **Not tracked in this view**: the “Plan” banner, cost and tokens, thinking (set by `/thinking` in the interface).
+
 ## On Windows with WSL
 
 When Claude Code is installed in WSL, Escouade launches it through `wsl.exe` (see [the harness settings](settings-claude-code)). Live tracking of the Claude Code view then requires WSL’s mirrored networking: without it, the interface’s hooks don’t reach the app. The settings point it out under the `claude` path (“WSL’s network is NAT…”). To switch to mirrored mode, add this to `%UserProfile%\.wslconfig`, then run `wsl --shutdown`:

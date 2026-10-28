@@ -191,6 +191,97 @@ test.describe('an agent on Mistral Vibe', () => {
   });
 });
 
+test.describe('« Vue Mistral Vibe » (ESC-268)', () => {
+  test.use({ appEnv: { ESCOUADE_VIBE: FAKE_VIBE }, preStart: { run: () => ({ mcpEnabled: true }) } });
+
+  /** The sessions opened in the agent's folder (not the one that read the account's models). */
+  const agentSessions = (app: App) => sent(app, 'session/new').filter((p) => path.resolve(p.cwd) === path.resolve(app.repo));
+
+  /** The hooks the fake interface ran, in the agent's VIBE_HOME `home`. */
+  const hooksRun = (home: string): { event: string }[] => {
+    const file = path.join(home, 'fake-tui-hooks.jsonl');
+    if (!fs.existsSync(file)) return [];
+    return fs
+      .readFileSync(file, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l));
+  };
+
+  /** The launches of the fake interface, in the agent's own VIBE_HOME. */
+  const launches = (app: App): any[] => {
+    const homes = path.join(app.data, 'agent-homes');
+    if (!fs.existsSync(homes)) return [];
+    return fs
+      .readdirSync(homes)
+      .map((id) => path.join(homes, id, 'fake-tui-launches.jsonl'))
+      .filter((f) => fs.existsSync(f))
+      .flatMap((f) => fs.readFileSync(f, 'utf8').split('\n').filter(Boolean))
+      .map((l) => JSON.parse(l));
+  };
+
+  test('opens Vibe’s interface on the agent’s session with Escouade’s server, follows its turns, and hands the session back', async ({
+    app,
+  }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    await newVibeAgent(page);
+    await send(page, 'bonjour Vibe');
+    await expect(page.getByText('Vibe a reçu : bonjour Vibe')).toBeVisible();
+    expect(agentSessions(app)).toHaveLength(1);
+
+    await page.getByRole('button', { name: 'Vue Mistral Vibe' }).click();
+    const view = page.locator('main .tui');
+    await expect(view.locator('.xterm')).toBeVisible({ timeout: 20_000 });
+    await expect.poll(() => launches(app).length, { timeout: 20_000 }).toBe(1);
+    // Its interface on the session (one store for both), in the agent's VIBE_HOME, with Escouade's server in its
+    // variables: its token in a variable of its own, never on its command line.
+    const launch = launches(app)[0];
+    const session = launch.argv[launch.argv.indexOf('--resume') + 1];
+    expect(launch.argv).toContain('--resume');
+    expect(launch.argv).toContain('--agent');
+    const servers = JSON.parse(launch.mcpServers);
+    expect(servers[0]).toMatchObject({ name: 'escouade', transport: 'http', api_key_env: 'ESCOUADE_MCP_TOKEN' });
+    expect(launch.mcpToken).toBeTruthy();
+    expect(launch.argv.join(' ')).not.toContain(launch.mcpToken);
+    expect(launch.mcpServers).not.toContain(launch.mcpToken);
+    // Its hooks and the trust of the folder, in its VIBE_HOME: no question about the folder, no band.
+    expect(launch.hooks).toContain('post_agent');
+    expect(launch.trusted).toContain('trusted = [');
+    await expect(view.getByRole('status')).toHaveCount(0);
+
+    // A message typed there: the card says it works, then that it is done. The terminal is drawn on a canvas: what the
+    // fake does is read from the conversation.
+    await view.locator('.xterm').click();
+    const ended = () => hooksRun(launch.home).filter((e) => e.event === 'post_agent').length;
+    await page.keyboard.type('Bonjour la vue');
+    await page.keyboard.press('Enter');
+    await expect.poll(ended, { timeout: 20_000 }).toBe(1);
+    // Then a command, in the next segment of its journal: its hooks before and after it.
+    await page.keyboard.type('commande');
+    await page.keyboard.press('Enter');
+    await expect.poll(ended, { timeout: 20_000 }).toBe(2);
+    expect(hooksRun(launch.home).map((e) => e.event)).toEqual(['post_agent', 'pre_tool', 'post_tool', 'post_agent']);
+    await expect(page.locator('.card', { hasText: 'Mistral' })).toContainText('Terminé');
+    await page.waitForTimeout(500);
+    await shots(page, 'view');
+
+    // Back in Escouade's view: the interface's turns in the conversation, its command among them; the same session
+    // resumed by its process, the hooks of its view gone.
+    await page.getByRole('button', { name: 'Vue Escouade' }).click();
+    await expect(page.getByText('Fini : Bonjour la vue')).toBeVisible();
+    await expect(page.getByText('Fini : commande')).toBeVisible();
+    await expect(page.locator('main.conv .bubble', { hasText: /^\s*Bonjour la vue\s*$/ })).toHaveCount(1);
+    await expect(page.locator('main.conv').getByText('npm test').first()).toBeVisible();
+    await send(page, 'encore');
+    await expect(page.getByText('Vibe a reçu : encore')).toBeVisible();
+    expect(agentSessions(app)).toHaveLength(1);
+    expect(sent(app, 'session/load').at(-1).sessionId).toBe(session);
+    expect(fs.existsSync(path.join(launch.home, 'hooks.toml'))).toBe(false);
+    await shots(page, 'view-back');
+  });
+});
+
 // ESC-267: a second Mistral Vibe account is an API key, kept in the system keychain (the sandbox's entries, apart from
 // the user's) and given to its agents by MISTRAL_API_KEY, never on their command line nor in a file of Escouade's; what a
 // turn costs is what its session's cost grew by; a rate limit ends the turn « limité », its resume planned.

@@ -72,6 +72,7 @@ fn claude_codes_launch_is_its_arguments_and_its_settings_file() {
         session: Some("s-new"),
         remote: None,
         private_file: file,
+        home: None,
         hooks: HookServer {
             url: "http://127.0.0.1:4120/hook",
             token_var: "ESCOUADE_HOOK_TOKEN",

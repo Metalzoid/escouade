@@ -10,6 +10,7 @@ fn launch_of(meta: &AgentMeta, session: Option<&str>) -> TerminalArgs {
         session,
         remote: None,
         private_file: Path::new("/data/tui/a1.json"),
+        home: None,
         hooks: HookServer {
             url: "http://127.0.0.1:4120/hook",
             token_var: "ESCOUADE_HOOK_TOKEN",

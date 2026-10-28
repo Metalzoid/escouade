@@ -36,7 +36,7 @@ Whatever the harness, the agent has the same conversation: the answer and the re
 | Message during a turn | waits for the end of the turn | enters the turn | waits for the end of the turn | enters the turn | waits for the end of the turn | waits for the end of the turn |
 | Cost | exact | estimated | exact (0 when local) | exact, in AI credits | not told | exact |
 | Quota | 5-hour and 7-day windows | 5-hour and 7-day windows (30 days on the free plan) | none: daily budget | monthly credits | a link to its dashboard | none: daily budget, a link to Mistral’s console |
-| Terminal view | “Claude Code view” | “Codex view” | “OpenCode view” | “Copilot CLI view” | “Cursor CLI view”, limited following | not yet |
+| Terminal view | “Claude Code view” | “Codex view” | “OpenCode view” | “Copilot CLI view” | “Cursor CLI view”, limited following | “Mistral Vibe view” |
 | Attached PDFs | yes | no | no | no | no | no |
 | Remote control, background tasks | yes | no | no | no | no | no |
 
@@ -195,7 +195,7 @@ For a private project, the other projects’ paths are refused to its read and w
 
 ### Cost, quota and what Vibe doesn’t do
 
-Vibe tells the cost and tokens of each turn: the conversation, the agent’s card, the status bar and the statistics show them, as for OpenCode. It tells no quota (a Mistral API key is billed by use): the day’s cost and a “Daily budget ($)” stand in for it, and “Usage on admin.mistral.ai”, in Settings › Accounts and in the quota panel, opens Mistral’s console. Its rate limit (“Rate limit exceeded”, after five minutes of Vibe’s retries) stops the turn on an amber card; the agent goes on by itself a minute later, or, for a ticket’s agent, on another Vibe account when “Resume a ticket’s agent stopped by the usage limit on another account” is on. The texts written, when “Model for written texts” is “Mistral Vibe”, go through `vibe -p`, without any tool, in one turn and 0.05 $ at most. No terminal view yet. No Auto mode, attached PDFs, `/` commands in Escouade (`/compact` goes as a message), remote control or background tasks. It gets Escouade’s MCP server through its session; the switch doesn’t declare it in Vibe’s config yet.
+Vibe tells the cost and tokens of each turn: the conversation, the agent’s card, the status bar and the statistics show them, as for OpenCode. It tells no quota (a Mistral API key is billed by use): the day’s cost and a “Daily budget ($)” stand in for it, and “Usage on admin.mistral.ai”, in Settings › Accounts and in the quota panel, opens Mistral’s console. Its rate limit (“Rate limit exceeded”, after five minutes of Vibe’s retries) stops the turn on an amber card; the agent goes on by itself a minute later, or, for a ticket’s agent, on another Vibe account when “Resume a ticket’s agent stopped by the usage limit on another account” is on. The texts written, when “Model for written texts” is “Mistral Vibe”, go through `vibe -p`, without any tool, in one turn and 0.05 $ at most. No Auto mode, attached PDFs, `/` commands in Escouade (`/compact` goes as a message), remote control or background tasks. It gets Escouade’s MCP server through its session; the switch doesn’t declare it in Vibe’s config yet. The “Mistral Vibe view” runs the agent in Vibe’s interface, on the same session (see [the terminal view](claude-code-view#with-mistral-vibe)).
 
 ## The MCP server
 

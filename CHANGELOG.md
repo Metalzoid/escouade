@@ -10,6 +10,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 - Mistral Vibe devient un sixième harness : ses agents conversent, demandent leurs permissions et posent leurs questions dans Escouade, avec ses modèles, ses modes et un mode Plan joué par Escouade.
 - Mistral Vibe a plusieurs comptes, chacun par sa clé d’API Mistral, et montre ce que coûte chaque tour, dans la conversation, la barre d’état et les statistiques ; à sa limite de débit, l’agent reprend seul une minute plus tard.
+- La « Vue Mistral Vibe » ouvre l’interface de Vibe dans un terminal, sur la session de l’agent : Escouade suit ses messages, ses outils et ses fins de tour, lui donne son serveur MCP, et le retour à la conversation reprend la même session.
 - Un index du code, proposé à l’ajout d’un projet et dans ses réglages, fait trouver le code aux agents plus vite et pour moins de tokens, sans que rien ne quitte la machine ; les statistiques montrent ce qu’il a fait économiser, en tokens et en dollars.
 - Les agents d’un projet partagent une mémoire de travail, quel que soit leur harness : ils y notent les façons de faire et les écueils du projet, et Escouade propose une fois d’y reprendre ce que Claude Code avait retenu.
 - Les documents du projet ont leur drive dans l’onglet Docs : des dossiers, le glisser-déposer et une recherche ; un fichier déposé (PDF, Word, Markdown, texte) est lu sur ta machine et rangé seul dans le bon dossier, et chacun dit s’il a été lu par les agents et combien de fois il est cité.

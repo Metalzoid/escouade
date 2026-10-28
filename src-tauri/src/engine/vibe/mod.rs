@@ -25,6 +25,7 @@
 pub(crate) mod bench;
 mod locate;
 mod process;
+pub(crate) mod terminal;
 
 use process::VibeProcess;
 
@@ -165,8 +166,8 @@ pub fn caps() -> EngineCaps {
         quota_windows: Vec::new(),
         // `usage_update.cost`, in dollars (ESC-267).
         cost: CostKind::Exact,
-        // Its interface in a terminal comes with ESC-268.
-        terminal_view: false,
+        // Its interface `vibe` in a terminal (`terminal`, ESC-268).
+        terminal_view: true,
         remote_control: false,
         background_tasks: false,
         todo_tools: false,
@@ -410,19 +411,25 @@ fn session_refused(lang: Lang, e: &anyhow::Error) -> String {
 /// project's config. Its path as Vibe writes it, a literal string of TOML (tried: `C:\…`, not
 /// `C:/…`).
 pub(crate) fn trust(home: &std::path::Path, cwd: &str) -> std::io::Result<()> {
+    let Some(file) = trusted_folders(cwd) else {
+        return Ok(());
+    };
+    std::fs::create_dir_all(home)?;
+    std::fs::write(home.join(TRUSTED_FOLDERS), file)
+}
+
+/// The file of the folders Vibe trusts, in its `VIBE_HOME`.
+pub(crate) const TRUSTED_FOLDERS: &str = "trusted_folders.toml";
+
+/// What `trusted_folders.toml` holds to trust `cwd` alone; None for a path a literal string of
+/// TOML cannot hold.
+pub(crate) fn trusted_folders(cwd: &str) -> Option<String> {
     let path = if cfg!(windows) {
         cwd.replace('/', "\\")
     } else {
         cwd.to_string()
     };
-    if path.contains('\'') {
-        return Ok(());
-    }
-    std::fs::create_dir_all(home)?;
-    std::fs::write(
-        home.join("trusted_folders.toml"),
-        format!("trusted = ['{path}']\n"),
-    )
+    (!path.contains('\'')).then(|| format!("trusted = ['{path}']\n"))
 }
 
 /// The file tools of Vibe the paths of a private project are refused to, by their `denylist` in
@@ -452,6 +459,16 @@ fn literal_glob(path: &str) -> String {
 pub(crate) fn fence_config(home: &std::path::Path, fence: &[String]) -> Result<()> {
     let file = home.join("config.toml");
     let before = std::fs::read_to_string(&file).unwrap_or_default();
+    let after = fenced_config(&before, fence)?;
+    if after != before {
+        std::fs::create_dir_all(home)?;
+        std::fs::write(&file, after)?;
+    }
+    Ok(())
+}
+
+/// The agent's `config.toml` (`before`) with the refusals of `fence_config`.
+pub(crate) fn fenced_config(before: &str, fence: &[String]) -> Result<String> {
     let mut doc: toml_edit::DocumentMut = before.parse()?;
     let patterns: Vec<String> = fence
         .iter()
@@ -490,12 +507,7 @@ pub(crate) fn fence_config(home: &std::path::Path, fence: &[String]) -> Result<(
     if let Some(t) = doc.get_mut("tools").and_then(|t| t.as_table_mut()) {
         t.set_implicit(true);
     }
-    let after = doc.to_string();
-    if after != before {
-        std::fs::create_dir_all(home)?;
-        std::fs::write(&file, after)?;
-    }
-    Ok(())
+    Ok(doc.to_string())
 }
 
 /// A message to Vibe: its text, the images joined to it (ACP's `image` blocks), the text files
@@ -748,7 +760,7 @@ impl Engine for Vibe {
     }
 
     fn terminal(&self) -> Option<&'static dyn super::TerminalView> {
-        None
+        Some(&terminal::VIBE_TERMINAL)
     }
 
     fn install(&self) -> Install {
@@ -805,6 +817,8 @@ impl Engine for Vibe {
             if let Err(e) = trust(home, &spawn.cwd) {
                 log::warn!("vibe: the trust of {} not written: {e}", spawn.cwd);
             }
+            // The hooks of its view are its interface's alone (`terminal`).
+            terminal::forget_hooks(home);
             fence_config(home, &fence).map_err(|e| {
                 anyhow!(tr!(
                     "Les chemins des projets privés n’ont pas pu être refusés à Mistral Vibe ({e}) : l’agent ne démarre pas.",

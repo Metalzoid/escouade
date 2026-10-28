@@ -33,6 +33,9 @@ pub(crate) struct VibeState {
     /// out; and the forms asked, by their request, for the answers recorded.
     loading: Option<Value>,
     forms: HashMap<String, Value>,
+    /// Its interface (« Vue Vibe », `agent/vibe_tui.rs`): the last turn of its journal ended, which
+    /// a segment read again does not start again.
+    pub(super) tui_ended: Option<String>,
     /// What the session had spent when its turn began, and what it has spent so far, as its
     /// `usage_update` last told it.
     base: Option<Spent>,

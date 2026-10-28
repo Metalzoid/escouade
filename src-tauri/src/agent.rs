@@ -33,6 +33,7 @@ mod opencode;
 pub mod sidechain;
 mod transcript;
 mod vibe;
+mod vibe_tui;
 
 pub use transcript::HookOutcome;
 

@@ -138,3 +138,33 @@ export function keepCopilot() {
     console.log(`copilot: config put back, ${ours.length} sessions and ${added.length} entries of %LOCALAPPDATA%\\copilot taken out`);
   };
 }
+
+/**
+ * Mistral Vibe: the user's ~/.vibe (its config, its trust, its hooks; its key is in the system's keychain, never read)
+ * as it was, byte for byte. Escouade gives each agent a VIBE_HOME of its own and should write nothing there: what
+ * changed is put back and said, a file added naming the test's folders taken out.
+ */
+export function keepVibe() {
+  const home = path.join(HOME, '.vibe');
+  const list = () =>
+    fs.existsSync(home)
+      ? (fs.readdirSync(home, { recursive: true, encoding: 'utf8' }) as string[]).filter((f) => fs.statSync(path.join(home, f)).isFile())
+      : [];
+  const saved = new Map(list().map((f) => [f, fs.readFileSync(path.join(home, f))]));
+  return () => {
+    const changed: string[] = [];
+    for (const [name, bytes] of saved) {
+      const file = path.join(home, name);
+      if (!fs.existsSync(file) || !fs.readFileSync(file).equals(bytes)) {
+        changed.push(name);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, bytes);
+      }
+    }
+    const added = list().filter((f) => !saved.has(f));
+    for (const f of added) if (ours(path.join(home, f))) fs.rmSync(path.join(home, f), { force: true });
+    console.log(
+      `vibe: ~/.vibe ${changed.length || added.length ? `changed (${[...changed, ...added].join(', ')}), put back` : 'as it was, byte for byte'}`,
+    );
+  };
+}
