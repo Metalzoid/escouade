@@ -676,7 +676,7 @@ L'ordre des harness devient : Cursor CLI, Mistral Vibe, Gemini CLI, OpenCode, Co
 
 **Ce qui manquait au store et au lien avec Escouade** :
 - le lien profond `escouade://plugin/<id>` (STORE-11, ESC-287), qui ouvre une page et n'installe jamais rien ;
-- les plugins proposés par un projet, `plugins.recommended` de `.escouade.yml` (PLG-13, ESC-288) ;
+- les plugins proposés par un projet, `plugins.recommended` de `.escouade.yml` (PLG-14, ESC-288) ;
 - le reste rejoint les tickets du store : la compatibilité, les limites de débit et la copie de la liste de révocation dans STORE-6 (ESC-233) ; la dernière version compatible, Réglages › Réseau, la télémétrie avec l'accord et le passage d'une installation par git au store dans STORE-9 (ESC-236) ; les pages des plugins de première main, les catégories et les signalements ouverts à tous dans STORE-4 (ESC-231).
 
 **Les décisions de la revue** (le chef d'escouade, à confirmer par l'utilisateur s'il le veut autrement) :
