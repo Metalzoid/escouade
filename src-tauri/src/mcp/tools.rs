@@ -1817,7 +1817,7 @@ impl<R: Runtime> Tools<R> {
             ("model", args.model.as_deref()),
             ("effort", args.effort.as_deref()),
         ]);
-        let result = act::start_ticket(&ctx.core, &ctx.caller, args);
+        let result = act::start_ticket(&ctx.core, &ctx.caller, args).await;
         ctx.reply("start_ticket", &asked, result)
     }
 

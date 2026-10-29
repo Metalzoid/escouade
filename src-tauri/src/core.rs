@@ -911,6 +911,9 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) works: AtomicUsize,
     /// One scheduling pass of the board at a time.
     pub(crate) board_lock: tokio::sync::Mutex<()>,
+    /// Why a ticket launched by hand was not started by the pass that took it up (`StartRefusal`),
+    /// until it is launched again: the tool that launched it says it.
+    pub(crate) start_refusals: Mutex<HashMap<String, crate::tickets::StartRefusal>>,
     /// Agents whose turn the app's previous stop cut (active when saved): their tickets go on.
     pub(crate) cut_turns: Mutex<Vec<String>>,
     /// The GitHub CLI, when installed (pull requests).
@@ -1861,6 +1864,7 @@ impl<R: Runtime> Core<R> {
             unsaved: AtomicUsize::new(0),
             works: AtomicUsize::new(0),
             board_lock: tokio::sync::Mutex::new(()),
+            start_refusals: Mutex::new(HashMap::new()),
             cut_turns: Mutex::new(cut_turns),
             gh: RwLock::new(locate_gh()),
             test_runs: Mutex::default(),

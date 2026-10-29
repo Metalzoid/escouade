@@ -7422,8 +7422,9 @@ async fn a_ticket_started_with_a_model_and_an_effort_keeps_them_until_it_is_star
         .ticket_create(&p.id, draft("Au choix [ok]", &[], 5))
         .await
         .unwrap();
-    // Nothing starts meanwhile: what is written on the ticket can be read before its agent goes.
-    h.core.pause_after_limit("principal");
+    // Nothing starts meanwhile (no pass of the board comes to it): what is written on the ticket
+    // can be read before its agent goes.
+    let gate = h.core.board_lock.lock().await;
     let own = |h: &Harness| {
         let t = h.ticket(&t.id);
         (t.forced, t.model, t.effort)
@@ -7455,7 +7456,8 @@ async fn a_ticket_started_with_a_model_and_an_effort_keeps_them_until_it_is_star
     assert_eq!(h.ticket(&t.id).column, Column::Todo);
 
     // Once it has started nothing is written: it is not « À faire » any more.
-    h.core.autopilot_resume();
+    drop(gate);
+    h.core.schedule();
     h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
         .await;
     assert_eq!(h.agent_of(&t.id).model, "haiku");

@@ -34,6 +34,16 @@ pub(crate) fn quota_lost(lang: Lang) -> String {
     tr_in!(lang, "limite d'usage atteinte", "usage limit reached")
 }
 
+/// Why the pass of the board did not start a ticket launched by hand: the ticket goes back to
+/// « À faire » as it was, and the tool or the window that launched it says so.
+#[derive(Debug, Clone)]
+pub(crate) enum StartRefusal {
+    /// A usage limit holds its account(s) back.
+    Held(board::Held),
+    /// Anything else, said as is.
+    Text(String),
+}
+
 /// The reason a ticket is blocked by an error, on one line (a git error may run over many; the
 /// whole error goes to the log): the contexts the app gave, then git's `fatal:` or `error:` line,
 /// the one that tells why, when there is one; else the first line, as `board::turn_end` does with
@@ -1016,10 +1026,35 @@ impl<R: Runtime> Core<R> {
             }
             Ok(())
         })?;
+        self.start_refusals.lock().remove(id);
         self.telemetry
             .track(Event::TicketStarted { autopilot: false });
         self.schedule();
         Ok(())
+    }
+
+    /// What became of a ticket launched by hand, waited for up to `within`: `Ok(true)` once it
+    /// left « À faire », `Err` with the reason when the pass did not start it, `Ok(false)` when
+    /// the pass has not come to it yet (behind another launch under way): it stays queued.
+    pub(crate) async fn wait_started(
+        &self,
+        id: &str,
+        within: Duration,
+    ) -> Result<bool, StartRefusal> {
+        let end = tokio::time::Instant::now() + within;
+        loop {
+            if let Some(why) = self.start_refusals.lock().remove(id) {
+                return Err(why);
+            }
+            match self.ticket(id) {
+                Ok(t) if t.column == Column::Todo => {}
+                _ => return Ok(true),
+            }
+            if tokio::time::Instant::now() >= end {
+                return Ok(false);
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
     }
 
     /// The ticket goes, and no other waits for it any more; one "En cours" or "À tester" has its
@@ -1501,6 +1536,13 @@ impl<R: Runtime> Core<R> {
                     if !self.claude_missing.swap(true, Ordering::AcqRel) {
                         log::info!("board: Claude Code not found, no ticket starts until it is");
                     }
+                    self.refuse_forced(
+                        &p,
+                        &StartRefusal::Text(tr!(
+                            "Claude Code est introuvable : aucun ticket ne démarre tant qu’il ne l’est pas.",
+                            "Claude Code was not found: no ticket starts until it is."
+                        )),
+                    );
                     continue;
                 }
             }
@@ -1510,6 +1552,20 @@ impl<R: Runtime> Core<R> {
             // limit while the pass goes on (each start takes seconds).
             // Each ticket by the accounts of its own harness.
             let engine_of = |t: &Ticket| t.engine.unwrap_or_else(|| p.engine());
+            // One launched by hand that a usage limit holds back (it may have been met since the
+            // tool checked) says so, rather than wait in « À faire » with nothing said.
+            let launched: Vec<Ticket> = self
+                .tickets
+                .read()
+                .iter()
+                .filter(|t| t.project_id == p.id && t.column == Column::Todo && t.forced)
+                .cloned()
+                .collect();
+            for t in launched {
+                if let Some(held) = self.ticket_hold(&p, &t, engine_of(&t)) {
+                    self.refuse_start(&p, &t.id, StartRefusal::Held(held));
+                }
+            }
             let ids = {
                 let tickets = self.tickets.read().clone();
                 let mut held: HashMap<(EngineId, bool), bool> = HashMap::new();
@@ -1534,6 +1590,7 @@ impl<R: Runtime> Core<R> {
                 if self.set_board_issue(&p.id, Some(issue.clone())) {
                     log::info!("board of {}: {issue}", p.name);
                 }
+                self.refuse_forced(&p, &StartRefusal::Text(issue));
                 continue;
             }
             // Every ticket's branch starts from the target: while it has no commit yet (a new
@@ -1555,12 +1612,17 @@ impl<R: Runtime> Core<R> {
                     log::info!("board of {}: {why}", p.name);
                 }
             }
-            if issue.is_some() {
+            if let Some(issue) = issue {
+                self.refuse_forced(&p, &StartRefusal::Text(issue));
                 continue;
             }
             for id in ids {
                 let Ok(t) = self.ticket(&id) else { continue };
-                if self.ticket_held(&p, &t, engine_of(&t)) {
+                if let Some(held) = self.ticket_hold(&p, &t, engine_of(&t)) {
+                    // Met while this pass started the ones before it.
+                    if t.forced {
+                        self.refuse_start(&p, &id, StartRefusal::Held(held));
+                    }
                     continue;
                 }
                 self.start_ticket(&p, &id).await;
@@ -1833,9 +1895,69 @@ impl<R: Runtime> Core<R> {
     /// Launched by hand, a ticket waits for a usage limit alone: « Pause au-delà du quota » and the
     /// day's budget hold back the autopilot (the user, 2026-10-28).
     fn ticket_held(&self, project: &Project, t: &Ticket, engine: EngineId) -> bool {
+        self.ticket_hold(project, t, engine).is_some()
+    }
+
+    /// What holds the ticket back (`ticket_held`), if anything does.
+    fn ticket_hold(&self, project: &Project, t: &Ticket, engine: EngineId) -> Option<board::Held> {
         match self.pinned(project, t, engine) {
-            Some(id) => self.account_hold_as(&id, t.forced).is_some(),
-            None => self.held(&project.id, engine, t.forced),
+            Some(id) => self.account_hold_as(&id, t.forced),
+            None => self.project_hold_as(&project.id, engine, t.forced),
+        }
+    }
+
+    /// A ticket launched by hand that the pass did not start goes back as it was (« À faire », not
+    /// forced) and the reason is kept for whoever launched it (`start_refusals`), and told to the
+    /// window: else it stays « À faire » with nothing said.
+    fn refuse_start(self: &Arc<Self>, project: &Project, id: &str, why: StartRefusal) {
+        let back = self.edit_ticket(id, |t| {
+            let ours = t.column == Column::Todo && t.forced;
+            if ours {
+                t.forced = false;
+            }
+            Ok(ours)
+        });
+        if !back.unwrap_or(false) {
+            return;
+        }
+        let text = self.refusal_text(&why);
+        log::info!("ticket {id}: not started: {text}");
+        self.start_refusals.lock().insert(id.to_string(), why);
+        let key = self.ticket(id).map(|t| t.key).unwrap_or_default();
+        self.alert(
+            NotifyKind::Ticket,
+            project.name.clone(),
+            tr!(
+                "{key} n’est pas parti : {text}",
+                "{key} did not start: {text}",
+                key = key,
+                text = text
+            ),
+            UiEvent::FocusBoard {
+                project_id: project.id.clone(),
+            },
+        );
+    }
+
+    /// `refuse_start` for every ticket of the project launched by hand and waiting.
+    fn refuse_forced(self: &Arc<Self>, project: &Project, why: &StartRefusal) {
+        let ids: Vec<String> = self
+            .tickets
+            .read()
+            .iter()
+            .filter(|t| t.project_id == project.id && t.column == Column::Todo && t.forced)
+            .map(|t| t.id.clone())
+            .collect();
+        for id in ids {
+            self.refuse_start(project, &id, why.clone());
+        }
+    }
+
+    /// What was said of a refused start, as the tools say it.
+    pub(crate) fn refusal_text(&self, why: &StartRefusal) -> String {
+        match why {
+            StartRefusal::Held(held) => crate::mcp::act::why(self, held),
+            StartRefusal::Text(text) => text.clone(),
         }
     }
 

@@ -383,7 +383,7 @@ fn when<R: Runtime>(core: &Core<R>, ms: i64) -> String {
 
 /// What `held` says, and until when: the pause of the account (or of the first account to be free
 /// again), else an agent waiting for its quota.
-fn why<R: Runtime>(core: &Core<R>, held: &Held) -> String {
+pub(crate) fn why<R: Runtime>(core: &Core<R>, held: &Held) -> String {
     let p = &held.pause;
     let until = when(core, p.until);
     let pct = p.pct.map_or(0, |pct| pct.round() as i64);
@@ -689,9 +689,12 @@ pub(super) fn move_ticket<R: Runtime>(
     json(&json!({ "ticket": t.key, "todo": todo_keys(core, &t.project_id) }))
 }
 
+/// How long `start_ticket` waits for the board to take the ticket up before it answers.
+const START_WAIT: std::time::Duration = std::time::Duration::from_secs(15);
+
 /// `start_ticket`: the window's « Lancer ». Refused where the window would not offer it, or ask
 /// the user first.
-pub(super) fn start_ticket<R: Runtime>(
+pub(super) async fn start_ticket<R: Runtime>(
     core: &Arc<Core<R>>,
     caller: &Caller,
     a: StartTicketArgs,
@@ -765,6 +768,12 @@ pub(super) fn start_ticket<R: Runtime>(
     }
     core.ticket_start_on(&t.id, account, model, effort)
         .map_err(refusal)?;
+    // The pass of the board that takes it up may meet what the checks above did not (a usage
+    // limit hit meanwhile): the answer says it, rather than `starting` for a ticket that stays.
+    // Behind a launch under way it may not have come to it yet: queued, it goes in its turn.
+    if let Err(why) = core.wait_started(&t.id, START_WAIT).await {
+        return Err(ToolError::Refused(core.refusal_text(&why)));
+    }
     // What its agent goes with: its ticket's own, else its Kanban's, else its account's.
     let started = core.ticket(&t.id).unwrap_or(t);
     let project = project_of(core, &started.project_id)?;

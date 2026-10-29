@@ -5170,3 +5170,61 @@ async fn a_ticket_set_on_codex_in_a_claude_project_takes_the_models_of_codex_and
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }
+
+#[tokio::test]
+async fn several_tickets_started_one_after_the_other_all_start() {
+    let h = harness("mcp-act-start-in-a-row");
+    let p = project(&h).await;
+    let a = made(&h, &p, "Un [ok]").await;
+    let b = made(&h, &p, "Deux [ok]").await;
+    let d = made(&h, &p, "Trois [ok]").await;
+    // Its worktree's setup takes a while: the next start comes while the first is under way.
+    let slow = if cfg!(windows) {
+        "Start-Sleep -Seconds 2"
+    } else {
+        "sleep 2"
+    };
+    h.set_worktree_steps(&p.id, vec![crate::core_tests::wt_step(slow, "")], vec![]);
+    let c = external(&h).await;
+    for t in [&a, &b, &d] {
+        tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+        let v = read(&c, "start_ticket", json!({ "ticket": t.key })).await;
+        assert_eq!(v["starting"], true);
+    }
+    for t in [&a, &b, &d] {
+        h.wait("each ticket to start", |h| {
+            stored(h, &t.id).column != Column::Todo
+        })
+        .await;
+    }
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_the_board_does_not_start_after_the_tool_checked_says_why_and_stays_to_do() {
+    let h = harness("mcp-act-start-met-limit");
+    let p = project(&h).await;
+    let a = made(&h, &p, "Un [ok]").await;
+    let c = external(&h).await;
+    let end = h.core.pause_now() + 3_600_000;
+    // A pass of the board is under way (a launch in progress): the one this call asks for waits.
+    let gate = h.core.board_lock.lock().await;
+    let call = refused(&c, "start_ticket", json!({ "ticket": a.key }));
+    // The usage limit is met after the tool's checks, before the pass comes to the ticket.
+    let driver = async {
+        while !stored(&h, &a.id).forced {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        window_used(&h, "principal", 100.0, end);
+        drop(gate);
+    };
+    let (said, ()) = tokio::join!(call, driver);
+    assert!(said.contains("100 %"), "{said}");
+    let t = stored(&h, &a.id);
+    assert_eq!(t.column, Column::Todo);
+    assert!(!t.forced);
+    assert_eq!(entry(&h).outcome, "refused");
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}

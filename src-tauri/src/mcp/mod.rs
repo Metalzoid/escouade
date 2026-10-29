@@ -6,7 +6,7 @@
 //! and in the config file its process is started with, both gone when it stops). It runs while
 //! the settings want it (`Core::sync_mcp`) and stops with the app.
 
-mod act;
+pub(crate) mod act;
 #[cfg(test)]
 mod act_tests;
 pub(crate) mod activity;
