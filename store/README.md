@@ -49,7 +49,7 @@ Créées par le chef d'escouade le 2026-10-29 (Coolify 4.5.3) d'après `docs/STO
 | Auto Deploy | oui |
 | Domains | `https://store.escouade.dev` (certificat par Traefik) |
 | Ports Exposes | `3000` |
-| Health Check | `GET /api/health`, port 3000, toutes les 30 s, 60 s de démarrage (l'image a aussi son `HEALTHCHECK`, les mêmes) |
+| Health Check | `GET /api/health`, hôte `127.0.0.1`, port 3000, toutes les 30 s, 60 s de démarrage (l'image a aussi son `HEALTHCHECK`, les mêmes). L'hôte compte : dans l'image Alpine, `localhost` se résout d'abord en `::1`, où Nitro n'écoute pas, et le premier déploiement est resté sur « Connection refused » |
 | Persistent Storage | un volume monté sur `/data/archives` |
 | Notifications | le salon Discord d'Escouade : déploiement raté, conteneur arrêté, sauvegarde ratée |
 
@@ -66,7 +66,7 @@ Créées par le chef d'escouade le 2026-10-29 (Coolify 4.5.3) d'après `docs/STO
 | `STORE_ADMINS` | l'identifiant numérique GitHub de l'utilisateur ; STORE-8 | non |
 | `SMTP_URL`, `MAIL_FROM` | Scaleway Transactional Email, `store@escouade.dev` ; STORE-2 | oui (`SMTP_URL`) |
 
-Posées le 2026-10-29 : toutes sauf `GITHUB_APP_CLIENT_SECRET`, `SMTP_URL` et `MAIL_FROM`. Le serveur démarre sans elles : le journal dit ce qui est éteint, `/api/health` répond 200 dès que la base et la file vont.
+Posées le 2026-10-29 : toutes sauf `SMTP_URL` (Scaleway Transactional Email, à configurer par l'utilisateur). Le serveur démarre sans elles : le journal dit ce qui est éteint, `/api/health` répond 200 dès que la base et la file vont.
 
 **La clé de signature des plugins n'est jamais ni dans Coolify ni dans le dépôt** (`docs/STORE.md`, §4.5) : seules les clés publiques viendront dans `store/keys/*.pub` (STORE-8).
 
