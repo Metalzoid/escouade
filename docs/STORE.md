@@ -344,6 +344,23 @@ Déjà tranché (2026-10-26) : le code vit dans ce dépôt, `store/`, et le push
 4. **Le stockage et les sauvegardes** (Coolify étant décidé) : PostgreSQL de Coolify, archives sur un volume du serveur actuel (Scaleway, Paris), sauvegardes nocturnes vers le stockage objet de Scaleway, une sonde extérieure qui prévient sur Discord. **Recommandé** (moins d'un euro par mois de plus, aucune donnée hors UE). Autre choix : les archives directement dans le stockage objet (plus de place, un service de plus sur le chemin des téléchargements).
 5. **Les binaires** (ajoutée par l'analyse) : un exécutable n'est vérifiable qu'avec une attestation de provenance GitHub qui le lie au commit relu. **Recommandé.** Autre choix : vérifier seulement les plugins sans binaire (déclaratifs, ou lancés par un runtime présent).
 
+### 8.1 La revue du 2026-10-29
+
+Le plan du store, revu avec celui des plugins (`docs/PLUGINS.md` §4.12), couvrait bien la pile, la CI, Coolify, les sauvegardes, la GitHub App, la soumission et ses contrôles, la revue, la signature, la révocation et le RGPD. Il lui manquait :
+- **la compatibilité** : `escouade.api`, `min` et `max` dans le catalogue et `version.json`, et l'app qui choisit la dernière version compatible (STORE-6, STORE-9) ;
+- **les limites de débit** de l'API, des soumissions et de `POST /installs`, pour que le compteur ne se gonfle pas (STORE-6) ;
+- **la copie de `revocations.json` sur escouade.dev**, avec son mécanisme écrit : qui la publie, à quel rythme, une heure de retard au plus, un fichier signé (STORE-6) ;
+- **le lien profond** `escouade://plugin/<id>` sur les trois systèmes et leurs installeurs, qui ouvre la page du plugin dans Réglages › Plugins et n'installe jamais rien (STORE-11, ESC-287) ;
+- **le réseau** : le catalogue et les archives par Réglages › Réseau (proxy, autorité de certification), comme l'updater qui reçoit un 403 derrière Zscaler (STORE-9) ;
+- **la télémétrie avec l'accord** de l'utilisateur (`POST /installs`, l'événement Aptabase), et **le passage d'une installation par git au store** pour le même id (STORE-9) ;
+- **les plugins proposés par un projet** (`plugins.recommended` de `.escouade.yml`, PLG-13, ESC-288).
+
+Décidé par le chef d'escouade, à confirmer par l'utilisateur s'il le veut autrement :
+- les plugins de première main ont une page, avec la marque « Escouade », leurs ids `dev.escouade.*` réservés ;
+- les catégories suivent le choix 214 (« Sources du Kanban », « Hébergeurs de code ») ;
+- « Signaler » est ouvert à tous par un formulaire avec une adresse e-mail (DSA), publier demande un compte GitHub ;
+- SPF et DKIM pour `store@escouade.dev` (STORE-4, STORE-6).
+
 ## 9. Le découpage en tickets
 
 Les tickets s'appellent ici STORE-1, STORE-2… ; le chef d'escouade leur donne leurs clés. Les plugins (ESC-172 à ESC-184) restent le socle : le store lit leur manifeste, appelle leur validateur et leur banc, et l'app l'ouvre dans leur onglet.

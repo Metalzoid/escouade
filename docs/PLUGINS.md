@@ -633,6 +633,47 @@ Posées par le chef d'escouade, répondues par l'utilisateur le 2026-10-26 :
 
 À confirmer avec l'utilisateur, conséquence de la décision 1 : **PLG-6 (ESC-178) sort de la 2.1.0**. L'adaptateur ACP générique s'écrit directement en plugin de première main, sur le contrat des harness (étape 6), plutôt que dans le cœur puis à nouveau dehors.
 
+### 4.12 La revue du 2026-10-29
+
+Demandée par l'utilisateur après la sortie de la 2.1.0 : « revérifie qu'il te manque rien et que tu as bien planifié l'implémentation du site de la marketplace, le lien avec Escouade, et le passage en plugins de toutes les features aujourd'hui intégrées ». Le plan du 2026-10-26 a été confronté au code de la 2.1.0 et aux 46 tickets des plugins, des intégrations et du store. Les décisions du §4.11 tiennent ; voici ce qui manquait, et ce qui est tranché.
+
+**Ce qui manquait au passage en plugins**, construit depuis le plan, ou oublié, a maintenant son ticket :
+
+| Étape | Ce qu'elle sort | Ticket | Après |
+|---|---|---|---|
+| INT-8.5 | Azure DevOps et Azure Boards (ESC-241, 242), ensemble, comme GitLab et GitLab Issues | ESC-280 | INT-5, INT-6, INT-8.4 |
+| INT-10.6 | Mistral Vibe, sur le client ACP générique de PLG-6 | ESC-281 | INT-9, PLG-6, INT-10.1 |
+| INT-10.7 | Gemini CLI, sur le même client ACP | ESC-282 | INT-10.6 |
+| INT-10.8 | Antigravity CLI, sur le contrat des harness (stream-json, pas d'ACP), avant Claude Code | ESC-283 | INT-9, INT-10.4 |
+| INT-12 | Le contrat des services de voix en ligne : dictée, direct, synthèse, catalogue, compte | ESC-284 | INT-0, INT-4, INT-5 |
+| INT-13 | OpenAI, Groq, Mistral, ElevenLabs et Deepgram en plugins | ESC-285 | INT-12, INT-6 |
+| INT-14 | Le point « environnement de lancement » (`up`, `ls`, `down`, `destroy`), isola en premier plugin | ESC-286 | INT-4, INT-5 |
+
+L'ordre des harness devient : Cursor CLI, Mistral Vibe, Gemini CLI, OpenCode, Copilot CLI, Codex, Antigravity CLI, Claude Code.
+
+**Ce qui manquait au store et au lien avec Escouade** :
+- le lien profond `escouade://plugin/<id>` (STORE-11, ESC-287), qui ouvre une page et n'installe jamais rien ;
+- les plugins proposés par un projet, `plugins.recommended` de `.escouade.yml` (PLG-13, ESC-288) ;
+- le reste rejoint les tickets du store : la compatibilité, les limites de débit et la copie de la liste de révocation dans STORE-6 (ESC-233) ; la dernière version compatible, Réglages › Réseau, la télémétrie avec l'accord et le passage d'une installation par git au store dans STORE-9 (ESC-236) ; les pages des plugins de première main, les catégories et les signalements ouverts à tous dans STORE-4 (ESC-231).
+
+**Les décisions de la revue** (le chef d'escouade, à confirmer par l'utilisateur s'il le veut autrement) :
+1. **Wispr Flow (ESC-164) s'écrit en plugin**, sur le contrat de la voix (INT-12), pas dans le cœur : la règle « tout l'externe en plugins » s'applique aux demandes d'avant elle.
+2. **Whisper, Piper et le modèle d'embeddings de l'index restent au cœur** (§4.2) : ils tournent hors ligne, sans compte, et ne parlent à aucun service une fois téléchargés.
+3. **Le client ACP de Cursor devient générique dans PLG-6**, avant toute migration de harness ACP : Vibe et Gemini l'appellent déjà (`engine/vibe/process.rs`, `engine/gemini/mod.rs`), sortir Cursor seul les casserait.
+4. **Le contrat des harness (INT-9) porte aussi** `read_only` (une garantie de sécurité que le cœur vérifie sur la description de lancement, comme la clôture), la réponse aux hooks, la reprise de la mémoire et `accounts_by_key`.
+5. **Les plugins de première main ont une page sur le store**, avec la marque « Escouade » ; ils s'installent avec l'app, et leurs ids `dev.escouade.*` restent réservés.
+6. **« Signaler » est ouvert à tous** sur le store, par un formulaire avec une adresse e-mail (DSA) ; publier demande toujours un compte GitHub.
+7. **L'exemple « harness ACP décrit » de PLG-10 passe à PLG-6**, sur Goose, puisque Gemini CLI est intégré : les exemples et le store n'attendent plus le contrat des harness.
+8. **Le compte Mistral**, partagé par Vibe et la voix, est tranché dans INT-13, avec INT-6.
+
+**Les nouveaux points d'extension que suggère la 2.1.0**, pour après les étapes ci-dessus, sans ticket encore :
+- les **lecteurs de documents** (`docsextract.rs` lit texte, PDF, docx, odt ; un plugin ajouterait l'OCR, pptx, xlsx) : sans réseau, le premier candidat au WASM ;
+- les **langues de l'index du code** (11 aujourd'hui, ni C, C++, Ruby, Kotlin ni Swift), en déclaratif : une grammaire tree-sitter et ses requêtes ;
+- les **sources de documents** (Confluence, Drive, Notion), que `docs/FACTORY.md` renvoie déjà aux plugins ;
+- les **faits** des Docs, de la mémoire, des PR et des comptes sur le bus (ajoutés à PLG-5, ESC-177).
+
+Les docs elles-mêmes (§1.1, §1.5, §4.7, §4.8, §4.10, le tableau des versions de `docs/TODO-2.2.md`, `docs/STORE.md` §5.1) sont remises d'accord avec la 2.1.0 par ESC-279, avant INT-0.
+
 ## 5. Sources
 
 - VS Code, _Workspace Trust_ : <https://code.visualstudio.com/docs/editor/workspace-trust> et le guide des extensions <https://code.visualstudio.com/api/extension-guides/workspace-trust>.
