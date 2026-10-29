@@ -13,12 +13,14 @@
 //   propose un plan — in `--mode plan`, its plan written in brain/<id>/plan_fake.md, then a reply saying so;
 //   sous-agent — a subagent (invoke_subagent);  lent — a turn of 6 s;  modèle — says its model, effort and mode;
 //   outil escouade <outil> — calls <outil> of Escouade's MCP server (config/mcp_config.json and its header);
-//   erreur — a `result` in ERROR.
+//   erreur — a `result` in ERROR;  limite — its quota exhausted (a `result` in ERROR, in `agy`'s words);
+//   capacité — the model's capacity exhausted;  compte — says who it runs as: « Compte : clé …<end> » with a Gemini API
+//   key and `modelProvider: gemini` (ESC-271), else « Compte : Google de la machine »; a key `cle-refusee…` is refused.
 // What Escouade says once the user answered: « The user allowed … » does again what was refused, « The user answered
 // your questions: » says the answers, « The plan is approved » carries it out.
 // `--conversation <id>` resumes a conversation kept in .gemini/antigravity-cli/conversations/fake/<id>.json (an unknown
 // one: its error on stderr, exit 1). `models` lists the models of `agy models`. Each launch ({launch: {argv, cwd, home,
-// geminiKey, autoUpdate, gitConfig}}) and message ({user}) goes to $FAKE_AGY_LOG when set.
+// geminiKey, autoUpdate, gitConfig, provider, deny}}) and message ({user}) goes to $FAKE_AGY_LOG when set.
 // Without -p (nor models), it is its interface `agy` (fake-agy-tui.mjs, « Vue Antigravity »).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -32,6 +34,15 @@ if (argv.includes('--version')) {
 const home = process.env.USERPROFILE || process.env.HOME || process.cwd();
 const logFile = process.env.FAKE_AGY_LOG;
 const log = (entry) => logFile && fs.appendFileSync(logFile, JSON.stringify(entry) + '\n');
+const settingsAtStart = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(home, '.gemini', 'antigravity-cli', 'settings.json'), 'utf8'));
+  } catch {
+    return {};
+  }
+})();
+const geminiKey = process.env.GEMINI_API_KEY || '';
+const byKey = settingsAtStart.modelProvider === 'gemini' && geminiKey !== '';
 log({
   launch: {
     argv,
@@ -40,8 +51,23 @@ log({
     geminiKey: process.env.GEMINI_API_KEY ?? null,
     autoUpdate: process.env.AGY_CLI_DISABLE_AUTO_UPDATE ?? null,
     gitConfig: process.env.GIT_CONFIG_GLOBAL ?? null,
+    provider: settingsAtStart.modelProvider ?? null,
+    deny: settingsAtStart.permissions?.deny ?? null,
   },
 });
+// Its interface (no `-p`) not signed in yet, as « Se connecter… » runs it (ESC-271): signed in, the file of
+// $ESCOUADE_AGY_SIGNED_IN stands for the keychain's entry, then it waits until it is killed. Signed in already (that
+// file there, or no such variable), its interface is fake-agy-tui.mjs, below (« Vue Antigravity », ESC-272): as `agy`.
+const signedOut = !!process.env.ESCOUADE_AGY_SIGNED_IN && !fs.existsSync(process.env.ESCOUADE_AGY_SIGNED_IN);
+if (signedOut && !argv.some((a) => a.startsWith('-p')) && argv[0] !== 'models') {
+  console.log('You are currently not signed in. Opening your browser to sign in with Google…');
+  setTimeout(() => {
+    if (process.env.ESCOUADE_AGY_SIGNED_IN) fs.writeFileSync(process.env.ESCOUADE_AGY_SIGNED_IN, 'signed in');
+    console.log('Signed in.');
+  }, 500);
+  setInterval(() => {}, 1 << 30);
+  await new Promise(() => {});
+}
 if (argv[0] === 'models') {
   console.log('Fetching available models...');
   console.log(
@@ -309,9 +335,24 @@ async function play(text) {
     });
     return ok ? planner({ text: `Escouade a répondu : ${said}` }) : undefined;
   }
+  if (byKey && geminiKey.startsWith('cle-refusee')) {
+    turn.error = 'API key not valid. Please pass a valid API key.';
+    return;
+  }
   if (words.includes('erreur')) {
     turn.error = 'model "inconnu" not found';
     return;
+  }
+  if (words.includes('limite')) {
+    turn.error = 'You have exhausted your quota on this model.';
+    return;
+  }
+  if (words.includes('capacité')) {
+    turn.error = 'MODEL_CAPACITY_EXHAUSTED: No capacity available for model, retry in 30s';
+    return;
+  }
+  if (words.includes('compte')) {
+    return planner({ text: byKey ? `Compte : clé …${geminiKey.slice(-4)}` : 'Compte : Google de la machine' });
   }
   if (words.includes('raisonnement')) {
     await planner({ thinking: 'Je réfléchis à la question posée.' });

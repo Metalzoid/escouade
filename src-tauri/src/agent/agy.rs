@@ -43,7 +43,18 @@ impl AgentRt {
             "escouade.prompt_end" => {
                 self.ag_spent(&p["usage"]);
                 self.ag_turn_spent();
-                self.cursor_frame(f, fx);
+                // Its usage limit: « limité », its resume planned (or another account, ESC-271).
+                let wait = p["error"].as_str().and_then(crate::engine::agy::limit_of);
+                if let Some(wait) = wait {
+                    let mut f = f.clone();
+                    self.cursor.limited_until = Some(now_ms() + wait);
+                    let said = p["error"].as_str().unwrap_or_default().trim();
+                    f["params"]["error"] =
+                        json!(crate::engine::agy::limited_error(i18n::ui(), said));
+                    self.cursor_frame(&f, fx);
+                } else {
+                    self.cursor_frame(f, fx);
+                }
             }
             crate::engine::agy::PLAN_REQUEST => {
                 self.ag_spent(&f["usage"]);

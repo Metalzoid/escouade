@@ -85,7 +85,8 @@ test.describe('an agent on Antigravity CLI', () => {
     // without the machine's Gemini key; Escouade's server in its own MCP config, never on its command line.
     const launch = agentLaunches(app)[0];
     expect(launch.argv.slice(0, 5)).toEqual(['-p=', '--input-format', 'stream-json', '--output-format', 'stream-json']);
-    expect(launch.geminiKey).toBeNull();
+    // The machine's key given empty, never its value.
+    expect(launch.geminiKey || null).toBeNull();
     const homes = path.join(app.data, 'agent-homes');
     expect(path.dirname(launch.home).toLowerCase()).toBe(homes.toLowerCase());
     expect(path.resolve(launch.cwd).toLowerCase()).toBe(path.resolve(app.repo).toLowerCase());
@@ -178,6 +179,92 @@ test.describe('an agent on Antigravity CLI', () => {
     await expect(page.getByText('Fini.')).toHaveCount(0);
     await send(page, 'encore');
     await expect(page.getByText('Antigravity a reçu : encore')).toBeVisible();
+  });
+});
+
+// ESC-271: the machine's Antigravity account is added by hand (none is made by itself, ESC-128), even before it is signed
+// in: its sign-in is made by `agy` itself in a terminal of the window (the fake writes the file that stands for the
+// keychain's entry). Another account is a Gemini API key, kept in the system keychain (the sandbox's entries) and given
+// to its agents by GEMINI_API_KEY with `modelProvider: gemini` in their own settings. Its usage is on its plans' page
+// and its interface's /usage; its quota met ends the turn « limité », its resume planned.
+test.describe('Antigravity CLI’s accounts', () => {
+  test.use({
+    appEnv: { ESCOUADE_AGY: FAKE_AGY },
+    // Claude Code's machine account alone: Antigravity's is the test's to add.
+    preStart: {
+      run: () => ({
+        agySignedOut: true,
+        noAccounts: true,
+        accounts: [{ id: 'principal', name: 'Principal', engine: 'claude', configDir: '', claudePath: '', active: true }],
+      }),
+    },
+  });
+
+  test('adds the machine’s account and signs it in by agy in a terminal, adds one by its Gemini key, links its usage', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const settings = page.getByRole('dialog', { name: 'Réglages' });
+    await settings.getByRole('tab', { name: 'Comptes' }).click();
+    // None of its own (ESC-128): Antigravity CLI installed, « Aucun compte ».
+    await expect(settings.getByRole('group', { name: 'Comptes Antigravity CLI' })).toContainText('Aucun compte');
+    await settings.getByRole('button', { name: 'Ajouter un compte Antigravity CLI…' }).click();
+    const modal = page.getByRole('dialog', { name: 'Ajouter un compte Antigravity CLI' });
+    await expect(modal.getByText('Antigravity CLI n’est pas encore connecté sur cette machine', { exact: false })).toBeVisible();
+    await expect(modal.getByRole('radio', { name: /Le compte de la machine/ })).toBeChecked();
+    await shots(page, 'account-machine');
+    await modal.getByRole('button', { name: 'Ajouter ce compte' }).click();
+    // Its sign-in, by agy in the terminal here; seen, then the terminal goes.
+    const signIn = page.getByRole('dialog', { name: 'Se connecter au compte « Principal »' });
+    await expect(signIn.getByRole('status')).toContainText('agy ouvre ton navigateur sur ton compte Google');
+    await expect(signIn.getByRole('status')).toContainText('Connecté', { timeout: 15_000 });
+    await shots(page, 'account-signed-in');
+    await signIn.getByRole('button', { name: 'Terminé' }).click();
+    const list = settings.getByRole('list', { name: 'Comptes Antigravity CLI' });
+    const machine = list.getByRole('listitem', { name: 'Principal' });
+    await expect(machine).toContainText('Connecté');
+    await expect(machine.getByRole('button', { name: 'Usage sur antigravity.google' })).toBeVisible();
+    // Another, by its key.
+    await settings.getByRole('button', { name: 'Ajouter un compte Antigravity CLI…' }).click();
+    const add = page.getByRole('dialog', { name: 'Ajouter un compte Antigravity CLI' });
+    await expect(add.getByRole('radio', { name: /Un nouveau compte/ })).toBeChecked();
+    await add.getByRole('textbox', { name: 'Nom' }).fill('Équipe');
+    await add.getByLabel('Clé d’API').fill('AIzaCleGeminiE2e0000wxyz');
+    await expect(add.getByLabel('Clé d’API')).toHaveAttribute('placeholder', 'Sur aistudio.google.com, Get API key');
+    await shots(page, 'account-key');
+    await add.getByRole('button', { name: 'Ajouter le compte' }).click();
+    const team = list.getByRole('listitem', { name: 'Équipe' });
+    await expect(team).toContainText('Connecté · clé …wxyz');
+    await expect(team.getByRole('button', { name: 'Changer la clé…' })).toBeVisible();
+    // Neither cost nor budget: its usage is on its page and its /usage.
+    const usage = team.getByRole('button', { name: 'Usage sur antigravity.google' });
+    await expect(usage).toBeVisible();
+    await expect(team.getByRole('textbox', { name: 'Budget par jour ($)' })).toHaveCount(0);
+    // Hovered again if the row is drawn anew meanwhile (its status, its models read).
+    await expect(async () => {
+      await page.mouse.move(0, 0);
+      await usage.hover();
+      await expect(page.getByRole('tooltip')).toContainText('se lit par /usage dans son interface', { timeout: 1500 });
+    }).toPass({ timeout: 15_000 });
+    await shots(page, 'accounts');
+    expect(fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8')).not.toContain('AIzaCle');
+    // The machine's account off: new Antigravity agents go to the key's, which runs as it.
+    await machine.getByRole('switch', { name: 'Actif' }).click();
+    await expect(machine.getByRole('switch', { name: 'Actif' })).toHaveAttribute('aria-checked', 'false');
+    await page.keyboard.press('Escape');
+    await newAgyAgent(page);
+    await send(page, 'compte');
+    await expect(page.getByText('Compte : clé …wxyz')).toBeVisible();
+    const launch = agentLaunches(app).at(-1)!;
+    expect(launch.geminiKey).toBe('AIzaCleGeminiE2e0000wxyz');
+    expect(launch.argv.join(' ')).not.toContain('AIzaCle');
+    // Its quota met: « limité », its resume planned.
+    await send(page, 'limite');
+    const card = page.locator('.card.error.limit');
+    await expect(card).toContainText('Limite d’usage d’Antigravity atteinte');
+    await expect(card).toContainText('You have exhausted your quota on this model.');
+    await expect(card).toContainText('Reprise automatique');
+    await shots(page, 'limit');
   });
 });
 

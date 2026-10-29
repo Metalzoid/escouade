@@ -33,7 +33,7 @@
   } from '../../lib/engines';
   import { EFFORTS, MODES } from '../../lib/models';
   import { fList, fPct, fUsd, tildify } from '../../lib/format';
-  import { t } from '../../lib/i18n';
+  import { t, type Key } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
@@ -45,6 +45,15 @@
   import Icon from '../Icon.svelte';
   import QuotaMeter from '../QuotaMeter.svelte';
   import { tip } from '../../lib/tip';
+
+  /**
+   * What the link to a harness's usage page says: its cost told, its quota not (Mistral Vibe); its quota in its own
+   * interface alone (Antigravity CLI's `/usage`, ESC-271); else its dashboard (Cursor CLI).
+   */
+  const USAGE_HINTS: Partial<Record<EngineId, Key>> = { agy: 'accounts.tab.usageHintInterface' };
+  function usageHint(engine: EngineId): Key {
+    return USAGE_HINTS[engine] ?? (showsCost({ engine }) ? 'accounts.tab.usageHintCost' : 'accounts.tab.usageHint');
+  }
 
   // The accounts, a group per harness in « Ordre des harness ». Each change goes to the backend at once (`account_*`,
   // `engine_order_set`), not through the modal's draft: an account is made, signed in and removed on the disk, which
@@ -330,7 +339,7 @@
                   <!-- No quota told to Escouade (Cursor CLI, nor its cost, ESC-43; Mistral Vibe, ESC-267): its own page says its usage. -->
                   <button
                     class="btn ghost small usage"
-                    use:tip={t(showsCost({ engine: g.engine }) ? 'accounts.tab.usageHintCost' : 'accounts.tab.usageHint', {
+                    use:tip={t(usageHint(g.engine), {
                       harness,
                       site: usageSite(g.engine),
                     })}

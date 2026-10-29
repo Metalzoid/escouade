@@ -23,6 +23,8 @@
   // Cursor CLI (ESC-43): its machine's account is the sign-in of `agent login`; a new one is its API key, kept in the system's
   // keychain and given to its processes by CURSOR_API_KEY: no terminal, « Changer la clé… » gives it again. Mistral Vibe
   // (ESC-267) the same: its machine's account is the key `vibe --setup` kept, a new one its API key, by MISTRAL_API_KEY.
+  // Antigravity CLI (ESC-271): its machine's account is its Google sign-in, made by `agy` itself in the terminal here, also
+  // when it is not signed in yet (added, then signed in); a new one its Gemini API key, by GEMINI_API_KEY.
   // `reserveFor` (a private project's settings, ESC-141): the account added is reserved to that project alone, a new one
   // offered first (the machine's is its folder outside Escouade too), and it closes back to that project's settings.
   let {
@@ -52,6 +54,11 @@
       never: 'accounts.modal.cursor.neverShared',
       hint: 'accounts.modal.cursor.signInHint',
     },
+    agy: {
+      nothing: 'accounts.modal.agy.nothingToShare',
+      never: 'accounts.modal.agy.neverShared',
+      hint: 'accounts.modal.agy.signInHint',
+    },
     vibe: {
       nothing: 'accounts.modal.vibe.nothingToShare',
       never: 'accounts.modal.vibe.neverShared',
@@ -60,6 +67,11 @@
   };
   /** What the field of an account's API key says, by harness (Cursor CLI's unless the harness has its own). */
   const KEY_SAYS: Partial<Record<EngineId, { placeholder: Key; hint: Key; newHint: Key }>> = {
+    agy: {
+      placeholder: 'accounts.modal.agy.keyPlaceholder',
+      hint: 'accounts.modal.agy.keyHint',
+      newHint: 'accounts.modal.agy.newHintKey',
+    },
     vibe: {
       placeholder: 'accounts.modal.vibe.keyPlaceholder',
       hint: 'accounts.modal.vibe.keyHint',
@@ -102,8 +114,8 @@
   let machine = $state<MachineAccount | null>(null);
   /** What is added: the machine's account (when it is offered) or a new one. */
   let kind = $state<'machine' | 'new'>('new');
-  /** The machine's account may be added: signed in there, not added yet. */
-  const offersMachine = $derived(!!machine && machine.connected && !machine.added);
+  /** The machine's account may be added: signed in there (or signed in once added, ESC-271), not added yet. */
+  const offersMachine = $derived(!!machine && (machine.connected || !!machine.signsInLater) && !machine.added);
   /** What Principal has to share; null until known. */
   let shareable = $state<string[] | null>(null);
   let checked = $state<Record<string, boolean>>({});
@@ -161,6 +173,7 @@
     const harness = engineName(engine);
     if (!m) return t('accounts.modal.machineChecking');
     if (m.added) return t('accounts.modal.machineAdded');
+    if (!m.connected && m.signsInLater) return t('accounts.modal.machineSignInLater', { harness });
     if (!m.connected) return t('accounts.modal.machineNotConnected', { harness });
     if (m.email) return t('accounts.modal.machineConnected', { harness, email: m.email });
     return t(m.signsIn ? 'accounts.modal.machineConnectedNoEmail' : 'accounts.modal.machineFound', { harness });
@@ -191,7 +204,7 @@
       .then((m) => {
         if (of !== engine) return;
         machine = m;
-        kind = m.connected && !m.added && !reserveFor ? 'machine' : 'new';
+        kind = (m.connected || m.signsInLater) && !m.added && !reserveFor ? 'machine' : 'new';
       })
       .catch(() => (machine = null));
   }
@@ -204,14 +217,22 @@
     loadMachine();
   }
 
-  /** « Ajouter ce compte »: the machine's account added as it is, signed in already: back to the accounts. */
+  /**
+   * « Ajouter ce compte »: the machine's account added as it is, signed in already: back to the accounts. Not signed in yet
+   * (Antigravity CLI, ESC-271): its sign-in follows here, by its program in the terminal.
+   */
   async function addMachine() {
     if (busy) return;
     busy = true;
     error = null;
     try {
+      const signsInNow = !!machine && !machine.connected && !!machine.signsInLater;
       const made = await reserved(await api.accountAddMachine(engine));
       if (!app.settings.accounts.some((a) => a.id === made.id)) app.settings.accounts = [...app.settings.accounts, made];
+      if (signsInNow) {
+        account = made;
+        return void (await start());
+      }
       void app.run(api.refreshUsage());
       close();
     } catch (e) {

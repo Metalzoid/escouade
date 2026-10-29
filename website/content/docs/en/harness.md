@@ -201,7 +201,11 @@ Vibe tells the cost and tokens of each turn: the conversation, the agent’s car
 
 ### Installation and account
 
-Install Antigravity CLI with its script (`irm https://antigravity.google/cli/install.ps1 | iex` on Windows, `curl -fsSL https://antigravity.google/cli/install.sh | bash` elsewhere), then run `agy` once in a terminal to sign in to your Google account. Escouade finds `agy` in the `PATH`, or where its script puts it. Each agent has its own folder, removed with it, which stands as `agy`’s home: its rules, its conversations and Escouade’s MCP server are kept there, never in your `~/.gemini`, which Gemini CLI shares. Your sign-in stays the machine’s; a `GEMINI_API_KEY` of your machine isn’t given to it. Its updates are off.
+Install Antigravity CLI with its script (`irm https://antigravity.google/cli/install.ps1 | iex` on Windows, `curl -fsSL https://antigravity.google/cli/install.sh | bash` elsewhere), then add its account in Settings › Accounts (see below). Escouade finds `agy` in the `PATH`, or where its script puts it. Each agent has its own folder, removed with it, which stands as `agy`’s home: its rules, its conversations and Escouade’s MCP server are kept there, never in your `~/.gemini`, which Gemini CLI shares. Its updates are off.
+
+Its machine’s account is your Google sign-in: “Add an Antigravity CLI account…” offers it, signed in or not. Not signed in yet, “Add this account” adds it, then runs `agy` in a terminal of the window, which opens your browser; Escouade never sees your credentials, only that the system keychain keeps the sign-in. “Sign in…”, on its row, does the same again. A `GEMINI_API_KEY` of your machine isn’t given to it.
+
+A second Google account isn’t possible: `agy`’s sign-in is the machine’s, whatever the folder. “A new account” is therefore a Gemini API key (on aistudio.google.com, “Get API key”): kept in the system keychain, given to its agents by `GEMINI_API_KEY`, never written in a file nor on a command line. Its agents then go through that key’s Gemini API, with its models only. “Change the key…” gives it again. Each account has its defaults (model, effort, mode), as the other harnesses’ do.
 
 ### Models and modes
 
@@ -222,7 +226,7 @@ For a private project, reading the other projects’ paths is refused to it by i
 
 ### Cost, quota and what Antigravity doesn’t do
 
-Antigravity gives each turn’s tokens, not their cost nor its quota: its `/usage` is only in its interface; “Usage on antigravity.google”, in Settings › Accounts and the quota panel, opens the page of its plans. Only one account for now. No Auto mode, attached images or PDFs, “Duplicate the conversation”, `/` commands in Escouade, remote control or background tasks. It gets Escouade’s MCP server through its folder’s config; the switch doesn’t declare it in yours yet. The “Antigravity CLI view” runs the agent in Antigravity’s interface, on the same conversation (see [the terminal view](claude-code-view#with-antigravity-cli)).
+Antigravity gives each turn’s tokens (on its card, in the statistics), not their cost nor its quota: its `/usage` (by group of models, weekly) is only in its interface; “Usage on antigravity.google”, in Settings › Accounts and the quota panel, opens the page of its plans. When its quota is spent, the turn ends “limited” on a card that says so; the agent tries again by itself at the reset Antigravity tells, else an hour later (a minute when the model’s capacity is what’s missing), or moves to another account as “Switch accounts at” and “Continue on the next harness” say. No Auto mode, attached images or PDFs, “Duplicate the conversation”, `/` commands in Escouade, remote control or background tasks. It gets Escouade’s MCP server through its folder’s config; the switch doesn’t declare it in yours yet. The “Antigravity CLI view” runs the agent in Antigravity’s interface, on the same conversation (see [the terminal view](claude-code-view#with-antigravity-cli)).
 
 ## Gemini CLI
 

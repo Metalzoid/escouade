@@ -24,6 +24,8 @@ export default defineZone('accounts', {
     usage: 'Usage on {site}',
     usageHint:
       '{harness} gives Escouade no usage: its dashboard shows it (the month’s included usage, the reset). A limit reached stops the turn on a card that says so.',
+    usageHintInterface:
+      '{harness} only gives Escouade the tokens of its turns: its quota (by group of models, weekly) is read by /usage in its interface, and {site} says what each plan includes. A limit reached stops the turn on a card that says so; the agent tries again by itself an hour later, or moves to another account as your settings say.',
     usageHintCost:
       '{harness} gives Escouade what each turn costs, no quota: {site} shows the account’s usage and bill. A rate limit stops the turn on a card that says so, and the agent goes on by itself a minute later.',
     remove: 'Remove',
@@ -83,6 +85,7 @@ export default defineZone('accounts', {
     machineConnectedNoEmail: '{harness} is signed in on this machine',
     machineFound: '{harness} is installed on this machine',
     machineNotConnected: '{harness} isn’t signed in on this machine',
+    machineSignInLater: '{harness} isn’t signed in on this machine yet: you sign in just after, in a terminal',
     machineAdded: 'Added already',
     machineChecking: 'Checking…',
     machineHint: 'Its usual folder, as it is: its settings, its sign-in and its conversations ({path}).',
@@ -138,6 +141,16 @@ export default defineZone('accounts', {
         'Kept in the system keychain, given to this account’s agents by CURSOR_API_KEY, never written in a file nor on a command line. Their turns go to that key’s Cursor account; the machine’s account stays the sign-in of agent login.',
       create: 'Add the account',
       saveKey: 'Save the key',
+    },
+    agy: {
+      nothingToShare:
+        'Nothing to share: each Antigravity agent has a folder of its own, where Escouade writes its rules and it keeps its conversations.',
+      neverShared: 'Antigravity CLI’s Google sign-in is the machine’s: it stays in the system keychain, and a folder doesn’t move it.',
+      signInHint: 'Sign in in the terminal below: agy opens your browser on your Google account. Escouade never sees your credentials.',
+      newHintKey: 'A Gemini API key of another Google account, kept in the system keychain.',
+      keyPlaceholder: 'From aistudio.google.com, Get API key',
+      keyHint:
+        'Kept in the system keychain, given to this account’s agents by GEMINI_API_KEY, never written in a file nor on a command line. Their turns go to that key’s Gemini API (its models only); the machine’s account stays agy’s Google sign-in.',
     },
     vibe: {
       nothingToShare: 'Nothing to share: each Vibe agent has a VIBE_HOME of its own, where “For this agent” keeps its rules and sessions.',

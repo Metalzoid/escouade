@@ -63,7 +63,8 @@ const INSTALL: Install = Install {
 /// gives it to `agy` as `USERPROFILE` and `HOME`.
 pub(crate) const HOME_VAR: &str = "ESCOUADE_AGY_HOME";
 
-/// The keys of the machine that would take the place of its Google account.
+/// The keys of the machine that would take the place of its Google account: the first, an
+/// account added by its key goes by (`modelProvider: gemini`, ESC-271).
 pub(crate) const KEY_VARS: [&str; 2] = ["GEMINI_API_KEY", "GOOGLE_API_KEY"];
 
 /// Its default model: Gemini Flash, its effort apart.
@@ -78,6 +79,95 @@ const EFFORTS: [&str; 3] = ["low", "medium", "high"];
 
 /// Where its plans and their quotas are told: its usage itself is in its interface alone (`/usage`).
 pub(crate) const USAGE_PAGE: &str = "https://antigravity.google/docs/plans";
+
+/// How long after a limit of the model's capacity (not the account's) its agent tries again.
+pub(crate) const CAPACITY_RESUME_MS: i64 = 60_000;
+
+/// How long after its quota was met its agent tries again when `agy` tells no reset: its plans'
+/// quotas are weekly and refreshed by parts (`/usage`: « Refreshes in 167h 49m »), a turn tried
+/// for nothing costs none.
+pub(crate) const QUOTA_RESUME_MS: i64 = 3_600_000;
+
+/// The usage limit an error of `agy` tells (its words read in its program, ESC-269: « You have
+/// exhausted your quota on this model. », « individual quota reached », `RESOURCE_EXHAUSTED`,
+/// `MODEL_CAPACITY_EXHAUSTED`, an HTTP 429): in how many ms to try again, the reset it tells (« in
+/// 2h 5m », « after 30s ») else a capacity's minute or a quota's hour. None for another error.
+pub(crate) fn limit_of(error: &str) -> Option<i64> {
+    let lower = error.to_lowercase();
+    let capacity = lower.contains("model_capacity_exhausted") || lower.contains("capacity");
+    let quota = [
+        "exhausted your quota",
+        "quota reached",
+        "quota exceeded",
+        "resource_exhausted",
+        "rate limit",
+        "too many requests",
+        " 429",
+    ]
+    .iter()
+    .any(|w| lower.contains(w))
+        || lower.starts_with("429");
+    if !capacity && !quota {
+        return None;
+    }
+    Some(
+        told_wait(&lower).unwrap_or(if quota && !lower.contains("capacity") {
+            QUOTA_RESUME_MS
+        } else {
+            CAPACITY_RESUME_MS
+        }),
+    )
+}
+
+/// The wait a text tells after « in », « after » or « retry »: `2h 5m`, `167h 49m`, `30s`, `1d`.
+fn told_wait(lower: &str) -> Option<i64> {
+    [
+        "refreshes in",
+        "resets in",
+        "reset in",
+        "retry in",
+        "retry after",
+        "try again in",
+        "after",
+    ]
+    .iter()
+    .flat_map(|w| lower.match_indices(w).map(move |(i, _)| i + w.len()))
+    .find_map(|at| wait_at(&lower[at..]))
+}
+
+/// The wait `text` starts with (` 2h 5m…`), none when it starts with none.
+fn wait_at(text: &str) -> Option<i64> {
+    let mut total = 0i64;
+    let mut num = String::new();
+    for c in text.chars() {
+        match c {
+            '0'..='9' => num.push(c),
+            ' ' | ',' if num.is_empty() => {}
+            _ if num.is_empty() => break,
+            _ => {
+                let unit = match c {
+                    'd' => 86_400_000,
+                    'h' => 3_600_000,
+                    'm' => 60_000,
+                    's' => 1_000,
+                    _ => break,
+                };
+                total += num.parse::<i64>().ok()? * unit;
+                num.clear();
+            }
+        }
+    }
+    (total > 0).then_some(total)
+}
+
+/// What the card of a turn stopped by its limit says (`said`: `agy`'s own words).
+pub(crate) fn limited_error(lang: Lang, said: &str) -> String {
+    tr_in!(
+        lang,
+        "Limite d’usage d’Antigravity atteinte : {said}",
+        "Antigravity’s usage limit reached: {said}"
+    )
+}
 
 /// The request of its process's own that asks the plan of a turn in the mode Plan approved.
 pub(crate) const PLAN_REQUEST: &str = "escouade/plan";
@@ -178,7 +268,8 @@ pub fn caps() -> EngineCaps {
         default_refusal: false,
         sandbox: false,
         usage_page: Some(USAGE_PAGE),
-        accounts_by_key: false,
+        // Another account than the machine's Google sign-in goes by its Gemini API key (ESC-271).
+        accounts_by_key: true,
         read_only: true,
     }
 }
@@ -444,6 +535,54 @@ pub(crate) fn write_grant(home: &Path, escouade: Option<(&str, &str)>) -> Result
     if let Some(parent) = file.parent() {
         std::fs::create_dir_all(parent)?;
     }
+    std::fs::write(&file, serde_json::to_string_pretty(&doc)?)?;
+    Ok(())
+}
+
+/// The provider of its models in the settings of `home`: the Gemini API by `GEMINI_API_KEY` for an
+/// account added by its key (its reference: `modelProvider: "gemini"`), else its Google sign-in (the
+/// setting taken out). The rest of the file kept.
+pub(crate) fn write_provider(home: &Path, by_key: bool) -> Result<()> {
+    let file = settings_file(home);
+    let mut doc: Value = std::fs::read_to_string(&file)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .filter(Value::is_object)
+        .unwrap_or_else(|| json!({}));
+    match doc.as_object_mut() {
+        Some(o) if by_key => {
+            o.insert("modelProvider".into(), json!("gemini"));
+        }
+        Some(o) => {
+            o.remove("modelProvider");
+        }
+        None => {}
+    }
+    if let Some(parent) = file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&file, serde_json::to_string_pretty(&doc)?)?;
+    Ok(())
+}
+
+/// Whether `env` gives `agy` a Gemini API key of its own (an account added by its key): its
+/// Principal's is given empty.
+pub(crate) fn by_key(env: &[(String, String)]) -> bool {
+    env.iter()
+        .any(|(k, v)| k == KEY_VARS[0] && !v.trim().is_empty())
+}
+
+/// The settings of a process that writes a text: every tool refused (`deny` before all), its
+/// provider as its account's.
+pub(crate) fn write_no_tools(home: &Path, by_key: bool) -> Result<()> {
+    write_provider(home, by_key)?;
+    let file = settings_file(home);
+    let mut doc: Value = serde_json::from_str(&std::fs::read_to_string(&file)?)?;
+    doc["permissions"] = json!({
+        "allow": [],
+        "deny": ["command(*)", "write_file(*)", "read_file(*)", "mcp(*)", "read_url(*)", "execute_url(*)"],
+        "ask": [],
+    });
     std::fs::write(&file, serde_json::to_string_pretty(&doc)?)?;
     Ok(())
 }
@@ -828,9 +967,14 @@ fn result_of(out: &[u8]) -> Result<String> {
         .to_string())
 }
 
-/// One question to `agy -p`, in a home of its own removed once answered, on its fastest Gemini.
+/// One question to `agy -p`, in a home of its own removed once answered, on its fastest Gemini,
+/// every tool refused (ESC-271); its time bounded by `oneshot::LIMIT`.
 async fn one_shot(ask: OneShot<'_>) -> Result<String> {
     let home = throwaway_home()?;
+    if let Err(e) = write_no_tools(&home, by_key(&ask.env)) {
+        let _ = std::fs::remove_dir_all(&home);
+        bail!("agy: its tools not refused for a text: {e:#}");
+    }
     let env = home_env(&ask.env, &home);
     let model = match ask.weight {
         Weight::Light => format!("{DEFAULT}-low"),
@@ -870,6 +1014,8 @@ async fn read_models(
     cwd: &Path,
 ) -> Result<Vec<ToldModel>> {
     let home = throwaway_home()?;
+    // An account by its key lists the Gemini API's models.
+    write_provider(&home, by_key(&env))?;
     let env = home_env(&env, &home);
     let out = super::oneshot::run(
         &program,
@@ -1025,6 +1171,8 @@ impl Engine for Agy {
             Escouade::Denied { .. } => None,
         };
         write_grant(&home, escouade)?;
+        // Its account's key, or the machine's Google sign-in (ESC-271).
+        write_provider(&home, by_key(&spawn.env))?;
         // The hooks of its interface (« Vue Antigravity ») would run here too, for nothing.
         terminal::forget_hooks(&home);
         let rules = AgyRules {

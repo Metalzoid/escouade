@@ -314,6 +314,8 @@ export interface MachineAccount {
   connected: boolean;
   /** Its harness signs in to an account of its own (not OpenCode, whose providers are its config's). */
   signsIn: boolean;
+  /** It may be added before it is signed in there, then signed in by its program in a terminal (Antigravity CLI, ESC-271). */
+  signsInLater?: boolean;
   /** Who it is signed in as, when the harness says: an email, a GitHub `@login`. */
   email: string | null;
   /** Its folder. */

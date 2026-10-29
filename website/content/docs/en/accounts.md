@@ -35,6 +35,8 @@ Without an account of its harness, nothing starts silently: a new agent, a ticke
 3. Choose the account:
    - “This machine’s account”: the account already signed in on this machine, in the harness’s usual folder, offered when the harness is signed in there (“Claude Code is signed in on this machine · ada@example.dev”) and it isn’t added yet (“Added already”). “Add this account” adds it as it is: there is nothing to sign in.
    - “A new account”: a folder of its own under `~/.escouade`, and its own sign-in. Then go on below.
+
+   For Cursor CLI, Mistral Vibe and Antigravity CLI, a new account is an API key, kept in the system keychain: their sign-in is the machine’s, whatever the folder. Antigravity CLI’s machine account is offered before it is signed in too: “Add this account” adds it, then `agy` signs in in a terminal of the window (see [the harnesses](harness#antigravity-cli)).
 4. Type the account’s name in “Name” (the field suggests “Pro, Team…”). Two accounts can’t have the same name, whatever the capitals.
 5. Choose what the account takes from this machine’s account, under “Share with…” (see below).
 6. Click “Create and sign in”. The account is created, active and placed last in the list, then the window opens its sign-in.

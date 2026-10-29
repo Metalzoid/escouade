@@ -261,3 +261,64 @@ fn a_message_takes_text_files_and_refuses_an_image() {
     assert_eq!(m["text"], "notes.txt:\n\nbonjour\n\nRegarde");
     assert!(message("x", &[file("a.png", "image/png", "iVBORw0KGgo=")]).is_err());
 }
+
+#[test]
+fn its_usage_limits_are_told_apart_with_the_wait_they_tell() {
+    // Its quota, in its words (ESC-269): no reset told, an hour.
+    assert_eq!(
+        limit_of("You have exhausted your quota on this model."),
+        Some(QUOTA_RESUME_MS)
+    );
+    assert_eq!(limit_of("individual quota reached"), Some(QUOTA_RESUME_MS));
+    assert_eq!(
+        limit_of("RESOURCE_EXHAUSTED: Weekly Limit, refreshes in 2h 5m"),
+        Some(2 * 3_600_000 + 5 * 60_000)
+    );
+    assert_eq!(
+        limit_of("429 Too Many Requests, retry after 1d"),
+        Some(86_400_000)
+    );
+    // The model's capacity: a minute, or what it says.
+    assert_eq!(
+        limit_of("MODEL_CAPACITY_EXHAUSTED"),
+        Some(CAPACITY_RESUME_MS)
+    );
+    assert_eq!(
+        limit_of("MODEL_CAPACITY_EXHAUSTED: retry in 30s"),
+        Some(30_000)
+    );
+    // Another error: none.
+    assert_eq!(limit_of("model \"inconnu\" not found"), None);
+    assert_eq!(
+        limit_of("API key not valid. Please pass a valid API key."),
+        None
+    );
+    assert!(limited_error(Lang::Fr, "x").starts_with("Limite d’usage d’Antigravity atteinte"));
+}
+
+#[test]
+fn an_account_by_its_key_has_the_gemini_api_as_its_provider_and_a_text_no_tool() {
+    let dir = crate::paths::test_dir("esc271-agy-provider");
+    let _ = std::fs::remove_dir_all(&dir);
+    let key = |v: &str| vec![("GEMINI_API_KEY".to_string(), v.to_string())];
+    assert!(by_key(&key("AIza0000")));
+    assert!(!by_key(&key("")) && !by_key(&[]));
+    // What `agy` keeps there is kept, its provider set then taken out.
+    std::fs::create_dir_all(settings_file(&dir).parent().unwrap()).unwrap();
+    std::fs::write(settings_file(&dir), r#"{"theme":"dark"}"#).unwrap();
+    write_provider(&dir, true).unwrap();
+    let read = || -> Value {
+        serde_json::from_str(&std::fs::read_to_string(settings_file(&dir)).unwrap()).unwrap()
+    };
+    assert_eq!(read()["modelProvider"], "gemini");
+    assert_eq!(read()["theme"], "dark");
+    write_provider(&dir, false).unwrap();
+    assert!(read().get("modelProvider").is_none());
+    write_no_tools(&dir, false).unwrap();
+    let deny = read()["permissions"]["deny"].clone();
+    for rule in ["command(*)", "write_file(*)", "read_file(*)", "mcp(*)"] {
+        assert!(deny.as_array().unwrap().iter().any(|r| r == rule), "{deny}");
+    }
+    assert_eq!(read()["permissions"]["allow"], json!([]));
+    assert!(caps().accounts_by_key);
+}

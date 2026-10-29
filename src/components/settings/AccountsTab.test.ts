@@ -13,6 +13,7 @@ import { app } from '../../lib/state.svelte';
 import type { Account, AccountStatus, ClosedProject } from '../../lib/types';
 import {
   agent,
+  AGY_ENGINE,
   BARE_ENGINE,
   CURSOR_ENGINE,
   CLAUDE_ENGINE,
@@ -281,6 +282,41 @@ describe('AccountsTab', () => {
     expect(opened).toEqual(['https://admin.mistral.ai/organization/usage']);
     await userEvent.click(within(team).getByRole('button', { name: 'Changer la clé…' }));
     expect(app.modal).toEqual({ kind: 'account', accountId: 'vibe-equipe' });
+  });
+
+  it('links an Antigravity account to its plans, says its quota is in its /usage, and gives its key again (ESC-271)', async () => {
+    const AGY_MAIN: Account = { id: 'principal-agy', name: 'Principal', engine: 'agy', configDir: '', claudePath: '', active: true };
+    const TEAM: Account = { id: 'agy-equipe', name: 'Équipe', engine: 'agy', configDir: 'C:\\equipe', claudePath: '', active: true };
+    app.engines = [CLAUDE_ENGINE, AGY_ENGINE];
+    app.settings = { ...SETTINGS, accounts: [PRINCIPAL, AGY_MAIN, TEAM] };
+    opened.length = 0;
+    backend({
+      account_status: (a: { id: string }) =>
+        a.id === 'agy-equipe'
+          ? { connected: true, email: 'clé …wxyz', dir: 'C:\\equipe', stamp: null }
+          : a.id === 'principal-agy'
+            ? { connected: false, email: null, dir: 'C:\\Users\\ada\\.gemini', stamp: null }
+            : status()(a),
+    });
+    render(SettingsModal, { tab: 'accounts' });
+    const team = screen.getAllByRole('listitem', { name: 'Équipe' })[0];
+    expect(await within(team).findByText('Connecté · clé …wxyz')).toBeInTheDocument();
+    // Neither cost nor budget: Antigravity tells tokens alone.
+    expect(within(team).queryByRole('textbox', { name: 'Budget par jour ($)' })).not.toBeInTheDocument();
+    const usage = within(team).getByRole('button', { name: 'Usage sur antigravity.google' });
+    await userEvent.hover(usage);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      /son quota \(par groupe de modèles, hebdomadaire\) se lit par \/usage dans son interface/,
+    );
+    await userEvent.unhover(usage);
+    await userEvent.click(usage);
+    expect(opened).toEqual(['https://antigravity.google/docs/plans']);
+    await userEvent.click(within(team).getByRole('button', { name: 'Changer la clé…' }));
+    expect(app.modal).toEqual({ kind: 'account', accountId: 'agy-equipe' });
+    // The machine's, not signed in: by agy in a terminal.
+    const main = screen.getAllByRole('listitem', { name: 'Principal' }).find((l) => within(l).queryByText('Usage sur antigravity.google'))!;
+    await userEvent.click(within(main).getByRole('button', { name: 'Se connecter…' }));
+    expect(app.modal).toEqual({ kind: 'account', accountId: 'principal-agy' });
   });
 
   it('shows what an account of a harness without a quota spent today, in the place of the gauges', async () => {

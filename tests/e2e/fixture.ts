@@ -122,6 +122,13 @@ interface Instance {
 
 /** Starts the app with `env`; its stderr is appended to `stderr` (a restart keeps what the launch before wrote). */
 /** The sign-in of Cursor CLI the app finds (`ESCOUADE_CURSOR_AUTH`): a file of the test's, with nothing in it. */
+/** The file that stands for Antigravity's Google sign-in on the machine, made unless `signedOut`. */
+function agySignIn(root: string, signedOut: boolean): string {
+  const file = path.join(root, 'agy-signed-in');
+  if (!signedOut && !fs.existsSync(file)) fs.writeFileSync(file, 'signed in');
+  return file;
+}
+
 function cursorAuth(root: string): string {
   const file = path.join(root, 'cursor-auth.json');
   if (!fs.existsSync(file)) fs.writeFileSync(file, '{}');
@@ -411,6 +418,9 @@ export const test = base.extend<{
       // never the user's ~/.gemini.
       ESCOUADE_AGY: 'none',
       FAKE_AGY_LOG: path.join(root, 'fake-agy.jsonl'),
+      // Its Google sign-in (the keychain's entry `gemini:antigravity`, ESC-271): a file of the test's stands for it, there
+      // unless the test says `agySignedOut`; the fake `agy` writes it when it is signed in in its terminal.
+      ESCOUADE_AGY_SIGNED_IN: agySignIn(root, !!given.agySignedOut),
       // The same for Gemini CLI (`appEnv: { ESCOUADE_GEMINI: FAKE_GEMINI }`): each agent has its own GEMINI_CLI_HOME in the
       // app's data, never the user's ~/.gemini.
       ESCOUADE_GEMINI: 'none',

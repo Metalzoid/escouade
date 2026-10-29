@@ -30,6 +30,8 @@ pub(crate) mod minimal;
 #[cfg(test)]
 mod userconfig_tests;
 
+#[cfg(test)]
+pub(crate) use agy::bench::fake_agy;
 pub use agy::AGY;
 pub(crate) use claude::terminal as claude_terminal;
 pub use claude::{

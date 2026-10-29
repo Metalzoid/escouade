@@ -490,6 +490,18 @@ export const VIBE_ENGINE: EngineDecl = {
   },
 };
 
+/** Antigravity CLI as it declares itself (ESC-271): its tokens, neither quota nor cost, its plans' page; another account by its Gemini API key. */
+export const AGY_ENGINE: EngineDecl = {
+  ...BARE_ENGINE,
+  id: 'agy',
+  name: 'Antigravity CLI',
+  caps: {
+    ...BARE_ENGINE.caps,
+    usagePage: 'https://antigravity.google/docs/plans',
+    accountsByKey: true,
+  },
+};
+
 /** Claude Code's two windows of a reading, the shorthand of the tests: `fiveHour` and `sevenDay`, as before 1.8. */
 export interface ClaudeWindows {
   fiveHour?: RateWindow | null;

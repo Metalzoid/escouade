@@ -10,6 +10,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 - Gemini CLI devient un huitième harness : ses agents conversent dans Escouade par ACP, avec ses modèles, ses modes, son plan à approuver et ses questions, chacun dans son propre dossier de configuration ; pas encore essayé avec un vrai compte.
 - Antigravity CLI, l’agent de Google, devient un septième harness : ses agents conversent dans Escouade avec ses modèles, ses efforts et son mode Plan, et ce qu’il refuse en cours de tour t’est demandé à la fin du tour, puis repris.
+- Antigravity CLI a ses comptes : celui de la machine, ajouté et connecté par agy dans un terminal de la fenêtre, et d’autres par leur clé d’API Gemini ; quand son quota est épuisé, l’agent attend et reprend seul, ou passe sur un autre compte.
 - La « Vue Antigravity CLI » ouvre l’interface d’Antigravity dans un terminal, sur la conversation de l’agent : Escouade suit ses messages, ses outils et ses fins de tour, lui donne son serveur MCP, et le retour à la conversation reprend la même conversation.
 - Mistral Vibe devient un sixième harness : ses agents conversent, demandent leurs permissions et posent leurs questions dans Escouade, avec ses modèles, ses modes et un mode Plan joué par Escouade.
 - Mistral Vibe a plusieurs comptes, chacun par sa clé d’API Mistral, et montre ce que coûte chaque tour, dans la conversation, la barre d’état et les statistiques ; à sa limite de débit, l’agent reprend seul une minute plus tard.

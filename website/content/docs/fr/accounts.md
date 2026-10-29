@@ -35,6 +35,8 @@ Sans compte pour son harness, rien ne démarre en silence : un nouvel agent, un 
 3. Choisis le compte :
    - « Le compte de la machine » : le compte déjà connecté sur cette machine, dans le dossier habituel du harness, proposé quand le harness y est connecté (« Claude Code est connecté sur cette machine · ada@exemple.dev ») et qu’il n’est pas déjà ajouté (« Déjà ajouté »). « Ajouter ce compte » l’ajoute tel quel : il n’y a rien à connecter.
    - « Un nouveau compte » : un dossier à lui sous `~/.escouade`, et sa propre connexion. Continue alors ci-dessous.
+
+   Pour Cursor CLI, Mistral Vibe et Antigravity CLI, un nouveau compte est une clé d’API, gardée dans le trousseau du système : leur connexion est celle de la machine, quel que soit le dossier. Le compte de la machine d’Antigravity CLI se propose aussi avant d’être connecté : « Ajouter ce compte » l’ajoute, puis `agy` s’y connecte dans un terminal de la fenêtre (voir [les harness](harness#antigravity-cli)).
 4. Écris le nom du compte dans « Nom » (le champ suggère « Pro, Équipe… »). Deux comptes ne peuvent pas porter le même nom, majuscules ou non.
 5. Choisis ce que le compte reprend du compte de la machine, sous « Partager avec… » (voir ci-dessous).
 6. Clique sur « Créer et se connecter ». Le compte est créé, actif et placé en dernier dans la liste, puis la fenêtre ouvre sa connexion.
