@@ -334,6 +334,16 @@ impl DataDir {
         self.0.join("agent-homes").join(name)
     }
 
+    /// The installed plugins' copies, one folder per plugin, by its id (`plugins`).
+    pub fn plugins_dir(&self) -> PathBuf {
+        self.0.join("plugins")
+    }
+
+    /// The list of the installed plugins: where each comes from and its fingerprint.
+    pub fn plugins_file(&self) -> PathBuf {
+        self.0.join("plugins.json")
+    }
+
     /// The MCP configs the agents' processes are started with (`--mcp-config`), one per agent.
     pub fn mcp_agents(&self) -> PathBuf {
         self.0.join("mcp")

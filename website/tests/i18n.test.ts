@@ -54,6 +54,7 @@ describe('catalogs', () => {
         'squad.names.docs',
         'squad.names.login',
         'docs.title',
+        'docs.groups.plugins.title',
         // The documentation's pages that bear the same name in both languages.
         'docs.pages.installation',
         'docs.pages.notifications',

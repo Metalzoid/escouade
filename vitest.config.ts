@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [svelte(), svelteTesting()],
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts', 'tests/e2e/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'schemas/**/*.test.ts', 'scripts/**/*.test.ts', 'tests/e2e/**/*.test.ts'],
     setupFiles: ['./src/test/setup.ts'],
     // A temporary folder of its own, removed at the end (scripts/test-tmp.ts).
     globalSetup: ['./scripts/vitest-global-tmp.ts'],

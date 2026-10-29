@@ -856,6 +856,8 @@ pub struct Core<R: Runtime = Wry> {
     pub git: GitService,
     /// The projects' code indexes (`codeindex`).
     pub(crate) codeindex: crate::codeindex::Service,
+    /// The installed plugins (`plugins`).
+    pub plugins: Arc<crate::plugins::Plugins>,
     /// The download of the vectors' model under way (ESC-254), by its flag to call it off.
     pub(crate) vectors_download: Mutex<Option<Arc<std::sync::atomic::AtomicBool>>>,
     pub git_cache: RwLock<HashMap<String, GitInfo>>,
@@ -1807,6 +1809,7 @@ impl<R: Runtime> Core<R> {
             telemetry,
             stats: Stats::open(&data.stats_db()),
             codeindex: crate::codeindex::Service::new(data.clone()),
+            plugins: crate::plugins::Plugins::load(data.clone(), env!("CARGO_PKG_VERSION")),
             app,
             data,
             hub: Hub::default(),

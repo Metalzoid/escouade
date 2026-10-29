@@ -1,0 +1,200 @@
+{
+  "about": "The manifests of escouade-plugin.json and what their reader says of them (ESC-173). Both readers go through every case: the app's (src-tauri/src/plugins/manifest_tests.rs) and the store's library (schemas/plugin-manifest.test.ts). `errors` are `<path> <code>`, in any order; `ignored` the unknown fields, which load nothing and fail nothing.",
+  "cases": [
+    {
+      "name": "the manifest of docs/PLUGINS.md §3.1",
+      "manifest": {
+        "$schema": "https://escouade.dev/schemas/plugin-1.json",
+        "id": "dev.exemple.slack",
+        "name": "Slack",
+        "version": "1.2.0",
+        "description": {
+          "fr": "Les tickets à tester et les agents qui attendent, dans un salon Slack.",
+          "en": "Tickets to test and agents waiting, in a Slack channel."
+        },
+        "author": { "name": "Exemple", "url": "https://exemple.dev" },
+        "license": "MIT",
+        "repository": "https://github.com/exemple/escouade-slack",
+        "escouade": { "api": "1", "min": "2.1.0" },
+        "run": { "command": "bin/escouade-slack", "windows": "bin/escouade-slack.exe" },
+        "activation": ["event:ticket.column", "event:agent.waiting"],
+        "permissions": { "events": ["ticket.*", "agent.waiting"], "network": ["hooks.slack.com"], "secrets": ["webhook"] },
+        "contributes": {
+          "settings": [{ "key": "channel", "type": "string", "title": { "fr": "Salon", "en": "Channel" } }],
+          "secrets": [{ "key": "webhook", "title": { "fr": "Adresse du webhook", "en": "Webhook URL" } }]
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "a declarative plugin: nothing runs",
+      "manifest": {
+        "id": "dev.exemple.contraste",
+        "name": { "fr": "Contraste élevé", "en": "High contrast" },
+        "version": "0.1.0-beta.1",
+        "escouade": { "api": "1", "min": "2.1", "max": "2.4" },
+        "contributes": { "themes": [{ "id": "high-contrast" }] }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "a first-hand plugin with several points (docs/PLUGINS.md §4.4), from the app",
+      "builtin": true,
+      "manifest": {
+        "id": "dev.escouade.github",
+        "name": "GitHub",
+        "version": "2.1.0",
+        "escouade": { "api": "1", "min": "2.1.0" },
+        "run": { "command": "{escouade}/escouade-plugins", "args": ["github"] },
+        "activation": ["account:github", "project:remote-github"],
+        "permissions": { "network": ["api.github.com"], "secrets": ["account:*"], "commands": ["gh auth token"] },
+        "contributes": {
+          "accounts": [{ "id": "github", "name": "GitHub", "hosts": { "default": "github.com" } }],
+          "ticketSources": [{ "id": "github-issues", "name": "GitHub Issues", "account": "github" }],
+          "forges": [{ "id": "github", "account": "github", "capabilities": { "pullRequests": true } }]
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "the same, installed by a user: the ids and the program of Escouade are its own",
+      "manifest": {
+        "id": "dev.escouade.github",
+        "name": "GitHub",
+        "version": "2.1.0",
+        "escouade": { "api": "1", "min": "2.1.0" },
+        "run": { "command": "{escouade}/escouade-plugins", "args": ["github"] }
+      },
+      "errors": ["id reserved", "run.command reserved"],
+      "ignored": []
+    },
+    {
+      "name": "a plugin of an API to come is read, and loads disabled",
+      "manifest": {
+        "id": "dev.exemple.futur",
+        "name": "Futur",
+        "version": "3.0.0",
+        "escouade": { "api": "7", "min": "4.0.0" }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "unknown fields are ignored, at every level Escouade knows",
+      "manifest": {
+        "id": "dev.exemple.neuf",
+        "name": "Neuf",
+        "version": "1.0.0",
+        "escouade": { "api": "1", "min": "2.1.0", "channel": "beta" },
+        "author": { "name": "Moi", "pronouns": "they" },
+        "permissions": { "events": ["app.started"], "camera": true },
+        "contributes": { "hologram": [{}], "settings": [{ "key": "a", "type": "string", "title": "A", "extra": 1 }] },
+        "store": { "categories": ["themes"], "price": 3 },
+        "sponsor": "https://exemple.dev/sponsor"
+      },
+      "errors": [],
+      "ignored": ["escouade.channel", "author.pronouns", "permissions.camera", "contributes.hologram", "store.price", "sponsor"]
+    },
+    {
+      "name": "not an object",
+      "manifest": ["dev.exemple.liste"],
+      "errors": [" type"],
+      "ignored": []
+    },
+    {
+      "name": "empty: each required field says so",
+      "manifest": {},
+      "errors": ["id required", "name required", "version required", "escouade required"],
+      "ignored": []
+    },
+    {
+      "name": "wrong at each level, field by field",
+      "manifest": {
+        "$schema": 1,
+        "id": "Slack",
+        "name": "",
+        "version": "1.2",
+        "description": { "de": "Nur Deutsch" },
+        "author": { "url": "ftp://exemple.dev" },
+        "license": "",
+        "repository": "github.com/exemple/x",
+        "escouade": { "api": "v1", "min": "deux", "max": "1.0" },
+        "run": { "command": "../bin/x", "args": "--fast", "linux": "/usr/bin/x" },
+        "activation": ["", 3],
+        "permissions": { "events": "ticket.*", "decide": "yes", "network": [""] },
+        "contributes": {
+          "settings": [
+            { "key": "1x", "type": "colour" },
+            { "key": "1x", "type": "string", "title": "B" }
+          ],
+          "secrets": {},
+          "accounts": [{ "name": "A" }],
+          "ticketSources": [{ "id": "src", "account": "nowhere" }],
+          "forges": ["github"],
+          "themes": [{}, { "id": "t" }, 3]
+        },
+        "store": { "screenshots": ["C:\\shot.png"], "docs": 3 }
+      },
+      "errors": [
+        "$schema type",
+        "id id",
+        "name empty",
+        "version version",
+        "description empty",
+        "author.name required",
+        "author.url url",
+        "license empty",
+        "repository url",
+        "escouade.api api",
+        "escouade.min version",
+        "run.command path",
+        "run.args type",
+        "run.linux path",
+        "activation[0] empty",
+        "activation[1] type",
+        "permissions.events type",
+        "permissions.network[0] empty",
+        "permissions.decide type",
+        "contributes.settings[0].key key",
+        "contributes.settings[0].type enum",
+        "contributes.settings[0].title required",
+        "contributes.settings[1].key duplicate",
+        "contributes.settings[1].key key",
+        "contributes.secrets type",
+        "contributes.accounts[0].id required",
+        "contributes.ticketSources[0].account account",
+        "contributes.forges[0] type",
+        "contributes.themes[2] type",
+        "store.screenshots[0] path",
+        "store.docs type"
+      ],
+      "ignored": []
+    },
+    {
+      "name": "a range that ends before it starts",
+      "manifest": {
+        "id": "dev.exemple.plage",
+        "name": "Plage",
+        "version": "1.0.0",
+        "escouade": { "api": "1", "min": "2.3.0", "max": "2.2" }
+      },
+      "errors": ["escouade.max range"],
+      "ignored": []
+    },
+    {
+      "name": "the types of the values: a text, a number for a string",
+      "manifest": {
+        "id": "dev.exemple.types",
+        "name": { "fr": 3, "en": "Types" },
+        "version": 1,
+        "escouade": { "api": 1, "min": "2.1.0" },
+        "author": "Moi"
+      },
+      "errors": ["name.fr type", "version type", "escouade.api type", "author type"],
+      "ignored": []
+    }
+  ]
+}

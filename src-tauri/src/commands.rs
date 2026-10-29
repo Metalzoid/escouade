@@ -268,6 +268,50 @@ pub fn data_dir(core: CoreState) -> String {
     core.data.root().display().to_string()
 }
 
+/// The installed plugins (ESC-173), as last read from their folders.
+#[tauri::command(async)]
+pub fn plugins_list(core: CoreState) -> Vec<crate::plugins::PluginView> {
+    core.plugins.list(crate::i18n::ui())
+}
+
+/// Installs the plugin of a local folder: copied into the app's data, pinned by its files.
+#[tauri::command(async)]
+pub fn plugin_install_folder(
+    core: CoreState,
+    path: String,
+) -> Result<crate::plugins::PluginView, crate::plugins::Refusal> {
+    core.plugins
+        .install_folder(std::path::Path::new(path.trim()), crate::i18n::ui())
+}
+
+/// Installs the plugin of a git repository at a tag, pinned by its commit.
+#[tauri::command(async)]
+pub async fn plugin_install_git(
+    core: CoreState<'_>,
+    url: String,
+    tag: String,
+) -> Result<crate::plugins::PluginView, crate::plugins::Refusal> {
+    core.plugins
+        .install_git(&url, &tag, crate::i18n::ui())
+        .await
+}
+
+/// Loads a plugin's folder in development in place, read again when it changes.
+#[tauri::command(async)]
+pub fn plugin_load_dev(
+    core: CoreState,
+    path: String,
+) -> Result<crate::plugins::PluginView, crate::plugins::Refusal> {
+    core.plugins
+        .load_dev(std::path::Path::new(path.trim()), crate::i18n::ui())
+}
+
+/// Uninstalls a plugin: its copy removed (a folder in development is left where it is).
+#[tauri::command(async)]
+pub fn plugin_remove(core: CoreState, id: String) -> Result<bool, String> {
+    core.plugins.remove(&id).map_err(|e| e.to_string())
+}
+
 /// Where the `claude` of a path of the settings is (empty: the one found by itself), the
 /// distribution of the settings (`wsl_distro`) for one of WSL: the line under the field.
 #[tauri::command(async)]

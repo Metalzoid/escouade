@@ -24,6 +24,8 @@ Escouade range ses données dans `~/.escouade/` (`C:\Users\<toi>\.escouade` sous
 | `voice/models/` | Les modèles de Whisper téléchargés pour la dictée et la conversation vocale (`ggml-<modèle>.bin`). Chacun s’efface depuis [Réglages › Voix](settings-voice#les-modeles-de-whisper). |
 | `voice/voices/` | Les voix de la conversation vocale téléchargées (`<voix>.onnx` et `<voix>.onnx.json`). Chacune s’efface depuis Réglages › Voix. |
 | `voice/espeak-ng-data/` | Les données de prononciation d’eSpeak NG (français et anglais), écrites par l’app à la première lecture à voix haute et réécrites après une mise à jour. |
+| `plugins/<id>/` | La copie de chaque plugin installé depuis un dossier ou un dépôt git, sans son historique git (voir [le manifeste](plugins/manifest#installer-un-plugin)). Effacée quand le plugin est désinstallé. |
+| `plugins.json` | La liste des plugins installés : leur origine (dossier, dépôt et étiquette, dossier en développement) et leur empreinte. |
 | `update.json` | La mise à jour en cours d’installation, notée pour le démarrage suivant puis effacée. |
 | `stats.db` | Les statistiques (une base SQLite, avec ses fichiers `stats.db-wal` et `stats.db-shm` tant qu’Escouade tourne). |
 | `telemetry-id` | L’identifiant tiré au hasard de cette installation, pour les statistiques d’usage. Créé quand tu les acceptes, supprimé quand tu les refuses ou les désactives. |

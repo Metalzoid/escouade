@@ -122,6 +122,9 @@ mod plan_tests;
 mod planfiles;
 #[cfg(test)]
 mod planfiles_tests;
+mod plugins;
+#[cfg(test)]
+mod plugins_tests;
 mod pricing;
 #[cfg(test)]
 mod private_tests;
@@ -515,6 +518,11 @@ pub fn run() {
             commands::claude_locate,
             commands::claude_update_status,
             commands::data_dir,
+            commands::plugins_list,
+            commands::plugin_install_folder,
+            commands::plugin_install_git,
+            commands::plugin_load_dev,
+            commands::plugin_remove,
             commands::account_sign_in_ended,
             commands::claude_found,
             commands::engines,

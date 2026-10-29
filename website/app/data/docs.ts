@@ -1,7 +1,8 @@
 // The documentation: its groups of pages, in the order of the sidebar. A page is a Markdown file per language,
-// content/docs/<lang>/<slug>.md (see content/docs/README.md); the names of the groups and of the pages in the
-// sidebar are in the catalogs, a page's own title is the first line of its file. No page is called `agents`: on a
-// system that ignores the case of file names, coding agents would take agents.md for an AGENTS.md of instructions.
+// content/docs/<lang>/<slug>.md (see content/docs/README.md), the pages of a section in its folder (`plugins/manifest`);
+// the names of the groups and of the pages in the sidebar are in the catalogs, a page's own title is the first line of
+// its file. No page is called `agents`: on a system that ignores the case of file names, coding agents would take
+// agents.md for an AGENTS.md of instructions.
 import type { Lang } from './language';
 
 export const DOC_GROUPS = [
@@ -40,6 +41,7 @@ export const DOC_GROUPS = [
       'settings-about',
     ],
   },
+  { id: 'plugins', pages: ['plugins/manifest'] },
   { id: 'reference', pages: ['shortcuts', 'escouade-yml', 'data', 'updates', 'troubleshooting'] },
 ] as const;
 
@@ -70,3 +72,10 @@ export function docRoute(url: URL, origin: string, base: string, current: string
 
 /** The Markdown file of a page, from the website's folder: what the “edit this page” link opens on GitHub. */
 export const docSource = (lang: Lang, slug: DocSlug) => `content/docs/${lang}/${slug}.md`;
+
+/**
+ * The slug of a route's parameter: one word, or the words of a page of a section (`plugins/manifest`). A catch-all
+ * route gives an empty last word for the trailing slash of the site's addresses.
+ */
+export const slugOf = (param: string | string[] | undefined) =>
+  (Array.isArray(param) ? param : [String(param ?? '')]).filter(Boolean).join('/');

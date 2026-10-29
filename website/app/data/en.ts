@@ -387,6 +387,7 @@ export const en: Catalog = {
       },
       usage: { title: 'Accounts and usage', text: 'Several accounts per harness, quotas, cost and statistics.' },
       settings: { title: 'Settings', text: 'Every tab of the settings window, option by option.' },
+      plugins: { title: 'Plugins', text: 'Add features to Escouade: a plugin’s manifest, how it is installed, its extension points.' },
       reference: { title: 'Reference', text: 'Shortcuts, local data, updates and troubleshooting.' },
     },
     pages: {
@@ -432,6 +433,7 @@ export const en: Catalog = {
       'settings-network': 'Network',
       'settings-voice': 'Voice',
       'settings-about': 'About',
+      'plugins/manifest': 'The manifest',
       shortcuts: 'Keyboard shortcuts',
       'escouade-yml': '.escouade.yml',
       data: 'Local data',

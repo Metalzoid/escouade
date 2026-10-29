@@ -391,6 +391,10 @@ export const fr: Catalog = {
       },
       usage: { title: 'Comptes et consommation', text: 'Plusieurs comptes par harness, les quotas, le coût et les statistiques.' },
       settings: { title: 'Réglages', text: 'Chaque onglet de la fenêtre des réglages, option par option.' },
+      plugins: {
+        title: 'Plugins',
+        text: 'Ajouter des fonctionnalités à Escouade : le manifeste d’un plugin, son installation, ses points d’extension.',
+      },
       reference: { title: 'Référence', text: 'Les raccourcis, les données locales, les mises à jour et le dépannage.' },
     },
     pages: {
@@ -436,6 +440,7 @@ export const fr: Catalog = {
       'settings-network': 'Réseau',
       'settings-voice': 'Voix',
       'settings-about': 'À propos',
+      'plugins/manifest': 'Le manifeste',
       shortcuts: 'Raccourcis clavier',
       'escouade-yml': '.escouade.yml',
       data: 'Données locales',
