@@ -568,7 +568,8 @@ impl Plugins {
         let tx = self.changes_tx();
         let pid = id.to_string();
         let handler = move |res: notify::Result<notify::Event>| {
-            if res.is_ok() {
+            // Reading the folder again opens its files: under Linux, that would read it again (ESC-290).
+            if res.is_ok_and(|ev| !crate::git::is_read(&ev)) {
                 let _ = tx.send(pid.clone());
             }
         };

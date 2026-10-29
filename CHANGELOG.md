@@ -12,6 +12,10 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - « Écrire une première spec depuis le code », et toute nouvelle discussion, ferme sa fenêtre et ouvre la discussion avec son premier message même quand les nouveaux agents s’ouvrent dans le terminal du harness : une discussion reste toujours dans sa conversation, où Escouade refuse ses écritures.
 - La carte des tickets créés par « Planifier » rejoint les cartes des sujets dans l’onglet Docs : rien n’en déborde plus, elle dit combien de tickets sont lancés, « Annuler » ne s’offre que pour ceux qui ne le sont pas encore, et elle se replie une fois tout lancé ou se ferme.
 - Une discussion qui ne peut pas démarrer ne laisse plus d’agent derrière elle : la fenêtre dit pourquoi et garde tes choix, pour recommencer ou changer de compte.
+- Sous Linux, Escouade ne relit plus le git de chaque projet en boucle quand rien ne change, ce qui pouvait faire tourner la fenêtre sans fin et la figer ; une ligne de plusieurs mégaoctets dans un diff n’est plus affichée qu’en partie.
+- L’interface ne se fige plus le temps d’une opération longue (gros dossier, git, verrou) : elle reste réactive pendant que la commande travaille, et le journal note les commandes lentes et les pauses de la fenêtre pour les diagnostiquer.
+- Quand la page de l’interface s’arrête net, Escouade la recharge sans rouvrir le projet qu’elle affichait et propose de le rouvrir : un projet qui fait tomber la page ne fige plus toute l’app.
+- La sortie d’un outil qui a lu un fichier binaire s’affiche nettoyée (caractères de contrôle rendus visibles, couleurs du terminal retirées) au lieu d’être perdue, et une sortie très longue s’affiche par morceaux.
 
 ## [2.1.0] — 2026-10-29
 

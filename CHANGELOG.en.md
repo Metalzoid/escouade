@@ -12,6 +12,10 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - “Write a first spec from the code”, and every new discussion, closes its window and opens the discussion with its first message even when new agents open in the harness terminal: a discussion always stays in its conversation, where Escouade refuses its writes.
 - The card of the tickets “Plan tickets” made now matches the subjects’ cards in the Docs tab: nothing spills out of it, it says how many tickets have started, “Undo” only shows for those not started yet, and it folds once all have started or closes.
 - A discussion that can’t start no longer leaves an agent behind: the window says why and keeps your choices, to start again or switch accounts.
+- On Linux, Escouade no longer reads every project’s git in a loop while nothing changes, which could keep the window busy and freeze it; a line of several megabytes in a diff is now only partly shown.
+- The interface no longer freezes during a long operation (a big folder, git, a lock): it stays responsive while the command works, and the log notes slow commands and window pauses to diagnose them.
+- When the interface’s page stops dead, Escouade reloads it without reopening the project it showed and offers to reopen it: a project that brings the page down no longer freezes the whole app.
+- The output of a tool that read a binary file is shown cleaned (control characters made visible, terminal colours removed) instead of being lost, and a very long output is shown in parts.
 
 ## [2.1.0] — 2026-10-29
 
