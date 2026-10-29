@@ -4,7 +4,7 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
-## [Unreleased]
+## [2.1.0] — 2026-10-29
 
 ### New
 
@@ -31,6 +31,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - A new agent of a harness without an Auto mode (Cursor CLI, Mistral Vibe, Antigravity CLI, Gemini CLI, OpenCode) starts in “Ask”, no longer in an Auto it doesn’t have.
 - “Approve the plan” resumes in the mode the agent was in before Plan, Auto for instance, instead of “Ask”, with every harness; the button says which mode.
 - A ticket launched by hand starts even past “Pause above quota”: that threshold now holds back the autopilot alone.
+- A ticket launched by hand that can’t start says so, with the reason, instead of staying in “To do” without a word.
 - Under WSLg, links, files and folders open in Windows, instead of doing nothing.
 
 ## [2.0.5] — 2026-10-27

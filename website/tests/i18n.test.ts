@@ -47,7 +47,7 @@ describe('catalogs', () => {
         'footer.github',
         'header.discord',
         'footer.discord',
-        'roadmap.items[2].title',
+        'roadmap.items[0].title',
         'demo.status.question',
         'demo.agents',
         'demo.kanban',

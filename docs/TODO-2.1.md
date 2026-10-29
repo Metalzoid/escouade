@@ -47,8 +47,8 @@ Un septième harness : Antigravity CLI (`agy`), l'agent de Google dans le termin
 **Sur le poste de l'utilisateur** (2026-10-28) : `agy` 1.4.9 installé (`%LOCALAPPDATA%\agy\bin\agy.exe`) et authentifié par Google ; sa config est `~/.gemini/antigravity-cli/`, **partagée avec Gemini CLI** ; ses jetons sont au Gestionnaire d'identifiants. Les essais réels s'y font comme ceux des autres harness : config sauvegardée puis rendue à l'octet près, jamais de déconnexion, jamais un jeton ni `google_accounts.json` lu ou copié.
 
 - [x] Essais réels d'abord (ESC-269, 2026-10-28), comme pour Cursor CLI (ESC-24) et Mistral Vibe (ESC-265) : protocole, permissions et questions, config et isolement (`USERPROFILE`), compte, quota, serveur MCP, hooks, interface, modèles et modes ; les réponses notées dans `docs/TODO-1.8.md` (point 0, « Antigravity CLI » : stream-json recommandé), les flux gardés dans `tests/fixtures/agy/`.
-- [ ] L'adaptateur par stream-json (ESC-270 et suivants) : un processus et un `USERPROFILE` par agent, lecteur de flux à part, permissions par `denied_actions` puis règle `permissions.allow` écrite dans le `settings.json` (relu à chaud) puis renvoi du message, MCP par `.agents/mcp_config.json` (jeton écrit dans le fichier, jamais en argument), `hooks.json` pour l'`escouade-hook`.
-- [ ] Ses comptes (celui du trousseau ; la clé d'API Gemini pour un compte de plus), son usage (jetons seulement, quota par `/usage` de l'interface), sa vue terminal (`agy --conversation <id>`, suivie par `transcript.jsonl`) ; la clôture des projets privés ; le banc des harness, la doc et le site.
+- [x] L'adaptateur par stream-json (ESC-270 et suivants) : un processus et un `USERPROFILE` par agent, lecteur de flux à part, permissions par `denied_actions` puis règle `permissions.allow` écrite dans le `settings.json` (relu à chaud) puis renvoi du message, MCP par `.agents/mcp_config.json` (jeton écrit dans le fichier, jamais en argument), `hooks.json` pour l'`escouade-hook`.
+- [x] Ses comptes (celui du trousseau ; la clé d'API Gemini pour un compte de plus), son usage (jetons seulement, quota par `/usage` de l'interface), sa vue terminal (`agy --conversation <id>`, suivie par `transcript.jsonl`) ; la clôture des projets privés ; le banc des harness, la doc et le site.
 - [ ] À dire à l'utilisateur : pas de questions ni de coût en dollars ni de liste de tâches en stream-json ; le mode `auto` dépend du compte ; les modèles tiers dépendent du forfait.
 
 ## Gemini CLI (demandé le 2026-10-28)
@@ -58,8 +58,8 @@ Un huitième harness : Gemini CLI (`gemini`), à côté de Claude Code, Codex, O
 **L'utilisateur n'a pas de compte Gemini à y consacrer** : l'étude s'est faite sur la doc, le code installé et des essais sans compte (le vrai binaire 0.66.0 contre un faux serveur d'API local) ; les tests de l'adaptateur se font sur un faux Gemini ; un essai réel reste écrit, ignoré, prêt pour le jour où un compte sera là.
 
 - [x] Étude sans compte (ESC-273, 2026-10-28) : les neuf points notés dans `docs/TODO-1.8.md` (point 0, « Gemini CLI » : ACP recommandé), les flux dans `tests/fixtures/gemini/` (README : « essayé » ou « d'après la doc / le code, à vérifier avec un compte »). `~/.gemini` non lu, non écrit (empreinte identique avant et après).
-- [ ] L'adaptateur par ACP (ESC-274 et suivants), en reprenant `engine/cursor/` et `agent/cursor.rs` : un processus et un `GEMINI_CLI_HOME` par agent, `GEMINI_CLI_TRUST_WORKSPACE=true`, la clé d'API dans l'environnement (jamais en argument), `mcpServers` de `session/new`, `fs` non annoncé, filtre des textes « [MODE_UPDATE] … » et du contexte de session rejoué, moteur de règles (`--policy`) pour la clôture des projets privés, faux Gemini (`tests/fixtures/gemini/`) pour les tests.
-- [ ] Ses comptes (clés d'API au trousseau d'Escouade), son usage (jetons seulement), sa vue terminal (`gemini --resume <id>` dans le même `GEMINI_CLI_HOME`, six hooks), la clôture des projets privés ; le banc des harness, la doc et le site.
+- [x] L'adaptateur par ACP (ESC-274 et suivants), en reprenant `engine/cursor/` et `agent/cursor.rs` : un processus et un `GEMINI_CLI_HOME` par agent, `GEMINI_CLI_TRUST_WORKSPACE=true`, la clé d'API dans l'environnement (jamais en argument), `mcpServers` de `session/new`, `fs` non annoncé, filtre des textes « [MODE_UPDATE] … » et du contexte de session rejoué, moteur de règles (`--policy`) pour la clôture des projets privés, faux Gemini (`tests/fixtures/gemini/`) pour les tests.
+- [x] Ses comptes (clés d'API au trousseau d'Escouade), son usage (jetons seulement), sa vue terminal (`gemini --resume <id>` dans le même `GEMINI_CLI_HOME`, six hooks), la clôture des projets privés ; le banc des harness, la doc et le site.
 - [ ] À dire à l'utilisateur : pas de questions, de tâches ni de coût en dollars en ACP ; les sous-agents ne marchent qu'en « Tout accepter » ; Google AI Plus n'est pas pris en charge par Gemini CLI.
 
 ### Ce qui reste à vérifier avec un compte Gemini
@@ -87,7 +87,7 @@ Un huitième harness : Gemini CLI (`gemini`), à côté de Claude Code, Codex, O
 ## Demandés pendant le redesign (2026-10-24)
 
 - [ ] **Wispr Flow** pour la transcription vocale, comme service en ligne et comme app de bureau (ESC-164).
-- [ ] **GitLab Issues** comme source de synchro du Kanban, sur gitlab.com et les instances auto-hébergées (ESC-165). À réécrire en source du plugin « GitLab », sur le compte partagé avec ESC-56 (ESC-203).
+- [x] **GitLab Issues** comme source de synchro du Kanban, sur gitlab.com et les instances auto-hébergées (ESC-165). À réécrire en source du plugin « GitLab », sur le compte partagé avec ESC-56 (ESC-203).
 
 ## Plugins (demandé le 2026-10-25)
 

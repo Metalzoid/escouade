@@ -244,20 +244,20 @@ export const en: Catalog = {
 
   roadmap: {
     title: 'What comes next.',
-    lead: 'Your code host in the loop, Cursor CLI, and dictation through Wispr Flow. No date promised: the work is planned in detail on GitHub.',
+    lead: 'Your code host in the loop, plugins and their marketplace, and dictation through Wispr Flow. No date promised: the work is planned in detail on GitHub.',
     next: 'Version {version} · in the works',
     items: [
       {
-        title: 'Wispr Flow and GitLab Issues',
-        text: 'Wispr Flow’s dictation in the message field and the voice conversation, and the Kanban synced with GitLab’s issues, as it is with GitHub Issues, Jira, Linear and Trello.',
+        title: 'Wispr Flow',
+        text: 'Wispr Flow’s dictation in the message field and the voice conversation, as an online service and as a desktop app.',
       },
       {
         title: 'GitHub, GitLab, Bitbucket and Gitea',
         text: 'Tickets’ pull requests followed through to the merge, with their CI and their deployments, without leaving Escouade.',
       },
       {
-        title: 'Cursor CLI',
-        text: 'A fifth harness beside Claude Code, Codex, OpenCode and Copilot CLI: same conversation, same cards, same Kanban, same worktrees.',
+        title: 'Plugins and their marketplace',
+        text: 'Escouade grows through plugins, and every external integration becomes one: code hosts, ticket sources, harnesses. A marketplace gathers them, reviewed before they get in.',
       },
     ],
     plan: 'The detailed plan (in French)',

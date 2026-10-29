@@ -248,20 +248,20 @@ export const fr: Catalog = {
 
   roadmap: {
     title: 'Ce qui arrive ensuite.',
-    lead: 'Ton hébergeur de code dans la boucle, Cursor CLI, et la dictée par Wispr Flow. Pas de date promise : le chantier est décrit en détail sur GitHub.',
+    lead: 'Ton hébergeur de code dans la boucle, les plugins et leur place de marché, et la dictée par Wispr Flow. Pas de date promise : le chantier est décrit en détail sur GitHub.',
     next: 'Version {version} · en préparation',
     items: [
       {
-        title: 'Wispr Flow et GitLab Issues',
-        text: 'La dictée de Wispr Flow dans la zone de saisie et la conversation vocale, et le Kanban synchronisé avec les tickets de GitLab, comme avec GitHub Issues, Jira, Linear et Trello.',
+        title: 'Wispr Flow',
+        text: 'La dictée de Wispr Flow dans la zone de saisie et la conversation vocale, comme service en ligne et comme app de bureau.',
       },
       {
         title: 'GitHub, GitLab, Bitbucket et Gitea',
         text: 'Les pull requests des tickets suivies jusqu’au merge, avec leur CI et leurs déploiements, sans quitter Escouade.',
       },
       {
-        title: 'Cursor CLI',
-        text: 'Un cinquième harness à côté de Claude Code, Codex, OpenCode et Copilot CLI : même conversation, mêmes cartes, même Kanban, mêmes worktrees.',
+        title: 'Les plugins et leur place de marché',
+        text: 'Escouade s’étend par des plugins, et chaque intégration externe en devient un : hébergeurs, sources de tickets, harness. Une place de marché les rassemble, relus avant d’y entrer.',
       },
     ],
     plan: 'Le plan détaillé',

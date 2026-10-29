@@ -4,7 +4,7 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
-## [Non publié]
+## [2.1.0] — 2026-10-29
 
 ### Nouveautés
 
@@ -31,6 +31,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Un nouvel agent d’un harness sans mode Auto (Cursor CLI, Mistral Vibe, Antigravity CLI, Gemini CLI, OpenCode) part en « Demander », et non plus en un Auto qu’il n’a pas.
 - « Approuver le plan » reprend dans le mode d’avant le Plan, Auto par exemple, et non plus en « Demander », avec chaque harness ; le bouton dit ce mode.
 - Un ticket lancé à la main part même au-delà de « Pause au-delà du quota » : ce seuil ne retient plus que le pilote auto.
+- Un ticket lancé à la main qui ne peut pas partir le dit, avec la raison, au lieu de rester « À faire » sans rien dire.
 - Sous WSLg, les liens, les fichiers et les dossiers s’ouvrent dans Windows, au lieu de ne rien faire.
 
 ## [2.0.5] — 2026-10-27
