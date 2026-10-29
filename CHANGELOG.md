@@ -8,7 +8,6 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Corrections
 
-- Sous Linux, ouvrir certains projets faisait planter la page d’Escouade, qui semblait figée : un défaut du moteur web de l’AppImage dans la mise en page de certains paragraphes, que l’app n’emploie plus sous Linux ni sous macOS.
 - « Écrire une première spec depuis le code », et toute nouvelle discussion, ferme sa fenêtre et ouvre la discussion avec son premier message même quand les nouveaux agents s’ouvrent dans le terminal du harness : une discussion reste toujours dans sa conversation, où Escouade refuse ses écritures.
 - La carte des tickets créés par « Planifier » rejoint les cartes des sujets dans l’onglet Docs : rien n’en déborde plus, elle dit combien de tickets sont lancés, « Annuler » ne s’offre que pour ceux qui ne le sont pas encore, et elle se replie une fois tout lancé ou se ferme.
 - Une discussion qui ne peut pas démarrer ne laisse plus d’agent derrière elle : la fenêtre dit pourquoi et garde tes choix, pour recommencer ou changer de compte.
@@ -16,6 +15,12 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - L’interface ne se fige plus le temps d’une opération longue (gros dossier, git, verrou) : elle reste réactive pendant que la commande travaille, et le journal note les commandes lentes et les pauses de la fenêtre pour les diagnostiquer.
 - Quand la page de l’interface s’arrête net, Escouade la recharge sans rouvrir le projet qu’elle affichait et propose de le rouvrir : un projet qui fait tomber la page ne fige plus toute l’app.
 - La sortie d’un outil qui a lu un fichier binaire s’affiche nettoyée (caractères de contrôle rendus visibles, couleurs du terminal retirées) au lieu d’être perdue, et une sortie très longue s’affiche par morceaux.
+
+## [2.1.1] — 2026-10-29
+
+### Corrections
+
+- Sous Linux, ouvrir certains projets faisait planter la page d’Escouade, qui semblait figée : un défaut du moteur web de l’AppImage dans la mise en page de certains paragraphes, que l’app n’emploie plus sous Linux ni sous macOS.
 
 ## [2.1.0] — 2026-10-29
 
