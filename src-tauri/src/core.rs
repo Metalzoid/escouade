@@ -2483,6 +2483,25 @@ impl<R: Runtime> Core<R> {
             fx.turns.iter().map(|t| t.cost).sum(),
             fx.turn_end.as_ref(),
         );
+        // Before the turn's end is shown: whoever sees a limited turn finds its resume planned.
+        if let Some(windows) = fx.rate {
+            // The quota of the account the agent's process runs on.
+            let account = self.account_of(id);
+            self.update_usage(|u| {
+                u.record(&account, usage::Reading::Windows(windows), now_ms());
+                if let Some(overage) = fx.overage {
+                    u.account_mut(&account).overage = overage;
+                }
+            });
+            // The autopilot pauses (or goes on) as the quotas just read say.
+            self.pause_tick();
+            // Read after its turn ended (Claude Code tells it after the result): its account may
+            // just have passed « Changer de compte à » (ESC-148).
+            self.switch_soon(id);
+        }
+        if let Some(resets_at) = fx.limited {
+            self.plan_resume(id, resets_at);
+        }
         if !fx.ops.is_empty() {
             self.emit_conv(id, fx.ops);
         }
@@ -2510,24 +2529,6 @@ impl<R: Runtime> Core<R> {
             {
                 self.pause_tick();
             }
-        }
-        if let Some(windows) = fx.rate {
-            // The quota of the account the agent's process runs on.
-            let account = self.account_of(id);
-            self.update_usage(|u| {
-                u.record(&account, usage::Reading::Windows(windows), now_ms());
-                if let Some(overage) = fx.overage {
-                    u.account_mut(&account).overage = overage;
-                }
-            });
-            // The autopilot pauses (or goes on) as the quotas just read say.
-            self.pause_tick();
-            // Read after its turn ended (Claude Code tells it after the result): its account may
-            // just have passed « Changer de compte à » (ESC-148).
-            self.switch_soon(id);
-        }
-        if let Some(resets_at) = fx.limited {
-            self.plan_resume(id, resets_at);
         }
         if fx.sign_in_lost {
             self.sign_in_lost_soon(id);
