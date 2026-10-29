@@ -4,6 +4,13 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [Unreleased]
+
+### Fixes
+
+- “Write a first spec from the code”, and every new discussion, closes its window and opens the discussion with its first message even when new agents open in the harness terminal: a discussion always stays in its conversation, where Escouade refuses its writes.
+- A discussion that can’t start no longer leaves an agent behind: the window says why and keeps your choices, to start again or switch accounts.
+
 ## [2.1.0] — 2026-10-29
 
 ### New
