@@ -19,7 +19,7 @@
 //   confiance — says whether its folder is trusted (GEMINI_CLI_TRUST_WORKSPACE);  réglages — says its settings.json;
 //   outil escouade <outil> — calls <outil> of Escouade's MCP server, by the entry `escouade` of its session (left out of
 //   an untrusted folder, without a word, as Gemini's), its permission asked outside yolo;
-//   limite — the error 429 of a rate limit.
+//   limite — the error 429 of a rate limit;  quota du jour — its daily quota met (an error without a 429, ESC-275).
 // Each turn spends 1 200 input tokens (200 from the cache) and 20 output, told in its answer's `usage`.
 // Sessions are kept in $GEMINI_CLI_HOME/.gemini/tmp/fake/chats/<id>.json. Each message, and each launch ({launch: {argv,
 // cwd, home, trust, policy, auth}}), goes to $FAKE_GEMINI_LOG when set. No key is ever logged.
@@ -32,6 +32,8 @@ if (argv.includes('--version') || argv.includes('-v')) {
   console.log(process.env.FAKE_GEMINI_VERSION || '0.66.0');
   process.exit(0);
 }
+// Out of ACP: `gemini -p` and its interface (ESC-275).
+if (!argv.includes('--acp')) await (await import('./fake-gemini-tui.mjs')).run(argv);
 const logFile = process.env.FAKE_GEMINI_LOG;
 const log = (entry) => logFile && fs.appendFileSync(logFile, JSON.stringify(entry) + '\n');
 const home = path.join(process.env.GEMINI_CLI_HOME || path.join(process.cwd(), '.fake-gemini-home'), '.gemini');
@@ -54,12 +56,11 @@ log({
     trust: trusted,
     policy: policyFile ? fs.readFileSync(policyFile, 'utf8') : null,
     auth: readSettings()?.security?.auth?.selectedType ?? null,
+    // Its account's sign-in (ESC-275): the file of its Google sign-in, or its key by its last four characters alone.
+    credentials: process.env.GOOGLE_APPLICATION_CREDENTIALS || null,
+    keyEnd: process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.slice(-4) : null,
   },
 });
-if (!argv.includes('--acp')) {
-  process.stderr.write('fake gemini: only --acp is played\n');
-  process.exit(2);
-}
 const sessionsDir = path.join(home, 'tmp', 'fake', 'chats');
 fs.mkdirSync(sessionsDir, { recursive: true });
 
@@ -494,6 +495,10 @@ async function onMessage(msg) {
       if (own.includes('limite')) {
         running = null;
         return error(msg.id, 'Resource has been exhausted (e.g. check quota).', 429);
+      }
+      if (own.includes('quota du jour')) {
+        running = null;
+        return error(msg.id, 'You have exhausted your daily quota on this model.', -32603);
       }
       try {
         await turn(s, own, () => run.cancelled);

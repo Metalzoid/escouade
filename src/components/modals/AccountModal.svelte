@@ -25,6 +25,8 @@
   // (ESC-267) the same: its machine's account is the key `vibe --setup` kept, a new one its API key, by MISTRAL_API_KEY.
   // Antigravity CLI (ESC-271): its machine's account is its Google sign-in, made by `agy` itself in the terminal here, also
   // when it is not signed in yet (added, then signed in); a new one its Gemini API key, by GEMINI_API_KEY.
+  // Gemini CLI (ESC-275): its machine's account is a key of the app's alone (its Google sign-in, in ~/.gemini, is never
+  // given); a new one is a Google sign-in made by `gemini` in the terminal here, in the account's folder, or its API key.
   // `reserveFor` (a private project's settings, ESC-141): the account added is reserved to that project alone, a new one
   // offered first (the machine's is its folder outside Escouade too), and it closes back to that project's settings.
   let {
@@ -54,6 +56,11 @@
       never: 'accounts.modal.cursor.neverShared',
       hint: 'accounts.modal.cursor.signInHint',
     },
+    gemini: {
+      nothing: 'accounts.modal.gemini.nothingToShare',
+      never: 'accounts.modal.gemini.neverShared',
+      hint: 'accounts.modal.gemini.signInHint',
+    },
     agy: {
       nothing: 'accounts.modal.agy.nothingToShare',
       never: 'accounts.modal.agy.neverShared',
@@ -67,6 +74,11 @@
   };
   /** What the field of an account's API key says, by harness (Cursor CLI's unless the harness has its own). */
   const KEY_SAYS: Partial<Record<EngineId, { placeholder: Key; hint: Key; newHint: Key }>> = {
+    gemini: {
+      placeholder: 'accounts.modal.gemini.keyPlaceholder',
+      hint: 'accounts.modal.gemini.keyHint',
+      newHint: 'accounts.modal.gemini.newHintKey',
+    },
     agy: {
       placeholder: 'accounts.modal.agy.keyPlaceholder',
       hint: 'accounts.modal.agy.keyHint',
@@ -107,8 +119,16 @@
   let name = $state('');
   /** The API key of a new Cursor or Vibe account, or the one given again (ESC-43, ESC-267). */
   let key = $state('');
-  /** An account of Cursor or Vibe other than its machine's: signed in by its key, given here. */
-  const byKey = $derived(goesByKey(engine) && (!account || !isPrincipal(account)));
+  /** How a new account of Gemini CLI signs in (ESC-275): its Google account, by `gemini` in a terminal, or its API key. */
+  let way = $state<'google' | 'key'>('google');
+  /** An account of Cursor or Vibe other than its machine's: signed in by its key, given here. Gemini's: as it was added. */
+  const byKey = $derived(
+    engine === 'gemini'
+      ? account
+        ? !!account.apiKey && !isPrincipal(account)
+        : way === 'key'
+      : goesByKey(engine) && (!account || !isPrincipal(account)),
+  );
 
   /** The machine's account of the harness picked; null until read. */
   let machine = $state<MachineAccount | null>(null);
@@ -173,6 +193,7 @@
     const harness = engineName(engine);
     if (!m) return t('accounts.modal.machineChecking');
     if (m.added) return t('accounts.modal.machineAdded');
+    if (m.apart) return t('accounts.modal.gemini.machineApart');
     if (!m.connected && m.signsInLater) return t('accounts.modal.machineSignInLater', { harness });
     if (!m.connected) return t('accounts.modal.machineNotConnected', { harness });
     if (m.email) return t('accounts.modal.machineConnected', { harness, email: m.email });
@@ -278,13 +299,15 @@
     busy = true;
     error = null;
     try {
-      const share = byKey ? [] : (shareable ?? []).filter((n) => checked[n]);
+      const keyed = byKey;
+      const share = keyed ? [] : (shareable ?? []).filter((n) => checked[n]);
       const made = await reserved(await api.accountCreate(name.trim(), share, mode, engine));
       // The backend tells them all (`accounts`): this one at once.
       if (!app.settings.accounts.some((a) => a.id === made.id)) app.settings.accounts = [...app.settings.accounts, made];
-      account = made;
+      // Gemini's goes by its key once it is given (the backend marks it then).
+      account = engine === 'gemini' && keyed ? { ...made, apiKey: true } : made;
       // A key refused leaves the account made, its key to give again here.
-      if (byKey) return void (await giveKey());
+      if (keyed) return void (await giveKey());
       await start();
     } catch (e) {
       error = String(e);
@@ -495,12 +518,32 @@
         </button>
         <button class="w-radio" role="radio" aria-checked={kind === 'new'} onclick={() => (kind = 'new')}>
           <i class="dot"></i>
-          <span><b>{t('accounts.modal.newAccount')}</b><span class="d">{t(byKey ? keySays.newHint : 'accounts.modal.newHint')}</span></span>
+          <span
+            ><b>{t('accounts.modal.newAccount')}</b><span class="d"
+              >{t(engine === 'gemini' || byKey ? keySays.newHint : 'accounts.modal.newHint')}</span
+            ></span
+          >
         </button>
       </div>
       {#if kind === 'machine' && machine?.dir}<span class="help">{t('accounts.modal.machineHint', { path: tildify(machine.dir) })}</span
         >{/if}
     </div>
+    {#if kind === 'new' && engine === 'gemini'}
+      <!-- Gemini CLI (ESC-275): its Google account, signed in by gemini just after, or its API key. -->
+      <div class="w-fld">
+        <span class="lab" id="account-way">{t('accounts.modal.gemini.way')}</span>
+        <div class="w-radios" role="radiogroup" aria-labelledby="account-way">
+          <button class="w-radio" role="radio" aria-checked={way === 'google'} onclick={() => (way = 'google')}>
+            <i class="dot"></i>
+            <span><b>{t('accounts.modal.gemini.google')}</b><span class="d">{t('accounts.modal.gemini.googleHint')}</span></span>
+          </button>
+          <button class="w-radio" role="radio" aria-checked={way === 'key'} onclick={() => (way = 'key')}>
+            <i class="dot"></i>
+            <span><b>{t('accounts.modal.gemini.apiKey')}</b><span class="d">{t('accounts.modal.gemini.apiKeyHint')}</span></span>
+          </button>
+        </div>
+      </div>
+    {/if}
     {#if kind === 'new' && byKey}
       {@render keyField()}
     {:else if kind === 'new'}

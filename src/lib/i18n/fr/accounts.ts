@@ -33,6 +33,9 @@ export default {
     /** Antigravity CLI (ESC-271): its tokens told, its quota in its interface alone. */
     usageHintInterface:
       '{harness} ne donne à Escouade que les jetons de ses tours : son quota (par groupe de modèles, hebdomadaire) se lit par /usage dans son interface, et {site} dit ce que chaque forfait inclut. Une limite atteinte arrête le tour sur une carte qui le dit ; l’agent réessaie seul une heure plus tard, ou passe sur un autre compte selon tes réglages.',
+    /** Gemini CLI (ESC-275): its tokens told, its usage in its interface alone (/stats), its page for a key. */
+    usageHintGemini:
+      '{harness} ne donne à Escouade que les jetons de ses tours : son usage se lit par /stats dans son interface, et {site} le montre pour une clé d’API. Une limite atteinte arrête le tour sur une carte qui le dit ; l’agent réessaie seul quand Gemini le dit (une heure plus tard pour son quota du jour), ou passe sur un autre compte selon tes réglages.',
     /** Mistral Vibe (ESC-267): its cost told, its quota not. */
     usageHintCost:
       '{harness} donne à Escouade le coût de chaque tour, pas de quota : {site} montre l’usage et la facture du compte. Une limite de débit arrête le tour sur une carte qui le dit, et l’agent reprend seul une minute plus tard.',
@@ -176,6 +179,26 @@ export default {
       keyPlaceholder: 'Sur aistudio.google.com, Get API key',
       keyHint:
         'Gardée dans le trousseau du système, donnée aux agents de ce compte par GEMINI_API_KEY, jamais écrite dans un fichier ni sur une ligne de commande. Leurs tours vont à l’API Gemini de cette clé (ses modèles seulement) ; le compte de la machine reste la connexion Google d’agy.',
+    },
+    /** Gemini CLI (ESC-275): a new account is its Google sign-in, made by gemini in a terminal of its folder, or its API key. */
+    gemini: {
+      nothingToShare:
+        'Rien à partager : chaque agent Gemini a son propre GEMINI_CLI_HOME, où Escouade écrit ses réglages et ses règles et où il garde ses sessions.',
+      neverShared:
+        'La connexion Google de ce compte reste dans son dossier, où gemini l’écrit : Escouade la donne à ses agents par GOOGLE_APPLICATION_CREDENTIALS sans jamais la lire. ~/.gemini n’est jamais touché.',
+      signInHint:
+        'Connecte-toi dans le terminal ci-dessous : gemini ouvre ton navigateur sur ton compte Google. Escouade ne voit jamais tes identifiants.',
+      newHintKey: 'Une connexion Google faite par gemini dans un terminal, ou une clé d’API Gemini gardée dans le trousseau du système.',
+      keyPlaceholder: 'Sur aistudio.google.com, Get API key',
+      keyHint:
+        'Gardée dans le trousseau du système, donnée aux agents de ce compte par GEMINI_API_KEY, jamais écrite dans un fichier ni sur une ligne de commande. Leurs tours vont à l’API Gemini de cette clé.',
+      machineApart:
+        'Gemini CLI garde sa connexion Google dans ~/.gemini, qu’Escouade ne touche pas : ajoute un nouveau compte, connecté par gemini ou par une clé d’API. Une clé GEMINI_API_KEY de la machine en ferait le compte de la machine.',
+      way: 'Connexion',
+      google: 'Compte Google',
+      googleHint: 'gemini s’y connecte dans un terminal, juste après',
+      apiKey: 'Clé d’API',
+      apiKeyHint: 'Une clé d’API Gemini, d’aistudio.google.com',
     },
     /** Mistral Vibe (ESC-267): the machine's account is the key of vibe --setup, a new one its API key. */
     vibe: {

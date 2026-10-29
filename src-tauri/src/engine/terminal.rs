@@ -237,6 +237,10 @@ pub trait TerminalView: Send + Sync {
     }
     /// The key that ends it for good when sent twice, `quit_gap` apart.
     fn quit_key(&self) -> &'static [u8];
+    /// Its turn was interrupted from the window (`interrupt_key` sent): nothing to do, unless its
+    /// interface tells nothing of a turn it stopped (Gemini CLI: no hook then), whose end is then
+    /// the agent's.
+    fn interrupted(&self, _rt: &mut AgentRt, _fx: &mut Effects) {}
 }
 
 /// A text pasted in a terminal (bracketed paste), the sequence's own escape taken out of it, and

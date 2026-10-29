@@ -50,7 +50,10 @@
    * What the link to a harness's usage page says: its cost told, its quota not (Mistral Vibe); its quota in its own
    * interface alone (Antigravity CLI's `/usage`, ESC-271); else its dashboard (Cursor CLI).
    */
-  const USAGE_HINTS: Partial<Record<EngineId, Key>> = { agy: 'accounts.tab.usageHintInterface' };
+  const USAGE_HINTS: Partial<Record<EngineId, Key>> = {
+    agy: 'accounts.tab.usageHintInterface',
+    gemini: 'accounts.tab.usageHintGemini',
+  };
   function usageHint(engine: EngineId): Key {
     return USAGE_HINTS[engine] ?? (showsCost({ engine }) ? 'accounts.tab.usageHintCost' : 'accounts.tab.usageHint');
   }
@@ -273,7 +276,8 @@
   }
 
   /** An account of Cursor CLI other than its machine's: signed in by its API key (ESC-43). */
-  const byKey = (a: Account) => goesByKey(engineOfAccount(a)) && !isPrincipal(a);
+  // Gemini CLI's (ESC-275): as it was added, its key or its Google sign-in.
+  const byKey = (a: Account) => (goesByKey(engineOfAccount(a)) || !!a.apiKey) && !isPrincipal(a);
 
   const blurOnEnter = (e: KeyboardEvent) => {
     if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
@@ -397,7 +401,8 @@
                 onblur={(e) => commit(a, e.currentTarget, 'claudePath')}
               />
               <span class="end">
-                {#if status}
+                {#if status && !(engineOfAccount(a) === 'gemini' && isPrincipal(a))}
+                  <!-- Gemini's machine's account is a key of the app's: nothing to sign in here (its ~/.gemini is never touched). -->
                   <!-- Not signed in, or out of date: to sign in. Signed in: to sign in again (another claude.ai account, say). -->
                   <button class="btn" onclick={() => (app.modal = { kind: 'account', accountId: a.id })}>
                     {byKey(a)

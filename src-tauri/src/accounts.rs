@@ -122,9 +122,10 @@ pub fn store(engine: EngineId) -> Store {
             dirs: &[],
             login: &[],
         },
-        // Gemini CLI: its sign-in is the machine's (its Google account in the system's keychain, or
-        // GEMINI_API_KEY), and each agent has a GEMINI_CLI_HOME of its own (`Engine::agent_home_var`);
-        // its accounts come with its third ticket.
+        // Gemini CLI (ESC-275): an account is signed in to Google by its interface itself (`gemini`,
+        // no argument) in a terminal with its folder as its `GEMINI_CLI_HOME`, where `gemini` keeps
+        // the sign-in; or goes by its API key, in the keychain. Each agent has a home of its own
+        // (`Engine::agent_home_var`), its account's sign-in given by `GOOGLE_APPLICATION_CREDENTIALS`.
         EngineId::Gemini => Store {
             home: ".gemini",
             var: crate::engine::gemini::HOME_VAR,
@@ -788,6 +789,33 @@ pub fn launch_env_with(
             env.push((AGY_KEY_VAR.to_string(), key));
         }
     }
+    // Gemini CLI (ESC-275): an account goes by its key (`GEMINI_API_KEY`) or by the Google sign-in
+    // `gemini` made in its folder (`GOOGLE_APPLICATION_CREDENTIALS`, read by `gemini` alone),
+    // never by a key or Vertex AI of the app's; the machine's account by what the app has. Never on
+    // its command line.
+    if account.engine == EngineId::Gemini && !is_principal(account) {
+        use crate::engine::gemini::{sign_in_file, CREDENTIALS_VAR, KEY_VAR, KEY_VARS};
+        let key = account_key(account).filter(|_| by_key(account));
+        let own_var = match (&key, by_key(account)) {
+            (Some(_), _) => Some(KEY_VAR),
+            (None, false) => Some(CREDENTIALS_VAR),
+            (None, true) => None,
+        };
+        env.extend(
+            KEY_VARS
+                .into_iter()
+                .filter(|v| inherited(v) && Some(*v) != own_var)
+                .map(|v| (v.to_string(), String::new())),
+        );
+        if let Some(key) = key {
+            env.push((KEY_VAR.to_string(), key));
+        } else if let (false, Some(dir)) = (by_key(account), own_dir(account)) {
+            env.push((
+                CREDENTIALS_VAR.to_string(),
+                sign_in_file(Path::new(dir)).to_string_lossy().into_owned(),
+            ));
+        }
+    }
     own.into_iter()
         .chain(env)
         .chain(engine::no_self_update_env(engine))
@@ -1005,10 +1033,18 @@ pub(crate) fn key_entry(engine: EngineId, id: &str) -> String {
 /// Whether the account is one that goes by its own API key: every one of Cursor CLI's and Mistral
 /// Vibe's but their Principal (the machine's sign-in, or the key `vibe --setup` kept).
 pub fn by_key(account: &Account) -> bool {
-    matches!(
-        account.engine,
-        EngineId::Cursor | EngineId::Vibe | EngineId::Agy
-    ) && !is_principal(account)
+    match account.engine {
+        EngineId::Cursor | EngineId::Vibe | EngineId::Agy => !is_principal(account),
+        // Gemini CLI: the one it was added with, its key or its Google sign-in (ESC-275).
+        EngineId::Gemini => account.api_key && !is_principal(account),
+        _ => false,
+    }
+}
+
+/// Whether a key may be given to the account (« Clé d’API »): one that goes by its key, or a new
+/// account of Gemini CLI, which then goes by it (ESC-275).
+pub(crate) fn takes_key(account: &Account) -> bool {
+    by_key(account) || (account.engine == EngineId::Gemini && !is_principal(account))
 }
 
 /// The API key the account goes by, as the keychain gave it; None when it has none (yet).
@@ -1037,8 +1073,29 @@ pub(crate) fn key_hint(key: &str) -> String {
 /// Why the account cannot start a process (none of Cursor's or Vibe's but their Principal goes
 /// without its key: it would run as the machine's, another account); Ok for any other.
 pub(crate) fn key_ready(account: &Account) -> Result<()> {
+    // Gemini CLI's account signed in to Google by `gemini` in its folder (ESC-275): without it, its
+    // agent would ask its sign-in where nobody sees it.
+    if account.engine == EngineId::Gemini && !is_principal(account) && !by_key(account) {
+        let signed = own_dir(account)
+            .is_some_and(|d| crate::engine::gemini::sign_in_file(Path::new(d)).is_file());
+        if !signed {
+            bail!(tr!(
+                "Le compte Gemini « {name} » n’est pas connecté à Google : connecte-le dans Réglages › Comptes, « Se connecter… ».",
+                "The Gemini account “{name}” isn’t signed in to Google: sign it in in Settings › Accounts, “Sign in…”.",
+                name = account.name
+            ));
+        }
+        return Ok(());
+    }
     if !by_key(account) || account_key(account).is_some() {
         return Ok(());
+    }
+    if account.engine == EngineId::Gemini {
+        bail!(tr!(
+            "Le compte Gemini « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes, « Changer la clé… ».",
+            "The Gemini account “{name}” has no API key: give it in Settings › Accounts, “Change the key…”.",
+            name = account.name
+        ));
     }
     if account.engine == EngineId::Agy {
         bail!(tr!(
@@ -1514,6 +1571,9 @@ pub struct MachineAccount {
     /// It may be added before it is signed in there, then signed in by its program in a terminal
     /// (Antigravity CLI, whose sign-in is the machine's alone, ESC-271).
     pub signs_in_later: bool,
+    /// Its sign-in is out of Escouade's reach (Gemini CLI's Google sign-in, in `~/.gemini`): a new
+    /// account is to add instead (ESC-275).
+    pub apart: bool,
     /// Who it is signed in as, when the harness says: an email, a GitHub `@login`.
     pub email: Option<String>,
     /// Its folder (`~/.claude`, the app's `CLAUDE_CONFIG_DIR`, `~/.codex`…).
@@ -1853,11 +1913,11 @@ impl<R: Runtime> Core<R> {
     /// ESC-267): `key` kept in the system's keychain, read back to check, and given to its
     /// processes from now on by `CURSOR_API_KEY` or `MISTRAL_API_KEY` (never on a command line,
     /// never in a file of Escouade's). Its status as it then is.
-    pub async fn set_account_key(&self, id: &str, key: &str) -> Result<AccountStatus> {
+    pub async fn set_account_key(self: &Arc<Self>, id: &str, key: &str) -> Result<AccountStatus> {
         let account = find(&self.settings.read(), id)
             .cloned()
             .ok_or_else(|| unknown(id))?;
-        if !by_key(&account) {
+        if !takes_key(&account) {
             bail!(tr!(
                 "Ce compte ne prend pas de clé d’API.",
                 "This account takes no API key."
@@ -1865,7 +1925,7 @@ impl<R: Runtime> Core<R> {
         }
         let key = key.trim();
         let malformed = key.len() < 16 || key.chars().any(char::is_whitespace);
-        if malformed && account.engine == EngineId::Agy {
+        if malformed && matches!(account.engine, EngineId::Agy | EngineId::Gemini) {
             bail!(tr!(
                 "Ce n’est pas une clé d’API Gemini : copie-la entière depuis aistudio.google.com, Get API key.",
                 "That isn’t a Gemini API key: copy it whole from aistudio.google.com, Get API key."
@@ -1898,6 +1958,30 @@ impl<R: Runtime> Core<R> {
             ))
         })?;
         remember_key(&account, Some(key));
+        // Gemini CLI: the account goes by its key from now on (ESC-275).
+        let account = if account.engine == EngineId::Gemini && !account.api_key {
+            let (made, _) = self.change_claude_accounts(|s| {
+                let a = s
+                    .accounts
+                    .iter_mut()
+                    .find(|a| a.id == id)
+                    .ok_or_else(|| unknown(id))?;
+                a.api_key = true;
+                Ok(a.clone())
+            })?;
+            // The window says it by its key from now on.
+            let (accounts, engine_order) = {
+                let s = self.settings.read();
+                (s.accounts.clone(), s.engine_order.clone())
+            };
+            self.hub.emit(crate::model::UiEvent::Accounts {
+                accounts,
+                engine_order,
+            });
+            made
+        } else {
+            account
+        };
         log::info!("{} account {id}: API key given", account.engine.as_str());
         Ok(self.status_of(&account).await)
     }
@@ -1965,11 +2049,17 @@ impl<R: Runtime> Core<R> {
             // OpenCode signs in to no account: its own installation, once found.
             connected: if engine == EngineId::Opencode {
                 found
+            } else if engine == EngineId::Gemini {
+                // Its machine's account is a key or Vertex AI of the app's alone (ESC-275).
+                crate::engine::gemini::machine_has_key()
             } else {
                 status.connected
             },
             signs_in: engine != EngineId::Opencode,
             signs_in_later: engine == EngineId::Agy,
+            // Gemini CLI's is its key or Vertex AI of the app's alone: its Google sign-in is in
+            // `~/.gemini`, never given (ESC-275).
+            apart: engine == EngineId::Gemini && !crate::engine::gemini::machine_has_key(),
             email: status.email,
             dir: status.dir,
         }
@@ -2484,6 +2574,36 @@ impl<R: Runtime> Core<R> {
                 dir: dir.to_string_lossy().into_owned(),
             };
         }
+        // Gemini CLI (ESC-275): its key, shown by its end; or the Google sign-in `gemini` wrote in its
+        // folder, looked for and never read (its address beside it); the machine's account by the
+        // key or Vertex AI of the app's.
+        if account.engine == EngineId::Gemini {
+            let dir = config_dir(account, &settings);
+            let key = account_key(account).filter(|_| by_key(account));
+            let (connected, stamp, email) = if is_principal(account) {
+                // As far as can be told (its key may come from the user's terminal alone).
+                (true, None, None)
+            } else if by_key(account) {
+                (key.is_some(), None, key.as_deref().map(key_hint))
+            } else {
+                let file = crate::engine::gemini::sign_in_file(&dir);
+                let stamp = std::fs::metadata(&file)
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .map(|t| format!("{t:?}"));
+                (
+                    stamp.is_some(),
+                    stamp,
+                    crate::engine::gemini::signed_in_email(&dir),
+                )
+            };
+            return AccountStatus {
+                connected,
+                stamp,
+                email,
+                dir: dir.to_string_lossy().into_owned(),
+            };
+        }
         // Copilot CLI: the user its folder is signed in to (`config.json`), shown `@login`; the
         // token stays in the keychain.
         if account.engine == EngineId::Copilot {
@@ -2499,8 +2619,7 @@ impl<R: Runtime> Core<R> {
         // OpenCode signs in to no account of its own: its providers are its config's. Mistral Vibe's
         // Principal goes by the key `vibe --setup` kept in the keychain, never read: signed in as
         // far as can be told.
-        // Gemini CLI the same: its Google account is in the keychain, never read.
-        if matches!(account.engine, EngineId::Opencode | EngineId::Gemini)
+        if account.engine == EngineId::Opencode
             || (account.engine == EngineId::Vibe && !by_key(account))
         {
             let dir = config_dir(account, &settings);
@@ -2598,12 +2717,26 @@ impl<R: Runtime> Core<R> {
             shell: match account.engine {
                 EngineId::Claude => "claude".into(),
                 EngineId::Agy => "agy".into(),
+                EngineId::Gemini => "gemini".into(),
                 _ => name.to_lowercase(),
             },
         };
         // Run from the home folder, as the user would.
         let (_, home) = app_env();
         let mut env = [settings.claude_env(), launch_env(&account)].concat();
+        // Gemini CLI (ESC-275): its interface straight to the Google sign-in (its settings in the
+        // account's folder), the home folder trusted.
+        if account.engine == EngineId::Gemini {
+            if let Some(dir) = own_dir(&account) {
+                if let Err(e) =
+                    crate::engine::gemini::write_settings(Path::new(dir), "oauth-personal")
+                {
+                    log::warn!("sign-in of account {id}: its settings not written: {e:#}");
+                }
+            }
+            let trust = crate::engine::gemini::TRUST;
+            env.push((trust.0.into(), trust.1.into()));
+        }
         if let Err(e) = crate::pty::open_browser_apart(&self.data.browser_opener(), &mut env) {
             log::warn!(
                 "sign-in of account {id}: no browser opener, its end closes the browser: {e}"
@@ -2690,6 +2823,77 @@ mod tests {
         assert_eq!(ids(&s), ["pro"]);
         assert_eq!(s.accounts[0], pro);
         assert_eq!(s.engine_order, [EngineId::Claude]);
+    }
+
+    #[test]
+    fn a_gemini_account_goes_by_its_google_sign_in_or_its_key_never_by_the_apps() {
+        // ESC-275: none by a key or Vertex AI of the app's.
+        let inherited = |v: &str| {
+            matches!(
+                v,
+                "GEMINI_API_KEY" | "GOOGLE_GENAI_USE_VERTEXAI" | "GOOGLE_APPLICATION_CREDENTIALS"
+            )
+        };
+        let dir = test_dir("esc275-gemini-google");
+        let google = Account {
+            id: "gemini-perso".into(),
+            name: "Perso".into(),
+            engine: EngineId::Gemini,
+            config_dir: dir.to_string_lossy().into_owned(),
+            ..Default::default()
+        };
+        assert!(!by_key(&google) && takes_key(&google));
+        let env = launch_env_with(&google, &inherited);
+        let creds = crate::engine::gemini::sign_in_file(&dir)
+            .to_string_lossy()
+            .into_owned();
+        assert!(env.contains(&("GOOGLE_APPLICATION_CREDENTIALS".into(), creds.clone())));
+        assert!(env.contains(&("GEMINI_API_KEY".into(), String::new())));
+        assert!(env.contains(&("GOOGLE_GENAI_USE_VERTEXAI".into(), String::new())));
+        assert!(env.contains(&("GEMINI_CLI_HOME".into(), dir.to_string_lossy().into_owned())));
+        assert!(!env.contains(&("GOOGLE_APPLICATION_CREDENTIALS".into(), String::new())));
+        // Not signed in until `gemini` wrote its sign-in in its folder (never read).
+        let refused = key_ready(&google).unwrap_err().to_string();
+        assert!(
+            refused.contains("Se connecter") || refused.contains("Sign in"),
+            "{refused}"
+        );
+        std::fs::create_dir_all(dir.join(".gemini")).unwrap();
+        std::fs::write(&creds, "{}").unwrap();
+        assert!(key_ready(&google).is_ok());
+        // By its key: the key alone.
+        let key_dir = test_dir("esc275-gemini-key");
+        let keyed = Account {
+            id: "gemini-cle".into(),
+            engine: EngineId::Gemini,
+            config_dir: key_dir.to_string_lossy().into_owned(),
+            api_key: true,
+            ..Default::default()
+        };
+        assert!(by_key(&keyed) && key_ready(&keyed).is_err());
+        remember_key(&keyed, Some("AIzaCleGemini0000000abcd"));
+        let env = launch_env_with(&keyed, &inherited);
+        assert!(env.contains(&("GEMINI_API_KEY".into(), "AIzaCleGemini0000000abcd".into())));
+        assert!(env.contains(&("GOOGLE_APPLICATION_CREDENTIALS".into(), String::new())));
+        assert!(!env.contains(&("GEMINI_API_KEY".into(), String::new())));
+        assert!(key_ready(&keyed).is_ok());
+        assert_eq!(
+            key_entry(EngineId::Gemini, "gemini-cle"),
+            "gemini:gemini-cle"
+        );
+        remember_key(&keyed, None);
+        // The machine's account: what the app has, as it is.
+        let machine = principal_of(EngineId::Gemini);
+        assert!(!by_key(&machine) && !takes_key(&machine));
+        let env = launch_env_with(&machine, &inherited);
+        assert!(!env
+            .iter()
+            .any(|(k, _)| k.starts_with("GEMINI_API") || k.starts_with("GOOGLE_")));
+        assert!(key_ready(&machine).is_ok());
+        // Saved only when it goes by its key.
+        let saved = serde_json::to_value(&google).unwrap();
+        assert!(saved.get("apiKey").is_none());
+        assert_eq!(serde_json::to_value(&keyed).unwrap()["apiKey"], true);
     }
 
     #[test]

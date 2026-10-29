@@ -1,6 +1,6 @@
 # The terminal view
 
-The terminal view runs an agent in its harness’s interface (Claude Code, Codex, OpenCode, Copilot CLI, Cursor CLI, Mistral Vibe or Antigravity CLI), in a terminal, without losing its session. This page explains how to switch views, what Escouade keeps tracking, and what changes.
+The terminal view runs an agent in its harness’s interface (Claude Code, Codex, OpenCode, Copilot CLI, Cursor CLI, Mistral Vibe, Antigravity CLI or Gemini CLI), in a terminal, without losing its session. This page explains how to switch views, what Escouade keeps tracking, and what changes.
 
 ## What it’s for
 
@@ -144,6 +144,16 @@ An agent on Antigravity CLI has its view too: the button is called “Antigravit
 - **Modes.** “Ask” is its default mode, “Accept edits” `accept-edits`, “Plan” `plan`, “Bypass” its rules that allow everything; a private project’s paths stay refused to its file tools.
 - **Interrupting** sends `Esc`, as in the interface: what it wrote so far ends the turn.
 - **Not tracked in this view**: a permission it asks you in the terminal (neither a hook nor the transcript tells it: the card stays “working” until you answer), the “Plan” banner, cost and tokens, thinking.
+
+## With Gemini CLI
+
+An agent on Gemini CLI has its view too: the button is called “Gemini CLI view” and runs Gemini’s interface (`gemini`) in the agent’s folder, with its model and mode, in the agent’s configuration folder (`GEMINI_CLI_HOME`), the one its session is kept in. Both views share the same session: the interface resumes it (`gemini --resume`) with all its history, and `gemini --acp` resumes it back in Escouade’s view. A session that has written nothing yet starts under the id Escouade gives it (`--session-id`). What changes from Claude Code:
+
+- **The following, by its hooks.** Its log writes a message anew at each change: Escouade doesn’t read it. Its hooks run `escouade-hook`, installed with the app: `BeforeAgent` (your message), `BeforeTool` and `AfterTool` (each tool and its end), `Notification` (a permission it asks you in the terminal: the card waits for your answer), `AfterAgent` (the end of the turn, with its whole answer). They are written in the settings of the agent’s folder when the view opens and taken out on the way back, never in your `~/.gemini`.
+- **Escouade’s MCP server** is in the settings of the agent’s folder (`mcpServers`), its token written in that file, never on its command line.
+- **The modes.** “Ask” is its `default` mode, “Auto edits” `auto_edit`, “Plan” `plan`, “Bypass” `yolo`; a private project’s paths stay refused by its rules (`--policy`).
+- **Interrupt** sends `Escape`, as in the interface; no hook tells that turn stopped, Escouade ends it itself.
+- **What isn’t followed in this view**: its texts between two tools (its whole answer alone comes, at the end of the turn), a usage limit (its interface itself offers to wait or to change models), the “Plan” banner, the cost and tokens.
 
 ## On Windows with WSL
 

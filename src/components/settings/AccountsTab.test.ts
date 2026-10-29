@@ -17,6 +17,7 @@ import {
   BARE_ENGINE,
   CURSOR_ENGINE,
   CLAUDE_ENGINE,
+  GEMINI_ENGINE,
   VIBE_ENGINE,
   fakeBackend,
   project,
@@ -317,6 +318,47 @@ describe('AccountsTab', () => {
     const main = screen.getAllByRole('listitem', { name: 'Principal' }).find((l) => within(l).queryByText('Usage sur antigravity.google'))!;
     await userEvent.click(within(main).getByRole('button', { name: 'Se connecter…' }));
     expect(app.modal).toEqual({ kind: 'account', accountId: 'principal-agy' });
+  });
+
+  it('links a Gemini account to its usage, signs one in by Google and gives another its key again (ESC-275)', async () => {
+    const MAIN: Account = { id: 'principal-gemini', name: 'Principal', engine: 'gemini', configDir: '', claudePath: '', active: true };
+    const PERSO: Account = { id: 'gemini-perso', name: 'Perso', engine: 'gemini', configDir: 'C:\\perso', claudePath: '', active: true };
+    const CLE: Account = { ...PERSO, id: 'gemini-cle', name: 'Clé', configDir: 'C:\\cle', apiKey: true };
+    app.engines = [CLAUDE_ENGINE, GEMINI_ENGINE];
+    app.settings = { ...SETTINGS, accounts: [PRINCIPAL, MAIN, PERSO, CLE] };
+    opened.length = 0;
+    backend({
+      account_status: (a: { id: string }) =>
+        a.id === 'gemini-cle'
+          ? { connected: true, email: 'clé …wxyz', dir: 'C:\\cle', stamp: null }
+          : a.id === 'gemini-perso'
+            ? { connected: true, email: 'moi@exemple.fr', dir: 'C:\\perso', stamp: 't' }
+            : a.id === 'principal-gemini'
+              ? { connected: true, email: null, dir: 'C:\\Users\\ada\\.gemini', stamp: null }
+              : status()(a),
+    });
+    render(SettingsModal, { tab: 'accounts' });
+    const cle = screen.getAllByRole('listitem', { name: 'Clé' })[0];
+    expect(await within(cle).findByText('Connecté · clé …wxyz')).toBeInTheDocument();
+    expect(within(cle).queryByRole('textbox', { name: 'Budget par jour ($)' })).not.toBeInTheDocument();
+    const usage = within(cle).getByRole('button', { name: 'Usage sur aistudio.google.com' });
+    await userEvent.hover(usage);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(/son usage se lit par \/stats dans son interface/);
+    await userEvent.unhover(usage);
+    await userEvent.click(usage);
+    expect(opened).toEqual(['https://aistudio.google.com/usage']);
+    await userEvent.click(within(cle).getByRole('button', { name: 'Changer la clé…' }));
+    expect(app.modal).toEqual({ kind: 'account', accountId: 'gemini-cle' });
+    // Signed in to Google by gemini in its folder: signed in again there.
+    const perso = screen.getAllByRole('listitem', { name: 'Perso' })[0];
+    expect(await within(perso).findByText('Connecté · moi@exemple.fr')).toBeInTheDocument();
+    await userEvent.click(within(perso).getByRole('button', { name: 'Se reconnecter…' }));
+    expect(app.modal).toEqual({ kind: 'account', accountId: 'gemini-perso' });
+    // The machine's: a key of the app's, nothing to sign in here (~/.gemini is never touched).
+    const main = screen
+      .getAllByRole('listitem', { name: 'Principal' })
+      .find((l) => within(l).queryByText('Usage sur aistudio.google.com'))!;
+    expect(within(main).queryByRole('button', { name: /Se connecter|Se reconnecter|Changer la clé/ })).not.toBeInTheDocument();
   });
 
   it('shows what an account of a harness without a quota spent today, in the place of the gauges', async () => {

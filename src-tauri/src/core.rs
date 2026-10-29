@@ -4806,6 +4806,13 @@ impl<R: Runtime> Core<R> {
 
     pub async fn interrupt(self: &Arc<Self>, id: &str) -> Result<()> {
         if self.interrupt_tui(id)? {
+            // An interface that tells nothing of a turn it stopped (Gemini CLI): over here.
+            let _ = self.with_agent(id, |rt, fx| {
+                if let Ok((view, _)) = crate::tui::view_of(&rt.meta) {
+                    view.interrupted(rt, fx);
+                }
+                Ok(())
+            });
             return Ok(());
         }
         let h = self.agent(id)?;

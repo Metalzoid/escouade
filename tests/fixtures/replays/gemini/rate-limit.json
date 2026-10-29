@@ -26,7 +26,7 @@
       "cost": 0.0,
       "durationMs": null,
       "engine": "gemini",
-      "error": "Limite d’usage de Gemini atteinte (429) : Resource has been exhausted (e.g. check quota).",
+      "error": "Limite d’usage de Gemini atteinte : Resource has been exhausted (e.g. check quota).",
       "interrupted": false,
       "isError": true,
       "kind": "turn",

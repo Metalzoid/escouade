@@ -1,6 +1,6 @@
 # La vue terminal
 
-La vue terminal fait tourner un agent dans l’interface de son harness (Claude Code, Codex, OpenCode, Copilot CLI, Cursor CLI, Mistral Vibe ou Antigravity CLI), dans un terminal, sans perdre sa session. Cette page explique comment changer de vue, ce qu’Escouade continue de suivre et ce qui change.
+La vue terminal fait tourner un agent dans l’interface de son harness (Claude Code, Codex, OpenCode, Copilot CLI, Cursor CLI, Mistral Vibe, Antigravity CLI ou Gemini CLI), dans un terminal, sans perdre sa session. Cette page explique comment changer de vue, ce qu’Escouade continue de suivre et ce qui change.
 
 ## À quoi ça sert
 
@@ -144,6 +144,16 @@ Un agent sur Antigravity CLI a aussi sa vue : le bouton s’appelle « Vue Ant
 - **Les modes.** « Demander » est son mode par défaut, « Accepter les modifications » `accept-edits`, « Plan » `plan`, « Bypass » ses règles qui permettent tout ; les chemins d’un projet privé restent refusés à ses outils de fichiers.
 - **Interrompre** envoie `Échap`, comme dans l’interface : ce qu’il a écrit jusque-là finit le tour.
 - **Ce qui n’est pas suivi dans cette vue** : une autorisation qu’il te demande dans le terminal (aucun hook ni le transcript ne la disent : la carte reste « travaille » jusqu’à ta réponse), le bandeau « Plan », le coût et les tokens, la réflexion.
+
+## Avec Gemini CLI
+
+Un agent sur Gemini CLI a aussi sa vue : le bouton s’appelle « Vue Gemini CLI » et lance l’interface de Gemini (`gemini`) dans le dossier de l’agent, avec son modèle et son mode, dans le dossier de configuration de l’agent (`GEMINI_CLI_HOME`), celui où sa session est gardée. Les deux vues partagent la même session : l’interface la reprend (`gemini --resume`) avec tout son historique, et `gemini --acp` la reprend au retour dans la vue Escouade. Une session qui n’a encore rien écrit commence sous l’identifiant qu’Escouade lui donne (`--session-id`). Ce qui change par rapport à Claude Code :
+
+- **Le suivi, par ses hooks.** Son journal réécrit un message à chaque changement : Escouade ne le lit pas. Ses hooks lancent `escouade-hook`, installée avec l’app : `BeforeAgent` (ton message), `BeforeTool` et `AfterTool` (chaque outil et sa fin), `Notification` (une autorisation qu’il te demande dans le terminal : la carte attend ta réponse), `AfterAgent` (la fin du tour, avec toute sa réponse). Ils sont écrits dans les réglages du dossier de l’agent à l’ouverture de la vue et retirés au retour, jamais dans ton `~/.gemini`.
+- **Le serveur MCP d’Escouade** est dans les réglages du dossier de l’agent (`mcpServers`), son jeton écrit dans ce fichier, jamais sur sa ligne de commande.
+- **Les modes.** « Demander » est son mode `default`, « Édits auto » `auto_edit`, « Plan » `plan`, « Bypass » `yolo` ; les chemins d’un projet privé restent refusés par ses règles (`--policy`).
+- **Interrompre** envoie `Échap`, comme dans l’interface ; aucun hook ne dit ce tour arrêté, Escouade le finit lui-même.
+- **Ce qui n’est pas suivi dans cette vue** : ses textes entre deux outils (seule sa réponse entière arrive, en fin de tour), une limite d’usage (son interface propose elle-même d’attendre ou de changer de modèle), le bandeau « Plan », le coût et les tokens.
 
 ## Sous Windows avec WSL
 

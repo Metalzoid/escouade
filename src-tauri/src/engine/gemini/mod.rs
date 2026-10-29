@@ -28,6 +28,7 @@
 pub(crate) mod bench;
 mod locate;
 mod process;
+pub(crate) mod terminal;
 #[cfg(test)]
 mod tests;
 
@@ -68,6 +69,103 @@ const INSTALL: Install = Install {
 
 /// The variable that moves all it keeps: the folder it makes its `.gemini` in.
 pub(crate) const HOME_VAR: &str = "GEMINI_CLI_HOME";
+
+/// The variables of the app's that would take the place of an account's sign-in: its API keys,
+/// Vertex AI (ESC-275). An account's own, its key or its Google sign-in, is given in their place.
+pub(crate) const KEY_VARS: [&str; 4] = [
+    "GEMINI_API_KEY",
+    "GOOGLE_API_KEY",
+    "GOOGLE_GENAI_USE_VERTEXAI",
+    CREDENTIALS_VAR,
+];
+
+/// The variable of the key an account added by its key goes by.
+pub(crate) const KEY_VAR: &str = KEY_VARS[0];
+
+/// The file of credentials Gemini reads after its home's own (its code, 0.66.0:
+/// `fetchCachedCredentialsList`): an agent's process is given its account's Google sign-in so,
+/// from the agent's own home (ESC-275).
+pub(crate) const CREDENTIALS_VAR: &str = "GOOGLE_APPLICATION_CREDENTIALS";
+
+/// Where `gemini` keeps the Google sign-in it made in `home` (its `GEMINI_CLI_HOME`): never read by
+/// Escouade, only looked for.
+pub(crate) fn sign_in_file(home: &Path) -> PathBuf {
+    home.join(".gemini").join("oauth_creds.json")
+}
+
+/// The address of the Google account `gemini` signed in to in `home` (`google_accounts.json`, its
+/// `active`): an address, no secret.
+pub(crate) fn signed_in_email(home: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(home.join(".gemini").join("google_accounts.json")).ok()?;
+    let doc: Value = serde_json::from_str(&text).ok()?;
+    doc["active"]
+        .as_str()
+        .map(str::trim)
+        .filter(|e| !e.is_empty())
+        .map(str::to_string)
+}
+
+/// The Google sign-in a process of Gemini wrote in the agent's own home (its tokens refreshed)
+/// taken away before it starts again: its account's (`CREDENTIALS_VAR`) is the one it reads, the
+/// account it goes by now, whichever it went by before. Never read.
+pub(crate) fn forget_sign_in(home: &Path) {
+    let _ = std::fs::remove_file(sign_in_file(home));
+}
+
+/// Whether the app's environment gives Gemini a key or Vertex AI: the machine's account then goes
+/// by it (its Google sign-in, in `~/.gemini`, is never given).
+pub(crate) fn machine_has_key() -> bool {
+    let set = |k: &str| std::env::var(k).is_ok_and(|v| !v.trim().is_empty());
+    set("GEMINI_API_KEY")
+        || set("GOOGLE_API_KEY")
+        || std::env::var("GOOGLE_GENAI_USE_VERTEXAI").is_ok_and(|v| v.eq_ignore_ascii_case("true"))
+}
+
+/// Where its usage and its quotas are told: Gemini tells them in its interface alone (`/stats`).
+pub(crate) const USAGE_PAGE: &str = "https://aistudio.google.com/usage";
+
+/// How long after a limit by the minute (a 429, its model's capacity) its agent goes on, when
+/// Gemini tells no wait.
+pub(crate) const RATE_RESUME_MS: i64 = 60_000;
+
+/// How long after its daily quota was met its agent tries again: Gemini tells no reset (its quotas
+/// are by the day), and a turn tried for nothing costs none.
+pub(crate) const DAILY_RESUME_MS: i64 = 3_600_000;
+
+/// The usage limit an error of Gemini tells (its words read in its code, 0.66.0: a 429, « You have
+/// exhausted your daily quota on this model. », « Please retry in 30.5s », its model's capacity):
+/// in how many ms to try again, the wait it tells else a minute (an hour for its daily quota). None
+/// for another error.
+pub(crate) fn limit_of(code: Option<i64>, error: &str) -> Option<i64> {
+    let lower = error.to_lowercase();
+    let daily = lower.contains("daily quota") || lower.contains("perday");
+    let limited = daily
+        || code == Some(429)
+        || lower.contains("usage limit")
+        || crate::engine::agy::limit_of(error).is_some();
+    if !limited {
+        return None;
+    }
+    let told = lower.split_once("retry in ").and_then(|(_, rest)| {
+        let digits: String = rest
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == '.')
+            .collect();
+        let n: f64 = digits.parse().ok()?;
+        let unit = rest[digits.len()..].trim_start();
+        let ms = if unit.starts_with("ms") {
+            n
+        } else {
+            n * 1000.0
+        };
+        (ms > 0.0).then_some(ms.ceil() as i64)
+    });
+    Some(told.unwrap_or(if daily {
+        DAILY_RESUME_MS
+    } else {
+        RATE_RESUME_MS
+    }))
+}
 
 /// Its default model: its router, which picks Pro or Flash at each turn.
 pub(crate) const DEFAULT: &str = "auto";
@@ -189,14 +287,16 @@ pub fn caps() -> EngineCaps {
         quota_windows: Vec::new(),
         // Its tokens alone.
         cost: CostKind::None,
-        // Its interface comes with the third ticket of Gemini CLI.
-        terminal_view: false,
+        // « Vue Gemini » (ESC-275, `terminal`).
+        terminal_view: true,
         remote_control: false,
         background_tasks: false,
         todo_tools: false,
         default_refusal: false,
         sandbox: false,
-        usage_page: None,
+        // Its usage and quotas are told in its interface alone (`/stats`), and on its page for a key.
+        usage_page: Some(USAGE_PAGE),
+        // An account goes by its key or its Google sign-in, as it was added (`Account::api_key`).
         accounts_by_key: false,
         // A discussion of the Docs tab: its writes and commands refused by its rules.
         read_only: true,
@@ -511,7 +611,8 @@ pub(crate) fn auth_type(env: &[(String, String)]) -> &'static str {
 }
 
 /// The agent's `settings.json` (`<home>/.gemini/settings.json`) with what Escouade sets: no update
-/// nor its notice, no statistics, and how it signs in when Gemini has not written it yet. What else
+/// nor its notice, no statistics, and how it signs in (its account's, whatever it went by before,
+/// ESC-275). What else
 /// it holds (Gemini writes there too) is kept.
 pub(crate) fn write_settings(home: &Path, auth: &str) -> Result<()> {
     let dir = home.join(".gemini");
@@ -542,7 +643,9 @@ pub(crate) fn write_settings(home: &Path, auth: &str) -> Result<()> {
         false,
     );
     set(&["privacy", "usageStatisticsEnabled"], json!(false), false);
-    set(&["security", "auth", "selectedType"], json!(auth), true);
+    set(&["security", "auth", "selectedType"], json!(auth), false);
+    // What its interface's view left (its hooks, Escouade's server) is not its process's.
+    terminal::forget_view(&mut doc);
     if doc != before || !file.exists() {
         std::fs::create_dir_all(&dir)?;
         std::fs::write(&file, serde_json::to_string_pretty(&doc)?)?;
@@ -698,24 +801,69 @@ async fn read_models(
     Ok(models_of(&got?["models"]))
 }
 
-/// The model of a one-shot question of `weight` among those a session offers: its smallest Flash
-/// for a short text, its Flash for one written after reading, else its router.
-fn writer_model(weight: Weight, told: &[ToldModel]) -> Option<String> {
-    let lite = |m: &&ToldModel| m.id.contains("flash-lite");
-    let flash = |m: &&ToldModel| m.id.contains("flash") && !m.id.contains("lite");
-    let pick = match weight {
-        Weight::Light => told.iter().find(lite).or_else(|| told.iter().find(flash)),
-        Weight::Reading => told.iter().find(flash).or_else(|| told.iter().find(lite)),
-    };
-    pick.map(|m| m.id.clone())
+/// The model of a text of `weight`: its smallest Flash for a short text, its Flash for one written
+/// after reading (its aliases, which follow its newest models).
+fn writer_model(weight: Weight) -> &'static str {
+    match weight {
+        Weight::Light => "flash-lite",
+        Weight::Reading => "flash",
+    }
 }
 
-/// One question to a `gemini --acp` of its own, in a throwaway home, its writes and commands
-/// refused by its rules (a permission it asks refused too): the words of its turn.
+/// The rules of a process that writes a text: every tool refused (`toolName = "*"`, which also
+/// keeps them from the model's sight).
+pub(crate) const NO_TOOLS: &str = "[[rule]]\ntoolName = \"*\"\ndecision = \"deny\"\npriority = 999\ndenyMessage = \"Refused by Escouade: this text is written without tools.\"\n";
+
+/// The arguments of `gemini -p` for a text of `weight`, its rules in `policy`: its answer in JSON,
+/// no extension, the question on its input (a command line holds none of it).
+pub(crate) fn one_shot_args(weight: Weight, policy: &Path) -> Vec<String> {
+    [
+        "-p",
+        "Answer the request above.",
+        "-o",
+        "json",
+        "-m",
+        writer_model(weight),
+        "--approval-mode",
+        "default",
+        "-e",
+        "none",
+        "--policy",
+    ]
+    .iter()
+    .map(|a| a.to_string())
+    .chain([policy.to_string_lossy().into_owned()])
+    .collect()
+}
+
+/// What `gemini -p -o json` answered: its `response`, else its `error`.
+pub(crate) fn response_of(out: &[u8]) -> Result<String> {
+    let text = String::from_utf8_lossy(out);
+    let start = text.find('{').unwrap_or(text.len());
+    let doc: Value = serde_json::from_str(text[start..].trim()).unwrap_or(Value::Null);
+    if let Some(e) = doc["error"]["message"].as_str() {
+        bail!("{e}");
+    }
+    let said = doc["response"].as_str().unwrap_or_default().trim();
+    if said.is_empty() {
+        bail!(tr!(
+            "Gemini CLI n’a rien répondu (sa connexion, sa limite ?)",
+            "Gemini CLI gave no answer (its sign-in, its limit?)"
+        ));
+    }
+    Ok(said.to_string())
+}
+
+/// One question to `gemini -p` (ESC-275), in a throwaway home removed once answered, every tool
+/// refused by its rules; the question on its input, its time bounded by `oneshot::LIMIT`.
 async fn one_shot(ask: OneShot<'_>) -> Result<String> {
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    let (p, home) = throwaway_process(ask.program, ask.env, ask.cwd, "default", true, tx)?;
-    let limit = std::time::Duration::from_secs(60);
+    let mut env = ask.env;
+    let home = throwaway_home(&mut env)?;
+    let policy = home.join(POLICY_FILE);
+    if let Err(e) = std::fs::write(&policy, NO_TOOLS) {
+        let _ = std::fs::remove_dir_all(&home);
+        bail!("gemini: its tools not refused for a text: {e}");
+    }
     let question = if ask.system.trim().is_empty() {
         ask.prompt.to_string()
     } else {
@@ -725,71 +873,11 @@ async fn one_shot(ask: OneShot<'_>) -> Result<String> {
             ask.prompt
         )
     };
-    let weight = ask.weight;
-    let asked = async {
-        p.request("initialize", hello(), limit).await?;
-        let opened = p
-            .request(
-                "session/new",
-                json!({ "cwd": ask.cwd.to_string_lossy(), "mcpServers": [] }),
-                limit,
-            )
-            .await?;
-        let session = opened["sessionId"]
-            .as_str()
-            .ok_or_else(|| anyhow!("session/new: no session"))?
-            .to_string();
-        if let Some(model) = writer_model(weight, &models_of(&opened["models"])) {
-            let _ = p
-                .request(
-                    "session/set_model",
-                    json!({ "sessionId": session, "modelId": model }),
-                    limit,
-                )
-                .await;
-        }
-        let rx_prompt = p.send(
-            "session/prompt",
-            json!({ "sessionId": session, "prompt": [{ "type": "text", "text": question }] }),
-        )?;
-        let mut words = String::new();
-        tokio::pin!(rx_prompt);
-        loop {
-            tokio::select! {
-                end = &mut rx_prompt => {
-                    match end {
-                        Ok(Ok(_)) => break,
-                        Ok(Err(e)) => bail!("{}", e["message"].as_str().unwrap_or("error")),
-                        Err(_) => bail!("Gemini CLI stopped"),
-                    }
-                }
-                Some(f) = rx.recv() => {
-                    let u = &f["params"]["update"];
-                    if f["method"] == "session/update" && u["sessionUpdate"] == "agent_message_chunk" {
-                        if let Some(t) = u["content"]["text"].as_str() {
-                            words.push_str(t);
-                        }
-                    }
-                    if let Some(rid) = f["id"].as_str() {
-                        let _ = p.reply(rid, Ok(json!({ "outcome": { "outcome": "cancelled" } })));
-                    }
-                }
-            }
-        }
-        Ok::<String, anyhow::Error>(words)
-    };
-    let got = asked.await;
-    p.kill();
-    p.wait_gone(std::time::Duration::from_secs(5)).await;
+    let args = one_shot_args(ask.weight, &policy);
+    let out =
+        super::oneshot::run(&ask.program, ask.cwd, &args, &env, &question, "Gemini CLI").await;
     let _ = std::fs::remove_dir_all(&home);
-    let text = got?.trim().to_string();
-    if text.is_empty() {
-        bail!(tr!(
-            "Gemini CLI n’a rien répondu (sa connexion, sa limite ?)",
-            "Gemini CLI gave no answer (its sign-in, its limit?)"
-        ));
-    }
-    Ok(text)
+    response_of(&out?)
 }
 
 impl Engine for Gemini {
@@ -864,7 +952,7 @@ impl Engine for Gemini {
     }
 
     fn terminal(&self) -> Option<&'static dyn super::TerminalView> {
-        None
+        Some(&terminal::GEMINI_TERMINAL)
     }
 
     fn install(&self) -> Install {
@@ -925,6 +1013,8 @@ impl Engine for Gemini {
         match spawn.env.iter().find(|(k, _)| k == HOME_VAR) {
             Some((_, home)) => {
                 let home = Path::new(home);
+                // Its account's sign-in, not the one it refreshed here before (ESC-275).
+                forget_sign_in(home);
                 if let Err(e) = write_settings(home, auth_type(&spawn.env)) {
                     log::warn!("gemini: the settings of {} not written: {e}", home.display());
                 }
@@ -1007,7 +1097,7 @@ impl Engine for Gemini {
         }
     }
 
-    /// Its `/compress` is a command of its interface, which comes with its third ticket.
+    /// Its `/compress` is a command of its interface (« Vue Gemini »).
     fn compaction(&self) -> super::Compaction {
         super::Compaction::InItsInterface("/compress")
     }

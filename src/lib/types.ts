@@ -302,6 +302,8 @@ export interface Account {
   defaultModel?: string;
   defaultEffort?: string;
   defaultMode?: string;
+  /** Gemini CLI (ESC-275): it goes by its API key, not by the Google sign-in of its folder. */
+  apiKey?: boolean;
 }
 
 /** What « Ajouter un compte… » says of the machine's account of a harness (its Principal, `accounts::MachineAccount`). */
@@ -316,6 +318,8 @@ export interface MachineAccount {
   signsIn: boolean;
   /** It may be added before it is signed in there, then signed in by its program in a terminal (Antigravity CLI, ESC-271). */
   signsInLater?: boolean;
+  /** Its sign-in is out of Escouade's reach (Gemini CLI's Google sign-in, in `~/.gemini`): a new account is to add instead (ESC-275). */
+  apart?: boolean;
   /** Who it is signed in as, when the harness says: an email, a GitHub `@login`. */
   email: string | null;
   /** Its folder. */

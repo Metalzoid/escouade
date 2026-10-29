@@ -30,6 +30,7 @@ mod cursor_tui;
 mod localcmd;
 // The translation of the minimal fake engine of the conformance bench (`engine/minimal/`).
 mod gemini;
+mod gemini_tui;
 #[cfg(test)]
 mod minimal;
 mod opencode;
@@ -292,6 +293,8 @@ pub struct AgentRt {
     agy: agy::AgyState,
     /// What the translation of Gemini CLI keeps between its updates (`agent/gemini.rs`).
     gemini: gemini::GeminiState,
+    /// What the hooks of its Gemini interface keep between them (`agent/gemini_tui.rs`).
+    gemini_tui: gemini_tui::GeminiTuiState,
 }
 
 /// A stream's process linked to claude.ai, and the session it holds there (its bridge id, when
@@ -565,6 +568,7 @@ impl AgentRt {
             vibe: vibe::VibeState::default(),
             agy: agy::AgyState::default(),
             gemini: gemini::GeminiState::default(),
+            gemini_tui: gemini_tui::GeminiTuiState::default(),
         }
     }
 

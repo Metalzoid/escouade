@@ -28,15 +28,15 @@ Whatever the harness, the agent has the same conversation: the answer and the re
 |---|---|---|---|---|---| --- | --- | --- |
 | Installation | Claude Code’s script | `npm install -g @openai/codex` | `npm install -g opencode-ai` | `npm install -g @github/copilot` | Cursor’s script | `uv tool install mistral-vibe` | Antigravity’s script | `npm install -g @google/gemini-cli` |
 | Tested with | 2.1.283 to 2.1.301 | 0.163.0 | 1.19.3 | 1.0.98 | 2026.10.22 | 3.0.3 | 1.4.9 | 0.66.0, without an account (not yet tried for real) |
-| Account | Claude subscription or API key | ChatGPT account | the providers connected to OpenCode, local models included | GitHub account with Copilot, Free included | Cursor account (`agent login`, or an API key), Free included | Mistral API key (`vibe --setup`) | Google account (its interface’s sign-in) | Google account, Gemini API key or Vertex AI (the machine’s sign-in) |
-| Several accounts | yes | yes | no | yes | yes, by API key | yes, by API key | no | no |
+| Account | Claude subscription or API key | ChatGPT account | the providers connected to OpenCode, local models included | GitHub account with Copilot, Free included | Cursor account (`agent login`, or an API key), Free included | Mistral API key (`vibe --setup`) | Google account (its interface’s sign-in) | Google account (its interface’s sign-in, in the account’s folder) or Gemini API key |
+| Several accounts | yes | yes | no | yes | yes, by API key | yes, by API key | no | yes |
 | Models | those Claude Code lists for each account | those Codex lists for your account | your providers’, with search and favorites | those Copilot lists, with their multiplier | your account’s, Auto first | its session’s | those `agy models` lists, Gemini’s effort apart | its session’s, Auto first |
 | Modes | all five | all five | four (no Auto) | all five | four (no Auto) | four (no Auto; Plan played by Escouade) | four (no Auto) | four (no Auto) |
 | What protects | its permissions | its sandbox | its permission rules | Escouade’s rules | its permissions, for its commands | its permissions; Escouade’s rules | its rules, written by Escouade; asks once the turn is over | its permissions; its rules for a private project |
 | Message during a turn | waits for the end of the turn | enters the turn | waits for the end of the turn | enters the turn | waits for the end of the turn | waits for the end of the turn | waits for the end of the turn | waits for the end of the turn |
 | Cost | exact | estimated | exact (0 when local) | exact, in AI credits | not told | exact | not given (tokens) | not given (tokens) |
-| Quota | 5-hour and 7-day windows | 5-hour and 7-day windows (30 days on the free plan) | none: daily budget | monthly credits | a link to its dashboard | none: daily budget, a link to Mistral’s console | not read | not read |
-| Terminal view | “Claude Code view” | “Codex view” | “OpenCode view” | “Copilot CLI view” | “Cursor CLI view”, limited following | “Mistral Vibe view” | “Antigravity CLI view” | not yet |
+| Quota | 5-hour and 7-day windows | 5-hour and 7-day windows (30 days on the free plan) | none: daily budget | monthly credits | a link to its dashboard | none: daily budget, a link to Mistral’s console | not read | not read: a link to its usage page |
+| Terminal view | “Claude Code view” | “Codex view” | “OpenCode view” | “Copilot CLI view” | “Cursor CLI view”, limited following | “Mistral Vibe view” | “Antigravity CLI view” | “Gemini CLI view” |
 | Attached PDFs | yes | no | no | no | no | no | no | no |
 | Remote control, background tasks | yes | no | no | no | no | no | no | no |
 
@@ -231,11 +231,18 @@ Antigravity gives each turn’s tokens (on its card, in the statistics), not the
 ## Gemini CLI
 
 > [!WARNING]
-> Gemini CLI hasn’t been tried with a real account yet: its adapter follows its documentation and what its program does against a fake server. What is left to see for real: the size of its live answers, its questions, its quotas, its sign-in in each agent’s folder.
+> Gemini CLI hasn’t been tried with a real account yet: its adapter follows its documentation and what its program does against a fake server. What is left to see for real: the size of its live answers, its questions, its quotas and their messages, its Google sign-in given to each agent, its terminal view and its hooks.
 
 ### Installation and account
 
-Install Gemini CLI with npm (`npm install -g @google/gemini-cli`, Node 20 or later) or Homebrew (`brew install gemini-cli`), then run `gemini` once in a terminal to sign in to your Google account, or give it an API key by `GEMINI_API_KEY`. Escouade finds `gemini` on the `PATH`, or in npm’s global folder. Each agent has its own configuration folder (`GEMINI_CLI_HOME`), removed with it: its settings, its sessions and its rules are kept there, never in your `~/.gemini`, which Antigravity CLI shares. Escouade turns off its updates and usage statistics there, and trusts the agent’s folder (without it, Gemini would leave out Escouade’s MCP server). Your sign-in stays the machine’s; several accounts will come later.
+Install Gemini CLI with npm (`npm install -g @google/gemini-cli`, Node 20 or later) or Homebrew (`brew install gemini-cli`), then add its account in Settings › Accounts (see below). Escouade finds `gemini` on the `PATH`, or in npm’s global folder. Each agent has its own configuration folder (`GEMINI_CLI_HOME`), removed with it: its settings, its sessions and its rules are kept there, never in your `~/.gemini`, which Antigravity CLI shares. Escouade turns off its updates and usage statistics there, and trusts the agent’s folder (without it, Gemini would leave out Escouade’s MCP server).
+
+A Gemini account is one or the other, as you choose when you add it:
+
+- **A Google account.** Escouade runs Gemini’s interface (`gemini`) in a terminal of the window, with the account’s folder as its `GEMINI_CLI_HOME`: it opens your browser on your Google account, and keeps its sign-in in that folder. Escouade never reads it: it only sees that it is there, with the account’s address. Its agents get it by `GOOGLE_APPLICATION_CREDENTIALS`, from their own folder. “Sign in again…” makes it again.
+- **A Gemini API key** (on aistudio.google.com, “Get API key”): kept in the system keychain, given to its agents by `GEMINI_API_KEY`, never written in a file nor on a command line. “Change the key…” gives it again.
+
+A key or Vertex AI of the machine (`GEMINI_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_GENAI_USE_VERTEXAI`) never goes to an added account. The machine’s account is offered only when the machine has such a key: the Google sign-in of your `~/.gemini` is never given to the agents. Each account has its defaults (model, mode), as the other harnesses’ do.
 
 ### Models and modes
 
@@ -254,7 +261,7 @@ For a private project, its file tools and its commands that name the other proje
 
 ### Cost, quota and what Gemini doesn’t do
 
-Gemini gives each turn’s tokens, not their cost nor its quota; its limit (a 429 error) stops the turn on an amber card, and the agent goes on by itself a minute later. No terminal view nor several accounts yet. No Auto mode, attached PDFs, “Duplicate the conversation”, `/` commands in Escouade (`/compact`: its `/compress`, in its interface), remote control nor background tasks. It gets Escouade’s MCP server by its session; the switch doesn’t declare it in your config yet.
+Gemini gives each turn’s tokens, not their cost nor its quota: its usage is read by `/stats` in its interface, and “Usage on aistudio.google.com”, in Settings › Accounts and the quota panel, opens the usage page of the API keys. Its limit ends the turn “limited” on a card that says so; the agent goes on by itself when Gemini says (“Please retry in 30s”), else a minute later, or an hour later for its daily quota, or moves to another account as “Switch accounts at” and “Go on with the next harness” say. The texts it writes (an agent’s name, a commit message…) go through `gemini -p`, every tool of it refused. The “Gemini CLI view” runs the agent in Gemini’s interface, on the same session (see [the terminal view](claude-code-view#with-gemini-cli)). No Auto mode, attached PDFs, “Duplicate the conversation”, `/` commands in Escouade (`/compact`: its `/compress`, in its interface), remote control nor background tasks. It gets Escouade’s MCP server by its session; the switch doesn’t declare it in your config yet.
 
 ## The MCP server
 

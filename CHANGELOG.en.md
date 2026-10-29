@@ -9,6 +9,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### New
 
 - Gemini CLI becomes an eighth harness: its agents converse in Escouade over ACP, with its models, its modes, its plan to approve and its questions, each in its own configuration folder; not yet tried with a real account.
+- Gemini CLI has its accounts, each signed in to Google by gemini in a terminal of the window or by its API key, writes its texts with gemini -p, goes on by itself after its usage limit, and its “Gemini CLI view” opens its interface on the agent’s session.
 - Antigravity CLI, Google’s agent, becomes a seventh harness: its agents converse in Escouade with its models, its efforts and its Plan mode, and what it refuses during a turn is asked of you at the end of the turn, then taken up again.
 - Antigravity CLI has its accounts: the machine’s, added and signed in by agy in a terminal of the window, and others by their Gemini API key; when its quota is spent, the agent waits and goes on by itself, or moves to another account.
 - The “Antigravity CLI view” opens Antigravity’s interface in a terminal, on the agent’s conversation: Escouade follows its messages, tools and turn ends, gives it its MCP server, and going back to the conversation resumes the same conversation.

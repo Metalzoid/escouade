@@ -12,8 +12,8 @@
 //! - the permission of its `exit_plan_mode` is the card « Plan à approuver » (its process gave it
 //!   the plan, read from its file), as Cursor's `cursor/create_plan`;
 //! - its change of mode is a text (« [MODE_UPDATE] plan »), the process's `escouade.mode` live;
-//! - its tokens come with the end of its prompt (`usage`): it tells no cost; a 429 ends the turn
-//!   « limité », its resume planned a minute later.
+//! - its tokens come with the end of its prompt (`usage`): it tells no cost; its usage limit ends
+//!   the turn « limité », its resume planned when it says, else a minute (an hour for its day).
 //!
 //! A recorded stream (`tests/fixtures/gemini/`, one message a line with its `dir`, `c2s` or `s2c`)
 //! is read as it came: the history `session/load` replays (until the next prompt) left out, as the
@@ -35,10 +35,6 @@ pub(crate) struct GeminiState {
 /// The tools of Gemini shown otherwise than as calls (or not at all): its topic of the turn, the
 /// end of its mode Plan (its card).
 const UNSHOWN: [&str; 2] = ["update_topic", "exit_plan_mode"];
-
-/// How long after a rate limit (429) the agent goes on: Gemini tells no reset, and its limits are
-/// by the minute (and by the day).
-pub(crate) const RATE_RESUME_MS: i64 = 60_000;
 
 /// The tool of a call of Gemini, the start of its id (`run_shell_command__run_shell_command_…`).
 fn tool_name(id: &str) -> &str {
@@ -160,9 +156,17 @@ impl AgentRt {
                 self.gm_spent(&p["usage"]);
                 self.gm_turn_spent();
                 let mut f = f.clone();
-                if p["code"].as_i64() == Some(429) {
-                    self.cursor.limited_until = Some(now_ms() + RATE_RESUME_MS);
-                    f["params"]["error"] = json!(rate_limited(i18n::ui(), p["error"].as_str()));
+                // Its usage limit: « limité », its resume planned (or another account, ESC-275).
+                let said = p["error"].as_str();
+                if let Some(wait) = said
+                    .and_then(|e| crate::engine::gemini::limit_of(p["code"].as_i64(), e))
+                    .or_else(|| {
+                        (p["code"].as_i64() == Some(429))
+                            .then_some(crate::engine::gemini::RATE_RESUME_MS)
+                    })
+                {
+                    self.cursor.limited_until = Some(now_ms() + wait);
+                    f["params"]["error"] = json!(rate_limited(i18n::ui(), said));
                 }
                 self.cursor_frame(&f, fx);
             }
@@ -316,8 +320,8 @@ fn rate_limited(lang: crate::i18n::Lang, said: Option<&str>) -> String {
     let said = said.unwrap_or("Rate limit exceeded");
     tr_in!(
         lang,
-        "Limite d’usage de Gemini atteinte (429) : {said}",
-        "Gemini’s usage limit reached (429): {said}"
+        "Limite d’usage de Gemini atteinte : {said}",
+        "Gemini’s usage limit reached: {said}"
     )
 }
 

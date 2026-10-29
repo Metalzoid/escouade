@@ -1,9 +1,9 @@
 // The real trial of each harness before a release (ESC-52): the app (debug build, data of the test's) drives the real
-// Claude Code, Codex, OpenCode, Copilot CLI, Mistral Vibe and Antigravity CLI of the machine, on the accounts it has. Each harness takes a small ticket in
+// Claude Code, Codex, OpenCode, Copilot CLI, Mistral Vibe, Antigravity CLI and Gemini CLI of the machine, on the accounts it has. Each harness takes a small ticket in
 // a worktree up to its commit and its merge, and an agent of its shows its terminal view; then an agent on Claude Code
 // whose quota is spent (simulated: tests/fixtures/real-claude-quota.mjs) goes on on Codex (ESC-88).
 //
-// Skipped unless ESCOUADE_E2E_REAL names what to try (`claude,codex,opencode,copilot,vibe,agy,handover`): each costs real usage.
+// Skipped unless ESCOUADE_E2E_REAL names what to try (`claude,codex,opencode,copilot,vibe,agy,gemini,handover`): each costs real usage.
 // What each needs (docs/TODO-1.8.md, chapter 1, « Tests ») :
 // - claude: Claude Code signed in as the user's own (Principal: no CLAUDE_CONFIG_DIR), ESCOUADE_REAL_CLAUDE its program;
 //   on Haiku. What it writes in ~/.claude for the test's folders is taken out at the end.
@@ -20,6 +20,10 @@
 // - agy: ESCOUADE_REAL_AGY (`agy` 1.4.9 or later, %LOCALAPPDATA%\agy\bin\agy.exe under Windows), signed in by the user to
 //   their Google account (`agy` once in a terminal; the account in the system's keychain): each agent has a home of its
 //   own; ~/.gemini is never read nor written, its files' sizes and dates compared at the end (ESC-272).
+// - gemini: ESCOUADE_REAL_GEMINI (`gemini` 0.66.0 or later, the `gemini.cmd` of npm under Windows) and a Gemini API key in
+//   ESCOUADE_REAL_GEMINI_KEY, given to the app as its own (`GEMINI_API_KEY`: its machine's account goes by it), never
+//   written: skipped without it, as long as nobody has an account to give it (ESC-275, never run yet). Each agent has a
+//   GEMINI_CLI_HOME of its own; ~/.gemini is never read nor written, its files' sizes and dates compared at the end.
 // ESCOUADE_E2E_REAL_OUT: a folder kept for the screenshots (the terminals are drawn on a canvas).
 // Run it with TMP and TEMP outside of %TEMP% (Codex accepts nothing by itself in a folder of %TEMP%), Claude Code's own
 // variables unset (CLAUDECODE…) when it is run from Claude Code.
@@ -33,6 +37,9 @@ import type { Page } from '@playwright/test';
 import { addProject, expect, send, test, type App } from './fixture';
 import { keepAgy, keepClaude, keepCodex, keepCopilot, keepVibe } from './real-keep';
 
+/** Gemini CLI is tried with an account alone: its key (ESC-275). */
+const GEMINI_KEY = process.env.ESCOUADE_REAL_GEMINI_KEY ?? '';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const WANTED = new Set((process.env.ESCOUADE_E2E_REAL ?? '').split(',').map((s) => s.trim()));
 const OUT = process.env.ESCOUADE_E2E_REAL_OUT ?? path.join(os.tmpdir(), 'escouade-real');
@@ -44,7 +51,7 @@ const QUOTA = path.join(ROOT, 'tests', 'fixtures', 'real-claude-quota.cmd');
 /** Up to half an hour for a ticket: a local model is slow. */
 const LONG = 30 * 60_000;
 
-type Harness = 'claude' | 'codex' | 'opencode' | 'copilot' | 'vibe' | 'agy';
+type Harness = 'claude' | 'codex' | 'opencode' | 'copilot' | 'vibe' | 'agy' | 'gemini';
 const NAMES: Record<Harness, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
@@ -52,6 +59,7 @@ const NAMES: Record<Harness, string> = {
   copilot: 'Copilot CLI',
   vibe: 'Mistral Vibe',
   agy: 'Antigravity CLI',
+  gemini: 'Gemini CLI',
 };
 
 let shot = 0;
@@ -103,6 +111,13 @@ function realEnv(h: Harness | 'handover'): Record<string, string> {
     // Its Google account, from the system's keychain: no key of the environment's.
     for (const k of ['GEMINI_API_KEY', 'GOOGLE_API_KEY']) env[k] = undefined;
   }
+  if (h === 'gemini') {
+    env.ESCOUADE_GEMINI = process.env.ESCOUADE_REAL_GEMINI;
+    // Its machine's account goes by the key given to the app; nothing else of the environment's.
+    env.GEMINI_API_KEY = GEMINI_KEY;
+    for (const k of ['GOOGLE_API_KEY', 'GOOGLE_GENAI_USE_VERTEXAI', 'GOOGLE_APPLICATION_CREDENTIALS', 'GEMINI_CLI_HOME'])
+      env[k] = undefined;
+  }
   return env as Record<string, string>;
 }
 
@@ -115,7 +130,7 @@ function realSettings(h: Harness | 'handover', root: string): Record<string, unk
   if (h === 'claude') s.claudePath = process.env.ESCOUADE_REAL_CLAUDE;
   if (h === 'handover') s.claudePath = QUOTA;
   // The texts (commit messages…) written by the harness tried, Claude Code apart (Haiku).
-  if (h === 'codex' || h === 'copilot' || h === 'vibe' || h === 'agy') s.writerEngine = h;
+  if (h === 'codex' || h === 'copilot' || h === 'vibe' || h === 'agy' || h === 'gemini') s.writerEngine = h;
   if (h === 'opencode') {
     s.writerEngine = 'opencode';
     s.writerModel = `ollama/${MODEL}`;
@@ -184,6 +199,8 @@ const TRUST: Record<Harness, string[]> = {
   vibe: [],
   // None: Escouade writes the trust of the agent's folder (and its first screens) in its home.
   agy: [],
+  // None: its folder is trusted by GEMINI_CLI_TRUST_WORKSPACE.
+  gemini: [],
 };
 
 /**
@@ -315,9 +332,10 @@ async function copilotAccount(page: Page) {
 
 // ---------- the trials ----------
 
-for (const h of ['claude', 'codex', 'opencode', 'copilot', 'vibe', 'agy'] as const) {
+for (const h of ['claude', 'codex', 'opencode', 'copilot', 'vibe', 'agy', 'gemini'] as const) {
   test.describe(`the real ${NAMES[h]}`, () => {
     test.skip(!WANTED.has(h), `ESCOUADE_E2E_REAL does not name ${h}`);
+    test.skip(h === 'gemini' && !GEMINI_KEY, 'no Gemini account to try it with (ESCOUADE_REAL_GEMINI_KEY)');
     test.setTimeout(2 * LONG);
     test.use({
       actionTimeout: 60_000,
@@ -337,6 +355,7 @@ for (const h of ['claude', 'codex', 'opencode', 'copilot', 'vibe', 'agy'] as con
         h === 'copilot' && keepCopilot(),
         h === 'vibe' && keepVibe(),
         h === 'agy' && keepAgy(),
+        h === 'gemini' && keepAgy('gemini'),
       ].filter(Boolean) as (() => void)[];
       try {
         await snap(app.page, `${h}-start`);

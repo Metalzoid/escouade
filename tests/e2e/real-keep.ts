@@ -175,7 +175,7 @@ export function keepVibe() {
  * which hold the account's address), and nothing is written back: a session of `agy` the user runs meanwhile writes its
  * own logs there. What changed is told.
  */
-export function keepAgy() {
+export function keepAgy(who = 'agy') {
   const home = path.join(HOME, '.gemini');
   const list = () =>
     new Map(
@@ -196,7 +196,7 @@ export function keepAgy() {
     const changed = [...after].filter(([f, m]) => before.get(f) !== m).map(([f]) => f);
     const gone = [...before.keys()].filter((f) => !after.has(f));
     console.log(
-      `agy: ~/.gemini ${changed.length || gone.length ? `changed (${[...changed, ...gone].join(', ')}): a session of the user's?` : 'untouched'}`,
+      `${who}: ~/.gemini ${changed.length || gone.length ? `changed (${[...changed, ...gone].join(', ')}): a session of the user's?` : 'untouched'}`,
     );
   };
 }

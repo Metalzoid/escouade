@@ -26,6 +26,8 @@ export default defineZone('accounts', {
       '{harness} gives Escouade no usage: its dashboard shows it (the month’s included usage, the reset). A limit reached stops the turn on a card that says so.',
     usageHintInterface:
       '{harness} only gives Escouade the tokens of its turns: its quota (by group of models, weekly) is read by /usage in its interface, and {site} says what each plan includes. A limit reached stops the turn on a card that says so; the agent tries again by itself an hour later, or moves to another account as your settings say.',
+    usageHintGemini:
+      '{harness} only gives Escouade the tokens of its turns: its usage is read by /stats in its interface, and {site} shows it for an API key. A limit reached stops the turn on a card that says so; the agent tries again by itself when Gemini says (an hour later for its daily quota), or moves to another account as your settings say.',
     usageHintCost:
       '{harness} gives Escouade what each turn costs, no quota: {site} shows the account’s usage and bill. A rate limit stops the turn on a card that says so, and the agent goes on by itself a minute later.',
     remove: 'Remove',
@@ -151,6 +153,24 @@ export default defineZone('accounts', {
       keyPlaceholder: 'From aistudio.google.com, Get API key',
       keyHint:
         'Kept in the system keychain, given to this account’s agents by GEMINI_API_KEY, never written in a file nor on a command line. Their turns go to that key’s Gemini API (its models only); the machine’s account stays agy’s Google sign-in.',
+    },
+    gemini: {
+      nothingToShare:
+        'Nothing to share: each Gemini agent has a GEMINI_CLI_HOME of its own, where Escouade writes its settings and rules and it keeps its sessions.',
+      neverShared:
+        'This account’s Google sign-in stays in its folder, where gemini writes it: Escouade gives it to its agents by GOOGLE_APPLICATION_CREDENTIALS without ever reading it. ~/.gemini is never touched.',
+      signInHint: 'Sign in in the terminal below: gemini opens your browser on your Google account. Escouade never sees your credentials.',
+      newHintKey: 'A Google sign-in made by gemini in a terminal, or a Gemini API key kept in the system keychain.',
+      keyPlaceholder: 'From aistudio.google.com, Get API key',
+      keyHint:
+        'Kept in the system keychain, given to this account’s agents by GEMINI_API_KEY, never written in a file nor on a command line. Their turns go to that key’s Gemini API.',
+      machineApart:
+        'Gemini CLI keeps its Google sign-in in ~/.gemini, which Escouade doesn’t touch: add a new account, signed in by gemini or by an API key. A GEMINI_API_KEY of the machine would make it the machine’s account.',
+      way: 'Sign-in',
+      google: 'Google account',
+      googleHint: 'gemini signs in to it in a terminal, just after',
+      apiKey: 'API key',
+      apiKeyHint: 'A Gemini API key, from aistudio.google.com',
     },
     vibe: {
       nothingToShare: 'Nothing to share: each Vibe agent has a VIBE_HOME of its own, where “For this agent” keeps its rules and sessions.',

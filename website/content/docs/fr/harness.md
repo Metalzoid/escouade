@@ -28,15 +28,15 @@ Quel que soit le harness, l’agent a la même conversation : la réponse et le 
 |---|---|---|---|---|---| --- | --- | --- |
 | Installation | script de Claude Code | `npm install -g @openai/codex` | `npm install -g opencode-ai` | `npm install -g @github/copilot` | script de Cursor | `uv tool install mistral-vibe` | script d’Antigravity | `npm install -g @google/gemini-cli` |
 | Testé avec | 2.1.283 à 2.1.301 | 0.163.0 | 1.19.3 | 1.0.98 | 2026.10.22 | 3.0.3 | 1.4.9 | 0.66.0, sans compte (pas encore essayé en vrai) |
-| Compte | abonnement Claude ou clé API | compte ChatGPT | les fournisseurs connectés à OpenCode, modèles locaux compris | compte GitHub avec Copilot, Free compris | compte Cursor (`agent login`, ou une clé d’API), Free compris | clé d’API Mistral (`vibe --setup`) | compte Google (connexion de son interface) | compte Google, clé d’API Gemini ou Vertex AI (connexion de la machine) |
-| Plusieurs comptes | oui | oui | non | oui | oui, par clé d’API | oui, par clé d’API | non | non |
+| Compte | abonnement Claude ou clé API | compte ChatGPT | les fournisseurs connectés à OpenCode, modèles locaux compris | compte GitHub avec Copilot, Free compris | compte Cursor (`agent login`, ou une clé d’API), Free compris | clé d’API Mistral (`vibe --setup`) | compte Google (connexion de son interface) | compte Google (connexion de son interface, dans le dossier du compte) ou clé d’API Gemini |
+| Plusieurs comptes | oui | oui | non | oui | oui, par clé d’API | oui, par clé d’API | non | oui |
 | Modèles | ceux que Claude Code liste pour chaque compte | ceux que Codex liste pour ton compte | ceux de tes fournisseurs, avec recherche et favoris | ceux que Copilot liste, avec leur multiplicateur | ceux de ton compte, Auto en tête | ceux de sa session | ceux qu’`agy models` liste, l’effort de Gemini à part | ceux de sa session, Auto en tête |
 | Modes | les cinq | les cinq | quatre (pas d’Auto) | les cinq | quatre (pas d’Auto) | quatre (pas d’Auto ; Plan joué par Escouade) | quatre (pas d’Auto) | quatre (pas d’Auto) |
 | Ce qui protège | ses permissions | son bac à sable | ses règles de permission | les règles d’Escouade | ses permissions, pour ses commandes | ses permissions ; les règles d’Escouade | ses règles, écrites par Escouade ; demandes une fois le tour fini | ses permissions ; ses règles pour un projet privé |
 | Message pendant un tour | attend la fin du tour | entre dans le tour | attend la fin du tour | entre dans le tour | attend la fin du tour | attend la fin du tour | attend la fin du tour | attend la fin du tour |
 | Coût | exact | estimé | exact (0 en local) | exact, en crédits d’IA | non donné | exact | non donné (tokens) | non donné (tokens) |
-| Quota | fenêtres 5 h et 7 jours | fenêtres 5 h et 7 jours (30 jours en offre gratuite) | aucun : budget par jour | crédits du mois | lien vers son tableau de bord | aucun : budget par jour, lien vers la console de Mistral | non lu | non lu |
-| Vue terminal | « Vue Claude Code » | « Vue Codex » | « Vue OpenCode » | « Vue Copilot CLI » | « Vue Cursor CLI », suivi limité | « Vue Mistral Vibe » | « Vue Antigravity CLI » | pas encore |
+| Quota | fenêtres 5 h et 7 jours | fenêtres 5 h et 7 jours (30 jours en offre gratuite) | aucun : budget par jour | crédits du mois | lien vers son tableau de bord | aucun : budget par jour, lien vers la console de Mistral | non lu | non lu : lien vers sa page d’usage |
+| Vue terminal | « Vue Claude Code » | « Vue Codex » | « Vue OpenCode » | « Vue Copilot CLI » | « Vue Cursor CLI », suivi limité | « Vue Mistral Vibe » | « Vue Antigravity CLI » | « Vue Gemini CLI » |
 | PDF joints | oui | non | non | non | non | non | non | non |
 | Remote control, tâches de fond | oui | non | non | non | non | non | non | non |
 
@@ -231,11 +231,18 @@ Antigravity donne les tokens de chaque tour (sur sa carte, dans les statistiques
 ## Gemini CLI
 
 > [!WARNING]
-> Gemini CLI n’a pas encore été essayé avec un vrai compte : son adaptateur suit sa documentation et ce que son programme fait contre un faux serveur. Les points à voir en vrai : la taille de ses réponses en direct, ses questions, ses quotas, sa connexion dans le dossier de chaque agent.
+> Gemini CLI n’a pas encore été essayé avec un vrai compte : son adaptateur suit sa documentation et ce que son programme fait contre un faux serveur. Les points à voir en vrai : la taille de ses réponses en direct, ses questions, ses quotas et leurs messages, sa connexion Google donnée à chaque agent, sa vue terminal et ses hooks.
 
 ### Installation et compte
 
-Installe Gemini CLI par npm (`npm install -g @google/gemini-cli`, Node 20 ou plus) ou Homebrew (`brew install gemini-cli`), puis lance `gemini` une fois dans un terminal pour te connecter à ton compte Google, ou donne-lui une clé d’API par `GEMINI_API_KEY`. Escouade trouve `gemini` dans le `PATH`, ou dans le dossier global de npm. Chaque agent a son propre dossier de configuration (`GEMINI_CLI_HOME`), retiré avec lui : ses réglages, ses sessions et ses règles y sont gardés, jamais dans ton `~/.gemini`, qu’Antigravity CLI partage. Escouade y coupe ses mises à jour et ses statistiques d’usage, et approuve le dossier de l’agent (sans quoi Gemini ignorerait le serveur MCP d’Escouade). Ta connexion reste celle de la machine ; plusieurs comptes viendront plus tard.
+Installe Gemini CLI par npm (`npm install -g @google/gemini-cli`, Node 20 ou plus) ou Homebrew (`brew install gemini-cli`), puis ajoute son compte dans Réglages › Comptes (voir ci-dessous). Escouade trouve `gemini` dans le `PATH`, ou dans le dossier global de npm. Chaque agent a son propre dossier de configuration (`GEMINI_CLI_HOME`), retiré avec lui : ses réglages, ses sessions et ses règles y sont gardés, jamais dans ton `~/.gemini`, qu’Antigravity CLI partage. Escouade y coupe ses mises à jour et ses statistiques d’usage, et approuve le dossier de l’agent (sans quoi Gemini ignorerait le serveur MCP d’Escouade).
+
+Un compte Gemini est l’un ou l’autre, au choix quand tu l’ajoutes :
+
+- **Un compte Google.** Escouade lance l’interface de Gemini (`gemini`) dans un terminal de la fenêtre, avec le dossier du compte pour `GEMINI_CLI_HOME` : elle ouvre ton navigateur sur ton compte Google, et garde sa connexion dans ce dossier. Escouade ne la lit jamais : il voit seulement qu’elle est là, avec l’adresse du compte. Ses agents la reçoivent par `GOOGLE_APPLICATION_CREDENTIALS`, depuis leur propre dossier. « Se reconnecter… » la refait.
+- **Une clé d’API Gemini** (sur aistudio.google.com, « Get API key ») : gardée dans le trousseau du système, donnée à ses agents par `GEMINI_API_KEY`, jamais écrite dans un fichier ni sur une ligne de commande. « Changer la clé… » la redonne.
+
+Une clé ou Vertex AI de la machine (`GEMINI_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_GENAI_USE_VERTEXAI`) ne passe jamais à un compte ajouté. Le compte de la machine n’est proposé que si la machine a une telle clé : la connexion Google de ton `~/.gemini` n’est jamais donnée aux agents. Chaque compte a ses défauts (modèle, mode), comme ceux des autres harness.
 
 ### Modèles et modes
 
@@ -254,7 +261,7 @@ Pour un projet privé, ses outils de fichiers et ses commandes qui nomment les c
 
 ### Coût, quota et ce que Gemini ne fait pas
 
-Gemini donne les tokens de chaque tour, pas leur coût ni son quota ; sa limite (une erreur 429) arrête le tour sur une carte ambre, et l’agent reprend seul une minute plus tard. Pas encore de vue terminal ni de plusieurs comptes. Pas de mode Auto, de PDF joints, de « Dupliquer la conversation », de commandes `/` dans Escouade (`/compact` : son `/compress`, dans son interface), ni de remote control ni de tâches de fond. Il reçoit le serveur MCP d’Escouade par sa session ; l’interrupteur ne le déclare pas encore dans ta config.
+Gemini donne les tokens de chaque tour, pas leur coût ni son quota : son usage se lit par `/stats` dans son interface, et « Usage sur aistudio.google.com », dans Réglages › Comptes et le panneau des quotas, ouvre la page d’usage des clés d’API. Sa limite arrête le tour « limité » sur une carte qui le dit ; l’agent reprend seul quand Gemini le dit (« Please retry in 30s »), sinon une minute plus tard, ou une heure plus tard pour son quota du jour, ou passe sur un autre compte selon « Changer de compte à » et « Continuer sur le harness suivant ». Les textes qu’il rédige (nom d’un agent, message de commit…) passent par `gemini -p`, tous ses outils refusés. La « Vue Gemini CLI » fait tourner l’agent dans l’interface de Gemini, sur la même session (voir [la vue terminal](claude-code-view#avec-gemini-cli)). Pas de mode Auto, de PDF joints, de « Dupliquer la conversation », de commandes `/` dans Escouade (`/compact` : son `/compress`, dans son interface), ni de remote control ni de tâches de fond. Il reçoit le serveur MCP d’Escouade par sa session ; l’interrupteur ne le déclare pas encore dans ta config.
 
 ## Le serveur MCP
 

@@ -844,7 +844,7 @@ pub(crate) fn clear_pastes(dir: &Path) {
 
 /// The interface in a terminal of the harness of the agent `m` (« Vue <harness> »), and its name;
 /// refused for a harness that has none.
-fn view_of(m: &AgentMeta) -> Result<(&'static dyn TerminalView, &'static str)> {
+pub(crate) fn view_of(m: &AgentMeta) -> Result<(&'static dyn TerminalView, &'static str)> {
     let harness = crate::engine::of(m);
     match harness.terminal() {
         Some(view) => Ok((view, harness.name())),

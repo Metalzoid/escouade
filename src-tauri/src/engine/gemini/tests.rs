@@ -35,14 +35,6 @@ fn the_models_of_a_session_make_the_menu() {
     assert!(told[0].default && told.iter().filter(|m| m.default).count() == 1);
     assert!(told.iter().all(|m| m.efforts.is_empty()));
     assert_eq!(catalog(&[])[0].id, DEFAULT);
-    assert_eq!(
-        writer_model(Weight::Light, &told).as_deref(),
-        Some("gemini-3.5-flash-lite")
-    );
-    assert_eq!(
-        writer_model(Weight::Reading, &told).as_deref(),
-        Some("gemini-3.8-flash")
-    );
 }
 
 #[test]
@@ -142,7 +134,7 @@ fn the_agents_settings_are_written_in_its_own_home_keeping_what_gemini_wrote() {
     assert_eq!(doc["general"]["enableAutoUpdate"], false);
     assert_eq!(doc["privacy"]["usageStatisticsEnabled"], false);
     assert_eq!(doc["security"]["auth"]["selectedType"], "gemini-api-key");
-    // What Gemini wrote (its sign-in chosen, a setting of its own) is kept.
+    // What Gemini wrote (a setting of its own) is kept; how it signs in is its account's.
     std::fs::write(
         &file,
         r#"{"security":{"auth":{"selectedType":"oauth-personal"}},"ui":{"theme":"x"}}"#,
@@ -150,7 +142,7 @@ fn the_agents_settings_are_written_in_its_own_home_keeping_what_gemini_wrote() {
     .unwrap();
     write_settings(&dir, "gemini-api-key").unwrap();
     let doc: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
-    assert_eq!(doc["security"]["auth"]["selectedType"], "oauth-personal");
+    assert_eq!(doc["security"]["auth"]["selectedType"], "gemini-api-key");
     assert_eq!(doc["ui"]["theme"], "x");
     assert_eq!(doc["general"]["enableAutoUpdateNotification"], false);
     // How it signs in, by the variables given.
@@ -198,4 +190,84 @@ fn a_message_takes_its_images_and_text_files_and_refuses_a_pdf() {
     .unwrap();
     assert_eq!(m["prompt"].as_array().unwrap().len(), 3);
     assert!(message("x", &[file("a.pdf", "application/pdf", "JVBERi0=")]).is_err());
+}
+
+#[test]
+fn its_usage_limits_are_read_from_its_words() {
+    // Its words, read in its code (0.66.0).
+    assert_eq!(
+        limit_of(None, "You have exhausted your daily quota on this model."),
+        Some(DAILY_RESUME_MS)
+    );
+    assert_eq!(
+        limit_of(Some(429), "Quota exceeded. Please retry in 30.5s."),
+        Some(30_500)
+    );
+    assert_eq!(
+        limit_of(Some(429), "Too Many Requests"),
+        Some(RATE_RESUME_MS)
+    );
+    assert_eq!(
+        limit_of(Some(503), "MODEL_CAPACITY_EXHAUSTED"),
+        Some(RATE_RESUME_MS)
+    );
+    assert_eq!(limit_of(Some(500), "Internal error"), None);
+    assert_eq!(limit_of(None, "Authentication required"), None);
+}
+
+#[test]
+fn a_text_is_asked_of_gemini_p_without_any_tool_its_question_on_its_input() {
+    let policy = Path::new("C:/x/escouade-policy.toml");
+    let args = one_shot_args(Weight::Light, policy);
+    assert_eq!(&args[..2], ["-p", "Answer the request above."]);
+    let at = |k: &str| {
+        args.iter()
+            .position(|a| a == k)
+            .map(|i| args[i + 1].as_str())
+    };
+    assert_eq!(at("-o"), Some("json"));
+    assert_eq!(at("-m"), Some("flash-lite"));
+    assert_eq!(at("-e"), Some("none"));
+    assert_eq!(at("--policy"), Some("C:/x/escouade-policy.toml"));
+    assert_eq!(one_shot_args(Weight::Reading, policy)[5], "flash");
+    // Every tool refused, whatever its name.
+    let rules: toml_edit::DocumentMut = NO_TOOLS.parse().unwrap();
+    let rule = &rules["rule"].as_array_of_tables().unwrap().get(0).unwrap();
+    assert_eq!(rule["toolName"].as_str(), Some("*"));
+    assert_eq!(rule["decision"].as_str(), Some("deny"));
+    // Its answer in JSON, a warning before it.
+    let out =
+        b"Warning: something\n{\n  \"session_id\": \"s\",\n  \"response\": \"  Titre court \"\n}";
+    assert_eq!(response_of(out).unwrap(), "Titre court");
+    let err = br#"{"error": {"type": "Error", "message": "You have exhausted your daily quota on this model."}}"#;
+    assert!(response_of(err)
+        .unwrap_err()
+        .to_string()
+        .contains("daily quota"));
+    assert!(response_of(b"").is_err());
+}
+
+#[test]
+fn an_agent_goes_by_its_accounts_sign_in_not_the_one_refreshed_in_its_home() {
+    let home = crate::paths::test_dir("esc275-home");
+    let file = sign_in_file(&home);
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, "{}").unwrap();
+    forget_sign_in(&home);
+    assert!(!file.exists());
+    // Its settings say how its account signs in, whatever they said before.
+    write_settings(&home, "gemini-api-key").unwrap();
+    write_settings(&home, "oauth-personal").unwrap();
+    let doc: Value =
+        serde_json::from_str(&std::fs::read_to_string(home.join(".gemini/settings.json")).unwrap())
+            .unwrap();
+    assert_eq!(doc["security"]["auth"]["selectedType"], "oauth-personal");
+    // The address of its Google account, beside the sign-in.
+    std::fs::write(
+        home.join(".gemini/google_accounts.json"),
+        r#"{"active": "moi@exemple.fr", "old": []}"#,
+    )
+    .unwrap();
+    assert_eq!(signed_in_email(&home).as_deref(), Some("moi@exemple.fr"));
+    assert!(caps().usage_page.is_some() && !caps().accounts_by_key);
 }

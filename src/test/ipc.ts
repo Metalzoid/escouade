@@ -502,6 +502,18 @@ export const AGY_ENGINE: EngineDecl = {
   },
 };
 
+/** Gemini CLI as it declares itself (ESC-275): its tokens, neither quota nor cost, the usage page of its keys; an account by its Google sign-in or its key, as it was added. */
+export const GEMINI_ENGINE: EngineDecl = {
+  ...BARE_ENGINE,
+  id: 'gemini',
+  name: 'Gemini CLI',
+  caps: {
+    ...BARE_ENGINE.caps,
+    usagePage: 'https://aistudio.google.com/usage',
+    accountsByKey: false,
+  },
+};
+
 /** Claude Code's two windows of a reading, the shorthand of the tests: `fiveHour` and `sevenDay`, as before 1.8. */
 export interface ClaudeWindows {
   fiveHour?: RateWindow | null;

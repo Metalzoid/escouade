@@ -286,6 +286,10 @@ pub struct Account {
     pub default_effort: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub default_mode: String,
+    /// Gemini CLI (ESC-275): it goes by its API key (in the keychain, given once with « Clé
+    /// d’API »), not by the Google sign-in made by `gemini` in its folder.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub api_key: bool,
 }
 
 /// The dictation's settings.
@@ -404,6 +408,7 @@ impl Default for Account {
             default_model: String::new(),
             default_effort: String::new(),
             default_mode: String::new(),
+            api_key: false,
         }
     }
 }

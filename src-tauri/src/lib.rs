@@ -87,6 +87,8 @@ mod fileorigin_tests;
 mod first_message_tests;
 mod forge;
 mod fsedit;
+#[cfg(test)]
+mod gemini_tui_tests;
 mod git;
 mod handover;
 mod hub;
