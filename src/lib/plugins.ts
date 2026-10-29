@@ -43,6 +43,8 @@ export interface Choices {
   projects: Record<string, boolean>;
   revoked: string[];
   settings: Record<string, unknown>;
+  /** The fingerprint of the commands on facts the user agreed to (PLG-5); absent: none. */
+  commandsApproved?: string;
 }
 
 export interface PluginUpdate {
@@ -67,6 +69,10 @@ export interface PluginView {
   asks: string[];
   secretKeys: string[];
   update: PluginUpdate | null;
+  /** The command lines it runs on facts (`contributes.commands`, PLG-5). */
+  commands: string[];
+  /** Whether they were agreed to as they are now (true without any): none runs before. */
+  commandsApproved: boolean;
 }
 
 /** A plugin read before it is installed: the install window's. */
@@ -126,6 +132,8 @@ export const pluginsApi = {
   setProject: (id: string, project: string, on: boolean) => invoke<PluginView>('plugin_set_project', { id, project, on }),
   setPermission: (id: string, word: string, granted: boolean) => invoke<PluginView>('plugin_set_permission', { id, word, granted }),
   setSetting: (id: string, key: string, value: unknown) => invoke<PluginView>('plugin_set_setting', { id, key, value }),
+  /** Agrees to the commands it runs on facts as they are now, or takes the agreement back (PLG-5). */
+  approveCommands: (id: string, on: boolean) => invoke<PluginView>('plugin_approve_commands', { id, on }),
   secrets: (id: string) => invoke<[string, boolean][]>('plugin_secrets', { id }),
   setSecret: (id: string, key: string, value: string) => invoke<void>('plugin_set_secret', { id, key, value }),
   run: (id: string) => invoke<PluginRun>('plugin_run', { id }),
