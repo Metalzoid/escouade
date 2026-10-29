@@ -2499,6 +2499,7 @@ impl<R: Runtime> Core<R> {
             // just have passed « Changer de compte à » (ESC-148).
             self.switch_soon(id);
         }
+        let limited = fx.limited.is_some();
         if let Some(resets_at) = fx.limited {
             self.plan_resume(id, resets_at);
         }
@@ -2506,6 +2507,12 @@ impl<R: Runtime> Core<R> {
             self.emit_conv(id, fx.ops);
         }
         let changed = view.is_some();
+        // The view given was taken before its resume was planned: told as it is now, else the
+        // window would be shown the agent without it, after the one `set_resume` sent.
+        let view = match view {
+            Some(_) if limited => self.agent(id).ok().map(|h| h.lock().view()),
+            view => view,
+        };
         if let Some(v) = view.filter(|_| self.is_registered(id)) {
             self.hub.emit(UiEvent::Agent { agent: v });
         }

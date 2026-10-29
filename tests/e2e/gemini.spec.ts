@@ -355,6 +355,9 @@ test.describe('« Vue Gemini » (ESC-275)', () => {
     // fake does is read from its hooks and the conversation.
     await view.locator('.xterm').click();
     const ended = () => ofHomes(app, 'fake-tui-hooks.jsonl').filter((e) => e.event === 'AfterAgent').length;
+    // Its first screen drawn (its SessionStart run) before a key: a slow machine (Windows CI) would else type into an
+    // interface not ready yet, which leaves the line.
+    await expect.poll(() => ofHomes(app, 'fake-tui-hooks.jsonl').some((e) => e.event === 'SessionStart'), { timeout: 20_000 }).toBe(true);
     await page.keyboard.type('Bonjour la vue');
     await page.keyboard.press('Enter');
     await expect.poll(ended, { timeout: 20_000 }).toBe(1);

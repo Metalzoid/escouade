@@ -126,7 +126,8 @@ test('the Docs tab imports the spec found, shows its subjects, a page and its ga
   await expect(map.getByRole('button', { name: 'Ouvrir le sujet Adhésion en ligne' })).toContainText('À jour');
   await expect(map.locator('[data-subject-card]')).toHaveCount(4);
   await expect(spaces.getByRole('button', { name: /Spécification/ })).toContainText('1 écart');
-  await expect(bar).toContainText('6 changements à partager');
+  // Its pages, and the list of what was imported (ESC-278, .escouade/spec/.imports.json).
+  await expect(bar).toContainText('7 changements à partager');
   // The tree, by subject, as a Confluence.
   const tree = page.getByRole('navigation', { name: 'Pages de la spécification' });
   const subjects = await tree.locator('[data-subject] > .subj .label').allTextContents();
@@ -162,11 +163,12 @@ test('the Docs tab imports the spec found, shows its subjects, a page and its ga
 
   // « Partager »: the docs alone are committed and pushed, the code changed meanwhile left out.
   fs.writeFileSync(path.join(app.repo, 'src', 'payment.ts'), 'export const MAX_INSTALMENTS = 3;\n');
-  await expect(bar).toContainText('6 changements à partager');
+  await expect(bar).toContainText('7 changements à partager');
   await bar.getByRole('button', { name: 'Partager' }).click();
   await expect(bar).toContainText('rien à partager', { timeout: 30_000 });
   const pushed = execFileSync('git', ['--git-dir', remote, 'show', '--name-only', '--format=%s', 'main'], { encoding: 'utf8' });
   expect(pushed).toContain('.escouade/spec/paiement/en-plusieurs-fois.md');
+  expect(pushed).toContain('.escouade/spec/.imports.json');
   expect(pushed).not.toContain('src/payment.ts');
   expect(git('status', '--porcelain')).toContain('src/payment.ts');
   // What changed: the commit just shared.
