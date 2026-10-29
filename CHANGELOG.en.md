@@ -8,6 +8,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
+- A spec imported into the Docs tab becomes the only one agents follow: they are told the old file is no longer the spec, and nothing touches it.
 - Gemini CLI becomes an eighth harness: its agents converse in Escouade over ACP, with its models, its modes, its plan to approve and its questions, each in its own configuration folder; not yet tried with a real account.
 - Gemini CLI has its accounts, each signed in to Google by gemini in a terminal of the window or by its API key, writes its texts with gemini -p, goes on by itself after its usage limit, and its “Gemini CLI view” opens its interface on the agent’s session.
 - Antigravity CLI, Google’s agent, becomes a seventh harness: its agents converse in Escouade with its models, its efforts and its Plan mode, and what it refuses during a turn is asked of you at the end of the turn, then taken up again.

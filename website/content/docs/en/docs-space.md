@@ -96,6 +96,8 @@ A project without a spec starts from an empty space. When Escouade finds a spec 
 
 Nothing is written before “Import”, and a page that already exists stays as it is. The original file is neither changed nor removed: removing it from the repository is up to you.
 
+Escouade keeps the imported paths with the docs, without duplicates, and shares them with the team. As soon as the project has a spec in Escouade, every agent Escouade launches on it (ticket, discussion, planner…), whatever its harness, is told that the spec and the project’s decisions are in Escouade and are the only ones to follow; the old file is named: it is no longer read as the spec nor updated.
+
 ## The documents
 
 The Documents space is the project’s drive: requirements, meeting notes, mockups and legal papers, in folders under `.escouade/documents/`.

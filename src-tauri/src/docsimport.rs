@@ -14,9 +14,25 @@ use anyhow::{bail, Result};
 use serde::Serialize;
 
 use crate::docs::{self, Page, Space};
+use crate::i18n::Lang;
 
 /// The most pages one import writes.
 const MAX_PAGES: usize = 500;
+
+/// Where the imports are kept, in `.escouade/spec/` (shared like the pages, which skip dot files).
+const IMPORTS: &str = ".imports.json";
+
+/// An import: where the spec came from (relative to the project) and the day.
+#[derive(Debug, Clone, PartialEq, Serialize, serde::Deserialize)]
+pub struct ImportedFrom {
+    pub path: String,
+    pub at: String,
+}
+
+#[derive(Serialize, serde::Deserialize)]
+struct ImportsFile {
+    imports: Vec<ImportedFrom>,
+}
 
 /// A page as an import would write it.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -349,7 +365,64 @@ impl Space {
             })?;
             out.written.push(d.path);
         }
+        if !out.written.is_empty() {
+            self.record_import(path)?;
+        }
         Ok(out)
+    }
+
+    /// What was imported into this spec: the paths (files or folders) it came from, with the day.
+    pub fn imported(&self) -> Vec<ImportedFrom> {
+        self.raw_read(docs::SPEC, IMPORTS)
+            .ok()
+            .and_then(|t| serde_json::from_str::<ImportsFile>(&t).ok())
+            .map(|f| f.imports)
+            .unwrap_or_default()
+    }
+
+    /// Keeps `path` among the imports, once: a second import of it changes nothing. The file lives
+    /// with the spec (`.escouade/spec/`), so the team's agents know it too. The original is not touched.
+    fn record_import(&self, path: &str) -> Result<()> {
+        let mut imports = self.imported();
+        if imports.iter().any(|i| i.path == path) {
+            return Ok(());
+        }
+        imports.push(ImportedFrom {
+            path: path.to_string(),
+            at: chrono::Local::now().format("%Y-%m-%d").to_string(),
+        });
+        let text = serde_json::to_string_pretty(&ImportsFile { imports })?;
+        self.raw_write(docs::SPEC, IMPORTS, &format!("{text}\n"))
+    }
+
+    /// What every agent of a project whose spec is in Escouade (one page at least) is told: the spec and
+    /// the decisions are there and the only ones to follow, and the old spec files (`imported`) are not
+    /// the spec any more. None for a project with no spec in Escouade.
+    pub fn follow_rule(&self, lang: Lang) -> Option<String> {
+        if self.spec_tree().is_empty() {
+            return None;
+        }
+        let mut rule = tr_in!(
+            lang,
+            "La spec et les décisions de ce projet sont dans Escouade (get_spec_tree, read_spec_page, search_spec, \
+             list_decisions, read_decision) : ce sont les seules à suivre.",
+            "This project's spec and decisions are in Escouade (get_spec_tree, read_spec_page, search_spec, \
+             list_decisions, read_decision): they are the only ones to follow."
+        );
+        let imports = self.imported();
+        if !imports.is_empty() {
+            let from = imports
+                .iter()
+                .map(|i| format!("{} ({})", i.path, i.at))
+                .collect::<Vec<_>>()
+                .join(", ");
+            rule.push_str(&tr_in!(
+                lang,
+                " Ancienne spec, importée dans Escouade : {from} ; ne la lis pas comme spec, ne la mets pas à jour.",
+                " Old spec, imported into Escouade: {from}; don’t read it as the spec, don’t update it."
+            ));
+        }
+        Some(rule)
     }
 
     /// The Markdown files of a folder `detect` found, relative to the project.

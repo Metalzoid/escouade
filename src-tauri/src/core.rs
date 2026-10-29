@@ -1349,6 +1349,15 @@ pub(crate) fn with_memory(lang: i18n::Lang, given: Option<String>) -> Option<Str
     })
 }
 
+/// `given` with what the agent is told of a spec that lives in Escouade (ESC-278, `Space::follow_rule`) after it.
+pub(crate) fn with_follow(given: Option<String>, follow: Option<&str>) -> Option<String> {
+    match (given.filter(|g| !g.trim().is_empty()), follow) {
+        (Some(g), Some(f)) => Some(format!("{g} {f}")),
+        (None, Some(f)) => Some(f.to_string()),
+        (g, None) => g,
+    }
+}
+
 /// What the Claude of a copy of an agent is told at every start: its conversation names the
 /// original's folder (`from`) everywhere, it works in `path`.
 pub(crate) fn copied_conversation(lang: i18n::Lang, from: &str, path: &str) -> String {
@@ -5651,6 +5660,8 @@ impl<R: Runtime> Core<R> {
             }
         };
         let engine = o.engine.unwrap_or_else(|| project.engine());
+        // Whatever the agent is (ticket, discussion, planner…), a spec in Escouade is the one to follow.
+        let follow = self.docs_follow(&project, self.lang().claude).await;
         let mut meta = AgentMeta {
             id: new_id(),
             project_id: project_id.to_string(),
@@ -5680,10 +5691,13 @@ impl<R: Runtime> Core<R> {
             // then what every agent is told of the shared memory.
             append_prompt: with_memory(
                 self.lang().claude,
-                o.append_prompt.or_else(|| {
-                    (project.code_index && o.ticket_id.is_none())
-                        .then(|| crate::codeindex::hint::rule(self.lang().claude))
-                }),
+                with_follow(
+                    o.append_prompt.or_else(|| {
+                        (project.code_index && o.ticket_id.is_none())
+                            .then(|| crate::codeindex::hint::rule(self.lang().claude))
+                    }),
+                    follow.as_deref(),
+                ),
             ),
             port_base: o.port_base,
             discussion: o.discussion.clone(),
@@ -5865,11 +5879,14 @@ impl<R: Runtime> Core<R> {
                     };
                     meta.append_prompt = with_memory(
                         self.lang().claude,
-                        Some(copied_conversation(
-                            self.lang().claude,
-                            &shown(&from.path),
-                            &shown(&path),
-                        )),
+                        with_follow(
+                            Some(copied_conversation(
+                                self.lang().claude,
+                                &shown(&from.path),
+                                &shown(&path),
+                            )),
+                            follow.as_deref(),
+                        ),
                     );
                 }
                 meta.cwd = path.clone();

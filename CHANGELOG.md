@@ -8,6 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- Une spec importée dans l’onglet Docs devient la seule que suivent les agents : ils sont prévenus que l’ancien fichier n’est plus la spec, sans que rien ne le touche.
 - Gemini CLI devient un huitième harness : ses agents conversent dans Escouade par ACP, avec ses modèles, ses modes, son plan à approuver et ses questions, chacun dans son propre dossier de configuration ; pas encore essayé avec un vrai compte.
 - Gemini CLI a ses comptes, chacun connecté à Google par gemini dans un terminal de la fenêtre ou par sa clé d’API, rédige ses textes par gemini -p, reprend seul après sa limite d’usage, et sa « Vue Gemini CLI » ouvre son interface sur la session de l’agent.
 - Antigravity CLI, l’agent de Google, devient un septième harness : ses agents conversent dans Escouade avec ses modèles, ses efforts et son mode Plan, et ce qu’il refuse en cours de tour t’est demandé à la fin du tour, puis repris.

@@ -62,6 +62,8 @@ mod docsdrive_tests;
 mod docsextract;
 #[cfg(test)]
 mod docsextract_tests;
+#[cfg(test)]
+mod docsfollow_tests;
 mod docsimport;
 #[cfg(test)]
 mod docsimport_tests;

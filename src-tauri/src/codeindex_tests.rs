@@ -1038,9 +1038,9 @@ mod events {
             ..Default::default()
         };
         let project = h.core.project(&p.id).unwrap();
-        let with = h
-            .core
-            .ticket_instructions(&project, crate::i18n::Lang::Fr, &t, None, false);
+        let with =
+            h.core
+                .ticket_instructions(&project, crate::i18n::Lang::Fr, &t, None, false, None);
         assert!(with.contains("index_search") && with.contains("ESC-1"));
         assert!(!with.contains('\n'));
         // With the shared memory's line added after it (`core::with_memory`), it still fits.
@@ -1056,9 +1056,9 @@ mod events {
         let _ = crate::engine::CLAUDE.instructions_room();
         h.core.set_code_index(&p.id, false).await.unwrap();
         let project = h.core.project(&p.id).unwrap();
-        let without = h
-            .core
-            .ticket_instructions(&project, crate::i18n::Lang::Fr, &t, None, false);
+        let without =
+            h.core
+                .ticket_instructions(&project, crate::i18n::Lang::Fr, &t, None, false, None);
         assert!(!without.contains("index_search"));
         assert!(without.contains("ESC-1"));
     }

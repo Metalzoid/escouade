@@ -96,6 +96,8 @@ Un projet sans spec part d’un espace vide. Si Escouade trouve une spec dans le
 
 Rien n’est écrit avant « Importer », et une page qui existe déjà reste telle quelle. Le fichier d’origine n’est ni modifié ni supprimé : c’est à toi de le retirer du dépôt si tu le veux.
 
+Escouade retient les chemins importés avec les docs, sans doublon, et les partage avec l’équipe. Dès que le projet a une spec dans Escouade, tout agent qu’Escouade lance dessus (ticket, discussion, planificateur…), quel que soit son harness, est prévenu qu’elle et les décisions du projet sont dans Escouade et sont les seules à suivre ; l’ancien fichier est nommé : il ne se lit plus comme la spec et ne se met plus à jour.
+
 ## Les documents
 
 L’espace Documents est le drive du projet : les cahiers des charges, comptes rendus, maquettes et pièces juridiques, rangés en dossiers sous `.escouade/documents/`.

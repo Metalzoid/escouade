@@ -20,6 +20,7 @@ use tauri::Runtime;
 
 use crate::core::Core;
 use crate::docs::Space;
+use crate::i18n::Lang;
 use crate::model::Project;
 
 /// One worktree is made at a time: two tools asking at once must not both make it.
@@ -62,6 +63,14 @@ impl<R: Runtime> Core<R> {
     /// Where the extracted text of a project's documents is kept.
     pub(crate) fn docs_text_dir(&self, project_id: &str) -> PathBuf {
         self.data.project_files(project_id).join("docs-text")
+    }
+
+    /// What an agent launched on `project` is told when its spec is in Escouade (ESC-278): None otherwise.
+    pub(crate) async fn docs_follow(&self, project: &Project, lang: Lang) -> Option<String> {
+        self.docs_space(&project.id, None)
+            .await
+            .ok()?
+            .follow_rule(lang)
     }
 
     /// Where the fixed branch's worktree is made.

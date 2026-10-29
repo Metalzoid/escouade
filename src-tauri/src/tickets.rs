@@ -1865,6 +1865,7 @@ impl<R: Runtime> Core<R> {
         t: &Ticket,
         ports: Option<u16>,
         isola: bool,
+        follow: Option<&str>,
     ) -> String {
         let engine = crate::engine::by_id(t.engine.unwrap_or(project.engine()));
         let rule = project
@@ -1875,7 +1876,9 @@ impl<R: Runtime> Core<R> {
                 .max
                 .saturating_sub(rule.as_deref().map_or(0, |x| (r.weigh)(&format!(" {x}"))))
                 // The shared memory's line, added after it (`core::with_memory`).
-                .saturating_sub((r.weigh)(&crate::memory::instruction(lang)) + 1),
+                .saturating_sub((r.weigh)(&crate::memory::instruction(lang)) + 1)
+                // And the spec in Escouade's (ESC-278), added before it.
+                .saturating_sub(follow.map_or(0, |f| (r.weigh)(f) + 1)),
             weigh: r.weigh,
         });
         let mut p = board::protocol_prompt_for(lang, t, ports, isola, room);
@@ -1923,6 +1926,7 @@ impl<R: Runtime> Core<R> {
         let isola = isola::cli().is_some() && isola::configured_on(&project.path, from).await;
         // Reserved at once: no other start or launch preparation gets this block meanwhile.
         let ports = if isola { None } else { self.reserve_ports() };
+        let follow = self.docs_follow(project, lang).await;
         let made = self
             .create_agent_with(
                 &project.id,
@@ -1936,7 +1940,14 @@ impl<R: Runtime> Core<R> {
                     worktree: new_branch,
                     // Within the room its harness gives it, the code index's rule included, and what
                     // it is told of the shared memory after it (`core::with_memory`).
-                    append_prompt: Some(self.ticket_instructions(project, lang, t, ports, isola)),
+                    append_prompt: Some(self.ticket_instructions(
+                        project,
+                        lang,
+                        t,
+                        ports,
+                        isola,
+                        follow.as_deref(),
+                    )),
                     ticket_id: Some(t.id.clone()),
                     port_base: ports,
                     select: false,
