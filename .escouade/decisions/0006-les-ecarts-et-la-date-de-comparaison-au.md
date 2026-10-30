@@ -2,7 +2,7 @@
 number: 6
 title: "Les écarts et la date de comparaison au code sont gardés hors des pages de spec"
 date: "2026-10-30"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-301"
 pages: ["docs/spec-a-jour","docs/specification"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"docs/spec-a-jour","added":5,"removed":1},{"page":"docs/specification","added":3,"removed":2}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-30T03:19:57+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
