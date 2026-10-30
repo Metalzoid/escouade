@@ -2,7 +2,7 @@
 title: "Spécification"
 subject: "Docs"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-256","ESC-258","ESC-261","ESC-262","ESC-263","ESC-301"]
+tickets: ["ESC-256","ESC-258","ESC-261","ESC-262","ESC-263","ESC-301","ESC-303"]
 decisions: []
 compared: "2026-10-30T03:22:16+01:00"
 ---
@@ -20,7 +20,7 @@ Troisième onglet de la barre latérale : « Agents · Kanban · Docs ». Il ne 
 ### Les pages
 
 - Une page est un fichier `.escouade/spec/<sujet>/<page>.md` : un en-tête, puis le texte en Markdown. Les pages sont rangées en dossiers par sujet, sur 4 niveaux au plus. Un chemin est un *slug* par segment (accents ôtés, minuscules, tirets).
-- L'en-tête a une ligne `clé: valeur` par clé, la valeur en JSON : `title` ; `subject`, le nom affiché de son sujet ; `sources`, d'où elle vient (documents, fichiers, liens) ; `tickets` ; `decisions` ; `compared` (`null` si jamais). Trois champs ne sont écrits que quand ils servent : `gaps`, des écarts avec le code (un texte et les fichiers en cause) ; `draft`, un brouillon ; `order`, sa place dans son sujet.
+- L'en-tête a une ligne `clé: valeur` par clé, la valeur en JSON : `title` ; `subject`, le nom affiché de son sujet ; `sources`, d'où elle vient (documents, fichiers, liens) ; `tickets` ; `decisions`, les décisions qu'elle suit (une acceptée par son numéro, une proposition par son id : `[3, "tarif-famille"]`, voir *Décisions*) ; `compared` (`null` si jamais). Trois champs ne sont écrits que quand ils servent : `gaps`, des écarts avec le code (un texte et les fichiers en cause) ; `draft`, un brouillon ; `order`, sa place dans son sujet.
 - La comparaison au code n'écrit plus `compared` ni `gaps` dans la page : elle les garde dans le dossier de données d'Escouade, et ce qu'elle a gardé se lit par-dessus l'en-tête (voir *Spec tenue à jour*). Ceux qu'un en-tête a encore se lisent tant que la page n'a pas été comparée de nouveau.
 - Un fichier écrit à la main, sans en-tête, est une page quand même. Les fichiers sont lus et réécrits à l'octet près.
 - L'ordre : les pages par `order`, puis par nom ; 0 range par nom, après les autres. Un sujet prend le plus petit `order` de ses pages. Son titre est le `subject` de ses pages, sinon le nom de son dossier.
@@ -36,7 +36,7 @@ C'est l'accueil de l'espace Spécification. En tête : les pages à jour, les é
 ### La page
 
 - En haut, ses écarts, chacun avec « Mettre la spec à jour » (une discussion avec l'agent rédacteur, voir *Discussions*), « Ouvrir un ticket pour le code » (la fenêtre d'un ticket, titre et description écrits depuis l'écart) et « Voir le code » (le premier fichier de l'écart, dans l'éditeur).
-- Le texte, rendu comme les messages de la conversation. À côté : ses sources, ses tickets, ses décisions et sa dernière comparaison, avec « Comparer au code » pour elle seule (voir *Spec tenue à jour*).
+- Le texte, rendu comme les messages de la conversation. À côté : ses sources, ses tickets, ses décisions (« 003 » pour une acceptée, l'id d'une proposition) et sa dernière comparaison, avec « Comparer au code » pour elle seule (voir *Spec tenue à jour*).
 - « Modifier » : le titre et le texte dans un éditeur simple, l'en-tête gardé. « Ouvrir dans l'éditeur » : sur la branche courante seulement, où le fichier est dans le dossier du projet.
 - « Nouvelle page » : un sujet et un titre, puis la page s'ouvre, prête à écrire.
 
@@ -53,7 +53,7 @@ C'est l'accueil de l'espace Spécification. En tête : les pages à jour, les é
 
 Tout ce que les agents écrivent dans la spec passe par ces outils. Ils écrivent dans la branche des docs, sans rien commiter ; ceux d'une discussion n'écrivent que des propositions (voir *Discussions*). Les formats sont dans `docs/PROTOCOL.md`.
 
-- `get_spec_tree` (l'arbre ; tant que la spec est vide, les candidats à l'import, sans rien importer), `read_spec_page` (avec les écarts et la dernière comparaison gardés par Escouade), `search_spec`, `write_spec_page`. Ce dernier crée ou modifie une page : un chemin sans dossier va sous `subject`, sinon sous `general`. Sa réponse donne les lignes ajoutées et retirées.
+- `get_spec_tree` (l'arbre ; tant que la spec est vide, les candidats à l'import, sans rien importer), `read_spec_page` (avec les écarts et la dernière comparaison gardés par Escouade), `search_spec`, `write_spec_page`. Ce dernier crée ou modifie une page : un chemin sans dossier va sous `subject`, sinon sous `general`. Sa réponse donne les lignes ajoutées et retirées. Ses `decisions` prennent un numéro ou l'id d'une proposition.
 - Les décisions ont leurs outils (voir *Décisions*).
 
 ## Limites

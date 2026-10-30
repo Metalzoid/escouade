@@ -2,7 +2,7 @@
 title: "Planifier"
 subject: "Docs"
 sources: ["website/content/docs/fr/docs-space.md","docs/FACTORY.md","src-tauri/src/docsplan.rs","src-tauri/src/core.rs","src/lib/i18n/fr/docs.ts"]
-tickets: ["ESC-262","ESC-291"]
+tickets: ["ESC-262","ESC-291","ESC-303"]
 decisions: []
 compared: null
 ---
@@ -20,16 +20,17 @@ Quand la spec a changé, « Planifier » demande à un agent planificateur les t
 
 ### Ce qui est à planifier
 
-Depuis la dernière planification : les pages versées par une discussion, les pages dont le texte a été écrit à la main dans la fenêtre, et les décisions proposées par une discussion ou depuis la fenêtre. Une page seulement créée, sans texte, n'en est pas. Escouade retient ces changements par projet, dans son dossier de données.
+Depuis la dernière planification : les pages versées par une discussion, les pages dont le texte a été écrit à la main dans la fenêtre, et les décisions proposées par une discussion ou depuis la fenêtre. Une page seulement créée, sans texte, n'en est pas. Escouade retient ces changements par projet, dans son dossier de données ; une décision proposée y est retenue par son id, et par son numéro dès qu'elle est acceptée (voir *Décisions*).
 
 ### Le planificateur
 
-- Il lit ces pages et ces décisions, le code (les fichiers que l'index du code rapproche des changements, 12 au plus, et le dossier du projet) et les tickets du Kanban, pour n'en créer aucun deux fois ni un pour ce qui est déjà fait.
+- Il lit ces pages et ces décisions, le code (les fichiers que l'index du code rapproche des changements, 12 au plus, et le dossier du projet) et les tickets du Kanban, pour n'en créer aucun deux fois ni un pour ce qui est déjà fait. Chaque décision lui est donnée avec sa référence : son numéro, ou l'id d'une proposition.
 - C'est un agent court qui lit sans rien modifier, sur le harness de « Modèle des textes rédigés » (voir *Langues*), 10 minutes au plus. Une planification à la fois par projet. « Le planificateur lit les changements… » pendant qu'il travaille.
 
 ### Les tickets
 
-- 12 au plus par planification, créés dans « À faire », chacun avec sa description, ses critères d'acceptation, les tickets qu'il suit (« Après ») et les pages et décisions qu'il implémente, que sa description cite pour son agent. Chaque page reçoit la clé du ticket dans ses `tickets`.
+- 12 au plus par planification, créés dans « À faire », chacun avec sa description, ses critères d'acceptation, les tickets qu'il suit (« Après ») et les pages et décisions qu'il implémente, que sa description cite pour son agent (« décisions 0003, tarif-famille (read_decision) »). Chaque page reçoit la clé du ticket dans ses `tickets`.
+- Un ticket cite une décision proposée par son id ; quand elle est acceptée, il cite son numéro (son id la retrouve encore par `read_decision`).
 - Un ticket dont le Kanban a déjà le titre, dans n'importe quelle colonne, n'est pas recréé, pas plus qu'un titre répété : « Déjà au Kanban : … ». Rien de nouveau : « Aucun ticket nouveau : le Kanban couvre déjà ces changements. »
 - Ils ne sont pas lancés : le pilote auto et les règles du Kanban s'appliquent comme à tout ticket (voir *Pilote auto*).
 
