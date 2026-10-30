@@ -4,7 +4,7 @@ subject: "store"
 sources: ["docs/STORE.md","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md"]
 tickets: ["ESC-236"]
 decisions: []
-compared: null
+compared: "2026-10-30T04:14:52+01:00"
 ---
 
 # Le store dans l'app
