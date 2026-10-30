@@ -2,7 +2,7 @@
 title: "Git & fichiers"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","src/lib/i18n/fr/git.ts","src-tauri/src/core.rs"]
-tickets: ["ESC-204","ESC-160"]
+tickets: ["ESC-204","ESC-160","ESC-305"]
 decisions: []
 compared: null
 order: 22
@@ -17,6 +17,8 @@ Le panneau Git montre ce que les agents ont changé : les fichiers non commités
 ### Le panneau
 
 - Il se ferme par son × au bout des onglets (« Fermer le panneau »). À côté de la disposition classique, il se ferme ; `Ctrl+Maj+B` ou « Fichiers » de l'en-tête le rouvrent. Côte à côte, il ramène à la disposition classique sans panneau, retenue comme la disposition ; `Ctrl+Maj+L` ou le sélecteur de disposition le rouvrent. L'infobulle dit le raccourci et comment le rouvrir.
+- Quatre onglets : « Non commités », « Historique », « Workflow » (voir *Workflow*) et « PR et CI » (voir *Pull requests*). Sous 420 px de large, les onglets se resserrent, le compte de « Workflow » s'efface (choix 132) et « PR et CI » quitte la bande pour le × (choix 189) : les mots de la CI sur la carte de l'agent l'ouvrent alors.
+- Dans un projet sans agent, le panneau s'ouvre aussi (« PR et CI du projet », `Ctrl+Maj+B`) : les fichiers du projet, son historique, et ses PR ouvertes.
 - **« Non commités »** : portée « Cet agent » ou « Tout le projet ». Un fichier est attribué à un agent par son worktree ou, sans worktree, par ses outils d'édition (`Edit`, `Write`). Un clic ouvre le diff ; le bouton `</>` ou le clic droit ouvrent le fichier dans l'éditeur. La liste dessine les 500 premiers fichiers, puis « … et N autres fichiers » ; le compte de l'onglet, « Voir le diff » et les commits les prennent tous.
 - **« Historique »** : le graphe des 300 derniers commits de tout le dépôt (branches locales et distantes, tags ; les branches des agents étiquetées de leur nom). La branche de l'agent (son worktree, sinon la branche courante) est mise en avant, le reste atténué. Un clic sur un commit ouvre son diff (contre le premier parent pour un merge). Le graphe se redessine à chaque commit, merge ou branche ; son menu contextuel agit sur les branches (voir *Branches*).
 - Les compteurs git se rafraîchissent quand les fichiers changent (après un court délai), jamais par une lecture à intervalle fixe.
