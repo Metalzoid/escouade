@@ -1,5 +1,5 @@
 ---
-number: 4
+number: 8
 title: "Le store dans l'app : sceau vérifié sur la machine, version compatible, révocation appliquée hors ligne"
 date: "2026-10-30"
 state: "accepted"
