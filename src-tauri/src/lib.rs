@@ -138,6 +138,8 @@ mod plugins_protocol_tests;
 #[cfg(test)]
 mod plugins_runtime_tests;
 #[cfg(test)]
+mod plugins_store_tests;
+#[cfg(test)]
 mod plugins_tests;
 mod pricing;
 #[cfg(test)]
@@ -563,6 +565,10 @@ pub fn run() {
                 commands::plugin_inspect_git,
                 commands::plugin_inspect_dev,
                 commands::plugin_install,
+                commands::plugin_inspect_store,
+                commands::store_view,
+                commands::store_refresh,
+                commands::store_suggestions,
                 commands::plugin_discard,
                 commands::plugin_remove,
                 commands::plugin_approve_commands,
