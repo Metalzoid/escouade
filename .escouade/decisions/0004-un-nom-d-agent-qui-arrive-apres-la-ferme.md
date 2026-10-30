@@ -2,7 +2,7 @@
 number: 4
 title: "Un nom d'agent qui arrive après la fermeture de son projet est perdu"
 date: "2026-10-30"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-300"
 pages: ["projets/fermer-un-projet"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"projets/fermer-un-projet","added":1,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-30T03:20:43+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
