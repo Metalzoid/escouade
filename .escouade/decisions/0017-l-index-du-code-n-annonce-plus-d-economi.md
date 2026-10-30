@@ -2,7 +2,7 @@
 number: 17
 title: "L'index du code n'annonce plus d'économie qu'on ne mesure pas"
 date: "2026-10-30"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-307"
 pages: ["docs/index-du-code"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"docs/index-du-code","added":13,"removed":12}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-30T21:03:50+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
