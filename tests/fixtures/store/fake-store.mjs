@@ -7,7 +7,7 @@
 // Run alone: `node tests/fixtures/store/fake-store.mjs` (FAKE_STORE_PORT, any free port by default) prints one line of
 // JSON, { url, key }, then serves until killed. The Rust tests and the end-to-end tests start it so.
 //
-// What it holds (examples of PLG-10, tests/fixtures/plugins/examples/, under ids of their own):
+// What it holds (examples of PLG-10, plugin-examples/, under ids of their own):
 // - dev.exemple.high-contrast: 1.0.0 verified, 1.1.0 not (an update that is not verified);
 // - dev.exemple.team-rules: 1.0.0 verified, a program that decides permissions;
 // - dev.exemple.slack: 1.0.0 not verified, a program and its binary for each system;
@@ -37,7 +37,7 @@ const canonical = (v) =>
           .join(',')}}`
       : JSON.stringify(v);
 
-const EXAMPLES = fileURLToPath(new URL('../plugins/examples/', import.meta.url));
+const EXAMPLES = fileURLToPath(new URL('../../../plugin-examples/', import.meta.url));
 const PLATFORMS = ['windows-x64', 'windows-arm64', 'macos-x64', 'macos-arm64', 'linux-x64', 'linux-arm64'];
 
 /** An example's files, its manifest changed by `over`. */
@@ -45,7 +45,7 @@ function example(name, over = {}) {
   const root = join(EXAMPLES, name);
   const out = { 'README.md': `# ${name}\n`, LICENSE: MIT };
   const walk = (dir) => {
-    for (const f of readdirSync(dir)) {
+    for (const f of readdirSync(dir).filter((f) => f !== 'node_modules')) {
       const p = join(dir, f);
       if (statSync(p).isDirectory()) walk(p);
       else out[relative(root, p).replace(/\\/g, '/')] = readFileSync(p);
