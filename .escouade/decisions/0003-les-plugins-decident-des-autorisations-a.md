@@ -2,7 +2,7 @@
 number: 3
 title: "Les plugins décident des autorisations avant l'utilisateur (PLG-8)"
 date: "2026-10-30"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-180"
 pages: ["plugins/regles-d-autorisation"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/regles-d-autorisation","added":17,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-30T01:45:30+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
