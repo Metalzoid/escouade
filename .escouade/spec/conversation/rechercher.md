@@ -4,7 +4,8 @@ subject: "Conversation"
 sources: ["docs/SPEC.md"]
 tickets: []
 decisions: []
-compared: null
+compared: "2026-10-30T05:34:09+01:00"
+gaps: [{"text":"La spec dit que Ctrl+K reste au shell dans un terminal sous Windows seulement. Le code ne transmet jamais Ctrl+K à l'application depuis un terminal, sauf avec Cmd sous macOS. Ctrl+K reste donc aussi au shell sous Linux.","code":["src/lib/shortcuts.ts"]}]
 ---
 
 ## Ce que c'est

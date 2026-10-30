@@ -4,7 +4,8 @@ subject: "Docs"
 sources: ["docs/SPEC.md"]
 tickets: ["ESC-256","ESC-257","ESC-258"]
 decisions: []
-compared: null
+compared: "2026-10-30T05:35:38+01:00"
+gaps: [{"text":"La page dit que « Partager » est dans la barre d'état de l'onglet Docs, et que les autres onglets ne l'affichent que tant que les docs ont des changements ou un conflit. Dans le code, le bouton « Partager » n'apparaît que si le compte est supérieur à 0, y compris sur l'onglet Docs. Il y est donc absent quand il n'y a rien à partager.","code":["src/components/docs/DocsShareItem.svelte"]}]
 ---
 
 ## Ce que c'est

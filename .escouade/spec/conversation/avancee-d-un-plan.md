@@ -4,7 +4,8 @@ subject: "Conversation"
 sources: ["docs/SPEC.md"]
 tickets: ["ESC-13","ESC-14","ESC-138"]
 decisions: []
-compared: null
+compared: "2026-10-30T05:32:12+01:00"
+gaps: [{"text":"La page dit que le bandeau « Plan » est ouvert par défaut quand la fenêtre fait au moins 800 px de haut. Le code met le seuil à 760 px (`TALL = 760`).","code":["src/components/PlanBanner.svelte"]},{"text":"La page dit qu'en mode étroit (conteneur sous 560 px) seuls la barre des lignes et, sans liste, le compteur de sous-agents s'effacent. Le code a trois seuils: 580 px masque la barre des lignes, la pastille du sous-agent et le nombre de tâches; 760 px masque le pas courant; 1000 px masque le compteur de sous-agents même quand le bandeau a une liste.","code":["src/components/PlanBanner.svelte"]}]
 ---
 
 ## Ce que c'est

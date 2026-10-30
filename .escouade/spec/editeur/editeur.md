@@ -4,7 +4,8 @@ subject: "Éditeur"
 sources: ["docs/SPEC.md"]
 tickets: []
 decisions: []
-compared: null
+compared: "2026-10-30T05:39:53+01:00"
+gaps: [{"text":"La spec dit que le double-clic sur la poignée ramène la colonne des fichiers à 240 px. Le code revient à 200 px (TREE_NARROW) quand la zone de l'éditeur fait 904 px ou moins, et à 240 px seulement au-delà.","code":["src/lib/editor/layout.ts","src/components/editor/EditorView.svelte"]}]
 order: 25
 ---
 
