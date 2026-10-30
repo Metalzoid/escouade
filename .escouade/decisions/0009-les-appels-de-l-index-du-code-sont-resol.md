@@ -2,7 +2,7 @@
 number: 9
 title: "Les appels de l'index du code sont résolus comme tokensave, d'un symbole à un symbole"
 date: "2026-10-30"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-297"
 pages: ["docs/index-du-code"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"docs/index-du-code","added":20,"removed":9}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-30T04:33:55+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
