@@ -4,7 +4,7 @@ subject: "store"
 sources: ["docs/STORE.md","website/content/docs/fr/plugins/publishing.md","website/content/docs/fr/plugins/security.md","store/server/utils/checks.ts","store/tests/unit/trial.test.ts"]
 tickets: ["ESC-237"]
 decisions: []
-compared: null
+compared: "2026-10-30T06:24:46+01:00"
 ---
 
 # Publier sur le store, la sécurité des plugins et l'essai réel
