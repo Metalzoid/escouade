@@ -2,7 +2,7 @@
 number: 16
 title: "L'onglet « PR et CI » devient la vue de la PR de l'agent (CI, journal, relance, revues, déploiements)"
 date: "2026-10-30"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-305"
 pages: ["git-fichiers/pull-requests","git-fichiers/git-fichiers"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"git-fichiers/pull-requests","added":27,"removed":8},{"page":"git-fichiers/git-fichiers","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-30T18:16:57+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
