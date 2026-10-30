@@ -2,7 +2,7 @@
 number: 5
 title: "La recherche et le contexte de l'index du code suivent tokensave (IDX-1)"
 date: "2026-10-30"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-296"
 pages: ["docs/index-du-code"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"docs/index-du-code","added":26,"removed":9}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-30T03:06:18+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
