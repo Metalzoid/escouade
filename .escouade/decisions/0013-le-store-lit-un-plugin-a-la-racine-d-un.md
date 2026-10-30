@@ -1,5 +1,5 @@
 ---
-number: 11
+number: 13
 title: "Le store lit un plugin à la racine d'un dépôt ; les exemples se publient depuis un dépôt chacun"
 date: "2026-10-30"
 state: "accepted"
