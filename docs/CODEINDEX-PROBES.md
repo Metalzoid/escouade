@@ -205,6 +205,33 @@ Le banc a été joué en entier, et ses résultats relus à la main sur huit son
 - `tache-modeles-harness` : les titres de `website/content/docs/fr/harness.md` et des notes de design ; aucun code.
 - `svelte-context-banner-fr` : les pages du plan du site et des TODO, pas `PlanBanner.svelte`.
 
+## Ticket après ticket
+
+Une colonne par ticket, le même banc sur les mêmes 54 sondes (`--compare` à la colonne précédente). Le détail de chaque colonne : ce qui a été fait, les écarts et pourquoi, sonde par sonde.
+
+- **ESC-294** : la référence (ci-dessous, `docs/codeindex-probes-reference.json`).
+- **IDX-1 (ESC-296)** : la recherche et le contexte de tokensave portés à l'identique (`docs/CODEINDEX-IDX-1.md`, référence `docs/codeindex-probes-reference-idx1.json`).
+
+| Mesure | ESC-294 | IDX-1 |
+|---|---|---|
+| R@10 moyen, tout (54) | 39 | 38 |
+| P@10 moyen, tout | 23 | 22 |
+| R@50 moyen, tout | 49 | 40 |
+| R@10 `index_search` (9) | 67 | 78 |
+| R@10 `index_context` (28) | 16 | 11 |
+| R@10 `callers` / `callees` / `impact` | 59 / 49 / 85 | 59 / 49 / 85 |
+| R@10 sondes « tâche » (17), la question | 6 | 6 |
+| R@50 sondes « tâche » | 18 | 12 |
+| Sondes « tâche » trouvées | 1 / 17 | 1 / 17 |
+| R@10 sondes « tâche », mots du code | 24 | 18 |
+| R@10 questions en français (5) | 40 | 20 |
+| R@10 questions en anglais (7) | 36 | 29 |
+| R@10 autres questions fr/en (11), mots du code | 59 | 41 |
+| Tokens réels de l'index, tout | 350 005 | 252 722 |
+| Tokens réels, sondes « tâche » | 209 811 | 139 003 |
+| Économie réelle (totaux) | −151 % | −81 % |
+| Sondes gagnées : index / grep / = | 5 / 48 / 1 | 4 / 48 / 2 |
+
 ## Les mesures
 
 Ce qui suit est le `results.md` du banc, recopié tel quel (ses trois premiers intertitres ajoutés). Le détail de chaque résultat est dans `results.json`, la référence dans `docs/codeindex-probes-reference.json`.
