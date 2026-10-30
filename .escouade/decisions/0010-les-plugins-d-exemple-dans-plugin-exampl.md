@@ -2,7 +2,7 @@
 number: 10
 title: "Les plugins d'exemple dans plugin-examples/ du dépôt d'Escouade"
 date: "2026-10-30"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-182"
 pages: ["plugins/plugins-d-exemple"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/plugins-d-exemple","added":18,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-30T05:10:37+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
