@@ -2,7 +2,7 @@
 number: 12
 title: "Le lien escouade://plugin/<id> : enregistré par les installeurs, il montre un plugin et n'installe jamais rien"
 date: "2026-10-30"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-287"
 pages: ["store/store-dans-l-app"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"store/store-dans-l-app","added":6,"removed":2}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-30T07:15:19+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

@@ -1436,6 +1436,7 @@ dependencies = [
  "flate2",
  "futures-util",
  "getrandom 0.4.3",
+ "glob",
  "gtk",
  "hound",
  "http-body-util",
