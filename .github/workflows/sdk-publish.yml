@@ -1,11 +1,13 @@
-# The plugins' SDK on npm (PLG-9, ESC-181): @escouade-dev/plugin and create-escouade-plugin, each published when the
-# version of its package.json is not on npm yet. Raising a version on main publishes it; « Run workflow » publishes
-# what is missing.
+# The plugins' SDK on npm (PLG-9, ESC-181): @escouade-dev/plugin and create-escouade-plugin, each staged when the
+# version of its package.json is not on npm yet. Raising a version on main stages it; « Run workflow » stages what is
+# missing.
 #
-# Trusted publishing (OIDC): no npm token in the repository, no 2FA code. Each package trusts this workflow on
-# npmjs.com (Settings › Trusted publisher: GitHub Actions, guillaume-gagnaire/escouade, sdk-publish.yml, environment
-# npm). A package's very first version is published by hand, as npm asks: the trust is set on an existing package.
-# Each version carries its provenance (the commit and this workflow), as npm makes it for a trusted publisher.
+# Trusted publishing (OIDC): no npm token in the repository. Each package trusts this workflow on npmjs.com (Settings ›
+# Trusted publisher: GitHub Actions, guillaume-gagnaire/escouade, sdk-publish.yml, environment npm), for « npm stage
+# publish » only: a version waits in Staged Packages until a maintainer approves it there, or by `npm stage approve
+# <id>`, with their 2FA (approve the SDK before the template, which depends on it). A package's very first version is
+# published by hand, as npm asks: the trust is set on an existing package. Each version carries its provenance (the
+# commit and this workflow), as npm makes it for a trusted publisher.
 name: SDK on npm
 
 on:
@@ -31,17 +33,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # npm 11.5.1 or later speaks trusted publishing: Node 24's.
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
+      # `npm stage` comes with npm 11.15.0, after the one of Node 24.
+      - run: npm install -g npm@^11.15.0
+
       - run: npm ci
 
       # The SDK first: a new plugin's template depends on its version. `prepack` checks the generated types against
       # the schemas and builds dist/ before anything leaves.
-      - name: Publish the versions not on npm yet
+      - name: Stage the versions not on npm yet
         run: |
           for dir in sdk/plugin sdk/create-escouade-plugin; do
             name=$(node -p "require('./$dir/package.json').name")
@@ -49,6 +53,6 @@ jobs:
             if npm view "$name@$version" version >/dev/null 2>&1; then
               echo "$name@$version is on npm already"
             else
-              (cd "$dir" && npm publish --access public)
+              (cd "$dir" && npm stage publish --access public)
             fi
           done
