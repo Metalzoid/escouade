@@ -17,11 +17,10 @@
 // Its controls: POST /_fake/revocations { entries, serial? } signs and serves the next list (the mirror too);
 // POST /_fake/down { down } makes /api/v1 answer 503; GET /_fake/state says the installs counted and the requests.
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MIT, tarball, png } from '../../../store/tests/fake/plugins.mjs';
+import { tarball, png } from '../../../store/tests/fake/plugins.mjs';
+import { exampleFiles } from '../../../store/tests/fake/review-store.mjs';
 import { testKey } from '../../../store/tests/fake/minisign.mjs';
 
 const sha256 = (b) => createHash('sha256').update(b).digest('hex');
@@ -37,21 +36,11 @@ const canonical = (v) =>
           .join(',')}}`
       : JSON.stringify(v);
 
-const EXAMPLES = fileURLToPath(new URL('../../../plugin-examples/', import.meta.url));
 const PLATFORMS = ['windows-x64', 'windows-arm64', 'macos-x64', 'macos-arm64', 'linux-x64', 'linux-arm64'];
 
-/** An example's files, its manifest changed by `over`. */
+/** An example's files (plugin-examples/, as their repository would hold them), its manifest changed by `over`. */
 function example(name, over = {}) {
-  const root = join(EXAMPLES, name);
-  const out = { 'README.md': `# ${name}\n`, LICENSE: MIT };
-  const walk = (dir) => {
-    for (const f of readdirSync(dir).filter((f) => f !== 'node_modules')) {
-      const p = join(dir, f);
-      if (statSync(p).isDirectory()) walk(p);
-      else out[relative(root, p).replace(/\\/g, '/')] = readFileSync(p);
-    }
-  };
-  walk(root);
+  const out = exampleFiles(name);
   const m = { ...JSON.parse(String(out['escouade-plugin.json'])), ...over };
   out['escouade-plugin.json'] = JSON.stringify(m, null, 2);
   return out;

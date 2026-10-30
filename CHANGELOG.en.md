@@ -21,6 +21,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - The store is in the app: the Plugins view reads the catalog of store.escouade.dev, searches it on your machine, suggests plugins for the open project from what it sees there, and installs the last compatible version after checking its archive and its “Verified by Escouade” seal with the app’s keys. A version withdrawn by Escouade is stopped and says so, and “Install verified versions only” refuses the others.
 - Four example plugins, complete and tested, to copy when you write yours: a “High contrast” theme, a Discord webhook with no code, Slack in each project’s channel and a team’s rules in TypeScript. The documentation shows their whole code.
 - “Open in Escouade” on a store page opens the plugin’s page in the app, running or not: a link only shows the plugin, installing it stays your gesture.
+- The documentation says how to publish a plugin on the store and prepare its review, and a new page, “Plugin security”, says what the app checks, what the “Verified by Escouade” seal covers and what the review refuses.
 
 ### Fixes
 

@@ -21,6 +21,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Le store est dans l’app : la vue Plugins lit le catalogue de store.escouade.dev, le cherche sur ta machine, propose des plugins pour le projet ouvert d’après ce qu’elle y voit, et installe la dernière version compatible après avoir vérifié son archive et son sceau « Vérifié par Escouade » avec les clés de l’app. Une version retirée par Escouade est arrêtée et le dit, et « N’installer que des versions vérifiées » refuse les autres.
 - Quatre plugins d’exemple, complets et testés, à copier pour écrire le tien : un thème « Contraste élevé », un webhook Discord sans code, Slack dans le salon de chaque projet et les règles d’une équipe en TypeScript. La documentation montre leur code entier.
 - « Ouvrir dans Escouade » sur une page du store ouvre la page du plugin dans l’app, qu’elle soit lancée ou non : un lien ne fait que montrer le plugin, l’installer reste ton geste.
+- La documentation dit comment publier un plugin sur le store et préparer sa revue, et une nouvelle page, « La sécurité des plugins », dit ce que l’app vérifie, ce que le sceau « Vérifié par Escouade » couvre et ce que la revue refuse.
 
 ### Corrections
 
