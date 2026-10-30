@@ -4,7 +4,8 @@ subject: "store"
 sources: ["docs/STORE.md","design/store/index.html","design/app-redesign/UX-NOTES.md"]
 tickets: ["ESC-235","ESC-295"]
 decisions: []
-compared: "2026-10-29T23:58:16+01:00"
+compared: "2026-10-30T01:48:59+01:00"
+gaps: [{"text":"La spec dit que les badges et les retraits partent dans le salon public fr et en. Le code n'envoie l'annonce publique « removed » que pour une entrée `disable`. Une entrée `unverify` (« Badge retiré ») n'est jamais annoncée au public, bien que discord.ts sache composer ce message. Avec `--quiet`, le retrait d'urgence n'est pas annoncé non plus, alors que la spec dit que `--quiet` ne fait que ne pas prévenir l'auteur.","code":["store/server/utils/review.ts","store/server/utils/discord.ts"]}]
 ---
 
 # La revue « Vérifié par Escouade » : la file, la signature, la révocation

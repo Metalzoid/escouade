@@ -4,7 +4,7 @@ subject: "store"
 sources: ["docs/STORE.md","store/README.md","store/server/utils/discord.ts"]
 tickets: ["ESC-295"]
 decisions: []
-compared: null
+compared: "2026-10-30T01:47:55+01:00"
 ---
 
 # Les annonces du store sur Discord
