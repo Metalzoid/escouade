@@ -2,7 +2,7 @@
 number: 15
 title: "Les plugins proposés par un projet : le store pour seule source, une bande qui n'installe rien, des réglages filtrés"
 date: "2026-10-30"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-288"
 pages: ["projets/escouade-yml"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"projets/escouade-yml","added":16,"removed":5}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-30T16:16:11+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
