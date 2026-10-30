@@ -4,7 +4,7 @@ subject: "Docs"
 sources: ["docs/SPEC.md","github.com/aovestdipaperino/tokensave @ 580936b (MIT, © 2025 Enzo Lombardi)","docs/CODEINDEX-PROBES.md","THIRD-PARTY-NOTICES.md"]
 tickets: ["ESC-251","ESC-252","ESC-253","ESC-254","ESC-293","ESC-296"]
 decisions: []
-compared: null
+compared: "2026-10-30T03:07:48+01:00"
 ---
 
 ## Ce que c'est
