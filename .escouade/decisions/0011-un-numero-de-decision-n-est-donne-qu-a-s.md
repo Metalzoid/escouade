@@ -1,5 +1,5 @@
 ---
-number: 9
+number: 11
 title: "Un numéro de décision n'est donné qu'à son acceptation"
 date: "2026-10-30"
 state: "accepted"
