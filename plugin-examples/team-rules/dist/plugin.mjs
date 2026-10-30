@@ -237,8 +237,9 @@ function readRules() {
   return JSON.parse(readFileSync(new URL("../rules.json", import.meta.url), "utf8"));
 }
 function commandsOf(line) {
-  return line.split(/&&|\|\||[;|\n]/).map((c) => c.trim().replace(/\s+/g, " ")).filter(Boolean);
+  return line.split(/&&|\|\||[;|&\n]/).map((c) => c.trim().replace(/\s+/g, " ")).filter(Boolean);
 }
+var HIDDEN = /[`$<>\\]/;
 var startsWith = (command, rule) => command === rule || command.startsWith(rule + " ");
 function decide(rules, line) {
   const commands = commandsOf(line);
@@ -248,7 +249,7 @@ function decide(rules, line) {
       return { decision: "deny", message: message ?? `The team's rules forbid \`${command}\`.` };
     }
   }
-  if (commands.length > 0 && commands.every((c) => rules.allow.some((rule) => startsWith(c, rule)))) {
+  if (!HIDDEN.test(line) && commands.length > 0 && commands.every((c) => rules.allow.some((rule) => startsWith(c, rule)))) {
     return { decision: "allow" };
   }
   return { decision: "ask" };

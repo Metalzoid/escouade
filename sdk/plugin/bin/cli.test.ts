@@ -80,11 +80,13 @@ describe('escouade-plugin of the SDK', () => {
     fs.writeFileSync(path.join(dir, 'docs', 'a'.repeat(60), 'b'.repeat(60), 'long.md'), '# long');
     const first = cli(['pack', dir, '--target', 'linux-x64']);
     expect(first.code, first.err).toBe(0);
-    const file = path.join(dir, 'packs', 'dev.exemple.slack-1.0.0-linux-x64.tar.gz');
+    const { version } = JSON.parse(fs.readFileSync(path.join(dir, 'escouade-plugin.json'), 'utf8'));
+    const name = `dev.exemple.slack-${version}-linux-x64.tar.gz`;
+    const file = path.join(dir, 'packs', name);
     const bytes = fs.readFileSync(file);
     const sha = createHash('sha256').update(bytes).digest('hex');
     expect(first.out).toContain(`sha256 ${sha}`);
-    expect(fs.readFileSync(`${file}.sha256`, 'utf8')).toBe(`${sha}  dev.exemple.slack-1.0.0-linux-x64.tar.gz\n`);
+    expect(fs.readFileSync(`${file}.sha256`, 'utf8')).toBe(`${sha}  ${name}\n`);
     expect(cli(['pack', dir, '--target', 'linux-x64']).code).toBe(0);
     expect(fs.readFileSync(file).equals(bytes)).toBe(true);
     const list = entries(file);

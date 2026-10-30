@@ -47,6 +47,14 @@ test('an agent waiting goes to the channel named after its project', async () =>
   assert.equal(s.posted[0].body.text, ':raised_hand: *esc-7* waits for you');
 });
 
+test('a title from elsewhere notifies no one', async () => {
+  const s = fakeSlack();
+  const escouade = connect(slack({ channels: {} }), { secrets: { token: TOKEN } });
+  await escouade.initialize();
+  await escouade.fact('ticket.column', { ticket: { key: 'APP-8', title: '<!channel> free <@U123> & more' } });
+  assert.equal(s.posted[0].body.text, ':test_tube: *APP-8* to test: &lt;!channel&gt; free &lt;@U123&gt; &amp; more');
+});
+
 test('the other moves and statuses say nothing', async () => {
   const s = fakeSlack();
   const escouade = connect(slack({ channels: {} }), { secrets: { token: TOKEN } });

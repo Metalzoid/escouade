@@ -112,7 +112,7 @@ Two declared webhooks, no program: a ticket moved to “To review”, and an age
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.exemple.discord",
   "name": "Discord",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": {
     "fr": "Les tickets à tester et les agents qui attendent, dans un salon Discord : un webhook, sans code.",
     "en": "Tickets to test and agents waiting, in a Discord channel: a webhook, no code."
@@ -132,20 +132,26 @@ Two declared webhooks, no program: a ticket moved to “To review”, and an age
         "url": "{{secrets.webhook}}",
         "events": ["ticket.column"],
         "when": { "data.to": "review" },
-        "body": { "content": "🧪 **{{ticket.key}}** to test: {{ticket.title}} ({{project.name}})" }
+        "body": {
+          "content": "🧪 **{{ticket.key}}** to test: {{ticket.title}} ({{project.name}})",
+          "allowed_mentions": { "parse": [] }
+        }
       },
       {
         "url": "{{secrets.webhook}}",
         "events": ["agent.status"],
         "when": { "data.status": "waiting" },
-        "body": { "content": "✋ **{{agent.name}}** waits for you ({{project.name}})" }
+        "body": {
+          "content": "✋ **{{agent.name}}** waits for you ({{project.name}})",
+          "allowed_mentions": { "parse": [] }
+        }
       }
     ]
   }
 }
 ```
 
-In Discord, create the webhook in the channel’s settings (Integrations › Webhooks), then paste its address in the plugin’s “Settings” tab. `when` lets through only the move to “To review” and the `waiting` status; the other moves and statuses say nothing.
+In Discord, create the webhook in the channel’s settings (Integrations › Webhooks), then paste its address in the plugin’s “Settings” tab. `when` lets through only the move to “To review” and the `waiting` status; the other moves and statuses say nothing. An empty `allowed_mentions`: an `@everyone` in the title of a ticket from elsewhere (a public issue) shows without notifying the channel.
 
 ## Slack
 
@@ -158,7 +164,7 @@ A TypeScript program, written with the [SDK](plugins/sdk). It posts in each proj
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.exemple.slack",
   "name": "Slack",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": {
     "fr": "Les tickets à tester et les agents qui attendent, dans le salon Slack de chaque projet.",
     "en": "Tickets to test and agents waiting, in each project's Slack channel."
@@ -223,13 +229,17 @@ export function channelOf(project: string, channels: Record<string, string>): st
   return `escouade-${slug || 'project'}`.slice(0, 80);
 }
 
+/** A text from elsewhere (a ticket's title may come from a public issue), as Slack asks: `<!channel>` or `<@U…>` in it
+ * is shown, never a mention that notifies. */
+export const escaped = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 /** What a fact says in Slack, or nothing for the facts it keeps quiet about. */
 export function textOf(fact: Fact): string | null {
   if (fact.name === 'ticket.column' && fact.data.to === 'review') {
-    return `:test_tube: *${fact.ticket?.key ?? ''}* to test: ${fact.ticket?.title ?? ''}`;
+    return `:test_tube: *${escaped(fact.ticket?.key ?? '')}* to test: ${escaped(fact.ticket?.title ?? '')}`;
   }
   if (fact.name === 'agent.status' && fact.data.status === 'waiting') {
-    return `:raised_hand: *${fact.agent?.name ?? 'An agent'}* waits for you`;
+    return `:raised_hand: *${escaped(fact.agent?.name ?? 'An agent')}* waits for you`;
   }
   return null;
 }
@@ -270,13 +280,13 @@ import { slack } from './plugin.ts';
 void slack().start();
 ```
 
-In Slack, create an app with a bot that has the `chat:write` scope, invite it to the channels, then paste its token in the plugin’s “Settings” tab. Without a token, the journal says so and nothing is sent.
+In Slack, create an app with a bot that has the `chat:write` scope, invite it to the channels, then paste its token in the plugin’s “Settings” tab. Without a token, the journal says so and nothing is sent. A ticket’s title is escaped (`&`, `<`, `>`) as Slack asks: a `<!channel>` from a public issue shows without notifying anyone.
 
 Its tests drive its handlers against the SDK’s fake Escouade and a fake Slack, with no network (`npm test`). `npm run build` bundles `src/` into `dist/plugin.mjs`, which `slack` and `slack.cmd` start: Escouade runs the plugin as the repository holds it, without `npm install`.
 
 ## Team rules
 
-A TypeScript program that decides permissions before they reach you (see [Permission rules](plugins/permission-rules)). Its rules are in `rules.json`, a file of the plugin’s repository that the team reviews like its code. A line that holds a denied command is denied, even after a `&&`; a line made only of allowed commands is allowed; the rest goes to the user.
+A TypeScript program that decides permissions before they reach you (see [Permission rules](plugins/permission-rules)). Its rules are in `rules.json`, a file of the plugin’s repository that the team reviews like its code. A line that holds a denied command is denied, even after a `&&` or a `&`; a line made only of allowed commands is allowed, unless it holds a substitution (`$(…)`, backquotes, `$VAR`), a redirection (`>`, `<`) or an escape, which would slip something else behind an allowed start; the rest goes to the user. A rule compares the start of a command: `deny` is a safety net (`sudo rm -rf` slips past it and goes to the user), and `allow` allows any arguments.
 
 `plugin-examples/team-rules/escouade-plugin.json`
 
@@ -285,7 +295,7 @@ A TypeScript program that decides permissions before they reach you (see [Permis
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.exemple.team-rules",
   "name": { "fr": "Règles de l'équipe", "en": "Team rules" },
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": {
     "fr": "Autorise ou refuse les commandes des agents selon les règles de l'équipe, écrites dans rules.json.",
     "en": "Allows or denies the agents' commands by the team's rules, written in rules.json."
@@ -334,13 +344,18 @@ export function readRules(): Rules {
   return JSON.parse(readFileSync(new URL('../rules.json', import.meta.url), 'utf8'));
 }
 
-/** The commands of a line: `cd app && rm -rf build` is two, each judged on its own. */
+/** The commands of a line: `cd app && rm -rf build` is two, each judged on its own (`&` too, which sends one away). */
 export function commandsOf(line: string): string[] {
   return line
-    .split(/&&|\|\||[;|\n]/)
+    .split(/&&|\|\||[;|&\n]/)
     .map((c) => c.trim().replace(/\s+/g, ' '))
     .filter(Boolean);
 }
+
+/** What makes a line more than its commands: a substitution (`$(…)`, backquotes, `$VAR`), a redirection (`>`, `<`,
+ * `<(…)`), an escape. A rule judges a command by its start, so a line that holds one of these is never allowed:
+ * `git diff > ~/.bashrc` starts like `git diff`. */
+const HIDDEN = /[`$<>\\]/;
 
 /** Whether `command` starts with `rule`, word for word (`npm testing` is not `npm test`). */
 const startsWith = (command: string, rule: string) => command === rule || command.startsWith(rule + ' ');
@@ -353,7 +368,7 @@ export function decide(rules: Rules, line: string): Decision {
       return { decision: 'deny', message: message ?? `The team's rules forbid \`${command}\`.` };
     }
   }
-  if (commands.length > 0 && commands.every((c) => rules.allow.some((rule) => startsWith(c, rule)))) {
+  if (!HIDDEN.test(line) && commands.length > 0 && commands.every((c) => rules.allow.some((rule) => startsWith(c, rule)))) {
     return { decision: 'allow' };
   }
   return { decision: 'ask' };

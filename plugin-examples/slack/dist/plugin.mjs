@@ -246,12 +246,13 @@ function channelOf(project, channels) {
   const slug = project.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
   return `escouade-${slug || "project"}`.slice(0, 80);
 }
+var escaped = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 function textOf(fact) {
   if (fact.name === "ticket.column" && fact.data.to === "review") {
-    return `:test_tube: *${fact.ticket?.key ?? ""}* to test: ${fact.ticket?.title ?? ""}`;
+    return `:test_tube: *${escaped(fact.ticket?.key ?? "")}* to test: ${escaped(fact.ticket?.title ?? "")}`;
   }
   if (fact.name === "agent.status" && fact.data.status === "waiting") {
-    return `:raised_hand: *${fact.agent?.name ?? "An agent"}* waits for you`;
+    return `:raised_hand: *${escaped(fact.agent?.name ?? "An agent")}* waits for you`;
   }
   return null;
 }

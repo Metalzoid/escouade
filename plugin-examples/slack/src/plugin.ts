@@ -31,13 +31,17 @@ export function channelOf(project: string, channels: Record<string, string>): st
   return `escouade-${slug || 'project'}`.slice(0, 80);
 }
 
+/** A text from elsewhere (a ticket's title may come from a public issue), as Slack asks: `<!channel>` or `<@U…>` in it
+ * is shown, never a mention that notifies. */
+export const escaped = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 /** What a fact says in Slack, or nothing for the facts it keeps quiet about. */
 export function textOf(fact: Fact): string | null {
   if (fact.name === 'ticket.column' && fact.data.to === 'review') {
-    return `:test_tube: *${fact.ticket?.key ?? ''}* to test: ${fact.ticket?.title ?? ''}`;
+    return `:test_tube: *${escaped(fact.ticket?.key ?? '')}* to test: ${escaped(fact.ticket?.title ?? '')}`;
   }
   if (fact.name === 'agent.status' && fact.data.status === 'waiting') {
-    return `:raised_hand: *${fact.agent?.name ?? 'An agent'}* waits for you`;
+    return `:raised_hand: *${escaped(fact.agent?.name ?? 'An agent')}* waits for you`;
   }
   return null;
 }

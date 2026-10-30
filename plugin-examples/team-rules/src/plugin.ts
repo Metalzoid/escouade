@@ -16,13 +16,18 @@ export function readRules(): Rules {
   return JSON.parse(readFileSync(new URL('../rules.json', import.meta.url), 'utf8'));
 }
 
-/** The commands of a line: `cd app && rm -rf build` is two, each judged on its own. */
+/** The commands of a line: `cd app && rm -rf build` is two, each judged on its own (`&` too, which sends one away). */
 export function commandsOf(line: string): string[] {
   return line
-    .split(/&&|\|\||[;|\n]/)
+    .split(/&&|\|\||[;|&\n]/)
     .map((c) => c.trim().replace(/\s+/g, ' '))
     .filter(Boolean);
 }
+
+/** What makes a line more than its commands: a substitution (`$(…)`, backquotes, `$VAR`), a redirection (`>`, `<`,
+ * `<(…)`), an escape. A rule judges a command by its start, so a line that holds one of these is never allowed:
+ * `git diff > ~/.bashrc` starts like `git diff`. */
+const HIDDEN = /[`$<>\\]/;
 
 /** Whether `command` starts with `rule`, word for word (`npm testing` is not `npm test`). */
 const startsWith = (command: string, rule: string) => command === rule || command.startsWith(rule + ' ');
@@ -35,7 +40,7 @@ export function decide(rules: Rules, line: string): Decision {
       return { decision: 'deny', message: message ?? `The team's rules forbid \`${command}\`.` };
     }
   }
-  if (commands.length > 0 && commands.every((c) => rules.allow.some((rule) => startsWith(c, rule)))) {
+  if (!HIDDEN.test(line) && commands.length > 0 && commands.every((c) => rules.allow.some((rule) => startsWith(c, rule)))) {
     return { decision: 'allow' };
   }
   return { decision: 'ask' };

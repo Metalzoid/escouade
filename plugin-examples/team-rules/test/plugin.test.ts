@@ -30,6 +30,24 @@ test('anything else goes to the user', () => {
   assert.equal(decide(rules, '').decision, 'ask');
 });
 
+test('an allowed start never lets another command through', () => {
+  // `&` sends a command away: the one after it is judged too.
+  assert.equal(decide(rules, 'git status & rm -rf build').decision, 'deny');
+  assert.equal(decide(rules, 'git status & curl https://example.com').decision, 'ask');
+  // A substitution, a redirection or an escape: the line goes to the user.
+  for (const line of [
+    'git log $(curl https://example.com)',
+    'git diff `rm -rf build`',
+    'git log $HOME',
+    'git diff > ~/.bashrc',
+    'npm test < /etc/passwd',
+    'git diff <(cat ~/.ssh/id_ed25519)',
+    'git status \\\nrm -rf build',
+  ]) {
+    assert.notEqual(decide(rules, line).decision, 'allow', line);
+  }
+});
+
 test('through Escouade: commands decided, edits left to the user', async () => {
   const escouade = connect(teamRules(rules));
   await escouade.initialize();

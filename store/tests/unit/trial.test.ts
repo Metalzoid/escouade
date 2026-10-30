@@ -24,9 +24,11 @@ type Files = Record<string, string | Buffer>;
 
 function snapshot(repo: string, files: Files, license: string | null = 'MIT'): Snapshot {
   const gz = tarball(files, { top: `${repo.replace('/', '-')}-e5a1c0d`, commit: COMMIT });
+  // The tag of the version the manifest says, as its author tags it.
+  const version = JSON.parse(String(files['escouade-plugin.json'] ?? '{}')).version ?? '1.0.0';
   return {
     repository: repo,
-    tag: 'v1.0.0',
+    tag: `v${version}`,
     commit: COMMIT,
     archive: { size: gz.length, read: readArchive(gz) },
     license,
@@ -91,7 +93,7 @@ describe('the examples of PLG-10 submitted to the store', () => {
       id: m.id,
       version: m.version,
       repository: `https://github.com/${repo}`,
-      tag: 'v1.0.0',
+      tag: `v${m.version}`,
       commit: COMMIT,
       archive: { sha256: sha256(gz), size: gz.length },
       binaries: {},
@@ -106,6 +108,6 @@ describe('the examples of PLG-10 submitted to the store', () => {
     expect(checkVersionSignature(json, minisig, [pub], m.id, '9.9.9')).toHaveProperty('error');
     expect(checkVersionSignature(json, minisig, [readPublicKey(testKey().pub)!], m.id, m.version)).toHaveProperty('error');
     expect(checkVersionSignature(json, minisig, [pub], m.id, m.version, [pub.id])).toHaveProperty('error');
-    expect(checkVersionSignature(json.replace('1.0.0', '1.0.1'), minisig, [pub], m.id, m.version)).toHaveProperty('error');
+    expect(checkVersionSignature(json.replace(`"${m.version}"`, '"9.9.9"'), minisig, [pub], m.id, m.version)).toHaveProperty('error');
   });
 });
