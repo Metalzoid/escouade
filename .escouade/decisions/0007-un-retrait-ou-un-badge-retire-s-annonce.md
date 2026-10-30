@@ -1,8 +1,8 @@
 ---
-number: 4
+number: 7
 title: "Un retrait ou un badge retiré s'annonce toujours en public ; --quiet ne coupe que l'e-mail à l'auteur"
 date: "2026-10-30"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-302"
 pages: ["store/revue-et-signature","store/annonces-discord"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"store/revue-et-signature","added":4,"removed":2},{"page":"store/annonces-discord","added":3,"removed":2}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-30T03:55:59+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

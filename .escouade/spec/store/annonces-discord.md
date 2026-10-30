@@ -4,7 +4,8 @@ subject: "store"
 sources: ["docs/STORE.md","store/README.md","store/server/utils/discord.ts"]
 tickets: ["ESC-295","ESC-302"]
 decisions: []
-compared: "2026-10-30T01:47:55+01:00"
+compared: "2026-10-30T03:22:43+01:00"
+gaps: [{"text":"La spec dit qu'on ne dit rien au public d'un plugin que son auteur a retiré de la liste. Le code applique ce filtre aux nouveaux plugins, aux nouvelles versions et aux « Vérifié ». Pour l'annonce publique « Plugin retiré » ou « Badge retiré » (kind 'removed'), `loadFacts` ne vérifie ni `unlistedAt` ni `deletedAt`, et le message part quand même.","code":["store/server/utils/discord.ts"]}]
 ---
 
 # Les annonces du store sur Discord
