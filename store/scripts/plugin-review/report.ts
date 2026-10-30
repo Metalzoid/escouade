@@ -257,6 +257,8 @@ export function renderPublicEn(d: ReviewData): string {
     .filter(([, v]) => (Array.isArray(v) ? v.length > 0 : v === true))
     .map(([k, v]) => (PERMISSION_WORDS_EN[k] ? PERMISSION_WORDS_EN[k]!(v) : `\`${k}\`: ${JSON.stringify(v)}`));
   perms.push(d.manifest?.run ? 'runs a program' : 'declarative: no program');
+  const contributes = Object.keys((d.manifest?.contributes ?? {}) as object);
+  if (contributes.length) perms.push(`adds ${contributes.map((c) => `\`${c}\``).join(', ')}`);
   const checked = ['fingerprints of the archive and of version.json', `commit ${d.commit?.slice(0, 12)} compared to the tag ${d.tag}`];
   if (d.bench?.played) checked.push('conformance bench without network');
   if (d.binaries?.some((b) => b.attested.state === 'verified')) checked.push('provenance of the binaries');

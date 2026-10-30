@@ -18,7 +18,7 @@ import { grownPermissions } from '../../scripts/plugin-review/diff';
 import { baseVersion, catalog, download, Integrity, parseTarget } from '../../scripts/plugin-review/download';
 import { extract, inside } from '../../scripts/plugin-review/extract';
 import { findLeads, hostAllowed, type LeadKind } from '../../scripts/plugin-review/leads';
-import { blockers, proposed, renderReport } from '../../scripts/plugin-review/report';
+import { blockers, proposed, renderPublic, renderPublicEn, renderReport } from '../../scripts/plugin-review/report';
 import { review, type ReviewOptions } from '../../scripts/plugin-review/review';
 import { tarball } from '../fake/plugins.mjs';
 import { exampleFiles, startReviewStore, TRAPPED } from '../fake/review-store.mjs';
@@ -456,6 +456,20 @@ describe('the review', () => {
     const md = renderReport({ id: 'x', version: '1.0.0', date: 'd', store: 's', integrity: 'Archive : non' });
     expect(md).toContain('Verdict proposé : **Refuser**');
     expect(md).not.toContain('## Pistes');
+  });
+
+  it('says what a plugin adds in both public summaries', () => {
+    const data = {
+      id: 'x',
+      version: '1.0.0',
+      date: '2026-10-30',
+      store: 's',
+      commit: 'd53888ea620f9ed5',
+      tag: 'v1.0.0',
+      manifest: { id: 'x', contributes: { themes: [], webhooks: [] } },
+    };
+    expect(renderPublic(data)).toContain('déclaratif : aucun programme ; ajoute `themes`, `webhooks`');
+    expect(renderPublicEn(data)).toContain('declarative: no program; adds `themes`, `webhooks`');
   });
 });
 
