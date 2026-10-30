@@ -4,7 +4,7 @@ subject: "store"
 sources: ["docs/STORE.md","design/store/index.html","design/app-redesign/UX-NOTES.md"]
 tickets: ["ESC-235","ESC-295"]
 decisions: []
-compared: null
+compared: "2026-10-29T23:58:16+01:00"
 ---
 
 # La revue « Vérifié par Escouade » : la file, la signature, la révocation
