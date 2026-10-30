@@ -438,44 +438,14 @@ impl Reader {
         Ok(out)
     }
 
-    /// The first definition of a name among `kinds` (the links are by name until IDX-2).
-    fn first_def(&self, name: &str, kinds: &str) -> Result<Option<Node>> {
-        let sql = format!(
-            "SELECT {NODE_COLS} FROM symbols s
-             WHERE s.name = ?1 COLLATE NOCASE AND s.kind IN {kinds} AND {}
-             ORDER BY s.path, s.line LIMIT 1",
-            Self::vis_pos("s", 2)
-        );
-        let mut stmt = self.conn.prepare(&sql)?;
-        let mut rows = stmt.query_map(rusqlite::params![name, self.scope], Node::of)?;
-        Ok(rows.next().transpose()?)
-    }
-
     /// The neighbours of a node at one step, `calls` first, outgoing then incoming (tokensave
-    /// `traverse_bfs` with `TraversalDirection::Both` and `edge_kind_priority`).
+    /// `traverse_bfs` with `TraversalDirection::Both` and `edge_kind_priority`), by the resolved
+    /// links (ESC-297).
     fn neighbours(&self, node: &Node) -> Result<Vec<Node>> {
-        const CALLABLE: &str = "('function','method','class','struct','component','macro')";
-        const TYPES: &str = "('class','struct','interface','trait','enum','type','component')";
-        let mut out: Vec<Node> = Vec::new();
-        let targets = |kinds: &str| -> Result<Vec<String>> {
-            let sql = format!(
-                "SELECT e.target FROM edges e WHERE e.from_id = ?1 AND e.kind IN {kinds} AND {}
-                 ORDER BY e.line",
-                Self::vis_pos("e", 2)
-            );
-            let mut stmt = self.conn.prepare(&sql)?;
-            let rows = stmt.query_map(rusqlite::params![node.id, self.scope], |r| r.get(0))?;
-            Ok(rows.flatten().collect())
-        };
-        let holders = |kinds: &str| -> Result<Vec<Node>> {
-            let sql = format!(
-                "SELECT e.from_id FROM edges e WHERE e.target = ?1 COLLATE NOCASE AND e.kind IN {kinds}
-                 AND e.from_id IS NOT NULL AND {} ORDER BY e.path, e.line",
-                Self::vis_pos("e", 2)
-            );
+        let linked = |sql: String| -> Result<Vec<Node>> {
             let mut stmt = self.conn.prepare(&sql)?;
             let ids: Vec<i64> = stmt
-                .query_map(rusqlite::params![node.name, self.scope], |r| r.get(0))?
+                .query_map(rusqlite::params![node.id, self.scope], |r| r.get(0))?
                 .flatten()
                 .collect();
             let by_id: HashMap<i64, Node> = self
@@ -490,17 +460,24 @@ impl Reader {
                 .filter_map(|i| by_id.get(&i).cloned())
                 .collect())
         };
-        for t in targets("('call')")? {
-            if let Some(d) = self.first_def(&t, CALLABLE)? {
-                out.push(d);
-            }
-        }
+        let targets = |kinds: &str| {
+            linked(format!(
+                "SELECT l.to_id FROM links l WHERE l.from_id = ?1 AND l.kind IN {kinds} AND {}
+                 ORDER BY l.line",
+                Self::lvis_pos("l", 2)
+            ))
+        };
+        let holders = |kinds: &str| {
+            linked(format!(
+                "SELECT l.from_id FROM links l WHERE l.to_id = ?1 AND l.kind IN {kinds}
+                 AND l.from_id IS NOT NULL AND {} ORDER BY l.path, l.line",
+                Self::lvis_pos("l", 2)
+            ))
+        };
+        let mut out: Vec<Node> = Vec::new();
+        out.extend(targets("('call')")?);
         out.extend(holders("('call')")?);
-        for t in targets("('extends','implements')")? {
-            if let Some(d) = self.first_def(&t, TYPES)? {
-                out.push(d);
-            }
-        }
+        out.extend(targets("('extends','implements')")?);
         out.extend(holders("('extends','implements')")?);
         Ok(out)
     }
@@ -581,6 +558,7 @@ impl Reader {
 impl Node {
     pub(super) fn to_hit(&self) -> Hit {
         Hit {
+            id: self.id,
             name: self.name.clone(),
             kind: self.kind.clone(),
             parent: self.parent.clone(),

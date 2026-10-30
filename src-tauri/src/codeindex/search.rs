@@ -315,41 +315,35 @@ impl Reader {
         self.nodes(&sql, ids.iter().map(|i| Value::from(*i)).collect())
     }
 
-    /// How many calls reach each of `nodes`, by their name: the links of today, by name, until the
-    /// calls are resolved (IDX-2). tokensave `batch_incoming_call_counts`.
+    /// How many calls reach each of `nodes`, by the resolved links (ESC-297). tokensave
+    /// `batch_incoming_call_counts`.
     pub(super) fn batch_incoming_call_counts(&self, nodes: &[&Node]) -> Result<HashMap<i64, u64>> {
-        let mut names: Vec<String> = nodes.iter().map(|n| n.name.to_lowercase()).collect();
-        names.sort();
-        names.dedup();
-        let mut counts = HashMap::new();
-        if names.is_empty() {
-            return Ok(counts);
+        let mut ids: Vec<i64> = nodes.iter().map(|n| n.id).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        if ids.is_empty() {
+            return Ok(HashMap::new());
         }
-        let n = names.len();
+        let n = ids.len();
         let marks = (1..=n)
             .map(|i| format!("?{i}"))
             .collect::<Vec<_>>()
             .join(", ");
         let sql = format!(
-            "SELECT lower(e.target), COUNT(*) FROM edges e
-             WHERE e.kind = 'call' AND lower(e.target) IN ({marks}) AND {}
-             GROUP BY lower(e.target)",
-            Self::vis_pos("e", n + 1)
+            "SELECT l.to_id, COUNT(*) FROM links l
+             WHERE l.kind = 'call' AND l.to_id IN ({marks}) AND {}
+             GROUP BY l.to_id",
+            Self::lvis_pos("l", n + 1)
         );
-        let mut args: Vec<Value> = names.into_iter().map(Value::from).collect();
+        let mut args: Vec<Value> = ids.into_iter().map(Value::from).collect();
         args.push(Value::from(self.scope.clone()));
         let mut stmt = self.conn.prepare(&sql)?;
-        let by_name: HashMap<String, u64> = stmt
+        let counts = stmt
             .query_map(params_from_iter(args), |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64))
+                Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)? as u64))
             })?
             .flatten()
             .collect();
-        for node in nodes {
-            if let Some(c) = by_name.get(&node.name.to_lowercase()) {
-                counts.insert(node.id, *c);
-            }
-        }
         Ok(counts)
     }
 

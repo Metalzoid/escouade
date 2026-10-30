@@ -2,7 +2,7 @@
 title: "Index du code"
 subject: "Docs"
 sources: ["docs/SPEC.md","github.com/aovestdipaperino/tokensave @ 580936b (MIT, © 2025 Enzo Lombardi)","docs/CODEINDEX-PROBES.md","THIRD-PARTY-NOTICES.md"]
-tickets: ["ESC-251","ESC-252","ESC-253","ESC-254","ESC-293","ESC-296"]
+tickets: ["ESC-251","ESC-252","ESC-253","ESC-254","ESC-293","ESC-296","ESC-297"]
 decisions: []
 compared: "2026-10-30T03:07:48+01:00"
 ---
@@ -15,15 +15,27 @@ Un index local du code de chaque projet. Il fait trouver le code aux agents pour
 
 ### Ce qu'il lit
 
-- Les fichiers d'un langage connu, découpés en **symboles** : fonctions, méthodes, classes, structs, enums, interfaces, traits, `impl`, types, constantes, champs, modules, composants Svelte, titres Markdown. Chacun avec son conteneur, ses lignes, sa première ligne, sa docstring ou le commentaire au-dessus, et sa **visibilité** (publique, de la crate, du parent, privée), lue comme les extracteurs de tokensave la lisent (`pub` de Rust, `export` et `private`/`protected` de TypeScript, `_` de Python, majuscule de Go, modificateurs de Java, C# et PHP ; un titre Markdown est public). Et en **liens**, par nom : `import`, `call`, `extends`, `implements`.
+- Les fichiers d'un langage connu, découpés en **symboles** : fonctions, méthodes, classes, structs, enums, interfaces, traits, `impl`, types, constantes, champs, modules, composants Svelte, titres Markdown. Chacun avec son conteneur, ses lignes, sa première ligne, sa docstring ou le commentaire au-dessus, et sa **visibilité** (publique, de la crate, du parent, privée), lue comme les extracteurs de tokensave la lisent (`pub` de Rust, `export` et `private`/`protected` de TypeScript, `_` de Python, majuscule de Go, modificateurs de Java, C# et PHP ; un titre Markdown est public). Et en **références** : `import`, `call`, `extends`, `implements`, nommées comme les nomme tokensave (`obj.method`, `a::b`, et `Type::method` quand le type du receveur se lit dans le code), résolues en liens (voir plus bas).
 - Langages : Rust, TypeScript (et TSX), JavaScript, Svelte (son `<script>` lu en TypeScript, ses balises de composants comme des appels), Python, Go, Java, C#, PHP, Markdown (une section par titre, imbriquée selon son niveau).
-- Écartés : les fichiers de plus de 400 Kio, les binaires, `*.min.*`, `*.d.ts`, `node_modules`, `target`, `dist` et `vendor`.
+- Écartés : les fichiers de plus de 1 Mio (la limite de tokensave), les binaires, `*.min.*`, `*.d.ts`, `node_modules`, `target`, `dist` et `vendor`.
 - La base, une par projet, vit dans le dossier de données d'Escouade (`projects/<id>/code-index.db`), jamais dans le dépôt. Fermer ou retirer un projet l'efface : elle se recalcule. Quand sa forme change avec une version d'Escouade, l'index d'un projet est relu une fois, sans rien demander.
 
 ### L'index plein texte
 
 - Chaque symbole y entre par cinq colonnes, pesées comme chez tokensave : le nom (10), le nom qualifié `chemin::Conteneur::nom` (5), la doc (1), la signature, sa première ligne (2), et les mots d'un nom en camelCase (3). Le tokenizer Porter ramène les mots à leur racine : « sending requests » trouve `send_request`.
 - Le corps de chaque fonction et méthode est indexé à part. Une tâche qui décrit un comportement trouve la plus petite fonction dont le corps contient au moins deux de ses mots (par leurs cinq premières lettres).
+
+### Les liens, résolus comme tokensave (ESC-297)
+
+La méthode est celle de tokensave (github.com/aovestdipaperino/tokensave, commit `580936b`, MIT), portée à l'identique ; ses écarts et leurs raisons sont écrits dans `docs/CODEINDEX-PROBES.md` (§ IDX-2).
+
+- **D'un symbole à un symbole.** Chaque appel, `extends` et `implements` est résolu à l'indexation vers l'id du symbole qu'il vise, ou vers rien. Les réponses lisent ces liens, jamais un nom.
+- **Les receveurs typés.** Dans l'extracteur, `self.m()` / `this.m()`, un appel sur un paramètre typé, sur une variable construite (`let x = T::new()`, `new T()`, `T()`) ou, en TypeScript, sur `this.champ` deviennent aussi `Type::m` (Rust, TypeScript/JavaScript/Svelte, Python). En Rust, `a.champ.m()` passe par le type du champ (le nôtre).
+- **Les stratégies, dans l'ordre** : le nom qualifié (`A::b`, par le nom complet ou sa fin), puis la fin du chemin ; l'appel pointé (`obj.m`) par le sélecteur d'import de Go, sinon par le nom simple, avec preuve ; le nom nu.
+- **Plusieurs candidats** se départagent par le score de tokensave : même fichier +100 et proximité de ligne (jusqu'à +20), dossiers communs +5 chacun (+40 au plus), même langage +50 ou autre langage −80, `pub` +10, appelable +25, nom importé +30.
+- **Une égalité n'est jamais devinée** : l'appel n'a pas de lien et va dans la table des appels ambigus, avec ses candidats. Un lien en dessous de 0,6 de confiance n'est pas gardé (un seul candidat d'un autre langage vaut 0,5). Les noms trop courants (`new`, `get`, `clone`, `run`…) ne se résolvent que dans leur fichier. En Python, JavaScript et TypeScript, un candidat seul doit être joignable : même fichier, même dossier, nom, conteneur ou module importé, fichier importé en relatif.
+- **La relecture partielle** : un fichier relu fait résoudre de nouveau ses références, et celles des autres fichiers dont le nom touche un symbole apparu ou disparu ; tout le reste se résout comme avant.
+- **Les worktrees** : un worktree résout ses propres références, et celles du projet que sa différence peut changer, contre ce qu'il voit ; ses liens remplacent alors ceux du projet pour ces références. Ils sont refaits quand le worktree ou le projet change.
 
 ### Les requêtes (outils MCP)
 
@@ -32,20 +44,20 @@ Un index local du code de chaque projet. Il fait trouver le code aux agents pour
   - la tâche lue : ses identifiants (camelCase, snake_case, `a::b`), les composés Pascal et camel de deux mots voisins (« promo banner » → `PromoBanner`), sans les mots vides ; ses mots de quatre lettres et plus ; les `keywords` donnés ;
   - un `Type::Variant` ou une phrase entre guillemets (8 caractères et plus, deux mots) cherchés tels quels dans le code : le plus petit symbole qui les contient est un point d'entrée sûr ;
   - les dix meilleurs symboles de chaque terme, mêlés à tour de rôle ; le nom exact écrit par l'utilisateur à 100 ; les corps des fonctions ; les méthodes d'un type trouvé, à la moitié de son score ;
-  - le reclassement multiplicatif : genre, visibilité, fichiers de test et fixtures, tests dans le code, Markdown, `src/`, appelants (par les liens d'aujourd'hui, par nom) ; puis les symboles qui portent plusieurs mots de la tâche ;
+  - le reclassement multiplicatif : genre, visibilité, fichiers de test et fixtures, tests dans le code, Markdown, `src/`, appelants (par les liens résolus) ; puis les symboles qui portent plusieurs mots de la tâche ;
   - trois points d'entrée au plus (plus les sûrs), un tiers au plus d'un même fichier ; puis les symboles à un lien d'eux (appelés, appelants, types étendus ou implémentés), 20 en tout par défaut (`limit`, 100 au plus) ; le code de cinq points d'entrée, 1 500 octets chacun au plus, la suite nommée par ses lignes.
   - **`keywords`** : des synonymes de la tâche (pour « authentification » : `login`, `session`, `token`), cherchés chacun ; un mot-clé de plusieurs mots est aussi cherché tel quel dans le code.
   - **Le diagnostic « Retrieval »** (`retrieval`, et la même chose en mots) : la correspondance — `exact` (un nom exact ou une source exacte), `strong` (score de 10 et plus), `fts-only` —, le meilleur score, les résultats de chaque terme et les termes sans résultat, avec le conseil d'ajouter des `keywords` ou d'essayer `index_search`.
-- `index_callers` et `index_callees` : les définitions trouvées ; les appelants, avec leur ligne ; les appelés définis dans le projet et, à part, les noms externes.
-- `index_impact` : d'un nom ou d'un chemin, les appelants jusqu'à la profondeur donnée, les types qui l'étendent ou l'implémentent, les fichiers qui l'importent, et les fichiers touchés.
-
-Les liens se résolvent par le nom, sans typage : un nom défini à plusieurs endroits est ambigu, et un chemin le précise.
+- `index_callers`, `index_callees` et `index_impact` prennent un **id** de symbole, ou un **nom** (`forget`, `Runtime::forget`, `Runtime.forget`, ou le nom qualifié) répondu **définition par définition**, chacune dans son groupe : les meilleures sortes seulement (une fonction et un type avant un champ), les surcharges ensemble, dans l'ordre de `index_search`, jusqu'à `max_matches` (3 par défaut, 20 au plus) ; les autres définitions sont listées sans résultat, à redemander par leur id. `path` ne garde que les définitions de ce fichier, et donc leurs seuls appelants.
+- `index_callers` : par définition, ses appelants (l'id du symbole qui appelle, la ligne de l'appel) et leur nombre ; à part, les appels ambigus qui peuvent la viser.
+- `index_callees` : les définitions qu'elle appelle ; à part, ses appels ambigus ; et les noms externes.
+- `index_impact` : d'un symbole (un type compte ses méthodes) ou d'un chemin, les appelants jusqu'à la profondeur donnée, les types qui l'étendent ou l'implémentent, les fichiers qui l'importent, les fichiers touchés, et à part les appels ambigus.
 
 ### Ce qui diffère de tokensave
 
 - Le delta des worktrees et la clôture des projets privés : chaque requête, le corps des fonctions et la recherche dans la source compris, ne voit que ce que voit le dossier qui la pose, et ne lit aucun fichier que la clôture refuse.
 - Les noms `index_*` des outils, la réponse en JSON avec le diagnostic en mots, en français ou en anglais.
-- Les liens par nom jusqu'à leur résolution (IDX-2) : les appelants comptés et les voisins d'un point d'entrée en dépendent.
+- Les appels : ceux de la résolution, avec ses propres écarts (§ « Les liens, résolus comme tokensave » et `docs/CODEINDEX-PROBES.md`, § IDX-2) ; les appelants comptés et les voisins d’un point d’entrée lisent les liens résolus.
 - Les branches et boucles d'un corps (un petit bonus du corps) se comptent par ses mots : l'index ne garde pas la complexité.
 - Un composant Svelte compte comme une classe, un titre Markdown comme un module (comme chez tokensave) ; il n'y a ni nœud de fichier ni doc compagnon à écarter.
 - `index_search` garde son filtre par genre ; `index_context` donne toujours le code de ses points d'entrée.
@@ -63,7 +75,7 @@ Aucun guetteur de fichiers. L'index se revérifie :
 
 ### Worktrees
 
-Le dossier du projet est indexé en entier. Un worktree ne garde que ce qui en diffère : les fichiers changés, ajoutés ou retirés. Une requête dans un worktree voit le projet, moins ces fichiers, plus les siens. Quand le projet prend le changement (une fusion), la différence se vide au passage suivant ; un worktree disparu est oublié. L'index du projet laisse de côté le dossier de ses worktrees et ceux de ses agents. Un dossier qui n'est ni le projet ni l'un de ses worktrees est refusé.
+Le dossier du projet est indexé en entier. Un worktree ne garde que ce qui en diffère : les fichiers changés, ajoutés ou retirés, et les liens que cette différence change. Une requête dans un worktree voit le projet, moins ces fichiers, plus les siens. Quand le projet prend le changement (une fusion), la différence se vide au passage suivant ; un worktree disparu est oublié. L'index du projet laisse de côté le dossier de ses worktrees et ceux de ses agents. Un dossier qui n'est ni le projet ni l'un de ses worktrees est refusé.
 
 ### Projets privés
 
@@ -81,6 +93,7 @@ Certains fichiers ne sont jamais listés, lus ni indexés : ceux que la clôture
 ### Mesures
 
 - Le banc des sondes (`docs/CODEINDEX-PROBES.md`, `cargo run --release --example codeindex_probes`) mesure la justesse, la vitesse et le coût des cinq outils face à grep, sur 54 sondes ; chaque ticket de l'index y ajoute sa colonne, avant et après.
+- Les liens résolus (ESC-297) et leur justesse face à grep : le banc des sondes, `docs/CODEINDEX-PROBES.md`, colonne IDX-2.
 - Recherche par le sens (build de debug, Windows). Chargement du modèle : 1,2 s. 195 passages courts par seconde, et 27 morceaux par seconde sur de longs documents. Ajouter une section à un document indexé relit 1 morceau sur 30, en 11 ms. Une recherche prend 8 ms sur 506 morceaux, 17 ms sur 1 000, 173 ms sur 10 000 et 860 ms sur 50 000.
 
 ## Réglages
@@ -94,6 +107,6 @@ Certains fichiers ne sont jamais listés, lus ni indexés : ceux que la clôture
 
 ## Limites
 
-- Les liens se résolvent par le nom, sans typage (jusqu'à IDX-2).
+- Un appel dont le receveur n'a pas de type lisible se résout par le nom et le score ; à égalité, il reste ambigu, sans lien. Les imports ne sont pas résolus en liens (ils servent de preuve et à `index_impact`).
 - Les langages hors de la liste ne sont pas indexés.
 - La carte d'un agent ne dit pas qu'il s'est servi de l'index ; les Stats le disent.

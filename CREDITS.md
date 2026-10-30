@@ -10,7 +10,7 @@ Escouade est sous licence GPL-3.0 ou ultérieure (voir [LICENSE](LICENSE)). Elle
 | [whisper.cpp](https://github.com/ggml-org/whisper.cpp), par [whisper-rs](https://codeberg.org/tazz4843/whisper-rs) | La transcription de la dictée et de la conversation | MIT (whisper-rs : Unlicense) |
 | [cpal](https://github.com/RustAudio/cpal) | Le micro et les haut-parleurs | Apache-2.0 |
 
-L’index du code reprend la méthode de [tokensave](https://github.com/aovestdipaperino/tokensave) (© 2025 Enzo Lombardi), portée en Rust dans Escouade au commit `580936b` : l’index plein texte, la lecture de la question, le contexte d’une tâche et son classement. Licence MIT ; le texte et la liste des fichiers portés sont dans [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+L’index du code reprend la méthode de [tokensave](https://github.com/aovestdipaperino/tokensave) (© 2025 Enzo Lombardi), portée en Rust dans Escouade au commit `580936b` : l’index plein texte, la lecture de la question, le contexte d’une tâche et son classement, la résolution des appels vers les symboles et la réponse définition par définition. Licence MIT ; le texte et la liste des fichiers portés sont dans [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Les voix
 
