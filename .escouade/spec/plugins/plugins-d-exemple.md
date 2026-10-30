@@ -4,7 +4,7 @@ subject: "plugins"
 sources: ["docs/TODO-2.1.md (PLG-10)","docs/PLUGINS.md","plugin-examples/README.md"]
 tickets: ["ESC-182"]
 decisions: [4]
-compared: null
+compared: "2026-10-30T05:11:05+01:00"
 ---
 
 # Les plugins d'exemple
