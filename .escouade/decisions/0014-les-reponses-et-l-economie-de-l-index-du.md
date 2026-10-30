@@ -2,7 +2,7 @@
 number: 14
 title: "Les réponses et l'économie de l'index du code, comme tokensave"
 date: "2026-10-30"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-298"
 pages: ["docs/index-du-code"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"docs/index-du-code","added":28,"removed":9}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-30T07:18:11+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
