@@ -4,7 +4,7 @@ subject: "Git & fichiers"
 sources: ["docs/SPEC.md","docs/TODO-1.8.md","src/components/PrPanel.svelte","src-tauri/src/prview.rs"]
 tickets: ["ESC-64","ESC-161","ESC-305"]
 decisions: [15]
-compared: null
+compared: "2026-10-30T18:20:19+01:00"
 ---
 
 ## Ce que c'est

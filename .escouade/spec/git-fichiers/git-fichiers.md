@@ -4,7 +4,7 @@ subject: "Git & fichiers"
 sources: ["docs/SPEC.md","src/lib/i18n/fr/git.ts","src-tauri/src/core.rs"]
 tickets: ["ESC-204","ESC-160","ESC-305"]
 decisions: []
-compared: null
+compared: "2026-10-30T18:19:03+01:00"
 order: 22
 ---
 
