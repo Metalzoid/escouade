@@ -2,7 +2,7 @@
 number: 2
 title: "Le store annonce sur Discord : salon privé des admins (fr), salon public fr et en"
 date: "2026-10-30"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-295"
 pages: ["store/annonces-discord","store/revue-et-signature"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"store/annonces-discord","added":16,"removed":0},{"page":"store/revue-et-signature","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-30T01:34:14+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
