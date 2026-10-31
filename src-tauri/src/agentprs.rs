@@ -15,7 +15,7 @@ use crate::forge::{
 };
 use crate::git;
 use crate::i18n::Lang;
-use crate::model::{AgentMeta, EngineId, FoundWorktree, Project};
+use crate::model::{AgentMeta, FoundWorktree, Project};
 use crate::text::truncate;
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
@@ -102,7 +102,7 @@ pub enum PrFix {
 
 /// What an ordinary agent's pull request needs: its branch, its project's code host and an
 /// account's client there.
-struct Target {
+pub(crate) struct Target {
     meta: AgentMeta,
     /// The folder of its branch: its worktree.
     path: String,
@@ -469,21 +469,19 @@ impl<R: Runtime> Core<R> {
     /// The worktree of the project's repository the agent went into by itself, by the folder its
     /// session was last in (ESC-161): an ordinary agent of Claude Code without a worktree of its
     /// own. None in the project's folder, in a folder of no worktree of the repository, in another
-    /// agent's worktree, or on a detached HEAD.
+    /// agent's worktree, on a detached HEAD, or for a harness whose session does not say where it
+    /// is (`Engine::session_cwd`).
     async fn found_worktree(&self, meta: &AgentMeta) -> Option<FoundWorktree> {
-        if meta.worktree.is_some()
-            || meta.ticket_id.is_some()
-            || meta.archived
-            || meta.engine != EngineId::Claude
-        {
+        if meta.worktree.is_some() || meta.ticket_id.is_some() || meta.archived {
             return None;
         }
+        let harness = crate::engine::by_id(meta.engine);
         let session = meta.session_id.clone()?;
         let config = {
             let settings = self.settings.read();
             crate::accounts::config_dir(&crate::accounts::get(&settings, &meta.account), &settings)
         };
-        let cwd = tokio::task::spawn_blocking(move || last_cwd(&config, &session))
+        let cwd = tokio::task::spawn_blocking(move || harness.session_cwd(&config, &session))
             .await
             .ok()
             .flatten()?;
@@ -651,29 +649,14 @@ impl<R: Runtime> Core<R> {
         (sources, Some(own_repo))
     }
 
-    /// The agent's branch, its project's code host and its client; refused for a ticket's agent
-    /// (its board opens its PR), an archived one, one without a worktree, a project without a
-    /// remote, a host unknown, without an account or whose client does not read pull requests yet.
-    async fn pr_target(&self, id: &str) -> Result<Target> {
-        let meta = self.agent(id)?.lock().meta.clone();
-        if meta.ticket_id.is_some() {
-            bail!(tr!(
-                "La PR d'un agent de ticket s'ouvre à la validation du ticket.",
-                "A ticket agent’s pull request opens when its ticket is approved."
-            ));
-        }
-        if meta.archived {
-            bail!(tr!("Cet agent est archivé.", "This agent is archived."));
-        }
-        // Its own worktree, else the one it went into by itself (ESC-161), which merges into the
-        // board's target.
-        let (path, branch, base) = match (&meta.worktree, &meta.found_worktree) {
-            (Some(wt), _) => (wt.path.clone(), wt.branch.clone(), wt.base_branch.clone()),
-            (None, Some(f)) => (f.path.clone(), f.branch.clone(), String::new()),
-            (None, None) => return Err(no_branch()),
-        };
-        let project: Project = self.project(&meta.project_id)?;
-        let remote = self.project_forge(&project.id).await.ok_or_else(|| {
+    /// The remote of the project's target, its code host and an account's client there; refused
+    /// for a project without a remote, a host unknown, whose client does not read pull requests
+    /// yet, or without an account.
+    pub(crate) async fn project_host(
+        &self,
+        project_id: &str,
+    ) -> Result<(Remote, Arc<dyn Provider>, Box<dyn Forge>)> {
+        let remote = self.project_forge(project_id).await.ok_or_else(|| {
             anyhow!(tr!(
                 "Ce projet n'a pas de dépôt distant chez un hébergeur de code.",
                 "This project has no remote on a code host."
@@ -699,6 +682,32 @@ impl<R: Runtime> Core<R> {
             ));
         }
         let (client, _) = self.forge_client(&host).await?;
+        Ok((remote, provider, client))
+    }
+
+    /// The agent's branch, its project's code host and its client; refused for a ticket's agent
+    /// (its board opens its PR), an archived one, one without a worktree, a project without a
+    /// remote, a host unknown, without an account or whose client does not read pull requests yet.
+    pub(crate) async fn pr_target(&self, id: &str) -> Result<Target> {
+        let meta = self.agent(id)?.lock().meta.clone();
+        if meta.ticket_id.is_some() {
+            bail!(tr!(
+                "La PR d'un agent de ticket s'ouvre à la validation du ticket.",
+                "A ticket agent’s pull request opens when its ticket is approved."
+            ));
+        }
+        if meta.archived {
+            bail!(tr!("Cet agent est archivé.", "This agent is archived."));
+        }
+        // Its own worktree, else the one it went into by itself (ESC-161), which merges into the
+        // board's target.
+        let (path, branch, base) = match (&meta.worktree, &meta.found_worktree) {
+            (Some(wt), _) => (wt.path.clone(), wt.branch.clone(), wt.base_branch.clone()),
+            (None, Some(f)) => (f.path.clone(), f.branch.clone(), String::new()),
+            (None, None) => return Err(no_branch()),
+        };
+        let project: Project = self.project(&meta.project_id)?;
+        let (remote, provider, client) = self.project_host(&project.id).await?;
         let base = match (base.is_empty(), project.board.target.is_empty()) {
             (false, _) => base,
             (true, false) => project.board.target.clone(),
@@ -970,7 +979,7 @@ impl<R: Runtime> Core<R> {
     /// The host, the repository and the branch of the agent's pull request `pr` (`number`): the
     /// repository it was read in (`host_repo`), else the target's. Refused for a ticket's agent
     /// (its board follows its pull request) and one without a branch of its own but the trunk.
-    async fn fix_target(
+    pub(crate) async fn fix_target(
         &self,
         id: &str,
         meta: &AgentMeta,

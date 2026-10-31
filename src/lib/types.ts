@@ -592,8 +592,14 @@ export interface IssuePage {
   total: number | null;
 }
 
-/** A harness that runs agents (« Harness » in the interface): Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode, Mistral Vibe, Antigravity CLI, Gemini CLI. */
-export type EngineId = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode' | 'vibe' | 'agy' | 'gemini';
+/** The harnesses written into the app: Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode, Mistral Vibe, Antigravity CLI, Gemini CLI. */
+export type KnownEngineId = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode' | 'vibe' | 'agy' | 'gemini';
+
+/**
+ * A harness that runs agents (« Harness » in the interface): an open id (INT-3), one of the app's or another the data names
+ * (a later version's, a plugin's), which the backend's registry declares or not (`engineOf`).
+ */
+export type EngineId = KnownEngineId | (string & {});
 
 /** A mode of Escouade a harness takes, and what it means there (null: what Escouade's menu says of it, Claude Code's meaning). */
 export interface ModeCap {
@@ -780,6 +786,8 @@ export interface Project {
   workflowsAutoRead?: boolean;
   /** « Où garder la configuration des workflows » (ESC-195): in the repository (`.escouade/workflows/`, by default) or on this machine. Absent from a project of the window’s tests made before it. */
   workflowsInRepo?: boolean;
+  /** Off: « Pas de workflow pour ce projet » (ESC-309), nothing read nor written of its workflows; `workflows.enabled` of its .escouade.yml when shared. Absent: on. */
+  workflowsEnabled?: boolean;
   /** « Index du code » (ESC-251), the project's own choice (ESC-293): absent, it follows « Index du code sur tous les projets » (`codeIndexOn`, lib/codeindex.ts). Set by `set_code_index` (Réglages › Projets, ESC-254). */
   codeIndexChoice?: boolean;
 }
@@ -2308,6 +2316,10 @@ export interface WorkflowScan {
   files?: { id: string; path: string; local: boolean; inRepo: boolean; updated: string | null }[];
   /** The files that could not be read, with why. */
   unreadable?: { path: string; why: string }[];
+  /** The workflows the user removed (ESC-309): never written again by a reading; `changed` when what found one changed since (proposed again). */
+  removed?: { id: string; name: string; changed: boolean }[];
+  /** « Pas de workflow pour ce projet » (ESC-309): nothing was read. */
+  off?: boolean;
 }
 
 /** How an agent's stay in a step, or outside the workflow (`step` null), ended. */
@@ -2711,6 +2723,78 @@ export interface PullRequest {
    * target: on the remote the agent's branch tracks, or the repository that one was forked from.
    */
   hostRepo?: string;
+  /** Who opened it, when the host says it. */
+  author?: string;
+  /** When it was opened (Unix seconds), when the host says it. */
+  created?: number;
+}
+
+/** A check or a status of a pull request's last commit (`forge::Check`). */
+export interface PrCheck {
+  name: string;
+  state: CheckState;
+  url: string | null;
+  /** What its log is asked by, when the host keeps it. */
+  job: string | null;
+  /** Unix seconds, when the host says them: a pending one that started is running. */
+  started: number | null;
+  finished: number | null;
+  /** Stopped before its end (a failure to the rest of the app). */
+  cancelled: boolean;
+}
+
+export interface PrReview {
+  author: string;
+  state: 'approved' | 'changesRequested' | 'commented';
+  body: string;
+}
+
+/** A comment of a pull request, on one of its lines or not. */
+export interface PrComment {
+  id: string;
+  author: string;
+  body: string;
+  path: string | null;
+  line: number | null;
+  resolved: boolean;
+}
+
+export interface PrDeployment {
+  environment: string;
+  state: string;
+  url: string | null;
+}
+
+/** The « PR et CI » tab's read of the agent's pull request (`prview::PrDetail`). */
+export interface PrDetail {
+  checks: PrCheck[];
+  reviews: PrReview[];
+  comments: PrComment[];
+  deployments: PrDeployment[];
+  can: { checks: boolean; jobLogs: boolean; rerun: boolean; reviews: boolean; deployments: boolean };
+  rateLimit?: { limit: number; remaining: number; reset: number };
+}
+
+/** Why the host's answer is missing (`prview::Failure`). */
+export interface PrFailure {
+  kind: 'refused' | 'rateLimit' | 'unreachable' | 'other' | 'unavailable';
+  message: string;
+  /** When the host's limit starts over (Unix seconds). */
+  reset?: number;
+  /** Réglages › Intégrations settles it. */
+  settings?: boolean;
+}
+
+/** What a read of the tab gave: the data, else why it is missing. */
+export interface PrRead<T> {
+  data?: T;
+  failure?: PrFailure;
+}
+
+/** Why an agent has no « Ouvrir une PR… » (`prview::NoPr`). */
+export interface NoPr {
+  reason: string;
+  settings: boolean;
 }
 
 /** « Ouvrir une PR »: what the model proposes, which the user reads and edits (`agentprs::PrProposal`). */

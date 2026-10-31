@@ -186,13 +186,9 @@ impl<C: AsRequestContext, R: Runtime> FromContextPart<C> for ToolCtx<R> {
     }
 }
 
-/// The blocks of an answer of the index: its text, then its metrics line when there is one.
-fn index_blocks((text, line): index::Reply) -> Vec<ContentBlock> {
-    let mut blocks = vec![ContentBlock::text(text)];
-    if !line.is_empty() {
-        blocks.push(ContentBlock::text(line));
-    }
-    blocks
+/// The blocks of an answer of the index: its text alone (no line about what it saved, ESC-307).
+fn index_blocks(text: index::Reply) -> Vec<ContentBlock> {
+    vec![ContentBlock::text(text)]
 }
 
 /// What the activity log says a call was asked: its arguments given, « name: value · … ».
@@ -222,15 +218,7 @@ impl<R: Runtime> Tools<R> {
     fn index_schemas(&self) -> u64 {
         static TOKENS: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
         *TOKENS.get_or_init(|| {
-            let tools: Vec<_> = self
-                .router
-                .list_all()
-                .into_iter()
-                .filter(|t| t.name.starts_with("index_"))
-                .collect();
-            crate::codeindex::accounting::schema_overhead_tokens(
-                &serde_json::to_value(tools).unwrap_or_default(),
-            )
+            crate::codeindex::accounting::schema_overhead_tokens(&index_tools(&self.router))
         })
     }
 
@@ -241,6 +229,17 @@ impl<R: Runtime> Tools<R> {
         let router = router + Self::test_router();
         router
     }
+}
+
+/// The index's tools of `router`, as a client lists them (also served by the bench of the real
+/// agents, `codeindex::probes::agents`).
+pub(crate) fn index_tools<R: Runtime>(router: &ToolRouter<Tools<R>>) -> serde_json::Value {
+    let tools: Vec<_> = router
+        .list_all()
+        .into_iter()
+        .filter(|t| t.name.starts_with("index_"))
+        .collect();
+    serde_json::to_value(tools).unwrap_or_default()
 }
 
 // The arguments' descriptions are the model's (English, one line each: a doc comment's line
@@ -1711,7 +1710,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Read the quota of every account, of every harness: for each account its harness (engine), whether new agents of that harness go to it now (current: the first active account of the harness whose meters are under the autopilot's threshold, else the first active one), and its meters as last read (meters: a window of a length in minutes, 300 for 5 hours and 10080 for a week, or the month's credits with minutes null; each with how much is used, pct 0 to 100, and when it resets, resetsAt in epoch milliseconds; none for a harness without a quota or not read yet), Claude Code's 5-hour and weekly windows also as fiveHour and sevenDay (null when not read); and why the autopilot holds the tickets of the default harness back, when it does (reason: window, with its length in minutes, credits or limit), until when (epoch milliseconds).",
+        description = "Read the quota of every account, of every harness: for each account its harness (engine), whether new agents of that harness go to it now (current: the first active account of the harness that is good — a 5-hour window under the autopilot's and the switch thresholds, a week or month's credits that keeps its pace —, else the first whose only fault is its pace, else the first active one), and its meters as last read (meters: a window of a length in minutes, 300 for 5 hours and 10080 for a week, or the month's credits with minutes null; each with how much is used, pct 0 to 100, and when it resets, resetsAt in epoch milliseconds; none for a harness without a quota or not read yet), Claude Code's 5-hour and weekly windows also as fiveHour and sevenDay (null when not read); and why the autopilot holds the tickets of the default harness back, when it does (reason: window, with its length in minutes, credits or limit), until when (epoch milliseconds).",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn get_usage(&self, ctx: ToolCtx<R>) -> CallToolResult {

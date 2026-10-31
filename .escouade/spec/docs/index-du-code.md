@@ -2,14 +2,14 @@
 title: "Index du code"
 subject: "Docs"
 sources: ["docs/SPEC.md","github.com/aovestdipaperino/tokensave @ 580936b (MIT, © 2025 Enzo Lombardi)","docs/CODEINDEX-PROBES.md","THIRD-PARTY-NOTICES.md","docs/codeindex-probes-sufficiency.json"]
-tickets: ["ESC-251","ESC-252","ESC-253","ESC-254","ESC-293","ESC-296","ESC-297","ESC-298"]
+tickets: ["ESC-251","ESC-252","ESC-253","ESC-254","ESC-293","ESC-296","ESC-297","ESC-298","ESC-307"]
 decisions: []
-compared: "2026-10-30T05:38:15+01:00"
+compared: "2026-10-30T21:05:05+01:00"
 ---
 
 ## Ce que c'est
 
-Un index local du code de chaque projet. Il fait trouver le code aux agents pour bien moins de tokens que grep ou la lecture de fichiers entiers. Il découpe le code en symboles et en liens, et répond à six requêtes : chercher un symbole ou un texte, le contexte d'une tâche, le corps d'un symbole, les appelants, les appelés, l'impact d'un changement. La recherche, le contexte, les liens, les réponses et le compte de l'économie suivent la méthode de tokensave (github.com/aovestdipaperino/tokensave, commit `580936b`, MIT, © 2025 Enzo Lombardi), portée à l'identique, mêmes étapes et mêmes constantes ; sa licence est dans `THIRD-PARTY-NOTICES.md` et les crédits. Aucune recherche par le sens pour le code (des vecteurs ont été mesurés puis abandonnés, ESC-294) : elle reste à la mémoire et aux docs. L'index cherche par les mots du code : une question dite avec ses identifiants trouve mieux qu'une paraphrase. Rien ne quitte la machine, sauf le téléchargement du modèle de la recherche par le sens. La conception est dans `docs/FACTORY.md` (« Le socle d'index local »).
+Un index local du code de chaque projet. Il fait trouver aux agents, en un appel, un symbole, ses appelants (justes même quand le nom a des homonymes), ses appelés et l'impact d'un changement ; il ne promet pas moins de tokens (voir *Mesures*). Il découpe le code en symboles et en liens, et répond à six requêtes : chercher un symbole ou un texte, le contexte d'une tâche, le corps d'un symbole, les appelants, les appelés, l'impact d'un changement. La recherche, le contexte, les liens, les réponses et le compte interne suivent la méthode de tokensave (github.com/aovestdipaperino/tokensave, commit `580936b`, MIT, © 2025 Enzo Lombardi), portée à l'identique, mêmes étapes et mêmes constantes ; sa licence est dans `THIRD-PARTY-NOTICES.md` et les crédits. Aucune recherche par le sens pour le code (des vecteurs ont été mesurés puis abandonnés, ESC-294) : elle reste à la mémoire et aux docs. L'index cherche par les mots du code : une question dite avec ses identifiants trouve mieux qu'une paraphrase. Rien ne quitte la machine, sauf le téléchargement du modèle de la recherche par le sens. La conception est dans `docs/FACTORY.md` (« Le socle d'index local »).
 
 ## Comportement
 
@@ -66,7 +66,7 @@ La méthode est celle de tokensave (github.com/aovestdipaperino/tokensave, commi
 - Le delta des worktrees et la clôture des projets privés : chaque requête, le corps des fonctions et la recherche dans la source compris, ne voit que ce que voit le dossier qui la pose, et ne lit aucun fichier que la clôture refuse. La recherche littérale lit ces fichiers l'un après l'autre et n'a pas le compte des fichiers que l'index ne connaît pas (`unscanned` de tokensave).
 - Les noms `index_*` des outils, les ids en nombres ; les phrases en français ou en anglais, les titres et les clés de tokensave.
 - `index_context` donne le code de ses points d'entrée par défaut (`include_code` vaut vrai) : chez tokensave, l'outil n'en donne que sur demande. Le but de l'index est que l'agent ait le code dont il a besoin sans le relire.
-- La ligne de mesure est toujours envoyée (tokensave la coupe par défaut) ; la session est celle de l'appelant (un agent, ou les clients hors Escouade), pas une connexion MCP ; les schémas comptés sont ceux des six outils de l'index.
+- Aucune ligne d'économie n'est envoyée à l'agent (ESC-307 ; tokensave la coupe aussi par défaut) ; la session du compte interne est celle de l'appelant (un agent, ou les clients hors Escouade), pas une connexion MCP ; les schémas comptés sont ceux des six outils de l'index.
 - **Le hook ne refuse rien** : tokensave refuse certains grep et les agents Explore ; Escouade conseille l'index et laisse toute recherche se faire (décision d'ESC-253), sauf décision contraire de l'utilisateur.
 - Pas repris : `merge_adjacent` et le mode `plan` de `tokensave_context`, le format `json` de la recherche et du corps.
 - Les appels : ceux de la résolution, avec ses propres écarts (§ « Les liens, résolus comme tokensave » et `docs/CODEINDEX-PROBES.md`, § IDX-2) ; les appelants comptés et les voisins d’un point d’entrée lisent les liens résolus.
@@ -74,18 +74,19 @@ La méthode est celle de tokensave (github.com/aovestdipaperino/tokensave, commi
 - Un composant Svelte compte comme une classe, un titre Markdown comme un module (comme chez tokensave) ; il n'y a ni nœud de fichier ni doc compagnon à écarter.
 - `index_search` garde son filtre par genre.
 
-### L'économie
+### Le compte interne (ESC-307)
 
-Chaque réponse finit par la ligne `index_metrics: before=… after=… result=… saved=…`, puis la même chose en mots, comptée comme tokensave la compte (`src/mcp/tools/accounting.rs`, `src/mcp/server.rs`) :
+Aucune réponse ne dit rien d'une économie : ni la ligne `index_metrics`, ni sa phrase (un test le vérifie pour les six outils). Escouade garde seulement un compte, pour les Stats, tenu comme tokensave le tient (`src/mcp/tools/accounting.rs`) :
 
-- **before** : les fichiers que la réponse a touchés, lus en entier (leur taille ÷ 4), **plafonnés à 4 fois la réponse** ; à la réponse elle-même pour une recherche littérale (grep en rendrait autant) ;
-- **after** : ce que l'agent a payé pour l'appel : la réponse (ses octets ÷ 4), sa requête (le nom de l'outil, ses arguments et 8 pour l'enveloppe JSON-RPC), **une fois par session** les schémas des outils de l'index, et la ligne de mesure elle-même ;
-- **saved** : before − after, jamais moins que rien ;
-- **le déficit est reporté** : un appel qui coûte plus qu'il n'économise (le premier d'une session, qui paie les schémas) ne crédite rien, et ce qu'il doit est payé par les appels suivants de la session avant qu'ils ne créditent.
+- **before** : les fichiers que la réponse a touchés, lus en entier (leur taille ÷ 4), **plafonnés à 4 fois la réponse** ; à la réponse elle-même pour une recherche littérale ;
+- **after** : la réponse (ses octets ÷ 4), sa requête (le nom de l'outil, ses arguments et 8 pour l'enveloppe JSON-RPC) et, **une fois par session**, les schémas des outils ;
+- **saved** : before − after, jamais moins que rien ; le déficit est reporté sur les appels suivants de la session.
 
-Une réponse qui n'a touché aucun fichier n'a pas de ligne. Les Stats font le total de ce qui a été crédité, par projet : réponses, tokens et dollars économisés sur la période, tous comptes et harness confondus ; une réponse comptée avant ESC-298 garde ce qu'elle avait dit (fichiers moins réponse). Les dollars sont comptés au prix d'entrée du dernier modèle sur lequel l'agent a tourné, sinon de son réglage, sinon 0.
+Les Stats, partie « Index du code » : par projet, les réponses, les tokens des réponses et, en dernière colonne, « Lecture de fichiers évitée (estimation haute) » (infobulle : ce n'est pas une économie mesurée). Plus de dollars. Cette dernière grandeur compte les fichiers comme s'ils avaient été lus entiers : un agent qui cherche avec grep en lit bien moins.
 
-**Les descriptions des outils** ne changent pas d'un appel à l'autre (rien n'y dépend de l'index : le cache de prompt du client reste bon). Elles demandent d'écrire avec les mots du code (en anglais ici), de redemander avec `keywords` quand un terme ne trouve rien, de passer `seen_node_ids` à `exclude_node_ids`, et disent ce que compte la ligne de mesure.
+**Les descriptions des outils** ne changent pas d'un appel à l'autre (le cache de prompt du client reste bon). Elles demandent d'écrire avec les mots du code, de redemander avec `keywords` quand un terme ne trouve rien, de passer `seen_node_ids` à `exclude_node_ids`.
+
+**Le hook et la consigne** disent ce que l'index trouve en un appel (un symbole, ses appelants, l'impact d'un changement) et gardent grep pour une regex ou un texte ; aucun chiffre, aucune promesse de tokens.
 
 ### Toujours à jour, sans guetteur
 
@@ -113,14 +114,15 @@ Certains fichiers ne sont jamais listés, lus ni indexés : ceux que la clôture
 
 ### Mesures
 
-- Le banc des sondes (`docs/CODEINDEX-PROBES.md`, `cargo run --release --example codeindex_probes`) mesure la justesse, la vitesse et le coût des outils face à grep, sur 54 sondes, la réponse comptée telle que le serveur MCP l'envoie ; chaque ticket de l'index y ajoute sa colonne, avant et après. Pour les 17 sondes « tâche », il mesure aussi la **suffisance** : la part du code nécessaire (des plages écrites à la main, `docs/codeindex-probes-sufficiency.json`) que la réponse contient déjà, et les appels de plus pour l'avoir en entier (ESC-298).
+- **L'effet sur le coût, avec de vrais agents** (IDX-3 à IDX-5, ESC-299) : sur les sondes, l'index coûte 63 % de plus que le grep informé ; avec des agents Haiku, l'index et le hook font dépenser environ 8 % de moins que grep seul (−13 % sur les questions, +14 % sur les petits changements), dans le bruit. Une mesure sur des changements à plusieurs endroits est en cours (IDX-6, ESC-306) : le site la dit en cours, sans promettre son résultat.
+- Le banc des sondes (`docs/CODEINDEX-PROBES.md`, `cargo run --release --example codeindex_probes`) mesure la justesse, la vitesse et le coût des outils face à grep, sur 54 sondes, la réponse comptée telle que le serveur MCP l'envoie (sans ligne d'économie) ; chaque ticket de l'index y ajoute sa colonne, avant et après. Pour les 17 sondes « tâche », il mesure aussi la **suffisance** : la part du code nécessaire (des plages écrites à la main, `docs/codeindex-probes-sufficiency.json`) que la réponse contient déjà, et les appels de plus pour l'avoir en entier (ESC-298).
 - Les liens résolus (ESC-297) et leur justesse face à grep : le banc des sondes, `docs/CODEINDEX-PROBES.md`, colonne IDX-2.
 - Recherche par le sens (build de debug, Windows). Chargement du modèle : 1,2 s. 195 passages courts par seconde, et 27 morceaux par seconde sur de longs documents. Ajouter une section à un document indexé relit 1 morceau sur 30, en 11 ms. Une recherche prend 8 ms sur 506 morceaux, 17 ms sur 1 000, 173 ms sur 10 000 et 860 ms sur 50 000.
 
 ## Réglages
 
 - **Réglages › Projets › Tous les projets › « Index du code sur tous les projets »** : coupé par défaut, enregistré aussitôt. Chaque projet le suit tant qu'il n'a pas fait son propre choix. Allumé, les projets qui le suivent sont lus un par un, les autres en attente ; un projet ajouté qui le suit aussi. Coupé, leur index est effacé, après une confirmation qui dit combien ; ceux qui ont fait leur choix le gardent. Ce réglage ne télécharge jamais le modèle de la recherche par le sens.
-- **Réglages › Projets › « Index du code »** d'un projet : « Indexer ce projet », enregistré aussitôt. C'est le choix du projet ; il peut revenir au réglage de l'app. Allumé, le projet est lu aussitôt ; coupé, son index est effacé. Le texte dit ce que l'index fait gagner et que rien ne quitte la machine ; pour un projet privé, que son index ne sert qu'à ses agents.
+- **Réglages › Projets › « Index du code »** d'un projet : « Indexer ce projet », enregistré aussitôt. C'est le choix du projet ; il peut revenir au réglage de l'app. Allumé, le projet est lu aussitôt ; coupé, son index est effacé. Le texte dit ce que l'index trouve et que rien ne quitte la machine ; pour un projet privé, que son index ne sert qu'à ses agents.
 - **« Nouveau projet »**, dernière étape : « Indexer le code », parti du réglage de l'app. Le changer en fait le choix du projet, lu en arrière-plan une fois le projet créé.
 - **Réglages › Projets › Index du code › « Recherche par le sens »** : le modèle, son téléchargement avec sa jauge, « Annuler », « Reprendre (N %) » et « Effacer ».
 - Ni le `.escouade.yml` ni la copie des réglages d'un projet ne portent ce réglage.

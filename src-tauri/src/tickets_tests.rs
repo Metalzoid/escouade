@@ -384,7 +384,7 @@ fn fail_checkouts(repo: &Path) {
 fn no_claude() -> String {
     format!(
         "Erreur : {}",
-        crate::engine::missing_line(EngineId::Claude, crate::i18n::Lang::Fr)
+        crate::engine::missing_line(EngineId::CLAUDE, crate::i18n::Lang::Fr)
     )
 }
 
@@ -6521,6 +6521,58 @@ async fn the_first_account_passing_the_threshold_sends_the_next_ticket_to_the_se
 }
 
 #[tokio::test]
+async fn a_ticket_follows_the_pace_of_the_week_not_its_percentage() {
+    // PR #20: a week that would not last to its reset goes behind the others even far under the
+    // pause threshold; one that starts again soon on pace is not wasted, past the threshold.
+    let h = harness("tk-account-pace");
+    let (p, _) = h.project(false).await;
+    let pro = second_account(&h);
+    h.core
+        .reorder_claude_accounts(&["pro".to_string(), "principal".to_string()])
+        .unwrap();
+    std::fs::create_dir_all(&pro.config_dir).unwrap();
+    let week = |pct: f64, minutes: i64| {
+        Some(RateWindow {
+            pct,
+            resets_at: Some(now_ms() + minutes * 60_000),
+        })
+    };
+    // Pro, the first: 60 % of its week at its second day, 210 % at the reset. Principal: 20 %.
+    h.record_usage("pro", Reading::claude((None, week(60.0, 5 * 24 * 60))))
+        .await;
+    h.record_usage(
+        "principal",
+        Reading::claude((None, week(20.0, 5 * 24 * 60))),
+    )
+    .await;
+    let a = h
+        .core
+        .ticket_create(&p.id, draft("Un [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&a.id, "to test", |t| t.column == Column::Review)
+        .await;
+    assert_eq!(account_of_ticket(&h, &a.id).await, "principal");
+    // Told: it is the pace that moved the new agents, under any threshold.
+    assert_eq!(
+        toasts(&h),
+        ["Le compte Pro finirait à 210 % de sa fenêtre hebdomadaire au rythme actuel : les nouveaux agents partent sur Principal."]
+    );
+    // Pro's week now at 88 %, starting again in 3 h: on pace, the first account again.
+    h.record_usage("pro", Reading::claude((None, week(88.0, 180))))
+        .await;
+    let b = h
+        .core
+        .ticket_create(&p.id, draft("Deux [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&b.id, "to test", |t| t.column == Column::Review)
+        .await;
+    assert_eq!(account_of_ticket(&h, &b.id).await, "pro");
+    assert!(h.pauses().is_empty(), "{:?}", h.pauses());
+}
+
+#[tokio::test]
 async fn with_every_account_past_the_threshold_the_autopilot_pauses_and_names_them() {
     let h = harness("tk-accounts-paused");
     let (p, _) = h.project(false).await;
@@ -6584,7 +6636,7 @@ async fn a_ticket_waits_for_the_accounts_of_its_own_harness_alone() {
     let work = Account {
         id: "work".into(),
         name: "Work".into(),
-        engine: EngineId::Codex,
+        engine: EngineId::CODEX,
         config_dir: h.dir.join("codex-work").to_string_lossy().into(),
         claude_path: crate::engine::fake_codex(),
         ..Default::default()
@@ -6609,7 +6661,7 @@ async fn a_ticket_waits_for_the_accounts_of_its_own_harness_alone() {
     // … while the one of Codex starts on Codex's account: never on Principal, whose quota is
     // spent, nor the other way round.
     let codex = TicketDraft {
-        engine: Some(Some(EngineId::Codex)),
+        engine: Some(Some(EngineId::CODEX)),
         ..draft("Sur Codex [ok]", &[], 5)
     };
     let b = h.core.ticket_create(&p.id, codex).await.unwrap();
@@ -6618,12 +6670,12 @@ async fn a_ticket_waits_for_the_accounts_of_its_own_harness_alone() {
     assert_eq!(account_of_ticket(&h, &b.id).await, "work");
     h.wait_board_idle().await;
     assert_eq!(h.ticket(&a.id).column, Column::Todo);
-    assert!(h.core.project_hold(&p.id, EngineId::Claude).is_some());
-    assert!(h.core.project_hold(&p.id, EngineId::Codex).is_none());
+    assert!(h.core.project_hold(&p.id, EngineId::CLAUDE).is_some());
+    assert!(h.core.project_hold(&p.id, EngineId::CODEX).is_none());
     // The status bar has the current account of each harness.
     let current = h.core.usage.lock().current.clone();
     assert_eq!(
-        current.get(&EngineId::Codex).map(String::as_str),
+        current.get(&EngineId::CODEX).map(String::as_str),
         Some("work")
     );
 }
@@ -6993,7 +7045,7 @@ async fn a_private_projects_new_agents_stay_on_its_own_account_past_the_threshol
     used_for_an_hour(&h, "pro", 100.0).await;
     // Past the threshold, Pro would hand its new agents to Équipe: P's stay on Pro.
     assert_eq!(
-        h.core.account_for_new(&p.id, EngineId::Claude).unwrap(),
+        h.core.account_for_new(&p.id, EngineId::CLAUDE).unwrap(),
         "pro"
     );
     // Allowed, or not private, they go to Équipe as any project's do.
@@ -7001,7 +7053,7 @@ async fn a_private_projects_new_agents_stay_on_its_own_account_past_the_threshol
     project.shared_on_limit = true;
     h.core.update_project(project).unwrap();
     assert_eq!(
-        h.core.account_for_new(&p.id, EngineId::Claude).unwrap(),
+        h.core.account_for_new(&p.id, EngineId::CLAUDE).unwrap(),
         "equipe"
     );
 }
@@ -8829,19 +8881,19 @@ fn a_ticket_agents_mode_is_one_its_own_harness_takes() {
         .2
     };
     assert_eq!(
-        crate::accounts::defaults(None, EngineId::Claude).mode,
+        crate::accounts::defaults(None, EngineId::CLAUDE).mode,
         "auto"
     );
-    assert_eq!(on(EngineId::Claude, "sonnet"), "auto");
-    assert_eq!(on(EngineId::Claude, "haiku"), "auto");
-    assert_eq!(on(EngineId::Claude, "claude-haiku-4-5"), "default");
+    assert_eq!(on(EngineId::CLAUDE, "sonnet"), "auto");
+    assert_eq!(on(EngineId::CLAUDE, "haiku"), "auto");
+    assert_eq!(on(EngineId::CLAUDE, "claude-haiku-4-5"), "default");
     // OpenCode has no mode « Auto »: « Demander », the closest that allows no more.
-    assert_eq!(on(EngineId::Opencode, "sonnet"), "default");
-    assert_eq!(on(EngineId::Opencode, ""), "default");
+    assert_eq!(on(EngineId::OPENCODE, "sonnet"), "default");
+    assert_eq!(on(EngineId::OPENCODE, ""), "default");
     // Codex and Copilot take it, whatever model of Claude Code the Kanban names.
-    assert_eq!(on(EngineId::Codex, "claude-haiku-4-5"), "auto");
-    assert_eq!(on(EngineId::Codex, "haiku"), "auto");
-    assert_eq!(on(EngineId::Copilot, "haiku"), "auto");
+    assert_eq!(on(EngineId::CODEX, "claude-haiku-4-5"), "auto");
+    assert_eq!(on(EngineId::CODEX, "haiku"), "auto");
+    assert_eq!(on(EngineId::COPILOT, "haiku"), "auto");
 }
 
 // ---------- worktrees of tickets that are over (ESC-143) ----------

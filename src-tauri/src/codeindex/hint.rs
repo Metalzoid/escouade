@@ -210,9 +210,10 @@ fn has_identifier_mark(s: &str) -> bool {
 }
 
 /// What an agent of `engine` is told about a search for a symbol, as the hook's answer: only
-/// harnesses that read it (Claude Code: an HTTP hook's answer; Codex: its command's output).
+/// harnesses that read it (`Engine::hook_context`: Claude Code's HTTP hook's answer, Codex's
+/// command's output).
 pub fn reply(engine: EngineId, lang: Lang, hook: &Value) -> Option<Value> {
-    if !matches!(engine, EngineId::Claude | EngineId::Codex) {
+    if !crate::engine::by_id(engine).hook_context() {
         return None;
     }
     let event = hook["hook_event_name"].as_str().unwrap_or("");
@@ -233,8 +234,8 @@ pub fn reply(engine: EngineId, lang: Lang, hook: &Value) -> Option<Value> {
 fn advice(lang: Lang) -> String {
     tr_in!(
         lang,
-        "Escouade a un index du code de ce projet : pour trouver un symbole, ses appelants ou ce qu’un changement touche, l’outil MCP index_search (ou index_callers, index_context, index_body, index_impact) répond en un appel, pour bien moins de tokens que grep ; un texte exact se cherche avec index_search et literal. Garde grep pour une regex.",
-        "Escouade has a code index of this project: to find a symbol, its callers or what a change touches, the MCP tool index_search (or index_callers, index_context, index_body, index_impact) answers in one call, for far fewer tokens than grep; an exact text is found by index_search with literal. Keep grep for a regex."
+        "Escouade a un index du code de ce projet : l’outil MCP index_search (ou index_callers, index_context, index_body, index_impact) trouve en un appel un symbole, ses appelants (justes même quand le nom a des homonymes) et ce qu’un changement touche ; un texte exact se cherche avec index_search et literal. Garde grep pour une regex ou un texte.",
+        "Escouade has a code index of this project: the MCP tool index_search (or index_callers, index_context, index_body, index_impact) finds in one call a symbol, its callers (right even when the name has namesakes) and what a change touches; an exact text is found by index_search with literal. Keep grep for a regex or a text."
     )
 }
 
@@ -243,8 +244,8 @@ fn advice(lang: Lang) -> String {
 pub fn rule(lang: Lang) -> String {
     tr_in!(
         lang,
-        "Index du code : pour trouver un symbole, ses appelants/appelés, le contexte d’une tâche, le corps d’une fonction ou l’impact d’un changement, utilise d’abord les outils MCP d’Escouade index_search, index_context, index_body, index_callers, index_callees et index_impact (une réponse pour bien moins de tokens que grep ou la lecture de fichiers), avec les mots du code ; garde grep pour une regex. Si l’index est coupé, l’outil le dit.",
-        "Code index: to find a symbol, its callers/callees, the context of a task, the body of a function or the impact of a change, first use Escouade's MCP tools index_search, index_context, index_body, index_callers, index_callees and index_impact (one answer for far fewer tokens than grep or reading files), with the words of the code; keep grep for a regex. If the index is off, the tool says so."
+        "Index du code : pour trouver un symbole, ses appelants/appelés, le contexte d’une tâche, le corps d’une fonction ou l’impact d’un changement, utilise d’abord les outils MCP d’Escouade index_search, index_context, index_body, index_callers, index_callees et index_impact (un appel donne les appelants, justes même quand le nom a des homonymes), avec les mots du code ; garde grep pour une regex ou un texte. Si l’index est coupé, l’outil le dit.",
+        "Code index: to find a symbol, its callers/callees, the context of a task, the body of a function or the impact of a change, first use Escouade's MCP tools index_search, index_context, index_body, index_callers, index_callees and index_impact (one call gives the callers, right even when the name has namesakes), with the words of the code; keep grep for a regex or a text. If the index is off, the tool says so."
     )
 }
 
@@ -321,7 +322,7 @@ mod tests {
     fn only_claude_and_codex_are_answered_and_only_for_a_symbol_search() {
         let grep = json!({ "hook_event_name": "PreToolUse", "tool_name": "Grep",
             "tool_input": { "pattern": "parse_config" } });
-        for e in [EngineId::Claude, EngineId::Codex] {
+        for e in [EngineId::CLAUDE, EngineId::CODEX] {
             let r = reply(e, Lang::En, &grep).unwrap();
             assert_eq!(r["hookSpecificOutput"]["hookEventName"], "PreToolUse");
             assert!(r["hookSpecificOutput"]["additionalContext"]
@@ -332,19 +333,19 @@ mod tests {
             assert!(r["hookSpecificOutput"].get("permissionDecision").is_none());
             assert!(r.get("decision").is_none());
         }
-        assert!(reply(EngineId::Copilot, Lang::En, &grep).is_none());
-        assert!(reply(EngineId::Cursor, Lang::En, &grep).is_none());
-        assert!(reply(EngineId::Claude, Lang::En, &bash("rg parse_config src")).is_some());
+        assert!(reply(EngineId::COPILOT, Lang::En, &grep).is_none());
+        assert!(reply(EngineId::CURSOR, Lang::En, &grep).is_none());
+        assert!(reply(EngineId::CLAUDE, Lang::En, &bash("rg parse_config src")).is_some());
         // A text search, another event, another tool: no word.
         assert!(reply(
-            EngineId::Claude,
+            EngineId::CLAUDE,
             Lang::En,
             &bash("rg 'failed to connect' src")
         )
         .is_none());
-        assert!(reply(EngineId::Claude, Lang::En, &bash("npm test")).is_none());
+        assert!(reply(EngineId::CLAUDE, Lang::En, &bash("npm test")).is_none());
         let mut post = grep.clone();
         post["hook_event_name"] = json!("PostToolUse");
-        assert!(reply(EngineId::Claude, Lang::En, &post).is_none());
+        assert!(reply(EngineId::CLAUDE, Lang::En, &post).is_none());
     }
 }

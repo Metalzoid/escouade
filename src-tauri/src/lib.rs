@@ -97,6 +97,8 @@ mod fileorigin;
 mod fileorigin_tests;
 #[cfg(test)]
 mod first_message_tests;
+#[cfg(test)]
+mod fluxbench;
 mod forge;
 mod fsedit;
 #[cfg(test)]
@@ -123,6 +125,7 @@ mod notify;
 #[cfg(test)]
 mod opencode_tests;
 mod outside;
+mod pace;
 mod pagecrash;
 mod paths;
 mod plan;
@@ -156,6 +159,9 @@ mod projectfile;
 #[cfg(test)]
 mod projectfile_tests;
 mod projectlogo;
+mod prview;
+#[cfg(test)]
+mod prview_tests;
 mod pty;
 mod repos;
 #[cfg(test)]
@@ -381,6 +387,12 @@ pub fn plugin_cli(args: Vec<String>) -> i32 {
 /// `docs/CODEINDEX-PROBES.md`). Gives the exit code.
 pub fn codeindex_probes_cli(args: Vec<String>) -> i32 {
     codeindex::probes::cli(args)
+}
+
+/// `codeindex_agents` (examples): the bench of the real agents, with and without the index (ESC-299,
+/// `docs/CODEINDEX-PROBES.md`). Gives the exit code.
+pub fn codeindex_agents_cli(args: Vec<String>) -> i32 {
+    codeindex::probes::agents::cli(args)
 }
 
 pub fn run() {
@@ -655,6 +667,7 @@ pub fn run() {
                 commands::refine_workflows,
                 commands::effective_workflows,
                 commands::remove_workflow_file,
+                commands::set_workflow_removed,
                 commands::agent_merge_check,
                 commands::merge_agent_repos,
                 commands::forget_repo,
@@ -742,6 +755,11 @@ pub fn run() {
                 commands::agent_branch_switch,
                 commands::agent_git_sync,
                 commands::agent_pr_fix,
+                commands::agent_pr_detail,
+                commands::agent_pr_log,
+                commands::agent_pr_rerun,
+                commands::agent_no_pr,
+                commands::project_prs,
                 commands::set_remote_control,
                 commands::stats,
                 commands::refresh_usage,

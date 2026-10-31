@@ -706,7 +706,7 @@ pub fn claude_found(core: CoreState) -> ClaudeFound {
 /// of it may share (those it has).
 #[tauri::command(async)]
 pub fn account_shareable(core: CoreState, engine: Option<EngineId>) -> Vec<String> {
-    core.shareable(engine.unwrap_or(EngineId::Claude))
+    core.shareable(engine.unwrap_or(EngineId::CLAUDE))
 }
 
 /// « Créer et se connecter »: a new account of `engine` (Claude Code by default), its folder made
@@ -720,7 +720,7 @@ pub fn account_create(
     mode: ShareMode,
     engine: Option<EngineId>,
 ) -> Res<ClaudeAccount> {
-    let engine = engine.unwrap_or(EngineId::Claude);
+    let engine = engine.unwrap_or(EngineId::CLAUDE);
     let r = core
         .create_account(engine, &name, &share, mode)
         .map_err(err);
@@ -1121,6 +1121,20 @@ pub async fn remove_workflow_file(
     workflow: String,
 ) -> Res<crate::workflow::Scan> {
     core.remove_workflow_file(&id, &workflow).await.map_err(err)
+}
+
+/// « Supprimer » a workflow (`removed`: its file goes, never written again), « Laisser supprimé »
+/// one proposed again, or « Rétablir » it (ESC-309).
+#[tauri::command]
+pub async fn set_workflow_removed(
+    core: CoreState<'_>,
+    id: String,
+    workflow: String,
+    removed: bool,
+) -> Res<crate::workflow::Scan> {
+    core.set_workflow_removed(&id, &workflow, removed)
+        .await
+        .map_err(err)
 }
 
 /// « Oublier » a repository gone from the project's folder (ESC-169).
@@ -1931,6 +1945,62 @@ pub async fn agent_pr_fix(
     core.agent_pr_fix(&id, number, host_repo.as_deref().unwrap_or(""), fix)
         .await
         .map_err(err)
+}
+
+/// The « PR et CI » tab (ESC-305): the checks, reviews, comments and deployments of the agent's
+/// pull request `number`, or why the host did not give them.
+#[tauri::command]
+pub async fn agent_pr_detail(
+    core: CoreState<'_>,
+    id: String,
+    number: u64,
+    host_repo: Option<String>,
+) -> Res<crate::prview::Read<crate::prview::PrDetail>> {
+    Ok(core
+        .agent_pr_detail(&id, number, host_repo.as_deref().unwrap_or(""))
+        .await)
+}
+
+/// The end of the log of a check's job of the agent's pull request `number`.
+#[tauri::command]
+pub async fn agent_pr_log(
+    core: CoreState<'_>,
+    id: String,
+    number: u64,
+    job: String,
+    host_repo: Option<String>,
+) -> Res<crate::prview::Read<String>> {
+    Ok(core
+        .agent_pr_log(&id, number, host_repo.as_deref().unwrap_or(""), &job)
+        .await)
+}
+
+/// « Relancer les échecs » on the agent's pull request `number`: how many runs started.
+#[tauri::command]
+pub async fn agent_pr_rerun(
+    core: CoreState<'_>,
+    id: String,
+    number: u64,
+    host_repo: Option<String>,
+) -> Res<usize> {
+    core.agent_pr_rerun(&id, number, host_repo.as_deref().unwrap_or(""))
+        .await
+        .map_err(err)
+}
+
+/// Why the agent has no « Ouvrir une PR… »; none when it can open one.
+#[tauri::command]
+pub async fn agent_no_pr(core: CoreState<'_>, id: String) -> Res<Option<crate::prview::NoPr>> {
+    core.agent_no_pr(&id).await.map_err(err)
+}
+
+/// The open pull requests of the project, or why they could not be read.
+#[tauri::command]
+pub async fn project_prs(
+    core: CoreState<'_>,
+    project_id: String,
+) -> Res<crate::prview::Read<crate::prview::ProjectPrs>> {
+    Ok(core.project_prs(&project_id).await)
 }
 
 /// The statistics of a period, of every account or (`account`) of one.
