@@ -2,7 +2,7 @@
 number: 18
 title: "Un workflow supprimé n'est plus recréé, et un projet peut n'avoir aucun workflow"
 date: "2026-10-30"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-309"
 pages: ["kanban/workflows","projets/escouade-yml","projets/nouveau-projet"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/workflows","added":17,"removed":4},{"page":"projets/escouade-yml","added":4,"removed":2},{"page":"projets/nouveau-projet","added":2,"removed":2}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-31T10:03:22+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
