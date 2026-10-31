@@ -2503,7 +2503,7 @@ mod tests {
         let usage = [
             account("principal", 100.0, NOW + 9_000),
             AccountUsage {
-                engine: EngineId::Codex,
+                engine: EngineId::CODEX,
                 ..account("work", 10.0, NOW + 9_000)
             },
         ];

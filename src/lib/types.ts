@@ -592,8 +592,14 @@ export interface IssuePage {
   total: number | null;
 }
 
-/** A harness that runs agents (« Harness » in the interface): Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode, Mistral Vibe, Antigravity CLI, Gemini CLI. */
-export type EngineId = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode' | 'vibe' | 'agy' | 'gemini';
+/** The harnesses written into the app: Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode, Mistral Vibe, Antigravity CLI, Gemini CLI. */
+export type KnownEngineId = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode' | 'vibe' | 'agy' | 'gemini';
+
+/**
+ * A harness that runs agents (« Harness » in the interface): an open id (INT-3), one of the app's or another the data names
+ * (a later version's, a plugin's), which the backend's registry declares or not (`engineOf`).
+ */
+export type EngineId = KnownEngineId | (string & {});
 
 /** A mode of Escouade a harness takes, and what it means there (null: what Escouade's menu says of it, Claude Code's meaning). */
 export interface ModeCap {
@@ -780,6 +786,8 @@ export interface Project {
   workflowsAutoRead?: boolean;
   /** « Où garder la configuration des workflows » (ESC-195): in the repository (`.escouade/workflows/`, by default) or on this machine. Absent from a project of the window’s tests made before it. */
   workflowsInRepo?: boolean;
+  /** Off: « Pas de workflow pour ce projet » (ESC-309), nothing read nor written of its workflows; `workflows.enabled` of its .escouade.yml when shared. Absent: on. */
+  workflowsEnabled?: boolean;
   /** « Index du code » (ESC-251), the project's own choice (ESC-293): absent, it follows « Index du code sur tous les projets » (`codeIndexOn`, lib/codeindex.ts). Set by `set_code_index` (Réglages › Projets, ESC-254). */
   codeIndexChoice?: boolean;
 }
@@ -2308,6 +2316,10 @@ export interface WorkflowScan {
   files?: { id: string; path: string; local: boolean; inRepo: boolean; updated: string | null }[];
   /** The files that could not be read, with why. */
   unreadable?: { path: string; why: string }[];
+  /** The workflows the user removed (ESC-309): never written again by a reading; `changed` when what found one changed since (proposed again). */
+  removed?: { id: string; name: string; changed: boolean }[];
+  /** « Pas de workflow pour ce projet » (ESC-309): nothing was read. */
+  off?: boolean;
 }
 
 /** How an agent's stay in a step, or outside the workflow (`step` null), ended. */
