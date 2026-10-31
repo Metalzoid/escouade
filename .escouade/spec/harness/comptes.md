@@ -2,7 +2,7 @@
 title: "Comptes"
 subject: "Harness"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162","ESC-2"]
+tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162"]
 decisions: []
 compared: null
 ---
