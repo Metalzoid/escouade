@@ -6,6 +6,10 @@ L’onglet « Projets » règle un projet à la fois : son nom, sa couleur et 
 
 L’onglet agit sur le projet choisi dans la rangée « Projet », sous l’en-tête de la [fenêtre des réglages](settings-application) : un bouton par projet ouvert. Ce que tu changes sur un projet reste dans le brouillon quand tu passes à un autre, et tout s’enregistre ensemble avec « Enregistrer ».
 
+## Plugins proposés
+
+Quand le `.escouade.yml` du projet propose des plugins (`plugins.recommended`) qui ne sont pas installés sur ta machine, une bande en tête de l’onglet les nomme, chacun avec ce qu’il demande. « Voir dans le store » ouvre sa page dans la vue Plugins, d’où tu l’installes après avoir lu ses permissions : la bande n’installe ni n’active rien. « Pas pour ce projet » la fait taire sur cette machine. Dans un projet privé, elle rappelle qu’un plugin installé n’y est actif qu’une fois activé pour lui. Voir [.escouade.yml](escouade-yml#plugins).
+
 ## Identité
 
 | Réglage | Effet | Par défaut |
@@ -230,7 +234,7 @@ L’interrupteur « Partir d’un projet vierge » (« L’historique reste d
 
 ## Index du code
 
-Le groupe « Index du code » allume l’[index du code](code-index) du projet (**Indexer ce projet**) : il dit ce que l’index fait gagner, que tout reste sur la machine, et ce qu’il contient. Tant que le projet n’a pas fait son propre choix, il suit **Index du code sur tous les projets** (voir plus bas) et le dit ; un choix fait ici est gardé, et **Suivre le réglage de l’app** y revient. Pour un projet privé, il dit ce qui reste hors de l’index. **Recherche par le sens** télécharge le modèle des vecteurs, avec sa progression et **Annuler**.
+Le groupe « Index du code » allume l’[index du code](code-index) du projet (**Indexer ce projet**) : il dit ce que l’index trouve, que tout reste sur la machine, et ce qu’il contient. Tant que le projet n’a pas fait son propre choix, il suit **Index du code sur tous les projets** (voir plus bas) et le dit ; un choix fait ici est gardé, et **Suivre le réglage de l’app** y revient. Pour un projet privé, il dit ce qui reste hors de l’index. **Recherche par le sens** télécharge le modèle des vecteurs, avec sa progression et **Annuler**.
 
 ## Mémoire partagée
 

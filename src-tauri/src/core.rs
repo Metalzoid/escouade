@@ -916,6 +916,8 @@ pub struct Core<R: Runtime = Wry> {
     pub quitting: AtomicBool,
     /// Files left unsaved in the editor, as the window last said.
     pub unsaved: AtomicUsize,
+    /// The agents the window holds a message for (`outbox.svelte.ts`).
+    pub held: Mutex<HashSet<String>>,
     /// What the page showed when its process ended abnormally, until the page told it (ESC-290).
     pub page_crash: Mutex<Option<crate::pagecrash::PageCrash>>,
     /// Work under way outside of an agent's turn that a restart would cut (`Core::working`): a
@@ -1026,6 +1028,10 @@ pub struct Core<R: Runtime = Wry> {
     /// (tests only: the wait is `NAMING_LIMIT`).
     #[cfg(test)]
     pub(crate) naming_ms: AtomicU64,
+    /// The conversation's ops handed to the window so far, sent or buffered (tests only: the
+    /// stream bench, `fluxbench`, tells by it the lines that made something).
+    #[cfg(test)]
+    pub(crate) conv_ops: AtomicU64,
     /// The names that came for an agent gone meanwhile and were dropped (tests only).
     #[cfg(test)]
     pub(crate) names_dropped: AtomicU64,
@@ -1741,6 +1747,7 @@ impl<R: Runtime> Core<R> {
         // Principal named in them, the first time.
         accounts::normalize(&mut settings);
         settings.normalize_display();
+        settings.normalize_mid_turn_delay();
         let mut state: PersistedState = read_json(&data.state_file()).unwrap_or_default();
         // « Les agents partent de la branche cible » kept as their branch to start from (ESC-160).
         for p in &mut state.projects {
@@ -1919,6 +1926,7 @@ impl<R: Runtime> Core<R> {
             waiting: AtomicUsize::new(usize::MAX),
             quitting: AtomicBool::new(false),
             unsaved: AtomicUsize::new(0),
+            held: Mutex::default(),
             page_crash: Mutex::default(),
             works: AtomicUsize::new(0),
             board_lock: tokio::sync::Mutex::new(()),
@@ -1967,6 +1975,8 @@ impl<R: Runtime> Core<R> {
             #[cfg(test)]
             naming_ms: AtomicU64::new(NAMING_LIMIT.as_millis() as u64),
             #[cfg(test)]
+            conv_ops: AtomicU64::new(0),
+            #[cfg(test)]
             names_dropped: AtomicU64::new(0),
             #[cfg(test)]
             alerts: Mutex::default(),
@@ -1990,7 +2000,8 @@ impl<R: Runtime> Core<R> {
         core.facts.resolve_with(resolver);
         let place: std::sync::Weak<dyn crate::plugins::events::Place> =
             Arc::downgrade(&(core.clone() as Arc<dyn crate::plugins::events::Place>));
-        core.plugin_events.place_with(place);
+        core.plugin_events.place_with(place.clone());
+        core.plugin_runtime.place_with(place);
         for h in core.agents.read().values() {
             h.lock().facts = core.facts.emitter();
         }
@@ -2058,14 +2069,7 @@ impl<R: Runtime> Core<R> {
         }
         let c = self.clone();
         tauri::async_runtime::spawn(async move { c.git_loop(git_rx).await });
-        let c = self.clone();
-        tauri::async_runtime::spawn(async move {
-            loop {
-                c.conv_flush.notified().await;
-                tokio::time::sleep(Duration::from_millis(16)).await;
-                c.flush_conv();
-            }
-        });
+        tauri::async_runtime::spawn(self.clone().conv_flusher());
         let c = self.clone();
         tauri::async_runtime::spawn(async move {
             loop {
@@ -2281,6 +2285,7 @@ impl<R: Runtime> Core<R> {
             s.user_id = self.settings.read().user_id.clone();
         }
         s.normalize_attachments();
+        s.normalize_mid_turn_delay();
         s.normalize_display();
         accounts::normalize(&mut s);
         accounts::check(&s)?;
@@ -2556,6 +2561,8 @@ impl<R: Runtime> Core<R> {
     /// Streaming deltas are buffered and sent at most every 16 ms (merged); any other op first
     /// flushes the agent's buffered deltas so the UI sees every op in order.
     fn emit_conv(&self, agent_id: &str, ops: Vec<ConvOp>) {
+        #[cfg(test)]
+        self.conv_ops.fetch_add(ops.len() as u64, Ordering::AcqRel);
         let only_deltas = ops.iter().all(|o| matches!(o, ConvOp::Delta { .. }));
         let mut buf = self.conv_buffer.lock();
         let was_empty = buf.is_empty();
@@ -2574,6 +2581,22 @@ impl<R: Runtime> Core<R> {
             agent_id: agent_id.to_string(),
             ops,
         });
+    }
+
+    /// Sends the buffered deltas 16 ms after the first of them (`emit_conv`), for good; the stream
+    /// bench (INT-0, `fluxbench`) runs it as the app does.
+    pub(crate) async fn conv_flusher(self: Arc<Self>) {
+        loop {
+            self.conv_flush.notified().await;
+            tokio::time::sleep(Duration::from_millis(16)).await;
+            self.flush_conv();
+        }
+    }
+
+    /// Whether deltas of the agent `id` wait in the buffer for `conv_flusher`.
+    #[cfg(test)]
+    pub(crate) fn conv_pending(&self, id: &str) -> bool {
+        self.conv_buffer.lock().contains_key(id)
     }
 
     /// Sends every buffered delta now.
@@ -2700,8 +2723,10 @@ impl<R: Runtime> Core<R> {
         name: &str,
     ) {
         // A ticket's agent at work: its board tells when the ticket is ready or blocked; its
-        // questions still call for the user.
-        if alert.kind == NotifyKind::Question || !self.ticket_doing(id) {
+        // questions still call for the user. Nor a turn's end the window follows with a message
+        // it holds.
+        let next = alert.kind == NotifyKind::Done && self.held.lock().contains(id);
+        if (alert.kind == NotifyKind::Question || !self.ticket_doing(id)) && !next {
             self.notify_agent(alert, project_id, id, name);
         }
     }
@@ -7432,6 +7457,8 @@ impl<R: Runtime> Core<R> {
                 let running = rt.proc.clone().filter(|_| rt.meta.status.is_active());
                 if running.is_some() {
                     rt.interrupted = true;
+                    // Told archived with its turn's end: the window sends it none of its held messages.
+                    rt.meta.archived = true;
                 }
                 running
             };
@@ -10270,6 +10297,22 @@ impl<R: Runtime> crate::plugins::events::Place for Core<R> {
 
     fn project_path(&self, id: &str) -> Option<String> {
         self.project(id).ok().map(|p| p.path)
+    }
+
+    fn project_plugin(
+        &self,
+        id: &str,
+        plugin: &str,
+    ) -> Option<(bool, serde_json::Map<String, serde_json::Value>)> {
+        let p = self.project(id).ok()?;
+        let settings = p
+            .shared
+            .file
+            .as_ref()
+            .and_then(|f| crate::projectfile::plugin_settings(&f.values, plugin))
+            .cloned()
+            .unwrap_or_default();
+        Some((p.private, settings))
     }
 }
 

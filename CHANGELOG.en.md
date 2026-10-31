@@ -8,6 +8,8 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
+- A message posted while an agent works can still be edited or cancelled before it reaches it: it waits a few seconds, or until the end of the turn with Cursor and OpenCode, and can also go at once.
+- The “PR and CI” tab of the right panel shows the pull request of the agent’s branch: its CI check by check, the log of a failure, “Re-run failed jobs” in one click, its reviews and its deployments. Without an agent it lists the project’s open pull requests, and an agent’s card tells the state of its CI beside “#41 → main”.
 - Plugins have their own view, opened by the icon of the projects’ rail: install from a folder or a git repository after seeing where the plugin comes from, its fingerprint, what it adds and what it will be able to do, the strongest permission first; switch it on for the app or project by project, a private project staying off by default; take a permission back, set its secrets, read its journal, uninstall it.
 - A new version of a plugin is offered, never installed by itself, and asks for your consent again if it asks for more than the installed version.
 - The code index turns on for every project at once, from Settings › Projects: each project follows it until it makes its own choice, and its section says where its state comes from. Projects are read one by one without blocking the window, and turning the switch off asks before erasing their indexes.
@@ -23,9 +25,12 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Four example plugins, complete and tested, to copy when you write yours: a “High contrast” theme, a Discord webhook with no code, Slack in each project’s channel and a team’s rules in TypeScript. The documentation shows their whole code.
 - “Open in Escouade” on a store page opens the plugin’s page in the app, running or not: a link only shows the plugin, installing it stays your gesture.
 - The documentation says how to publish a plugin on the store and prepare its review, and a new page, “Plugin security”, says what the app checks, what the “Verified by Escouade” seal covers and what the review refuses.
+- A project can propose plugins in its `.escouade.yml`: when it opens, a band of Settings › Projects names those missing, with their store page, installing nothing by itself; “Not for this project” silences it. The file can also set a plugin up for that project, never with a secret.
 
 ### Fixes
 
+- Uncommitted files no longer blink at each refresh: “No file changed by this agent” and the list stay shown as long as nothing changes.
+- The code index no longer claims a token saving that isn’t measured: its answers, the agents’ instructions, the statistics (no more dollars) and the website say what it finds well, and the effect measured with real agents (small).
 - Two tickets worked on at once no longer propose a decision under the same number: a proposed decision has no number and gets the register’s next one when it is accepted, and the pages and tickets that cite it follow.
 - Approving a ticket is no longer refused for “uncommitted changes” after the spec was compared to the code: its gaps and date stay on this computer instead of being written in the pages, and the Docs tab still shows them.
 - “Write a first spec from the code”, and every new discussion, closes its window and opens the discussion with its first message even when new agents open in the harness terminal: a discussion always stays in its conversation, where Escouade refuses its writes.

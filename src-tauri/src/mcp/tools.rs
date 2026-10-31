@@ -186,13 +186,9 @@ impl<C: AsRequestContext, R: Runtime> FromContextPart<C> for ToolCtx<R> {
     }
 }
 
-/// The blocks of an answer of the index: its text, then its metrics line when there is one.
-fn index_blocks((text, line): index::Reply) -> Vec<ContentBlock> {
-    let mut blocks = vec![ContentBlock::text(text)];
-    if !line.is_empty() {
-        blocks.push(ContentBlock::text(line));
-    }
-    blocks
+/// The blocks of an answer of the index: its text alone (no line about what it saved, ESC-307).
+fn index_blocks(text: index::Reply) -> Vec<ContentBlock> {
+    vec![ContentBlock::text(text)]
 }
 
 /// What the activity log says a call was asked: its arguments given, « name: value · … ».
@@ -222,15 +218,7 @@ impl<R: Runtime> Tools<R> {
     fn index_schemas(&self) -> u64 {
         static TOKENS: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
         *TOKENS.get_or_init(|| {
-            let tools: Vec<_> = self
-                .router
-                .list_all()
-                .into_iter()
-                .filter(|t| t.name.starts_with("index_"))
-                .collect();
-            crate::codeindex::accounting::schema_overhead_tokens(
-                &serde_json::to_value(tools).unwrap_or_default(),
-            )
+            crate::codeindex::accounting::schema_overhead_tokens(&index_tools(&self.router))
         })
     }
 
@@ -241,6 +229,17 @@ impl<R: Runtime> Tools<R> {
         let router = router + Self::test_router();
         router
     }
+}
+
+/// The index's tools of `router`, as a client lists them (also served by the bench of the real
+/// agents, `codeindex::probes::agents`).
+pub(crate) fn index_tools<R: Runtime>(router: &ToolRouter<Tools<R>>) -> serde_json::Value {
+    let tools: Vec<_> = router
+        .list_all()
+        .into_iter()
+        .filter(|t| t.name.starts_with("index_"))
+        .collect();
+    serde_json::to_value(tools).unwrap_or_default()
 }
 
 // The arguments' descriptions are the model's (English, one line each: a doc comment's line

@@ -8,6 +8,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- Un message posté pendant qu’un agent travaille peut encore être modifié ou annulé avant de lui parvenir : il attend quelques secondes, ou la fin du tour chez Cursor et OpenCode, et peut aussi partir tout de suite.
+- L’onglet « PR et CI » du panneau de droite montre la PR de la branche de l’agent : sa CI vérification par vérification, le journal d’un échec, « Relancer les échecs » d’un clic, ses revues et ses déploiements. Sans agent, il liste les PR ouvertes du projet, et la carte d’un agent dit l’état de sa CI à côté de « #41 → main ».
 - Les plugins ont leur vue, ouverte par l’icône de la barre des projets : installer depuis un dossier ou un dépôt git après avoir vu d’où vient le plugin, son empreinte, ce qu’il ajoute et ce qu’il pourra faire, la permission la plus forte d’abord ; l’activer pour l’app ou projet par projet, un projet privé restant coupé d’office ; lui retirer une permission, régler ses secrets, lire son journal, le désinstaller.
 - Une nouvelle version d’un plugin est proposée, jamais installée seule, et redemande ton accord si elle demande plus que la version installée.
 - L’index du code s’allume d’un coup sur tous les projets, depuis Réglages › Projets : chaque projet le suit tant qu’il n’a pas fait son propre choix, et sa section dit d’où vient son état. Les projets sont lus un par un sans bloquer la fenêtre, et couper la case demande avant d’effacer leurs index.
@@ -23,9 +25,12 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Quatre plugins d’exemple, complets et testés, à copier pour écrire le tien : un thème « Contraste élevé », un webhook Discord sans code, Slack dans le salon de chaque projet et les règles d’une équipe en TypeScript. La documentation montre leur code entier.
 - « Ouvrir dans Escouade » sur une page du store ouvre la page du plugin dans l’app, qu’elle soit lancée ou non : un lien ne fait que montrer le plugin, l’installer reste ton geste.
 - La documentation dit comment publier un plugin sur le store et préparer sa revue, et une nouvelle page, « La sécurité des plugins », dit ce que l’app vérifie, ce que le sceau « Vérifié par Escouade » couvre et ce que la revue refuse.
+- Un projet peut proposer des plugins dans son `.escouade.yml` : à son ouverture, une bande de Réglages › Projets nomme ceux qui manquent, avec leur page du store, sans rien installer seule ; « Pas pour ce projet » la fait taire. Le fichier peut aussi régler un plugin pour ce projet, jamais avec un secret.
 
 ### Corrections
 
+- Les fichiers non commités ne clignotent plus à chaque rafraîchissement : « Aucun fichier modifié par cet agent » et la liste restent affichés tant que rien ne change.
+- L’index du code n’annonce plus d’économie de tokens qu’on ne mesure pas : ses réponses, les consignes des agents, les statistiques (plus de dollars) et le site disent ce qu’il trouve bien, et l’effet mesuré avec de vrais agents (faible).
 - Deux tickets menés en même temps ne proposent plus une décision sous le même numéro : une décision proposée n’a pas de numéro et reçoit le suivant du registre quand elle est acceptée, et les pages et tickets qui la citent suivent.
 - Valider un ticket n’est plus refusé pour « des modifications non commitées » après la comparaison de la spec au code : ses écarts et sa date restent sur ce poste au lieu d’être écrits dans les pages, et l’onglet Docs les montre toujours.
 - « Écrire une première spec depuis le code », et toute nouvelle discussion, ferme sa fenêtre et ouvre la discussion avec son premier message même quand les nouveaux agents s’ouvrent dans le terminal du harness : une discussion reste toujours dans sa conversation, où Escouade refuse ses écritures.

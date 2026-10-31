@@ -6,6 +6,10 @@ The “Projects” tab sets one project at a time: its name, color and tile, its
 
 The tab acts on the project chosen in the “Project” row, under the header of the [settings window](settings-application): one button per open project. What you change on a project stays in the draft when you switch to another, and everything is saved together with “Save”.
 
+## Proposed plugins
+
+When the project’s `.escouade.yml` proposes plugins (`plugins.recommended`) not installed on your machine, a band at the head of the tab names them, each with what it asks for. “See in the store” opens its page in the view Plugins, from where you install it after reading its permissions: the band installs and switches on nothing. “Not for this project” silences it on this machine. In a private project, it reminds you that an installed plugin is on in it only once switched on for it. See [.escouade.yml](escouade-yml#plugins).
+
 ## Identity
 
 | Setting | Effect | Default |
@@ -230,7 +234,7 @@ The “Start from a blank project” switch (“The history stays in Settings �
 
 ## Code index
 
-The “Code index” group turns the project’s [code index](code-index) on (**Index this project**): it says what the index saves, that everything stays on the machine, and what it holds. Until the project makes its own choice, it follows **Code index on every project** (see below) and says so; a choice made here is kept, and **Follow the app’s setting** goes back to it. For a private project, it says what stays out of the index. **Search by meaning** downloads the vectors’ model, with its progress and **Cancel**.
+The “Code index” group turns the project’s [code index](code-index) on (**Index this project**): it says what the index finds, that everything stays on the machine, and what it holds. Until the project makes its own choice, it follows **Code index on every project** (see below) and says so; a choice made here is kept, and **Follow the app’s setting** goes back to it. For a private project, it says what stays out of the index. **Search by meaning** downloads the vectors’ model, with its progress and **Cancel**.
 
 ## Shared memory
 

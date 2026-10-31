@@ -97,6 +97,8 @@ mod fileorigin;
 mod fileorigin_tests;
 #[cfg(test)]
 mod first_message_tests;
+#[cfg(test)]
+mod fluxbench;
 mod forge;
 mod fsedit;
 #[cfg(test)]
@@ -156,6 +158,9 @@ mod projectfile;
 #[cfg(test)]
 mod projectfile_tests;
 mod projectlogo;
+mod prview;
+#[cfg(test)]
+mod prview_tests;
 mod pty;
 mod repos;
 #[cfg(test)]
@@ -383,6 +388,12 @@ pub fn codeindex_probes_cli(args: Vec<String>) -> i32 {
     codeindex::probes::cli(args)
 }
 
+/// `codeindex_agents` (examples): the bench of the real agents, with and without the index (ESC-299,
+/// `docs/CODEINDEX-PROBES.md`). Gives the exit code.
+pub fn codeindex_agents_cli(args: Vec<String>) -> i32 {
+    codeindex::probes::agents::cli(args)
+}
+
 pub fn run() {
     // Before GTK starts: the window's app_id and WM_CLASS, which find its icon (ESC-239).
     #[cfg(target_os = "linux")]
@@ -565,6 +576,7 @@ pub fn run() {
             lanes,
             tauri::generate_handler![
                 commands::subscribe,
+                commands::set_held,
                 commands::set_ui,
                 commands::open_url,
                 commands::open_path,
@@ -742,6 +754,11 @@ pub fn run() {
                 commands::agent_branch_switch,
                 commands::agent_git_sync,
                 commands::agent_pr_fix,
+                commands::agent_pr_detail,
+                commands::agent_pr_log,
+                commands::agent_pr_rerun,
+                commands::agent_no_pr,
+                commands::project_prs,
                 commands::set_remote_control,
                 commands::stats,
                 commands::refresh_usage,

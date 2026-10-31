@@ -63,6 +63,7 @@
   import { shortWindow } from '../lib/short-window.svelte';
   import { closeTerminal, newTerminal, terminalIn } from '../lib/term-actions';
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
+  import { returnHeld } from '../lib/outbox.svelte';
   import { backTarget, forwardTargets } from '../lib/handover';
   import type { Agent, AgentStatus, BranchInfo, EngineId, Project } from '../lib/types';
   import RunsSection from './RunsSection.svelte';
@@ -103,6 +104,13 @@
   let pickingBase = $state<{ branch: string | null } | null>(null);
   /** The new branch the picker of the starting branch was opened for: read once it is closed, as it gives its pick then. */
   let baseFor: string | null = null;
+  /** The agent's pull request in the side panel's « PR et CI » tab (ESC-305): its CI, its log, its reviews. */
+  function showCi(id: string) {
+    app.selectAgent(id);
+    app.panelTab = 'hosts';
+    if (!app.split) app.filesOpen = true;
+  }
+
   function pickBase(branch: string | null) {
     baseFor = branch;
     pickingBase = { branch };
@@ -485,6 +493,8 @@
     const archive = () => {
       // Archiving stops its test launches: stopped first, their ends are no crashes.
       stopTests(a.id);
+      // What it holds goes back to its draft, unsent.
+      returnHeld(a.id);
       return app.run(api.archiveAgent(a.id, true));
     };
     const ticket = app.ticketOf(a.id);
@@ -1015,6 +1025,14 @@
                   use:tip={{ text: prTip(word, p), aria: false }}
                   onclick={() => openPr(p)}><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
                 >
+                <!-- Where it goes and its CI in words (ESC-305): « #41 → main · CI en échec ». -->
+                <span class="prto">{t('prs.to', { base: p.base })}</span>
+                {#if p.checks && p.state === 'open'}
+                  <!-- Its CI opens the side panel's « PR et CI » on it, even where the panel is too narrow for that tab (choice 189). -->
+                  <button class="prci {p.checks}" use:tip={t('prs.seeCi', { word, number: p.number })} onclick={() => showCi(a.id)}
+                    >{t(`prs.checks.${p.checks}`)}</button
+                  >
+                {/if}
                 {#if !a.archived && canFixChecks(p)}
                   <button
                     class="prfix"
@@ -1950,6 +1968,36 @@
   }
   .prnum.dim {
     color: var(--muted);
+  }
+  .prto {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font: 11px var(--mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .prci {
+    padding: 0;
+    border: none;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .prci:hover {
+    text-decoration: underline;
+  }
+  .prci.success {
+    color: var(--run);
+  }
+  .prci.failure {
+    color: var(--del);
+  }
+  .prci.pending {
+    color: var(--wait);
   }
   .prfix {
     background: rgba(var(--fg-rgb), 0.05);
