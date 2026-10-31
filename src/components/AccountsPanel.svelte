@@ -99,7 +99,7 @@
           <span class="name"
             >{accountName(r.account)}{#if r.current}<span class="tag cur">{t('accounts.panel.current')}</span>{/if}{#if r.over}<span
                 class="tag over">{t('accounts.panel.over')}</span
-              >{/if}</span
+              >{:else if r.behind}<span class="tag over">{t('accounts.panel.behind')}</span>{/if}</span
           >
           <!-- A harness that tells no cost (Cursor CLI) has none of the day to show. -->
           {#if !page || counted}<span class="today" use:tip={r.today.estimated ? estimateHint(r.today) : undefined}

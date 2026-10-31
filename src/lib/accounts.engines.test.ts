@@ -5,9 +5,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { agent, BARE_ENGINE, CLAUDE_ENGINE, project, resetApp, usageOf } from '../test/ipc';
 import {
   accountEngines,
-  anyOver,
   engineOrder,
   isPrincipal,
+  judge,
   meterLabel,
   meterName,
   metersShown,
@@ -141,11 +141,13 @@ describe('the quota of an account', () => {
     expect(metersShown(null, 'codex')).toEqual([]);
   });
 
-  it('is past the threshold by any of its meters, credits included; never without one', () => {
-    const credits = usageOf('x', { meters: [{ minutes: null, pct: 96, resetsAt: NOW + HOUR }] });
-    expect(anyOver(credits, 95, NOW)).toBe(true);
-    expect(anyOver(credits, 97, NOW)).toBe(false);
-    expect(anyOver(usageOf('none'), 0, NOW)).toBe(false);
+  it('is out by any of its meters, credits included; never without one', () => {
+    const credits = usageOf('x', { meters: [{ minutes: null, pct: 100, resetsAt: NOW + HOUR }] });
+    expect(judge(credits.meters, 95, NOW)).toEqual({ standing: 'out', leave: true });
+    // The month's credits are a long window judged by their pace: 96 % an hour before the reset is on pace, past the threshold or not.
+    const early = usageOf('x', { meters: [{ minutes: null, pct: 96, resetsAt: NOW + HOUR }] });
+    expect(judge(early.meters, 95, NOW)).toEqual({ standing: 'good', leave: false });
+    expect(judge(usageOf('none').meters, 0, NOW)).toEqual({ standing: 'good', leave: false });
   });
 
   it('pauses the autopilot by a window named by its length, or by the credits', () => {
