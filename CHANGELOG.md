@@ -8,7 +8,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
-- Un message posté pendant qu’un agent travaille peut encore être modifié ou annulé avant de lui parvenir : il attend quelques secondes, ou la fin du tour chez Cursor et OpenCode, et peut aussi partir tout de suite.
+- Dans Réglages › Comptes, le petit carré de chaque pastille « Réservé aux projets » s’allume à la couleur du projet quand le compte le sert, et passe au gris sinon. Merci à @Metalzoid (#19).
+- Un message posté pendant qu’un agent travaille peut encore être modifié ou annulé avant de lui parvenir : il attend quelques secondes, ou la fin du tour chez Cursor et OpenCode, et peut aussi partir tout de suite. Merci à @Metalzoid (#18).
 - L’onglet « PR et CI » du panneau de droite montre la PR de la branche de l’agent : sa CI vérification par vérification, le journal d’un échec, « Relancer les échecs » d’un clic, ses revues et ses déploiements. Sans agent, il liste les PR ouvertes du projet, et la carte d’un agent dit l’état de sa CI à côté de « #41 → main ».
 - Les plugins ont leur vue, ouverte par l’icône de la barre des projets : installer depuis un dossier ou un dépôt git après avoir vu d’où vient le plugin, son empreinte, ce qu’il ajoute et ce qu’il pourra faire, la permission la plus forte d’abord ; l’activer pour l’app ou projet par projet, un projet privé restant coupé d’office ; lui retirer une permission, régler ses secrets, lire son journal, le désinstaller.
 - Une nouvelle version d’un plugin est proposée, jamais installée seule, et redemande ton accord si elle demande plus que la version installée.
@@ -31,6 +32,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 - Les fichiers non commités ne clignotent plus à chaque rafraîchissement : « Aucun fichier modifié par cet agent » et la liste restent affichés tant que rien ne change.
 - L’index du code n’annonce plus d’économie de tokens qu’on ne mesure pas : ses réponses, les consignes des agents, les statistiques (plus de dollars) et le site disent ce qu’il trouve bien, et l’effet mesuré avec de vrais agents (faible).
+- Un workflow que tu supprimes, dans Réglages › Projets › Workflow ou en effaçant son fichier, ne revient plus à chaque relecture ni au redémarrage : la liste « Supprimés » le garde, avec « Rétablir ». Et « Pas de workflow pour ce projet », dans l’assistant ou les réglages (et dans `.escouade.yml`), coupe leur lecture et leur écriture.
+- Un agent enregistré sur un harness que cette version n’a pas (celui d’une version plus récente, ou d’un plugin retiré) est lu et gardé avec sa conversation, marqué « harness absent » ; il ne démarre pas, et aucun agent n’est créé sur ce harness.
 - Deux tickets menés en même temps ne proposent plus une décision sous le même numéro : une décision proposée n’a pas de numéro et reçoit le suivant du registre quand elle est acceptée, et les pages et tickets qui la citent suivent.
 - Valider un ticket n’est plus refusé pour « des modifications non commitées » après la comparaison de la spec au code : ses écarts et sa date restent sur ce poste au lieu d’être écrits dans les pages, et l’onglet Docs les montre toujours.
 - « Écrire une première spec depuis le code », et toute nouvelle discussion, ferme sa fenêtre et ouvre la discussion avec son premier message même quand les nouveaux agents s’ouvrent dans le terminal du harness : une discussion reste toujours dans sa conversation, où Escouade refuse ses écritures.

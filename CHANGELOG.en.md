@@ -8,7 +8,8 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
-- A message posted while an agent works can still be edited or cancelled before it reaches it: it waits a few seconds, or until the end of the turn with Cursor and OpenCode, and can also go at once.
+- In Settings › Accounts, the small square of each “Reserved for projects” chip lights up in the project’s colour when the account serves it, and turns grey otherwise. Thanks to @Metalzoid (#19).
+- A message posted while an agent works can still be edited or cancelled before it reaches it: it waits a few seconds, or until the end of the turn with Cursor and OpenCode, and can also go at once. Thanks to @Metalzoid (#18).
 - The “PR and CI” tab of the right panel shows the pull request of the agent’s branch: its CI check by check, the log of a failure, “Re-run failed jobs” in one click, its reviews and its deployments. Without an agent it lists the project’s open pull requests, and an agent’s card tells the state of its CI beside “#41 → main”.
 - Plugins have their own view, opened by the icon of the projects’ rail: install from a folder or a git repository after seeing where the plugin comes from, its fingerprint, what it adds and what it will be able to do, the strongest permission first; switch it on for the app or project by project, a private project staying off by default; take a permission back, set its secrets, read its journal, uninstall it.
 - A new version of a plugin is offered, never installed by itself, and asks for your consent again if it asks for more than the installed version.
@@ -31,6 +32,8 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 - Uncommitted files no longer blink at each refresh: “No file changed by this agent” and the list stay shown as long as nothing changes.
 - The code index no longer claims a token saving that isn’t measured: its answers, the agents’ instructions, the statistics (no more dollars) and the website say what it finds well, and the effect measured with real agents (small).
+- A workflow you delete, in Settings › Projects › Workflow or by erasing its file, no longer comes back at every reading or restart: the “Deleted” list keeps it, with “Restore”. And “No workflow for this project”, in the assistant or the settings (and in `.escouade.yml`), stops their reading and writing.
+- An agent saved on a harness this version doesn’t have (a later version’s, or a removed plugin’s) is read and kept with its conversation, marked “harness missing”; it doesn’t start, and no agent is created on that harness.
 - Two tickets worked on at once no longer propose a decision under the same number: a proposed decision has no number and gets the register’s next one when it is accepted, and the pages and tickets that cite it follow.
 - Approving a ticket is no longer refused for “uncommitted changes” after the spec was compared to the code: its gaps and date stay on this computer instead of being written in the pages, and the Docs tab still shows them.
 - “Write a first spec from the code”, and every new discussion, closes its window and opens the discussion with its first message even when new agents open in the harness terminal: a discussion always stays in its conversation, where Escouade refuses its writes.

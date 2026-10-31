@@ -194,3 +194,14 @@ Enregistré à chaque changement, hors du brouillon (une création ou une suppre
 - Sous Windows, un passage de Claude Code au Gestionnaire d'identification (drapeau distant) est hors périmètre.
 - Une session ne passe ni d'un harness à l'autre (passation seulement), ni entre Windows et WSL (voir *Claude Code dans WSL*).
 - Ce qui part d'un compte partagé reste partagé, fichiers partagés à la création compris (réglages, instructions, skills…) : la modale le dit.
+
+## Voyant des pastilles « Réservé aux projets »
+
+Complète *Réservations*. Dans Réglages › Comptes, chaque pastille de la liste « Réservé aux projets » porte un petit carré décoratif (`aria-hidden`) qui sert de voyant à sa case :
+
+- case cochée : le carré est allumé, à la couleur du projet, avec un léger halo ; pour un projet fermé (« {nom} (fermé) », qui n'a pas de couleur), il est allumé en neutre (la couleur du texte) ;
+- case décochée : le carré est gris éteint (le texte à 28 % d'opacité), distinct du fond de la pastille et de l'état allumé en thème clair comme en thème sombre ;
+- le changement est immédiat au clic et au clavier (Espace sur la case) ; la transition est coupée sous « réduire les animations » ;
+- le fond et la couleur du texte de la pastille cochée sont inchangés, et l'accessibilité aussi : l'état reste porté par la case, dans le groupe « Réservé aux projets ». L'assistant « Nouveau projet » et les réglages d'un projet privé n'ont pas ce voyant.
+
+- **Exception : « Tous les projets ».** Tant que rien n'est réservé au compte (liste vide, « Tous les projets »), le compte sert tous les projets : tous les carrés sont allumés, cases décochées comprises. Dès qu'un projet est coché, seuls les carrés des projets réservés restent allumés, les autres passent au gris. Cette exception l'emporte sur « case décochée : gris » ci-dessus.
