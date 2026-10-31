@@ -128,7 +128,9 @@ fn only_codex_declares_a_sandbox() {
 fn the_harnesses_that_hold_a_message_until_the_turn_ends_say_so() {
     for e in all() {
         let expected = match e.id() {
-            id if id == crate::engine::CLAUDE.id() => MidTurn::Queued,
+            id if id == crate::engine::CLAUDE.id() || id == crate::engine::VIBE.id() => {
+                MidTurn::Queued
+            }
             id if id == crate::engine::CURSOR.id() || id == crate::engine::OPENCODE.id() => {
                 MidTurn::TurnEnd
             }
