@@ -174,7 +174,7 @@ impl Server {
 /// search of a text). Each event is noted in `log`, with whether it was answered.
 pub fn hook(input: &str, log: Option<&Path>) -> Option<Value> {
     let event: Value = serde_json::from_str(input).ok()?;
-    let reply = hint::reply(EngineId::Claude, LANG, &event);
+    let reply = hint::reply(EngineId::CLAUDE, LANG, &event);
     if let Some(log) = log {
         if let Ok(mut f) = std::fs::OpenOptions::new()
             .create(true)
