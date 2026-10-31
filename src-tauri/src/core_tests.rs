@@ -8923,6 +8923,32 @@ fn core_account_ids(core: &Core<MockRuntime>) -> Vec<String> {
 }
 
 #[tokio::test]
+async fn an_archiving_cut_short_by_a_stop_lets_go_of_the_resume_and_the_ports_at_the_next_start() {
+    // Told archived before its turn was stopped, the app killed meanwhile: saved with its planned
+    // resume and its test ports still on it.
+    let agent = |id: &str, archived: bool| {
+        json!({ "id": id, "projectId": "p1", "name": id, "model": "sonnet", "effort": "medium",
+                "mode": "auto", "cwd": "/x", "sessionId": "s1", "archived": archived,
+                "resumeAt": 4_102_444_800_000_i64, "portBase": 41000 })
+    };
+    let (core, _dir) = core_saved_by_1_8_0(
+        "pr18-archiving-cut-short",
+        json!({ "claudePath": "" }),
+        json!({ "projects": [], "agents": [agent("gone", true), agent("kept", false)] }),
+    );
+    let meta = |id: &str| core.agent(id).unwrap().lock().meta.clone();
+    let gone = meta("gone");
+    assert!(gone.archived);
+    assert_eq!((gone.resume_at, gone.port_base), (None, None));
+    // An agent that is not archived keeps them.
+    let kept = meta("kept");
+    assert_eq!(
+        (kept.resume_at, kept.port_base),
+        (Some(4_102_444_800_000), Some(41000))
+    );
+}
+
+#[tokio::test]
 async fn settings_and_agents_saved_before_the_accounts_keep_principal_through_the_update() {
     // ESC-128: settings of before the accounts (none listed) and an agent of then (on Principal).
     let agent = json!({ "id": "a1", "projectId": "p1", "name": "ancien", "model": "sonnet",

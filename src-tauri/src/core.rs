@@ -1768,6 +1768,13 @@ impl<R: Runtime> Core<R> {
             .filter(|m| m.status.is_active() && !m.archived)
             .map(|m| m.id.clone())
             .collect();
+        // An agent is told archived before its turn is stopped (the window then sends it none of the
+        // messages it holds): an archiving the app's stop cut short lets go of its planned resume and
+        // its test ports here, as it would have.
+        for m in state.agents.iter_mut().filter(|m| m.archived) {
+            m.resume_at = None;
+            m.port_base = None;
+        }
         let mut tickets = state.tickets;
         for t in &mut tickets {
             // A validation the app's stop cut: to run again by hand.

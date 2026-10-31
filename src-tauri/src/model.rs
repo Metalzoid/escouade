@@ -500,7 +500,7 @@ impl Default for IntegrationSettings {
 
 /// The steps of « Délai avant l'envoi pendant un tour », in seconds (0: off).
 pub const MID_TURN_DELAYS: [u32; 5] = [0, 5, 10, 20, 30];
-const DEFAULT_MID_TURN_DELAY: u32 = 10;
+const DEFAULT_MID_TURN_DELAY: u32 = 5;
 
 /// The variable that turns on Claude Code's task list tools (read in its binary, not documented).
 pub const TODO_TOOLS_VAR: &str = "CLAUDE_CODE_ENABLE_TODO_TOOLS";
@@ -3207,11 +3207,11 @@ mod tests {
     }
 
     #[test]
-    fn the_delay_before_a_message_sent_during_a_turn_is_ten_seconds_and_one_of_its_steps() {
-        assert_eq!(Settings::default().mid_turn_delay_secs, 10);
+    fn the_delay_before_a_message_sent_during_a_turn_is_five_seconds_and_one_of_its_steps() {
+        assert_eq!(Settings::default().mid_turn_delay_secs, 5);
         let read: Settings = serde_json::from_value(json!({})).unwrap();
-        assert_eq!(read.mid_turn_delay_secs, 10);
-        for (saved, kept) in [(7, 10), (0, 0), (5, 5), (20, 20), (30, 30), (45, 10)] {
+        assert_eq!(read.mid_turn_delay_secs, 5);
+        for (saved, kept) in [(7, 5), (0, 0), (10, 10), (20, 20), (30, 30), (45, 5)] {
             let mut s = Settings {
                 mid_turn_delay_secs: saved,
                 ..Default::default()
@@ -3220,7 +3220,7 @@ mod tests {
             assert_eq!(s.mid_turn_delay_secs, kept, "{saved}");
         }
         let v = serde_json::to_value(Settings::default()).unwrap();
-        assert_eq!(v["midTurnDelaySecs"], json!(10));
+        assert_eq!(v["midTurnDelaySecs"], json!(5));
     }
 
     #[test]
