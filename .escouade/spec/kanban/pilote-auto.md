@@ -2,7 +2,7 @@
 title: "Pilote auto"
 subject: "Kanban"
 sources: ["docs/SPEC.md","src-tauri/src/mcp/act_tests.rs","website/content/docs/fr/autopilot.md"]
-tickets: ["ESC-3"]
+tickets: []
 decisions: []
 compared: null
 ---

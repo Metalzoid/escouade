@@ -6522,7 +6522,7 @@ async fn the_first_account_passing_the_threshold_sends_the_next_ticket_to_the_se
 
 #[tokio::test]
 async fn a_ticket_follows_the_pace_of_the_week_not_its_percentage() {
-    // ESC-3: a week that would not last to its reset goes behind the others even far under the
+    // PR #20: a week that would not last to its reset goes behind the others even far under the
     // pause threshold; one that starts again soon on pace is not wasted, past the threshold.
     let h = harness("tk-account-pace");
     let (p, _) = h.project(false).await;

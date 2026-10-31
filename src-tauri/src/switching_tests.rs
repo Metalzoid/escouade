@@ -54,7 +54,7 @@ fn read_week_as(h: &Harness, account: &str, pct: f64, minutes: i64) {
 }
 
 /// The fake CLI of `account` tells its weekly window used `pct` percent, starting again in
-/// `minutes` (ESC-3).
+/// `minutes` (PR #20).
 fn week_of(account: &Account, pct: u32, minutes: u32) {
     uses(account, "fake-week-pct", pct);
     uses(account, "fake-week-reset-min", minutes);
@@ -409,7 +409,7 @@ const TWO_DAYS_LEFT: u32 = 2 * 24 * 60;
 
 #[tokio::test]
 async fn a_week_at_88_percent_that_starts_again_in_3_hours_moves_nobody() {
-    // ESC-3: past the threshold in percent, but at 88 % with 3 h left the week is on pace: the
+    // PR #20: past the threshold in percent, but at 88 % with 3 h left the week is on pace: the
     // agent stays, and new agents still go there.
     let h = harness("switch-at-week-on-pace");
     let (p, _) = h.project(true).await;
@@ -425,7 +425,7 @@ async fn a_week_at_88_percent_that_starts_again_in_3_hours_moves_nobody() {
     assert_eq!(config_dirs(&h, &cwd(&h, &id)).len(), 1);
     assert!(notices(&h, &id).is_empty());
     assert_eq!(
-        h.core.account_for_new(&p.id, EngineId::Claude).unwrap(),
+        h.core.account_for_new(&p.id, EngineId::CLAUDE).unwrap(),
         "pro"
     );
 }
@@ -463,7 +463,7 @@ async fn under_the_threshold_a_bad_pace_only_moves_the_new_agents() {
     assert!(!h.core.switch_if_over(&id).await);
     assert_eq!(h.agent(&id).account, "pro");
     assert_eq!(
-        h.core.account_for_new(&p.id, EngineId::Claude).unwrap(),
+        h.core.account_for_new(&p.id, EngineId::CLAUDE).unwrap(),
         "equipe"
     );
 }
@@ -480,7 +480,7 @@ async fn at_the_limit_setting_new_agents_follow_the_pace_and_a_running_agent_sta
     h.wait_quotas_read().await;
     // The choice of new agents (and tickets) is the rule, whatever « Changer de compte à »…
     assert_eq!(
-        h.core.account_for_new(&p.id, EngineId::Claude).unwrap(),
+        h.core.account_for_new(&p.id, EngineId::CLAUDE).unwrap(),
         "equipe"
     );
     // … and a running agent does not move before the limit.

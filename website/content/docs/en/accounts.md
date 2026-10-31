@@ -143,6 +143,8 @@ A new agent, or a ticket the autopilot takes, starts on:
 2. otherwise the first “good” account of the list, in order, that serves the project (an account that just hit its usage limit is also left out);
 3. if no account is good, first the first one whose pace alone is bad, otherwise the first active account. The [autopilot](autopilot) then pauses.
 
+A long window (the week, Codex’s 30 days, Copilot CLI’s credits of the month) is judged by its pace: projected at 100% or less at its reset it stays good, even past the threshold; projected past 100%, or used at 95% or more whatever its pace, its account goes behind the others.
+
 The order of the list therefore decides: put at the top the account you want to use up first.
 
 The threshold is set in Settings › Kanban, “Autopilot” group: 80, 90, 95 or 100% (100% by default), for all projects. It is detailed in [the Kanban settings](settings-board). That ceiling stays yours: the autopilot pauses at that percentage, without looking at the pace, so with a ceiling under 100% an account judged good can still be held back by the autopilot, which then moves on to the next one.

@@ -267,6 +267,7 @@ export default defineZone('accounts', {
     current: 'current',
     over: 'past the pause or switch threshold',
     behind: 'pace too fast for its window',
+    nearLimit: 'near the limit of its window',
     today: 'Today: {amount}',
   },
 

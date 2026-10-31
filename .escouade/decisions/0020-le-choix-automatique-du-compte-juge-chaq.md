@@ -1,19 +1,18 @@
 ---
-number: null
-id: "le-choix-automatique-du-compte-juge-chaq"
+number: 20
 title: "Le choix automatique du compte juge chaque fenêtre selon sa longueur : la 5 h est une pause courte, la semaine se juge au rythme"
 date: "2026-10-30"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
-origin_ref: "ESC-3"
+origin_ref: "PR #20"
 pages: ["harness/comptes","fenetre/barre-de-statut","kanban/pilote-auto"]
-tickets: ["ESC-3"]
+tickets: []
 documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/comptes","added":32,"removed":16},{"page":"fenetre/barre-de-statut","added":4,"removed":2},{"page":"kanban/pilote-auto","added":1,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-31T13:08:50+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
@@ -22,7 +21,7 @@ Le mode « Automatique » doit toujours choisir le compte le plus pertinent. Jus
 
 ## Décision
 
-L'ordre des comptes reste la priorité (demandé, puis « Compte préféré » du projet, puis le premier compte « bon » dans l'ordre) ; ce qui change est ce qu'est un compte bon, fenêtre par fenêtre, par la longueur de la fenêtre et non par le nom du harness. Une fenêtre courte (24 h ou moins : la 5 h) est une pause courte : au seuil, le compte est écarté jusqu'à la remise à zéro de cette fenêtre seulement, puis il redevient un candidat comme les autres. Une fenêtre longue (plus de 24 h : semaine, 30 jours ; crédits du mois de Copilot CLI, pris comme une fenêtre d'un mois) est jugée au rythme, avec la projection de la barre d'état : à 100 % écartée jusqu'à sa remise à zéro ; projection à 100 % ou moins, bonne même au-dessus du seuil en % ; au-delà de 100 %, le compte passe derrière les autres même sous le seuil ; sans projection (première journée, remise à zéro inconnue), le seuil en % décide. Aucun compte bon : d'abord le premier dont seul le rythme est mauvais, sinon le premier actif (le pilote auto fait alors sa pause). « Changer de compte à » reste un seul réglage, sans second seuil : il déclenche le départ d'un agent déjà lancé, mais le choix des nouveaux agents et des tickets suit toujours la règle, « À la limite » compris. Le cœur Rust a un seul prédicat (pace::judge), utilisé par le compte en cours, les nouveaux agents et tickets, la reprise sur un autre compte, la passation et le départ d'un agent lancé ; la projection y est portée avec les mêmes chiffres que la fenêtre (tests/fixtures/quota-pace.json, vérifié des deux côtés).
+L'ordre des comptes reste la priorité (demandé, puis « Compte préféré » du projet, puis le premier compte « bon » dans l'ordre) ; ce qui change est ce qu'est un compte bon, fenêtre par fenêtre, par la longueur de la fenêtre et non par le nom du harness. Une fenêtre courte (24 h ou moins : la 5 h) est une pause courte : au seuil, le compte est écarté jusqu'à la remise à zéro de cette fenêtre seulement, puis il redevient un candidat comme les autres. Une fenêtre longue (plus de 24 h : semaine, 30 jours ; crédits du mois de Copilot CLI, pris comme une fenêtre d'un mois) est jugée au rythme, avec la projection de la barre d'état : à 100 % écartée jusqu'à sa remise à zéro ; projection à 100 % ou moins, bonne même au-dessus du seuil en % ; au-delà de 100 %, le compte passe derrière les autres même sous le seuil ; sans projection (première journée, remise à zéro inconnue), le seuil en % décide ; à 95 % ou plus (NEAR_LIMIT), quel que soit son rythme, le compte passe derrière les autres (ajouté avec l'utilisateur à la revue de la PR #20 : les nouveaux agents ne partent pas au bord de la limite tant qu'un autre compte peut les prendre). Aucun compte bon : d'abord le premier dont seul le rythme est mauvais, sinon le premier actif (le pilote auto fait alors sa pause). « Changer de compte à » reste un seul réglage, sans second seuil : il déclenche le départ d'un agent déjà lancé, mais le choix des nouveaux agents et des tickets suit toujours la règle, « À la limite » compris. Le cœur Rust a un seul prédicat (pace::judge), utilisé par le compte en cours, les nouveaux agents et tickets, la reprise sur un autre compte, la passation et le départ d'un agent lancé ; la projection y est portée avec les mêmes chiffres que la fenêtre (tests/fixtures/quota-pace.json, vérifié des deux côtés).
 
 ## Conséquences
 

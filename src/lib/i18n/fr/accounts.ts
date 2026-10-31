@@ -326,6 +326,8 @@ export default {
     over: 'au-delà du seuil de pause ou de changement de compte',
     /** A long window (week, 30 days, credits) that would not last to its reset at the current pace: the account goes behind the others. */
     behind: 'rythme trop rapide pour sa fenêtre',
+    /** A long window at 95 % or more, on pace or not: the account goes behind the others. */
+    nearLimit: 'près de la limite de sa fenêtre',
     /** What the account's turns cost today; `{amount}`: « 1,20 $ » (« ≈ 1,20 $ » while a turn is running). */
     today: "Aujourd'hui : {amount}",
   },

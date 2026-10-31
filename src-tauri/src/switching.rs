@@ -1,5 +1,5 @@
 //! « Changer de compte à » (ESC-148): an agent whose account has a short quota window at the
-//! threshold, or a long one at the threshold whose pace is not good (ESC-3, `pace`), goes on, at the
+//! threshold, or a long one at the threshold whose pace is not good (PR #20, `pace`), goes on, at the
 //! end of its turn, on another usable account of its harness (its session with it, as « Reprendre
 //! sur <compte> » moves it), never in the middle of a turn, nor while a question waits for the user
 //! or something runs in the background in its process.

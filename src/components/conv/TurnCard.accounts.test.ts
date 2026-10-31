@@ -97,11 +97,11 @@ describe('TurnCard of a turn stopped by the usage limit, with several accounts',
     expect(screen.getAllByRole('button').map((b) => b.textContent?.trim())).toEqual(['Annuler la reprise', 'Reprendre sur Principal']);
   });
 
-  it('offers an account whose week is past the threshold but starts again soon on pace, not one that would not last (ESC-3)', () => {
-    // 99 % of the week, starting again in an hour: on pace, the agent would not meet the limit there.
+  it('offers an account whose week is past the threshold but starts again soon on pace, not one that would not last (PR #20)', () => {
+    // 94 % of the week, starting again in an hour: on pace and under the 95 % margin, the agent would not meet the limit there.
     const onPace = render(TurnCard, {
       item: turn(),
-      agent: stopped({}, [PRINCIPAL, PRO], [read('pro', { sevenDay: win(99) })]),
+      agent: stopped({}, [PRINCIPAL, PRO], [read('pro', { sevenDay: win(94) })]),
       last: true,
     });
     expect(resume('Pro')).toBeInTheDocument();

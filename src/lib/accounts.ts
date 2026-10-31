@@ -354,8 +354,11 @@ export function projectedPct(minutes: number | null, w: RateWindow | null, now: 
   return (w.pct * length) / gone;
 }
 
-/** How an account stands for the choice of the account (ESC-3), as the backend's `pace::Standing`: good, behind (only its pace is bad) or out. */
+/** How an account stands for the choice of the account (PR #20), as the backend's `pace::Standing`: good, behind (only its pace is bad) or out. */
 export type Standing = 'good' | 'behind' | 'out';
+
+/** The use past which a long window is never good, on pace or not, as the backend's `pace::NEAR_LIMIT`. */
+export const NEAR_LIMIT = 95;
 
 /** What an account's meters say of it, as the backend's `pace::Verdict`. */
 export interface Verdict {
@@ -363,6 +366,8 @@ export interface Verdict {
   standing: Standing;
   /** An agent running on the account leaves it: a short window at the threshold, or a long one at the threshold whose pace is not good. */
   leave: boolean;
+  /** Behind for being near its limit (`NEAR_LIMIT`), not for its pace. */
+  near: boolean;
 }
 
 /** Whether a window is a short pause (a day or less: the 5 hours); the month's credits (no length) and the longer windows are judged by their pace. */
@@ -381,6 +386,7 @@ const WORST: Record<Standing, number> = { good: 0, behind: 1, out: 2 };
 export function judge(meters: QuotaMeter[], threshold: number, now: number): Verdict {
   let standing: Standing = 'good';
   let leave = false;
+  let near = false;
   for (const m of meters) {
     const at = overThreshold(m, threshold, now);
     let s: Standing = 'good';
@@ -392,14 +398,17 @@ export function judge(meters: QuotaMeter[], threshold: number, now: number): Ver
       leave = true;
     } else {
       const p = projectedPct(m.minutes, m, now);
+      const byPace = p !== null && p > 100;
+      const nearLimit = !byPace && !(p === null && at) && overThreshold(m, NEAR_LIMIT, now);
       if (p === null && at) s = 'out';
-      else if (p !== null && p > 100) s = 'behind';
-      // At the threshold with a pace that is not good (past 100 % or not known).
-      leave ||= at && (p === null || p > 100);
+      else if (byPace || nearLimit) s = 'behind';
+      near ||= nearLimit;
+      // At the threshold with a pace that is not good (past 100 % or not known), or near its limit.
+      leave ||= at && (p === null || byPace || nearLimit);
     }
     if (WORST[s] > WORST[standing]) standing = s;
   }
-  return { standing, leave };
+  return { standing, leave, near };
 }
 
 const DAY_MS = 24 * 3_600_000;
@@ -492,6 +501,8 @@ export interface QuotaRow {
   over: boolean;
   /** Active, and behind the others only by its pace: a long window that would not last to its reset (`judge`). */
   behind: boolean;
+  /** Behind the others for a long window near its limit (`NEAR_LIMIT`), not for its pace. */
+  nearLimit: boolean;
   /** Why it is dimmed: switched off, not signed in, sign-in expired. */
   reasons: string[];
   /** What its turns cost today, the ones running now included (an estimate): the status bar's total, account by account. */
@@ -541,11 +552,12 @@ export function quotaRows(now: number): QuotaRow[] {
     const verdict = account.active ? judge(usage?.meters ?? [], threshold, now) : null;
     const over = verdict?.standing === 'out';
     const behind = verdict?.standing === 'behind';
+    const nearLimit = behind && !!verdict?.near;
     const live = liveCostOf(account.id);
     const byHarness = estimatedBy(engineOfAccount(account));
     const today = { cost: (usage?.todayCost ?? 0) + live, estimated: byHarness || live > 0, ...(byHarness ? { byHarness } : {}) };
     const current = account.id === app.usage.current[engineOfAccount(account)];
-    return { account, usage, current, over, behind, reasons, today };
+    return { account, usage, current, over, behind, nearLimit, reasons, today };
   });
   return [...rows.filter((r) => r.current), ...rows.filter((r) => !r.current)];
 }

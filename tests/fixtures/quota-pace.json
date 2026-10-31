@@ -258,6 +258,34 @@
       "meters": [],
       "standing": "good",
       "leave": false
+    },
+    {
+      "name": "a week at 97 % that resets in 1 h, on pace (98 % at the reset), threshold 98: behind, near its limit",
+      "threshold": 98,
+      "meters": [{ "minutes": 10080, "pct": 97, "resetsInMin": 60 }],
+      "standing": "behind",
+      "leave": false
+    },
+    {
+      "name": "the same week near its limit, threshold 90: behind, and an agent leaves",
+      "threshold": 90,
+      "meters": [{ "minutes": 10080, "pct": 97, "resetsInMin": 60 }],
+      "standing": "behind",
+      "leave": true
+    },
+    {
+      "name": "first day of the week at 96 %, threshold 99: no projection, near its limit: behind",
+      "threshold": 99,
+      "meters": [{ "minutes": 10080, "pct": 96, "resetsInMin": 9000 }],
+      "standing": "behind",
+      "leave": false
+    },
+    {
+      "name": "a week at 94 % that resets in 1 h, threshold 90: on pace and under the margin, good",
+      "threshold": 90,
+      "meters": [{ "minutes": 10080, "pct": 94, "resetsInMin": 60 }],
+      "standing": "good",
+      "leave": false
     }
   ]
 }

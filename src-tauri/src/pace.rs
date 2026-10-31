@@ -1,4 +1,4 @@
-//! The one place that says whether an account is a good one to send work to (ESC-3), meter by
+//! The one place that says whether an account is a good one to send work to (PR #20), meter by
 //! meter, as the length of the meter's window asks:
 //!
 //! - A **short** window (24 h or less: the 5 hours of Claude Code and Codex) is a short pause. At
@@ -11,6 +11,8 @@
 //!   - at 100 % (the real limit) it is out until it starts again;
 //!   - projected at 100 % or less it is good, even past the threshold: a week at 88 % that starts
 //!     again in 3 hours is not to be wasted;
+//!   - at `NEAR_LIMIT` (95 %) or more it goes behind the others whatever its pace: new agents do not
+//!     start so near its limit while another account can take them;
 //!   - projected past 100 % it goes behind the others, even under the threshold: at this pace it
 //!     would not last to its reset;
 //!   - without a projection (the first day, an unknown reset) the threshold decides, as before.
@@ -25,6 +27,10 @@ use chrono::{DateTime, Months};
 
 /// The longest a window is a short pause: a day.
 pub const SHORT_MINUTES: u32 = 24 * 60;
+
+/// The use past which a long window is never good, on pace or not: an account so near its limit
+/// goes behind the others (decided with the user at the review of PR #20).
+pub const NEAR_LIMIT: u32 = 95;
 
 const DAY_MS: i64 = 24 * 3_600_000;
 
@@ -54,9 +60,10 @@ pub struct MeterVerdict {
 }
 
 impl MeterVerdict {
-    /// It is the pace that holds the meter back: a long window under its limit that would not last.
+    /// It is the pace that holds the meter back: a long window under its limit that would not last
+    /// (not one held back for being near its limit, `NEAR_LIMIT`).
     pub fn by_pace(&self) -> bool {
-        self.standing == Standing::Behind
+        self.standing == Standing::Behind && self.projected.is_some_and(|p| p > 100.0)
     }
 }
 
@@ -129,11 +136,14 @@ pub fn judge_meter(meter: &QuotaMeter, threshold: u32, now: i64) -> MeterVerdict
     } else if board::over_threshold(&rate, 100, now) {
         (Standing::Out, true)
     } else {
+        let near = board::over_threshold(&rate, NEAR_LIMIT, now);
         match projected {
             Some(p) if p > 100.0 => (Standing::Behind, at_threshold),
-            Some(_) => (Standing::Good, false),
             None if at_threshold => (Standing::Out, true),
-            None => (Standing::Good, false),
+            // On pace (or not known yet) but near its limit: behind the others, and an agent at the
+            // threshold leaves.
+            _ if near => (Standing::Behind, at_threshold),
+            _ => (Standing::Good, false),
         }
     };
     MeterVerdict {

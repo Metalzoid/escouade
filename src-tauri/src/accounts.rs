@@ -343,7 +343,7 @@ pub fn get(settings: &Settings, id: &str) -> Account {
 
 /// The verdict on the account's quota (`usage`) at `now`, `threshold` being the percentage at which
 /// a short window is out (`pace::judge`): the one place that says whether an account is a good one
-/// (ESC-3). An account of a harness without a quota, or not read yet, has no meter: good.
+/// (PR #20). An account of a harness without a quota, or not read yet, has no meter: good.
 pub(crate) fn verdict(usage: &[AccountUsage], id: &str, threshold: u32, now: i64) -> pace::Verdict {
     let meters = usage
         .iter()
@@ -3483,8 +3483,10 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(pick_at(&s, &[week(100.0)]).as_deref(), Some("pro"));
-        // A week at 99 % that starts again in a minute is not wasted (ESC-3).
-        assert_eq!(pick_at(&s, &[week(99.0)]).as_deref(), Some("principal"));
+        // A week at 99 % that starts again in a minute, on pace: too near its limit, behind the
+        // others (`pace::NEAR_LIMIT`); 94 %, it is not wasted.
+        assert_eq!(pick_at(&s, &[week(99.0)]).as_deref(), Some("pro"));
+        assert_eq!(pick_at(&s, &[week(94.0)]).as_deref(), Some("principal"));
         // The next one over as well: the one after.
         let two_over = [used("principal", 100.0, end), used("pro", 96.0, end)];
         assert_eq!(pick_at(&s, &two_over).as_deref(), Some("team"));
@@ -4308,7 +4310,7 @@ mod tests {
     #[test]
     fn codex_has_a_short_5_hour_window_and_a_week_and_thirty_days_judged_by_their_pace() {
         let s = with_codex();
-        let codex = for_project(&s, EngineId::Codex, None);
+        let codex = for_project(&s, EngineId::CODEX, None);
         let thirty = Some(43_200);
         let day = 24 * 60;
         let usage = [
@@ -4353,7 +4355,7 @@ mod tests {
         // Never an account of another harness.
         assert_eq!(
             pick(
-                &for_project(&s, EngineId::Claude, None),
+                &for_project(&s, EngineId::CLAUDE, None),
                 &usage,
                 90,
                 None,
@@ -4369,7 +4371,7 @@ mod tests {
         let mut s = Settings::default();
         for id in ["first", "second"] {
             s.accounts.push(Account {
-                engine: EngineId::Copilot,
+                engine: EngineId::COPILOT,
                 ..account(id, "")
             });
         }
@@ -4432,7 +4434,7 @@ mod tests {
         let mut s = Settings::default();
         for id in ["one", "two"] {
             s.accounts.push(Account {
-                engine: EngineId::Opencode,
+                engine: EngineId::OPENCODE,
                 ..account(id, "")
             });
         }

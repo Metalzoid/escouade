@@ -2,7 +2,7 @@
 title: "Comptes"
 subject: "Harness"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162","ESC-3"]
+tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162"]
 decisions: []
 compared: null
 ---
@@ -92,6 +92,7 @@ Le choix d'un compte (nouvel agent, ticket, compte en cours, reprise, passation)
   - À 100 % (la limite réelle) : écartée jusqu'à sa remise à zéro.
   - Projection à 100 % ou moins : bonne, même au-dessus du seuil en % (une semaine à 88 % qui se remet à zéro dans 3 h ne se gaspille pas).
   - Projection au-delà de 100 % : le compte passe derrière les autres, même sous le seuil (au rythme actuel, il ne tiendrait pas jusqu'à sa remise à zéro).
+  - À 95 % ou plus (`pace::NEAR_LIMIT`), projection bonne ou absente : le compte passe aussi derrière les autres, pour que les nouveaux agents ne partent pas au bord de la limite tant qu'un autre compte peut les prendre ; un agent lancé le quitte au seuil (décidé à la revue de la PR #20).
   - Pas de projection (première journée de la fenêtre, remise à zéro inconnue) : le seuil en % décide, comme avant.
 - Un compte est **bon** quand aucun de ses compteurs ne l'écarte ni ne le met derrière, **derrière** quand seul le rythme d'une fenêtre longue est mauvais (aucune fenêtre n'est à sa limite, ni au seuil sans projection), **écarté** sinon. Un compte sans compteur (harness sans quota comme OpenCode, compte pas encore lu) est bon : l'ordre seul décide.
 - Exemples : A (1er de la liste) à 88 % de sa semaine qui se remet à zéro dans 3 h, 5 h à 30 %, B à 10 % : A. A à 60 % au deuxième jour de sa semaine (210 % à la remise à zéro), B à 20 % (70 %) : B. A à 96 % de sa 5 h (seuil de 95 %), semaine à 20 % : B, puis A de nouveau dès la remise à zéro de sa 5 h.
@@ -109,7 +110,7 @@ Le choix d'un compte (nouvel agent, ticket, compte en cours, reprise, passation)
 - La présence de Claude Code se vérifie sur le compte où partirait l'agent.
 - La puce « Compte : Pro » (avec plusieurs comptes seulement, juste après le modèle) propose « Automatique (Pro) » (le compte préféré du projet, sinon le compte en cours), puis les comptes actifs (« Équipe (inactif) » pour un compte désactivé depuis). Elle est modifiable tant que l'agent n'a ni session, ni message, ni copie d'origine, ni tour en cours : son process préchauffé repart alors avec le nouveau compte. Ensuite elle est en lecture seule : « Le compte d’un agent ne change plus après son premier message (sa conversation est rangée dans ce compte). »
 - Un toast le dit une fois, quand le compte en cours quitte un compte pour un compte moins écarté. Si le compte quitté est écarté par un compteur au seuil ou à sa limite : « Le compte Pro a atteint 95 % : les nouveaux agents partent sur Principal. » (le pourcentage est celui du compteur qui l'écarte, le plus utilisé). Si seul son rythme le met derrière : « Le compte Pro finirait à 140 % de sa fenêtre hebdomadaire au rythme actuel : les nouveaux agents partent sur Principal. » (« de ses crédits du mois », « de sa fenêtre de 5 h »…). Rien quand il redevient le premier bon, quand un compte est désactivé ou supprimé, ni quand tous les comptes sont écartés : c'est alors la bannière de pause qui parle.
-- Le panneau des quotas marque un compte « au-delà du seuil de pause ou de changement de compte » quand le choix l'écarte, et « rythme trop rapide pour sa fenêtre » quand seul son rythme le met derrière (voir *Barre de statut*).
+- Le panneau des quotas marque un compte « au-delà du seuil de pause ou de changement de compte » quand le choix l'écarte, « rythme trop rapide pour sa fenêtre » quand seul son rythme le met derrière, et « près de la limite de sa fenêtre » quand il est derrière pour ses 95 % (voir *Barre de statut*).
 
 ### Pause du pilote auto, compte par compte
 

@@ -220,7 +220,7 @@ describe('the quota of each account', () => {
     ]);
   });
 
-  it('does not flag a week past the threshold that starts again soon on pace (ESC-3)', () => {
+  it('does not flag a week past the threshold that starts again soon on pace (PR #20)', () => {
     // 91 % of the week, starting again in an hour: 91.5 % at the reset.
     app.usage.accounts = [read('principal', { fiveHour: win(40), sevenDay: win(91) })];
     expect(quotaRows(NOW).map((r) => [r.account.id, r.over, r.behind])).toEqual([
@@ -461,6 +461,6 @@ describe('the pace of a quota (the figures the Rust core checks too, tests/fixtu
         c.threshold,
         now,
       ),
-    ).toEqual({ standing: c.standing, leave: c.leave });
+    ).toMatchObject({ standing: c.standing, leave: c.leave });
   });
 });

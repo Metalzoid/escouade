@@ -2,7 +2,7 @@
 title: "Barre de statut"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-3"]
+tickets: []
 decisions: []
 compared: null
 ---

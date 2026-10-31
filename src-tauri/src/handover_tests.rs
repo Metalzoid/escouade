@@ -613,7 +613,7 @@ async fn with_the_option_an_agent_whose_harness_is_spent_goes_on_by_itself_and_i
 
 #[tokio::test]
 async fn an_account_is_usable_for_a_handover_unless_out_for_its_quota_by_the_pace_of_its_windows() {
-    // ESC-3: the same judgement as the choice of the account (`pace`): a week on pace is usable
+    // PR #20: the same judgement as the choice of the account (`pace`): a week on pace is usable
     // past the threshold, one behind too (only its pace is bad), one at its limit is spent.
     use crate::model::{now_ms, RateWindow};
     use crate::usage::Reading;
@@ -643,9 +643,10 @@ async fn an_account_is_usable_for_a_handover_unless_out_for_its_quota_by_the_pac
     read(window(100.0, 60), window(20.0, 5 * 24 * 60));
     assert!(!h.core.account_usable("principal"));
     // Under « Pause au-delà du quota », the autopilot's own ceiling stays what it was: a week on
-    // pace is judged good, and still held back past 90 % (ESC-3 leaves the pause alone).
+    // pace (and under the 95 % margin, `pace::NEAR_LIMIT`) is judged good, and still held back past
+    // 90 % (PR #20 leaves the pause alone).
     h.set_settings(|s| s.quota_pause = 90);
-    read(window(10.0, 60), window(95.0, 180));
+    read(window(10.0, 60), window(93.0, 180));
     assert!(!h.core.account_usable("principal"));
     assert_eq!(
         crate::accounts::standing(&h.core.usage.lock().accounts, "principal", 90, now),
