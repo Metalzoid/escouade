@@ -799,7 +799,9 @@
     border-radius: 2px;
     /* The light of the toggle: grey when off, the project's colour (neutral for a closed one) when ticked. */
     background: rgba(var(--fg-rgb), 0.28);
-    transition: background 0.12s, box-shadow 0.12s;
+    transition:
+      background 0.12s,
+      box-shadow 0.12s;
   }
   .chip-t i.lit {
     background: var(--dot, var(--text));
