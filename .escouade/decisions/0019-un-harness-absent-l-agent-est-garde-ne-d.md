@@ -2,7 +2,7 @@
 number: 19
 title: "Un harness absent : l'agent est gardé, ne démarre pas, aucun n'est créé dessus"
 date: "2026-10-30"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-209"
 pages: ["harness/harness"]
@@ -11,8 +11,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/harness","added":6,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-10-31T10:03:22+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
