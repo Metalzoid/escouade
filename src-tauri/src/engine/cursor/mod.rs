@@ -161,6 +161,7 @@ pub fn caps() -> EngineCaps {
         usage_page: Some(DASHBOARD),
         // Its sign-in is the machine's alone: another account is an API key (ESC-43).
         accounts_by_key: true,
+        read_only: false,
     }
 }
 

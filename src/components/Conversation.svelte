@@ -1416,7 +1416,7 @@
     0%,
     70% {
       background: color-mix(in oklch, var(--p) 9%, transparent);
-      outline: 2px solid var(--accent-soft);
+      outline: 2px solid color-mix(in oklch, var(--p) var(--sel), transparent);
       outline-offset: 6px;
     }
     100% {
@@ -1532,7 +1532,7 @@
     .item.found {
       animation: none;
       background: color-mix(in oklch, var(--p) 9%, transparent);
-      outline: 2px solid var(--accent-soft);
+      outline: 2px solid color-mix(in oklch, var(--p) var(--sel), transparent);
       outline-offset: 6px;
     }
   }

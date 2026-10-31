@@ -40,8 +40,11 @@
 use super::act;
 use super::activity::{self, Outcome};
 use super::background;
+use super::docs;
 use super::files;
 use super::images;
+use super::index;
+use super::memory;
 use super::read;
 use super::wait;
 use super::workflow;
@@ -183,6 +186,11 @@ impl<C: AsRequestContext, R: Runtime> FromContextPart<C> for ToolCtx<R> {
     }
 }
 
+/// The blocks of an answer of the index: its text alone (no line about what it saved, ESC-307).
+fn index_blocks(text: index::Reply) -> Vec<ContentBlock> {
+    vec![ContentBlock::text(text)]
+}
+
 /// What the activity log says a call was asked: its arguments given, « name: value · … ».
 fn summary(args: &[(&str, Option<&str>)]) -> String {
     args.iter()
@@ -205,6 +213,15 @@ impl<R: Runtime> Tools<R> {
         }
     }
 
+    /// The schemas of the index's tools, as the client lists them, in tokens: what a session pays
+    /// once for them (tokensave `schema_overhead_tokens`). The same from one call to the next.
+    fn index_schemas(&self) -> u64 {
+        static TOKENS: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+        *TOKENS.get_or_init(|| {
+            crate::codeindex::accounting::schema_overhead_tokens(&index_tools(&self.router))
+        })
+    }
+
     /// Every tool the server offers (and, in tests, the test's own).
     pub fn router() -> ToolRouter<Self> {
         let router = Self::tool_router();
@@ -212,6 +229,17 @@ impl<R: Runtime> Tools<R> {
         let router = router + Self::test_router();
         router
     }
+}
+
+/// The index's tools of `router`, as a client lists them (also served by the bench of the real
+/// agents, `codeindex::probes::agents`).
+pub(crate) fn index_tools<R: Runtime>(router: &ToolRouter<Tools<R>>) -> serde_json::Value {
+    let tools: Vec<_> = router
+        .list_all()
+        .into_iter()
+        .filter(|t| t.name.starts_with("index_"))
+        .collect();
+    serde_json::to_value(tools).unwrap_or_default()
 }
 
 // The arguments' descriptions are the model's (English, one line each: a doc comment's line
@@ -734,6 +762,59 @@ pub struct GetWorkflowArgs {
     pub project: String,
 }
 
+const MEMORY_PROJECT: &str = "The project: its id, or its name in any case. An agent of Escouade may leave it out for its own.";
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SearchMemoryArgs {
+    #[schemars(description = MEMORY_PROJECT)]
+    pub project: Option<String>,
+    #[schemars(
+        description = "What to look for, in a few words (any language). Empty: the memories by name, up to limit."
+    )]
+    pub query: String,
+    #[schemars(description = "The most memories answered: 10 when left out, 50 at most.")]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ReadMemoryArgs {
+    #[schemars(description = MEMORY_PROJECT)]
+    pub project: Option<String>,
+    #[schemars(description = "The memory's name, as search_memory gives it.")]
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct WriteMemoryArgs {
+    #[schemars(description = MEMORY_PROJECT)]
+    pub project: Option<String>,
+    #[schemars(
+        description = "Its name, short, in kebab-case (made so: lower case letters, digits and dashes). A memory of that name is replaced: read it first to keep what it says."
+    )]
+    pub name: String,
+    #[schemars(
+        description = "One line that says what it is about, so that a search and the index tell when it matters (300 characters at most)."
+    )]
+    pub description: String,
+    #[serde(rename = "type")]
+    #[schemars(
+        description = "Its kind: feedback (a way to work, a trap to avoid; the default), project (a constraint of the work under way), reference (where to find something) or user (what the user prefers)."
+    )]
+    pub kind: Option<crate::memory::Kind>,
+    #[schemars(
+        description = "What to remember, in Markdown: the rule, then why, then how to apply it (20,000 characters at most)."
+    )]
+    pub body: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ForgetMemoryArgs {
+    #[schemars(description = MEMORY_PROJECT)]
+    pub project: Option<String>,
+    #[schemars(description = "The memory's name.")]
+    pub name: String,
+}
+
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetBoardArgs {
     #[schemars(description = "The project: its id, or its name in any case.")]
@@ -1134,6 +1215,501 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
+        description = "Search for symbols (functions, structs, traits, etc.) in the code index by name or keyword, the best first: one line per symbol, file:line-end_line: name (kind) — signature. Write the words of the code (its identifiers, in English here), not a paraphrase; when a word finds nothing, ask index_context with keywords. ids: true adds the id that index_body, index_callers, index_callees and index_impact take. literal: true finds an exact text in the source (an error message, a string) and returns file:line locations. path_include and path_exclude narrow by path; persistent noise (vendored trees, docs) can be suppressed project-wide via gitignore-style patterns in .escouade/queryignore. Keep grep for a regex. Each answer ends with index_metrics: before (the files touched, read whole, capped at 4 times the answer), after (the answer, the call and, once, the tools' schemas) and saved. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn index_search(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<index::SearchArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("query", Some(&args.query)),
+        ]);
+        let arguments = index::sent(&args);
+        let result = index::search(
+            &ctx.core,
+            &ctx.caller,
+            self.index_schemas(),
+            args,
+            arguments,
+        )
+        .await;
+        ctx.reply_blocks("index_search", &asked, result.map(index_blocks))
+    }
+
+    #[tool(
+        description = "Build an AI-ready context for a task description, in Markdown: the entry points, the related symbols by file, and the code of the entry points (5 blocks at most, of 1,500 bytes at most; a truncated one ends with the index_body call that returns the rest). Tell the task with the words of the code (its identifiers, in English here) where you know them. The output includes a `### Retrieval` section: when it lists zero-hit terms, re-query once with `keywords` synonyms for them (or use index_search); a `match: fts-only` tier means weak lexical matches, so verify entry points before building on them. Pass seen_node_ids from each answer to the next call's exclude_node_ids; path, path_include and path_exclude narrow the entry points. Each answer ends with index_metrics: before (the files touched, read whole, capped at 4 times the answer), after (the answer, the call and, once, the tools' schemas) and saved. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn index_context(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<index::ContextArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("task", Some(&args.task)),
+        ]);
+        let arguments = index::sent(&args);
+        let result = index::context(
+            &ctx.core,
+            &ctx.caller,
+            self.index_schemas(),
+            args,
+            arguments,
+        )
+        .await;
+        ctx.reply_blocks("index_context", &asked, result.map(index_blocks))
+    }
+
+    #[tool(
+        description = "Return the full source body of a symbol by name (function, struct, const, etc.) from the code index. Collapses search + node lookup + file read into a single call. Returns a body only when exactly one definition matches; when the name is ambiguous (e.g. several methods named `refresh`), returns no body but a candidate list (qualified name, kind, file, line range, node id) — re-call with a qualified name such as `Type::Member` / `Type.Member`, or with `node_id`. A function or type definition outranks a same-named field or import. A truncated snippet of index_context names its node_id. Each answer ends with index_metrics, as the other index tools. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn index_body(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<index::BodyArgs>,
+    ) -> CallToolResult {
+        let id = args.node_id.map(|i| i.to_string());
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("node_id", id.as_deref()),
+            ("symbol", args.symbol.as_deref()),
+        ]);
+        let arguments = index::sent(&args);
+        let result = index::body(
+            &ctx.core,
+            &ctx.caller,
+            self.index_schemas(),
+            args,
+            arguments,
+        )
+        .await;
+        ctx.reply_blocks("index_body", &asked, result.map(index_blocks))
+    }
+
+    #[tool(
+        description = "Who calls a function or method, from the code index, as JSON: by its id, or by a name answered definition by definition (matches: each definition, its callers resolved to it (file, line, the symbol that calls, its id), and apart the calls that may mean it among others, ambiguous; more: the other definitions of the name, to ask again by id). The calls are resolved to symbols when the files are read, as tokensave does; a tie is never guessed. Each answer ends with index_metrics, as the other index tools. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn index_callers(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<index::CallArgs>,
+    ) -> CallToolResult {
+        let id = args.id.map(|i| i.to_string());
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("id", id.as_deref()),
+            ("name", args.name.as_deref()),
+        ]);
+        let arguments = index::sent(&args);
+        let result = index::callers(
+            &ctx.core,
+            &ctx.caller,
+            self.index_schemas(),
+            args,
+            arguments,
+        )
+        .await;
+        ctx.reply_blocks("index_callers", &asked, result.map(index_blocks))
+    }
+
+    #[tool(
+        description = "What a function or method calls, from the code index, as JSON: by its id, or by a name answered definition by definition (matches: the definitions it calls, resolved; apart the calls left to a tie, ambiguous; the names left, the language's and libraries', external; more: the other definitions of the name). Each answer ends with index_metrics, as the other index tools. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn index_callees(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<index::CallArgs>,
+    ) -> CallToolResult {
+        let id = args.id.map(|i| i.to_string());
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("id", id.as_deref()),
+            ("name", args.name.as_deref()),
+        ]);
+        let arguments = index::sent(&args);
+        let result = index::callees(
+            &ctx.core,
+            &ctx.caller,
+            self.index_schemas(),
+            args,
+            arguments,
+        )
+        .await;
+        ctx.reply_blocks("index_callees", &asked, result.map(index_blocks))
+    }
+
+    #[tool(
+        description = "What a change would touch, from the code index, as JSON: a symbol by its id, a name answered definition by definition, or a file by its path; for each, its callers followed by the resolved links up to depth levels, the types that extend or implement it, the files that import it, every file touched, and apart the calls that may mean it among others (ambiguous). Each answer ends with index_metrics, as the other index tools. The project is the agent's own when left out; the code index is off until the user turns it on in the project's settings (the tool then says so). Open to every client, for the projects it sees (a private project is seen by its own agents alone, and its index holds only what its privacy allows).",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn index_impact(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<index::ImpactArgs>,
+    ) -> CallToolResult {
+        let id = args.id.map(|i| i.to_string());
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("id", id.as_deref()),
+            ("target", args.target.as_deref()),
+        ]);
+        let arguments = index::sent(&args);
+        let result = index::impact(
+            &ctx.core,
+            &ctx.caller,
+            self.index_schemas(),
+            args,
+            arguments,
+        )
+        .await;
+        ctx.reply_blocks("index_impact", &asked, result.map(index_blocks))
+    }
+
+    #[tool(
+        description = "Search the shared memory of a project: the work notebook of its agents, shared by every harness (Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode) and by the team, of how to work in the project and the traps to avoid (not the product: the spec says what it does). Look in it at the start of a task. By the words (name, description, text; accents and case ignored), and by the meaning too when Escouade's vectors' model is downloaded (by: meaning, else words). Answers the memories found, best first: name, description, type and the start of their text (excerpt); read_memory reads one whole. A private project's memory is seen by its own agents alone.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn search_memory(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<SearchMemoryArgs>,
+    ) -> CallToolResult {
+        let result = memory::search(
+            &ctx.core,
+            &ctx.caller,
+            args.project.as_deref(),
+            &args.query,
+            args.limit,
+        )
+        .await;
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("query", Some(args.query.trim())),
+        ]);
+        ctx.reply("search_memory", &asked, result)
+    }
+
+    #[tool(
+        description = "Read a memory of a project's shared memory whole: its name, description, type and text (body, Markdown).",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn read_memory(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<ReadMemoryArgs>,
+    ) -> CallToolResult {
+        let result = memory::read(&ctx.core, &ctx.caller, args.project.as_deref(), &args.name);
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("name", Some(&args.name)),
+        ]);
+        ctx.reply("read_memory", &asked, result)
+    }
+
+    #[tool(
+        description = "Note in a project's shared memory what you learned of how to work in it: a way of doing that works, a trap to avoid, a command to run first, a test that is flaky and why. One memory per file of .escouade/memory/ in the project's folder (Markdown with a header), its index MEMORY.md written again; every agent of the project finds it, whatever its harness or its branch. Not the product (what it does belongs to the spec), never a secret (a token, a password, a key). A memory of the same name is replaced: search and read first, and complete one rather than repeat it. Escouade never commits it; the team shares it by git. Answers the memory as written and whether it is new.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn write_memory(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<WriteMemoryArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("name", Some(&args.name)),
+        ]);
+        let draft = crate::memory::Draft {
+            name: args.name,
+            description: args.description,
+            kind: memory::kind_of(args.kind),
+            body: args.body,
+        };
+        let result = memory::write(&ctx.core, &ctx.caller, args.project.as_deref(), draft);
+        ctx.reply_changed("write_memory", &asked, result)
+    }
+
+    #[tool(
+        description = "Forget a memory of a project's shared memory that turned out wrong or no longer holds: its file is removed and the index written again. Answers the name forgotten.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn forget_memory(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<ForgetMemoryArgs>,
+    ) -> CallToolResult {
+        let result = memory::forget(&ctx.core, &ctx.caller, args.project.as_deref(), &args.name);
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("name", Some(&args.name)),
+        ]);
+        ctx.reply_changed("forget_memory", &asked, result)
+    }
+
+    #[tool(
+        description = "Read a project's specification, the tree of its pages: the subjects (folders) with, for each page, its path, title, when it was last compared to the code (compared, empty when never), the tickets and the decisions it is linked to. The spec lives under .escouade/spec of the project's docs branch (branch: current, or the name of the fixed docs branch). When the spec has no page yet, existingSpec lists what the project already has that looks like one (SPEC.md, a docs folder…: path, kind file or folder, files, bytes) so it can be offered for import; nothing is imported by this tool. Open to every client, for the projects it sees (a private project is seen by its own agents alone).",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn get_spec_tree(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::DocsProjectArgs>,
+    ) -> CallToolResult {
+        let result = docs::tree(&ctx.core, &ctx.caller, &args.project).await;
+        let asked = summary(&[("project", Some(&args.project))]);
+        ctx.reply("get_spec_tree", &asked, result)
+    }
+
+    #[tool(
+        description = "Read a page of the specification: its path, title, subject, sources, tickets, decisions, compared (when it was last compared to the code, empty when never) and body (Markdown). Open to every client, for the projects it sees.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn read_spec_page(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::SpecPageArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("project", Some(&args.project)), ("path", Some(&args.path))]);
+        let result = docs::page(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("read_spec_page", &asked, result)
+    }
+
+    #[tool(
+        description = "Create a page of the specification or change one, in the project's docs branch (the branch you work on, or the project's fixed docs branch): the fields you leave out stay as they are, body replaces the text (or goes at its end with append). Every write of the spec goes through this tool, so the spec stays where the team reads it. Nothing is committed nor pushed: the user shares the changes. Answers the page's path, title, subject, created, and the lines added and removed (which propose_decision takes as the changes of a decision).",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn write_spec_page(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::WriteSpecArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("project", Some(&args.project)), ("path", Some(&args.path))]);
+        let result = docs::write(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("write_spec_page", &asked, result)
+    }
+
+    #[tool(
+        description = "Search the specification: the pages whose title or text hold all the words (any case), the best first, each with its path, title and the first lines that hold a word. Open to every client, for the projects it sees.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn search_spec(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::SearchSpecArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("query", Some(&args.query)),
+        ]);
+        let result = docs::search(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("search_spec", &asked, result)
+    }
+
+    #[tool(
+        description = "List a project's decisions, the register of the product's choices, accepted ones by number then the proposals: number (none for a proposal: it gets one when accepted), id (how a proposal is cited), title, date, state (proposed, accepted or superseded), origin, what it supersedes and what superseded it, replacementProposed (the id of a proposal that would replace an accepted one), and what it changed in the spec (changes: page, lines added and removed). A decision is accepted by a human, in the window: no tool does it. Open to every client, for the projects it sees.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn list_decisions(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::ListDecisionsArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("state", args.state.as_deref()),
+        ]);
+        let result = docs::decisions(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("list_decisions", &asked, result)
+    }
+
+    #[tool(
+        description = "Read a decision whole, by its number or its id (a proposal has only an id): number, id, title, date, state, origin, links (pages, tickets, documents), what it supersedes, what superseded it, what it changed in the spec, when and by whom it was accepted, and its context, decision and consequences. Open to every client, for the projects it sees.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn read_decision(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::ReadDecisionArgs>,
+    ) -> CallToolResult {
+        let number = args.number.map(|n| n.to_string());
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("number", number.as_deref()),
+            ("id", args.id.as_deref()),
+        ]);
+        let result = docs::decision(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("read_decision", &asked, result)
+    }
+
+    #[tool(
+        description = "Propose a decision about the product: a new proposal (state proposed, with an id and no number: cite it by its id in the spec pages and tickets; it gets its number when it is accepted, after the register of the branch it goes to, and what cites it takes that number), or the revision of a proposal still open (id). It is not decided until a human accepts it in the window (the agent of a ticket: when its ticket is validated; its decisions say they come from it), and an accepted decision is never rewritten: replace_decision replaces it. Give it a title, its context, what is decided and what follows, where it comes from and the spec pages it changed (changes, from write_spec_page). Nothing is committed nor pushed.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn propose_decision(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::ProposeDecisionArgs>,
+    ) -> CallToolResult {
+        let number = args.number.map(|n| n.to_string());
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("id", args.id.as_deref()),
+            ("number", number.as_deref()),
+            ("title", Some(&args.fields.title)),
+        ]);
+        let result = docs::propose(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("propose_decision", &asked, result)
+    }
+
+    #[tool(
+        description = "Propose a decision that replaces an accepted one (number): a new proposal that lists it in supersedes. Once a human accepts the new one, the old one becomes superseded and says by which; until then the old one stands. Only an accepted decision is replaced. Same fields as propose_decision.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn replace_decision(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::ReplaceDecisionArgs>,
+    ) -> CallToolResult {
+        let number = args.number.to_string();
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("number", Some(&number)),
+            ("title", Some(&args.fields.title)),
+        ]);
+        let result = docs::replace(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("replace_decision", &asked, result)
+    }
+
+    #[tool(
+        description = "List the documents of a project's drive (the files the team dropped under .escouade/documents of the docs branch): its folders (path, name, files), and each document's path, name, folder, size, kind (text, pdf, word, image or other), readable (whether read_document gives their text), modified (epoch milliseconds), author, reads (times the agents read it) and cited (pages of the spec and decisions that cite it). To find the documents about something, search_documents. Open to every client, for the projects it sees.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn list_documents(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::ListDocumentsArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("folder", args.folder.as_deref()),
+        ]);
+        let result = docs::documents(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("list_documents", &asked, result)
+    }
+
+    #[tool(
+        description = "Read a document's text, extracted on this machine from text, Markdown, PDF, Word (.docx) and OpenDocument (.odt) files and kept in Escouade's folder, not in the repository: text (null for a format whose text Escouade does not read, as an image or a PDF of scans; an image gives its format and size in meta), total (characters of the whole text), from and truncated (more follows: ask again with from). To cite a document, name its path (documents/<path>) in a page's sources (write_spec_page) or a decision's documents: the window counts the citations. Open to every client, for the projects it sees.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn read_document(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::ReadDocumentArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("project", Some(&args.project)), ("path", Some(&args.path))]);
+        let result = docs::read_document(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("read_document", &asked, result)
+    }
+
+    #[tool(
+        description = "Search a project's documents (the drive of .escouade/documents: text, Markdown, PDF, Word, OpenDocument, and images by their name): by the meaning and the words together when the vectors' model is downloaded, by the words otherwise (by says which). Answers each document's path, name, folder, kind and the passage that answers (excerpt); read_document gives the whole text. Everything runs on this machine. Open to every client, for the projects it sees.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn search_documents(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::SearchDocumentsArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("query", Some(&args.query)),
+        ]);
+        let result = docs::search_documents(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("search_documents", &asked, result)
+    }
+
+    #[tool(
+        description = "The changes of a project's docs (spec, decisions, documents) not shared with the team yet: pending.files, pending.count, and pending.conflict when a sharing stopped on a conflict between two versions of a page, which the writer agent resolves from the window. Open to every client, for the projects it sees.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn get_docs_to_share(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::DocsProjectArgs>,
+    ) -> CallToolResult {
+        let result = docs::to_share(&ctx.core, &ctx.caller, &args.project).await;
+        let asked = summary(&[("project", Some(&args.project))]);
+        ctx.reply("get_docs_to_share", &asked, result)
+    }
+
+    #[tool(
+        description = "Share a project's docs, as the window's « Partager » does: the remote branch is fetched first, the changes of the docs (and only them) are committed with a message, others' work is merged in and the branch is pushed. A conflict between two versions of a page is undone and left for the writer agent (the window offers « L'agent résout » / « Annuler »); it is never shown as lines of git. Sharing is the user's gesture: an agent of Escouade is refused unless the user told it to (userAskedForIt). Refused, in a sentence, while the branch has commits of code not pushed yet, unless withCode is true. Answers kind nothing, done (committed, message, pulled) or conflict.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = true
+        )
+    )]
+    async fn share_docs(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::ShareDocsArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("project", Some(&args.project))]);
+        let result = docs::share(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("share_docs", &asked, result)
+    }
+
+    #[tool(
+        description = "Add a text file to a project's drive of documents, in the docs branch: under the folder given (made if needed), or, without one, filed by Escouade in the folder that fits it (by its name, its sort and its words, or a new folder): placement says where and why (by). Nothing already there is overwritten: a taken name gets a number. Nothing is committed nor pushed.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn add_document(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<docs::AddDocumentArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("folder", args.folder.as_deref()),
+            ("name", Some(&args.name)),
+        ]);
+        let result = docs::add_document(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("add_document", &asked, result)
+    }
+
+    #[tool(
         description = "Read the quota of every account, of every harness: for each account its harness (engine), whether new agents of that harness go to it now (current: the first active account of the harness whose meters are under the autopilot's threshold, else the first active one), and its meters as last read (meters: a window of a length in minutes, 300 for 5 hours and 10080 for a week, or the month's credits with minutes null; each with how much is used, pct 0 to 100, and when it resets, resetsAt in epoch milliseconds; none for a harness without a quota or not read yet), Claude Code's 5-hour and weekly windows also as fiveHour and sevenDay (null when not read); and why the autopilot holds the tickets of the default harness back, when it does (reason: window, with its length in minutes, credits or limit), until when (epoch milliseconds).",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
@@ -1326,7 +1902,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Launch a To do ticket now, as the Launch button does: its agent starts as soon as a place is free. Refused while the autopilot is paused for the project (every Claude account it may use is past its quota threshold or at its usage limit: the answer says until when), when the project already has its most tickets in progress in parallel, when the ticket comes after tickets that are not done, and when the board cannot start anything. You may give the ticket's agent its own account, model and effort (they take precedence over the ticket's and the Kanban's, which get_board gives, and are the ticket's from then on; auto, or an empty string, goes back to the default): they are checked before anything starts. A model that has no auto mode (Haiku) starts its agent in the default mode where the Kanban's is auto. Answers once it is queued, with the model and the effort its agent starts with (the ticket's, else the Kanban's, else the app's default; no effort for a model that takes none, Haiku); follow it with get_ticket. It uses the quota.",
+        description = "Launch a To do ticket now, as the Launch button does: its agent starts as soon as a place is free. Refused while every Claude account the project may use is at its usage limit (the answer says until when); asked for so, it is not held by “Pause above quota” nor by a day's budget, which hold back the autopilot alone, when the project already has its most tickets in progress in parallel, when the ticket comes after tickets that are not done, and when the board cannot start anything. You may give the ticket's agent its own account, model and effort (they take precedence over the ticket's and the Kanban's, which get_board gives, and are the ticket's from then on; auto, or an empty string, goes back to the default): they are checked before anything starts. A model that has no auto mode (Haiku) starts its agent in the default mode where the Kanban's is auto. Answers once it is queued, with the model and the effort its agent starts with (the ticket's, else the Kanban's, else the app's default; no effort for a model that takes none, Haiku); follow it with get_ticket. It uses the quota.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -1344,7 +1920,7 @@ impl<R: Runtime> Tools<R> {
             ("model", args.model.as_deref()),
             ("effort", args.effort.as_deref()),
         ]);
-        let result = act::start_ticket(&ctx.core, &ctx.caller, args);
+        let result = act::start_ticket(&ctx.core, &ctx.caller, args).await;
         ctx.reply("start_ticket", &asked, result)
     }
 
@@ -1367,7 +1943,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Send a To review ticket back for rework, as the Send back button does: it goes back In progress with the same agent and worktree, on loop 1 again, and the comment is sent to its agent, which reads it as test feedback followed by who sent the ticket back (sent back by <you> through Escouade), then fixes it, checks every criterion again and ends with its report. Refused for a blank comment, for a ticket that is not in To review or has no agent, while its agent works (wait for the end of its turn), while its approval runs, while the agent's own Claude account is held back (past its quota threshold, at its usage limit, or with an agent waiting for its quota: the answer says until when), and for your own ticket when you are an agent. It uses the quota. Answers the ticket as get_ticket does, and since, the cursor of the ticket as it was before: pass it to wait_ticket to be told at once of what follows.",
+        description = "Send a To review ticket back for rework, as the Send back button does: it goes back In progress with the same agent and worktree, on loop 1 again, and the comment is sent to its agent, which reads it as test feedback followed by who sent the ticket back (sent back by <you> through Escouade), then fixes it, checks every criterion again and ends with its report. Refused for a blank comment, for a ticket that is not in To review or has no agent, while its agent works (wait for the end of its turn), while its approval runs, while the agent's own Claude account is at its usage limit (or has an agent waiting for its quota: the answer says until when; “Pause above quota” holds back the autopilot alone), and for your own ticket when you are an agent. It uses the quota. Answers the ticket as get_ticket does, and since, the cursor of the ticket as it was before: pass it to wait_ticket to be told at once of what follows.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -1388,7 +1964,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Take up a blocked In progress ticket, as the Resume button does: its agent goes on where it was (an agent that never got the ticket gets it, with its description and criteria), or, when its agent is gone, the ticket starts again with a new agent even if the autopilot is off. Refused for a ticket that is not In progress or not blocked, while its agent waits for its quota (the answer says until when), while the Claude account that would take it is held back (past its quota threshold or at its usage limit: the answer says until when), and for your own ticket when you are an agent. It uses the quota. Answers the ticket as get_ticket does, and since, the cursor of the ticket as it was before: pass it to wait_ticket to be told at once of what follows.",
+        description = "Take up a blocked In progress ticket, as the Resume button does: its agent goes on where it was (an agent that never got the ticket gets it, with its description and criteria), or, when its agent is gone, the ticket starts again with a new agent even if the autopilot is off. Refused for a ticket that is not In progress or not blocked, while its agent waits for its quota (the answer says until when), while the Claude account that would take it is at its usage limit (the answer says until when; “Pause above quota” holds back the autopilot alone), and for your own ticket when you are an agent. It uses the quota. Answers the ticket as get_ticket does, and since, the cursor of the ticket as it was before: pass it to wait_ticket to be told at once of what follows.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -1406,7 +1982,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Hand a merge conflict to the ticket's agent, as the \"Let the agent resolve\" button does on a To review ticket whose approval stopped on a conflict: the target branch is merged into the ticket's branch with the conflicts left in its worktree (with the rebase strategy, the agent is asked to rebase instead), the ticket goes back In progress on loop 1, and the agent is asked to resolve the conflicts and to end with its report. Refused for a ticket that is not in To review or has no conflict, while its approval runs, while its agent works, while the agent's own Claude account is held back (past its quota threshold, at its usage limit, or with an agent waiting for its quota: the answer says until when), and for your own ticket when you are an agent. It uses the quota. Answers the ticket as get_ticket does, and since, the cursor of the ticket as it was before: pass it to wait_ticket to be told at once of what follows.",
+        description = "Hand a merge conflict to the ticket's agent, as the \"Let the agent resolve\" button does on a To review ticket whose approval stopped on a conflict: the target branch is merged into the ticket's branch with the conflicts left in its worktree (with the rebase strategy, the agent is asked to rebase instead), the ticket goes back In progress on loop 1, and the agent is asked to resolve the conflicts and to end with its report. Refused for a ticket that is not in To review or has no conflict, while its approval runs, while its agent works, while the agent's own Claude account is at its usage limit (or has an agent waiting for its quota: the answer says until when; “Pause above quota” holds back the autopilot alone), and for your own ticket when you are an agent. It uses the quota. Answers the ticket as get_ticket does, and since, the cursor of the ticket as it was before: pass it to wait_ticket to be told at once of what follows.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -1501,7 +2077,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Start a new Claude Code agent in a project and send it its first message, which it reads headed by your name (Message from <you>: …), as coming from you and not from the user. It works on its own from then on: follow it with get_agent_summary. Refused while the autopilot is paused for the project (every Claude account it may use is past its quota threshold or at its usage limit: the answer says until when) and when the project already has its most agents working at once (its Kanban's In parallel setting). It uses the quota. Answers the agent's id and name.",
+        description = "Start a new Claude Code agent in a project and send it its first message, which it reads headed by your name (Message from <you>: …), as coming from you and not from the user. It works on its own from then on: follow it with get_agent_summary. Refused while every Claude account the project may use is at its usage limit (the answer says until when); asked for so, it is not held by “Pause above quota” nor by a day's budget, which hold back the autopilot alone and when the project already has its most agents working at once (its Kanban's In parallel setting). It uses the quota. Answers the agent's id and name.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -1522,7 +2098,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Send a message to an agent of Escouade (32,000 characters at most). The agent reads it, and the conversation shows it, headed by your name (Message from <you>: …), as coming from you and not from the user; an agent at work reads it after its current turn. Refused while the agent's own Claude account is held back (past its quota threshold, at its usage limit, or with an agent waiting for its quota: the answer says until when), for an archived agent, and for yourself when you are an agent. It uses the quota. Answers the agent's id and name, and whether the message waits for the end of a turn.",
+        description = "Send a message to an agent of Escouade (32,000 characters at most). The agent reads it, and the conversation shows it, headed by your name (Message from <you>: …), as coming from you and not from the user; an agent at work reads it after its current turn. Refused while the agent's own Claude account is at its usage limit (or has an agent waiting for its quota: the answer says until when; “Pause above quota” holds back the autopilot alone), for an archived agent, and for yourself when you are an agent. It uses the quota. Answers the agent's id and name, and whether the message waits for the end of a turn.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -1544,7 +2120,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Write to a subagent that works in the background, as the message box of its view in the window does (list_background_work gives the ids; a subagent may also be named by its taskId). The message is 32,000 characters at most. Claude Code lets no host write to a subagent: the agent it belongs to is asked to pass the message on with its SendMessage tool, and does so in a turn of its own, reading it and the subagent reading it headed by your name (Message from <you>: …), as coming from you and not from the user. Refused, as the window refuses, for a subagent that no longer runs, for a subagent in the foreground (the agent waits for it and would only pass the message on once it ended), for a subagent whose task Claude Code has not told yet, for an agent in the Claude Code view (the message is typed in its interface), for an archived agent, and for a subagent of yourself when you are an agent; and, once none of those applies, while the agent's own Claude account is held back (past its quota threshold, at its usage limit, or with an agent waiting for its quota: the answer says until when). A refusal that waiting would not change is therefore told before the one that says to try again later. It uses the quota. The activity log keeps the agent and the subagent, never the message. Answers the agent (id, name), the subagent (the call that launched it) and whether the message waits for the end of the agent's turn (queued).",
+        description = "Write to a subagent that works in the background, as the message box of its view in the window does (list_background_work gives the ids; a subagent may also be named by its taskId). The message is 32,000 characters at most. Claude Code lets no host write to a subagent: the agent it belongs to is asked to pass the message on with its SendMessage tool, and does so in a turn of its own, reading it and the subagent reading it headed by your name (Message from <you>: …), as coming from you and not from the user. Refused, as the window refuses, for a subagent that no longer runs, for a subagent in the foreground (the agent waits for it and would only pass the message on once it ended), for a subagent whose task Claude Code has not told yet, for an agent in the Claude Code view (the message is typed in its interface), for an archived agent, and for a subagent of yourself when you are an agent; and, once none of those applies, while the agent's own Claude account is at its usage limit (or has an agent waiting for its quota: the answer says until when; “Pause above quota” holds back the autopilot alone). A refusal that waiting would not change is therefore told before the one that says to try again later. It uses the quota. The activity log keeps the agent and the subagent, never the message. Answers the agent (id, name), the subagent (the call that launched it) and whether the message waits for the end of the agent's turn (queued).",
         annotations(
             read_only_hint = false,
             destructive_hint = false,

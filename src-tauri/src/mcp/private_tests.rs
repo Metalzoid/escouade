@@ -82,6 +82,114 @@ fn naming_calls() -> Vec<(&'static str, Names, Value)> {
         ("get_board", Names::Project, json!({ "project": "{}" })),
         ("get_workflow", Names::Project, json!({ "project": "{}" })),
         ("list_requests", Names::Project, json!({ "project": "{}" })),
+        ("get_spec_tree", Names::Project, json!({ "project": "{}" })),
+        (
+            "read_spec_page",
+            Names::Project,
+            json!({ "project": "{}", "path": "a/b" }),
+        ),
+        (
+            "write_spec_page",
+            Names::Project,
+            json!({ "project": "{}", "path": "a/b", "body": "Texte" }),
+        ),
+        (
+            "search_spec",
+            Names::Project,
+            json!({ "project": "{}", "query": "texte" }),
+        ),
+        (
+            "index_search",
+            Names::Project,
+            json!({ "project": "{}", "query": "texte" }),
+        ),
+        (
+            "index_context",
+            Names::Project,
+            json!({ "project": "{}", "task": "texte" }),
+        ),
+        (
+            "index_body",
+            Names::Project,
+            json!({ "project": "{}", "symbol": "texte" }),
+        ),
+        (
+            "index_callers",
+            Names::Project,
+            json!({ "project": "{}", "name": "texte" }),
+        ),
+        (
+            "index_callees",
+            Names::Project,
+            json!({ "project": "{}", "name": "texte" }),
+        ),
+        (
+            "index_impact",
+            Names::Project,
+            json!({ "project": "{}", "target": "texte" }),
+        ),
+        ("list_decisions", Names::Project, json!({ "project": "{}" })),
+        (
+            "read_decision",
+            Names::Project,
+            json!({ "project": "{}", "number": 1 }),
+        ),
+        (
+            "propose_decision",
+            Names::Project,
+            json!({ "project": "{}", "title": "Une décision" }),
+        ),
+        (
+            "replace_decision",
+            Names::Project,
+            json!({ "project": "{}", "number": 1, "title": "Une autre" }),
+        ),
+        ("list_documents", Names::Project, json!({ "project": "{}" })),
+        (
+            "get_docs_to_share",
+            Names::Project,
+            json!({ "project": "{}" }),
+        ),
+        (
+            "share_docs",
+            Names::Project,
+            json!({ "project": "{}", "userAskedForIt": true }),
+        ),
+        (
+            "read_document",
+            Names::Project,
+            json!({ "project": "{}", "path": "a.md" }),
+        ),
+        (
+            "search_documents",
+            Names::Project,
+            json!({ "project": "{}", "query": "plan" }),
+        ),
+        (
+            "add_document",
+            Names::Project,
+            json!({ "project": "{}", "name": "a.md", "text": "x" }),
+        ),
+        (
+            "search_memory",
+            Names::Project,
+            json!({ "project": "{}", "query": "e2e" }),
+        ),
+        (
+            "read_memory",
+            Names::Project,
+            json!({ "project": "{}", "name": "e2e" }),
+        ),
+        (
+            "write_memory",
+            Names::Project,
+            json!({ "project": "{}", "name": "e2e", "description": "d", "body": "b" }),
+        ),
+        (
+            "forget_memory",
+            Names::Project,
+            json!({ "project": "{}", "name": "e2e" }),
+        ),
         (
             "create_ticket",
             Names::Project,

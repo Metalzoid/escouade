@@ -265,7 +265,7 @@ impl CursorProcess {
                             if text.is_empty() {
                                 continue;
                             }
-                            match serde_json::from_str::<Value>(text) {
+                            match crate::text::json_line(text) {
                                 Ok(msg) => match weak.upgrade() {
                                     Some(p) => p.read(msg),
                                     None => break,
@@ -828,25 +828,27 @@ impl EngineProcess for CursorProcess {
             // The plan approved: its work starts in the mode Agent (its edits accepted with
             // « Approuver et accepter les modifications »); sent back, the planning goes on.
             let (outcome, mode) = match &answer {
-                PermissionAnswer::Allow { .. } => {
-                    (json!({ "outcome": "accepted" }), Some("default"))
-                }
-                PermissionAnswer::Always { .. } => {
-                    (json!({ "outcome": "accepted" }), Some("acceptEdits"))
-                }
+                PermissionAnswer::Allow { resume, .. } => (
+                    json!({ "outcome": "accepted" }),
+                    Some(resume.clone().unwrap_or_else(|| "default".into())),
+                ),
+                PermissionAnswer::Always { .. } => (
+                    json!({ "outcome": "accepted" }),
+                    Some("acceptEdits".to_string()),
+                ),
                 PermissionAnswer::Deny { message, .. } => {
                     (json!({ "outcome": "rejected", "reason": message }), None)
                 }
             };
             self.answer(request_id, json!({ "outcome": outcome }))?;
             if let Some(mode) = mode {
-                self.state.lock().settings.mode = mode.to_string();
+                self.state.lock().settings.mode = mode.clone();
                 let session = self.session()?;
                 // Told and set on a task of its own: the answer is given with the agent held,
                 // which its frames need.
                 let me = self.self_arc()?;
                 tokio::spawn(async move {
-                    if let Err(e) = me.apply_mode(&session, mode).await {
+                    if let Err(e) = me.apply_mode(&session, &mode).await {
                         log::warn!("cursor: mode {mode} not set after the plan: {e:#}");
                     }
                     me.frame(

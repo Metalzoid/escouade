@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { fmt } from '~/data/catalog';
-import { DOC_GROUPS, DOC_SLUGS, docPath, docRoute, docSource, type DocSlug } from '~/data/docs';
+import { DOC_GROUPS, DOC_SLUGS, docPath, docRoute, docSource, slugOf, type DocSlug } from '~/data/docs';
 import { REPO } from '~/data/site';
 
 // A page of the documentation: its group, its title and lede, its content, then where to edit it and the pages
 // before and after it; its summary beside it.
 const { lang, text } = useLang();
 const route = useRoute();
-const slug = String(route.params.slug) as DocSlug;
+const slug = slugOf(route.params.slug) as DocSlug;
 const { load } = useDocs();
 
 // The page's payload keeps what it shows: the search loads the pages itself.

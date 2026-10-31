@@ -1,0 +1,54 @@
+{
+  "about": "Une lecture refusée par une règle deny de --policy (ESC-273, faux serveur) : l’appel dit par sa seule fin, en erreur, « denied by policy ».",
+  "agent": {
+    "cwd": "C:\\tmp\\esc273\\proj2",
+    "engine": "gemini",
+    "mode": "default",
+    "model": "auto"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": null,
+    "sessionId": "a774d38c-c2f1-49f3-9ce8-ac45c651da96",
+    "status": "done",
+    "tokens": 2440,
+    "touchedFiles": []
+  },
+  "flux": "../../gemini/16-policy-fence-deny.jsonl",
+  "items": [
+    {
+      "images": 0,
+      "kind": "user",
+      "queued": false,
+      "text": "lis cle"
+    },
+    {
+      "input": {},
+      "kind": "tool",
+      "name": "Read",
+      "parent": null,
+      "result": {
+        "isError": true,
+        "text": "Tool execution for \"ReadFile\" denied by policy."
+      },
+      "status": "error"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "Terminé : {\"error\":\"Tool execution for \\\"ReadFile\\\" denied by policy.\""
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "gemini",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 2440
+    }
+  ]
+}

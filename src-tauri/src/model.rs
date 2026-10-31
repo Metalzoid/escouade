@@ -142,8 +142,20 @@ pub struct Settings {
     /// « Nouveaux projets privés » (Réglages › Projets): a project added is private
     /// (`Project::private`) from the start. Off by default.
     pub private_projects: bool,
+    /// « Index du code sur tous les projets » (Réglages › Projets, ESC-293): the index of every
+    /// project that has not made its own choice (`Project::code_index`) is on. Off by default.
+    /// Saved at once by `set_code_index_all`, never by the settings modal's draft.
+    pub code_index_all: bool,
     /// « Thème » (Réglages › Application › Affichage): the window's look, the system's by default.
     pub theme: ThemeChoice,
+    /// « Couleurs » (Réglages › Application › Affichage, PLG-7): the theme of a plugin the window takes,
+    /// `<plugin id>/<theme id>`; empty, Escouade's. Its values are filtered by the window
+    /// (src/lib/plugin-themes.ts); a plugin switched off or gone leaves Escouade's colours, the choice kept.
+    pub plugin_theme: String,
+    /// « N'installer que des versions vérifiées » (la vue Plugins, STORE-9): a version from the store
+    /// without the seal « Vérifié par Escouade » is refused, at an install as at an update. Off by
+    /// default (docs/STORE.md §4.4).
+    pub plugins_verified_only: bool,
     /// « Zoom de l’interface », in percent (`ZOOM_LEVELS`): the whole window's, as the WebView's
     /// zoom (text, spacing and icons together); Ctrl+= / Ctrl+- / Ctrl+0 change it too.
     pub ui_zoom: u32,
@@ -288,6 +300,10 @@ pub struct Account {
     pub default_effort: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub default_mode: String,
+    /// Gemini CLI (ESC-275): it goes by its API key (in the keychain, given once with « Clé
+    /// d’API »), not by the Google sign-in made by `gemini` in its folder.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub api_key: bool,
 }
 
 /// The dictation's settings.
@@ -406,6 +422,7 @@ impl Default for Account {
             default_model: String::new(),
             default_effort: String::new(),
             default_mode: String::new(),
+            api_key: false,
         }
     }
 }
@@ -623,7 +640,10 @@ impl Default for Settings {
             mid_turn_delay_secs: DEFAULT_MID_TURN_DELAY,
             remote_control_all: false,
             private_projects: false,
+            code_index_all: false,
             theme: ThemeChoice::System,
+            plugin_theme: String::new(),
+            plugins_verified_only: false,
             ui_zoom: 100,
             terminal_font_size: DEFAULT_FONT_SIZE,
             editor_font_size: DEFAULT_FONT_SIZE,
@@ -734,11 +754,20 @@ pub struct Project {
     /// window see every project.
     #[serde(default)]
     pub private: bool,
+    /// « Branche des docs » (ESC-256): where `.escouade/spec`, `decisions` and `documents` live. Empty: the
+    /// branch checked out (a ticket’s agent writes them on its own branch); a name: that branch, in a
+    /// worktree of its own that Escouade holds and never merges anywhere (`docsbranch`).
+    #[serde(default)]
+    pub docs_branch: String,
     /// « Comptes partagés à la limite » (a private project, ESC-141): its agents may go on on an
     /// account it shares with other projects when its own reach the usage limit. Off: they wait
     /// for the reset (`accounts::confined`).
     #[serde(default)]
     pub shared_on_limit: bool,
+    /// The memory Claude Code kept for this project was offered to its shared memory (ESC-255): once,
+    /// taken or not. Set by `claude_memory_take` and `claude_memory_dismiss` alone.
+    #[serde(default)]
+    pub claude_memory_asked: bool,
     /// Its `.escouade.yml` (ESC-146): the keys kept on this machine, the commands trusted, the file
     /// as last read.
     #[serde(default)]
@@ -763,6 +792,21 @@ pub struct Project {
     /// comes back to the front and a file read changed. Off: by « Relire » alone.
     #[serde(default = "crate::model::yes")]
     pub workflows_auto_read: bool,
+    /// « Index du code » (ESC-251): the project's code cut into symbols and links, in a database
+    /// of this machine (`codeindex`), for the agents to find code with for less; off, nothing is
+    /// read and the database is erased. The project's own choice (ESC-293), on or off; None
+    /// follows « Index du code sur tous les projets » of the app's settings. Read through
+    /// `Core::code_index_on` alone.
+    #[serde(
+        default,
+        rename = "codeIndexChoice",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub code_index: Option<bool>,
+    /// The switch saved before ESC-293 (`codeIndex`), read once by `settle_legacy`, never
+    /// written again.
+    #[serde(default, rename = "codeIndex", skip_serializing)]
+    pub code_index_before: bool,
 }
 
 impl Project {
@@ -803,12 +847,24 @@ impl Project {
     /// A project saved before ESC-160 with « Les agents partent de la branche cible » on starts its
     /// new worktrees from the board's target: the choice is kept as « Branche de départ des
     /// nouveaux worktrees », the old switch never saved again.
+    ///
+    /// « Index du code » saved before ESC-293: on stays a choice of the project's; off follows the
+    /// app's setting, nothing having told the off by default from the off wanted.
     pub fn settle_legacy(&mut self) {
         if std::mem::take(&mut self.board.agents_from_target)
             && self.worktree_base == WorktreeBase::Head
         {
             self.worktree_base = WorktreeBase::Target;
         }
+        if std::mem::take(&mut self.code_index_before) && self.code_index.is_none() {
+            self.code_index = Some(true);
+        }
+    }
+
+    /// Whether its index is on: its own choice, or the app's « Index du code sur tous les
+    /// projets » (`all`) when it made none. Read through `Core::code_index_on`.
+    pub fn code_index_on(&self, all: bool) -> bool {
+        self.code_index.unwrap_or(all)
     }
 }
 
@@ -1145,6 +1201,11 @@ pub struct Ticket {
     /// folder, written by Escouade and committed by the user (`sharing`). None: this machine's
     /// alone, and for a ticket saved before.
     pub shared: Option<Shared>,
+    /// The pages of the spec it implements (`subject/page`), as « Planifier » made it (ESC-262);
+    /// each of them names it in its `tickets`. Empty for a ticket made otherwise.
+    pub pages: Vec<String>,
+    /// The decisions it implements, the same way: by number, or by id while they are proposals.
+    pub decisions: Vec<crate::docs::Ref>,
 }
 
 /// Someone of the team, as the files of the shared tickets name them (ESC-190): the name they
@@ -1488,6 +1549,12 @@ pub enum EngineId {
     Copilot,
     Cursor,
     Opencode,
+    /// Mistral Vibe (ESC-266).
+    Vibe,
+    /// Antigravity CLI (ESC-270).
+    Agy,
+    /// Gemini CLI (ESC-274).
+    Gemini,
     /// The minimal fake engine of the conformance bench, run by the core in the tests of the
     /// handover (`engine/minimal/`): a second harness beside Claude Code's fake.
     #[cfg(test)]
@@ -1503,6 +1570,9 @@ impl EngineId {
             EngineId::Copilot => "copilot",
             EngineId::Cursor => "cursor",
             EngineId::Opencode => "opencode",
+            EngineId::Vibe => "vibe",
+            EngineId::Agy => "agy",
+            EngineId::Gemini => "gemini",
             #[cfg(test)]
             EngineId::Bench => "bench",
         }
@@ -1544,7 +1614,12 @@ pub struct AgentMeta {
     pub engine: EngineId,
     pub model: String,
     pub effort: String,
+    /// Changed by `set_mode`, which keeps `plan_from`.
     pub mode: String,
+    /// The mode its work resumes in once a plan is approved (ESC-277): the one it was in when it
+    /// went into Plan, or its mode of departure when it started in it. None: the app's, `auto`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan_from: Option<String>,
     pub session_id: Option<String>,
     /// The latest entry of its session's main chain (the uuid of its latest assistant message),
     /// saved with the end of each turn: where a copy made now forks its session.
@@ -1674,6 +1749,10 @@ pub struct AgentMeta {
     /// them: the only files outside its folders that its `Read` is allowed without asking
     /// (`attachfiles::granted`). The `MAX_GRANTED_FILES` last.
     pub granted_files: Vec<String>,
+    /// A discussion of the Docs tab (ESC-261): its role, its subject and what it proposes for the
+    /// spec. None for any other agent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discussion: Option<crate::discussion::Discussion>,
 }
 
 /// The sign-in an agent waits for (`AgentMeta::sign_in`): its account's, another than `stamp`.
@@ -1702,6 +1781,39 @@ pub struct HandedFrom {
 pub const MAX_GRANTED_FILES: usize = 200;
 
 impl AgentMeta {
+    /// Its mode is now `mode`, however it changed (the menu, its harness, Escouade): going into
+    /// Plan, the mode it leaves is kept for the plan's approval (`plan_resume`). False when it was
+    /// already in it.
+    pub fn set_mode(&mut self, mode: &str) -> bool {
+        if self.mode == mode {
+            return false;
+        }
+        if mode == "plan" && !self.mode.is_empty() {
+            self.plan_from = Some(self.mode.clone());
+        }
+        self.mode = mode.to_string();
+        true
+    }
+
+    /// The mode its work resumes in when its plan is approved (« Approuver le plan »): the one it
+    /// was in before Plan, else the app's mode of new agents (`auto`); its own when it is not in
+    /// Plan; never `plan`, and `default` for `auto` on a model that has no auto mode (`takes_auto`).
+    pub fn plan_resume(&self, takes_auto: bool) -> String {
+        let mode = if !self.mode.is_empty() && self.mode != "plan" {
+            self.mode.as_str()
+        } else {
+            self.plan_from
+                .as_deref()
+                .filter(|m| !m.is_empty() && *m != "plan")
+                .unwrap_or("auto")
+        };
+        if mode == "auto" && !takes_auto {
+            "default".into()
+        } else {
+            mode.into()
+        }
+    }
+
     /// Remembers that the user joined the file `claude_path` (as Claude Code reads it) by its own
     /// path: its `Read` of exactly that file is allowed from now on. Joined again, it only moves to
     /// the end; past `MAX_GRANTED_FILES` the oldest go.
@@ -2479,6 +2591,16 @@ pub enum UiEvent {
         agent_id: String,
         ops: Vec<ConvOp>,
     },
+    /// A project's shared memory changed (ESC-255): written or forgotten through the server or the window.
+    #[serde(rename_all = "camelCase")]
+    Memory {
+        project_id: String,
+    },
+    /// A project's « Index du code » changed (ESC-293): read, erased, or waiting for its reading.
+    #[serde(rename_all = "camelCase")]
+    CodeIndex {
+        project_id: String,
+    },
     #[serde(rename_all = "camelCase")]
     Git {
         project_id: String,
@@ -2606,6 +2728,27 @@ pub enum UiEvent {
     Voice {
         voice: crate::voice::VoiceEvent,
     },
+    /// A link `escouade://` came (STORE-11): the window takes it (`deep_links_take`).
+    DeepLink {},
+    /// The download of the vectors' model (ESC-254): bytes so far, of `total`.
+    VectorsDownload {
+        done: u64,
+        total: u64,
+    },
+    /// What a project's docs have to share (ESC-257): the changes not shared yet, and the conflict
+    /// a « Partager » stopped on, if any.
+    #[serde(rename_all = "camelCase")]
+    DocsShare {
+        project_id: String,
+        pending: u32,
+        conflict: Option<crate::docsshare::Conflict>,
+    },
+    /// The pages of a project being compared to the code (ESC-263), told when one starts or ends.
+    #[serde(rename_all = "camelCase")]
+    DocsCompared {
+        project_id: String,
+        comparing: Vec<String>,
+    },
 }
 
 pub fn now_ms() -> i64 {
@@ -2648,6 +2791,44 @@ mod tests {
             id: id.into(),
             text: t.into(),
         }
+    }
+
+    #[test]
+    fn a_plan_approved_resumes_in_the_mode_before_plan_never_in_ask_by_default() {
+        let mut a = AgentMeta {
+            mode: "auto".into(),
+            ..Default::default()
+        };
+        // Auto → Plan (by the menu or by its harness): Auto again once approved.
+        assert!(a.set_mode("plan"));
+        assert!(!a.set_mode("plan"));
+        assert_eq!(a.plan_from.as_deref(), Some("auto"));
+        assert_eq!(a.plan_resume(true), "auto");
+        // A model with no auto mode (Claude Code's Haiku 4.5): « Demander ».
+        assert_eq!(a.plan_resume(false), "default");
+        // Bypass only where it was.
+        a.set_mode("bypassPermissions");
+        a.set_mode("plan");
+        assert_eq!(a.plan_resume(true), "bypassPermissions");
+        // Out of Plan without Escouade knowing it went in: its own mode.
+        a.set_mode("acceptEdits");
+        assert_eq!(a.plan_resume(true), "acceptEdits");
+        // In Plan with nothing kept (saved before ESC-277): the app's mode of new agents.
+        let old = AgentMeta {
+            mode: "plan".into(),
+            ..Default::default()
+        };
+        assert_eq!(old.plan_resume(true), "auto");
+        // Its Plan's mode of departure never `plan`.
+        let odd = AgentMeta {
+            mode: "plan".into(),
+            plan_from: Some("plan".into()),
+            ..Default::default()
+        };
+        assert_eq!(odd.plan_resume(true), "auto");
+        // Saved and read again, with its mode kept.
+        let v = serde_json::to_value(&a).unwrap();
+        assert_eq!(v["planFrom"], "bypassPermissions");
     }
 
     #[test]
@@ -2971,6 +3152,20 @@ mod tests {
         })
         .unwrap();
         assert_eq!(v["theme"], json!("light"));
+    }
+
+    #[test]
+    fn the_colours_are_escouade_s_until_a_plugin_s_theme_is_chosen() {
+        let s: Settings = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(s.plugin_theme, "");
+        let s: Settings =
+            serde_json::from_value(json!({ "pluginTheme": "dev.exemple.hc/high-contrast" }))
+                .unwrap();
+        assert_eq!(s.plugin_theme, "dev.exemple.hc/high-contrast");
+        assert_eq!(
+            serde_json::to_value(&s).unwrap()["pluginTheme"],
+            json!("dev.exemple.hc/high-contrast")
+        );
     }
 
     #[test]
@@ -3342,6 +3537,9 @@ mod tests {
             (EngineId::Copilot, "copilot"),
             (EngineId::Cursor, "cursor"),
             (EngineId::Opencode, "opencode"),
+            (EngineId::Vibe, "vibe"),
+            (EngineId::Agy, "agy"),
+            (EngineId::Gemini, "gemini"),
         ] {
             assert_eq!(engine.as_str(), id);
             let v = serde_json::to_value(AgentMeta {

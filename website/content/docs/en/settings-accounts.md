@@ -95,7 +95,7 @@ The threshold is set in the [“Kanban”](settings-board) tab, not here, but it
 
 | Setting | Effect | Default |
 |---|---|---|
-| “Pause above quota” (for all projects) | No ticket starts while the 5-hour window or the weekly window is at or above this threshold. Choices: 80%, 90%, 95%, or 100%. | 100% |
+| “Pause above quota” (for all projects) | The autopilot starts no ticket while the 5-hour window or the weekly window is at or above this threshold; a ticket launched by hand still starts. Choices: 80%, 90%, 95%, or 100%. | 100% |
 
 An account with a window past the threshold is set aside in favor of the next one of its harness, and the quota panel marks it “past the pause or switch threshold” (it counts “Switch accounts at” too). Autopilot pauses harness by harness: a ticket waits for one of its harness’s accounts to go back under the threshold, while those of another harness start. A harness without a quota never pauses it.
 

@@ -1,14 +1,14 @@
 // The projects' rail (ESC-158, the 2.0 design): a tile per open project, on the left, as Slack's workspaces. What a
 // tile says of its project, the project's menu (its tile's right click, its name in the title bar) and its order.
 
-import { openPath } from '@tauri-apps/plugin-opener';
+import { openPath } from './opener';
 import { t } from './i18n';
 import { api } from './ipc';
 import type { MenuItem } from './menu.svelte';
 import { askCloseProject } from './project-actions';
 import { app } from './state.svelte';
 import { alertColor, mostPressing } from './tab-strip';
-import { PROJECT_COLORS } from './theme';
+import { projectPalette } from './plugin-theme.svelte';
 import type { Project } from './types';
 
 /**
@@ -152,7 +152,7 @@ export function projectMenu(p: Project): MenuItem[] {
         };
       },
     },
-    { label: t('common.color'), colors: { values: PROJECT_COLORS, selected: p.color, onPick: (color) => save({ ...p, color }) } },
+    { label: t('common.color'), colors: { values: projectPalette(p.color), selected: p.color, onPick: (color) => save({ ...p, color }) } },
     { label: '', separator: true },
     {
       label: p.worktreePerAgent ? t('nav.titleBar.menu.worktreeOff') : t('nav.titleBar.menu.worktreeOn'),

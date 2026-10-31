@@ -72,6 +72,7 @@ fn claude_codes_launch_is_its_arguments_and_its_settings_file() {
         session: Some("s-new"),
         remote: None,
         private_file: file,
+        home: None,
         hooks: HookServer {
             url: "http://127.0.0.1:4120/hook",
             token_var: "ESCOUADE_HOOK_TOKEN",
@@ -176,4 +177,93 @@ async fn escouade_hook_tells_escouade_what_the_interface_does() {
         h.agent(&id).status == AgentStatus::Running
     })
     .await;
+}
+
+/// What the hooks' server answers (status line and body) to `event` posted with `token`.
+fn post_hook(port: u16, token: &str, event: &serde_json::Value) -> (String, String) {
+    use std::io::Read;
+    let body = event.to_string();
+    let req = format!(
+        "POST /hook HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    s.set_read_timeout(Some(std::time::Duration::from_secs(10)))
+        .unwrap();
+    s.write_all(req.as_bytes()).unwrap();
+    let mut out = String::new();
+    let _ = s.read_to_string(&mut out);
+    let (head, body) = out.split_once("\r\n\r\n").unwrap_or((&out, ""));
+    (
+        head.lines().next().unwrap_or_default().to_string(),
+        body.trim().to_string(),
+    )
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_hook_points_a_search_for_a_symbol_to_the_index_and_lets_a_text_search_go() {
+    let h = harness("tui-index-hint");
+    let id = agent_in_tui(&h).await;
+    let project_id = h.agent(&id).project_id;
+    let port = h.core.hooks_port().unwrap();
+    let token = h.core.hooks.grant(&id);
+    let session = h.agent(&id).session_id.unwrap();
+    let search = |tool: &str, input: serde_json::Value| {
+        post_hook(
+            port,
+            &token,
+            &serde_json::json!({ "hook_event_name": "PreToolUse", "session_id": session,
+                "tool_name": tool, "tool_input": input }),
+        )
+    };
+    let symbol = serde_json::json!({ "pattern": "parse_config" });
+    let bash = serde_json::json!({ "command": "rg -n 'fn load_all' src" });
+    let text = serde_json::json!({ "pattern": "failed to connect" });
+
+    // The index is off: nothing is said, whatever is searched.
+    assert_eq!(
+        search("Grep", symbol.clone()),
+        ("HTTP/1.1 200 OK".into(), "{}".into())
+    );
+    h.core
+        .set_code_index(&project_id, Some(true))
+        .await
+        .unwrap();
+
+    // On: a search for a symbol, by the Grep tool or a shell, gets a pointer to the index, as
+    // context only: no decision, so the search runs.
+    for (tool, input) in [("Grep", symbol), ("Bash", bash)] {
+        let (status, body) = search(tool, input);
+        assert!(status.contains("200"), "{status}");
+        let answer: serde_json::Value = serde_json::from_str(&body).unwrap();
+        let out = &answer["hookSpecificOutput"];
+        assert_eq!(out["hookEventName"], "PreToolUse", "{body}");
+        assert!(out["additionalContext"]
+            .as_str()
+            .unwrap()
+            .contains("index_search"));
+        assert!(out.get("permissionDecision").is_none() && answer.get("decision").is_none());
+    }
+    // A text search, or another tool, goes by with nothing said.
+    assert_eq!(search("Grep", text).1, "{}");
+    assert_eq!(
+        search("Bash", serde_json::json!({ "command": "npm test" })).1,
+        "{}"
+    );
+    assert_eq!(
+        search(
+            "Read",
+            serde_json::json!({ "file_path": "/tmp/parse_config" })
+        )
+        .1,
+        "{}"
+    );
+    // The other events say nothing either.
+    let (_, body) = post_hook(
+        port,
+        &token,
+        &serde_json::json!({ "hook_event_name": "PostToolUse", "session_id": session,
+            "tool_name": "Grep", "tool_input": { "pattern": "parse_config" } }),
+    );
+    assert_eq!(body, "{}");
 }

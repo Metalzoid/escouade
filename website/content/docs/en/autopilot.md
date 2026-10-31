@@ -79,7 +79,7 @@ When a ticket goes back to its agent after “Send back”, failing tests, or a 
 
 ## Pausing near the quota limit
 
-The “Pause above quota” setting (Settings › Kanban, “for all projects”) takes 80%, 90%, 95%, or 100% (the default). As soon as an account’s 5-hour window or weekly window reaches this threshold, no ticket starts on it until the window resets. The queue starts again by itself 30 seconds after that reset, or as soon as the quotas read are back under the threshold.
+The “Pause above quota” setting (Settings › Kanban, “for all projects”) takes 80%, 90%, 95%, or 100% (the default). As soon as an account’s 5-hour window or weekly window reaches this threshold, the autopilot starts no ticket on it until the window resets. This threshold holds back the autopilot alone: a ticket launched by hand (“Launch”, or an agent’s `start_ticket`) still starts, and only a usage limit reached holds it back. The queue starts again by itself 30 seconds after that reset, or as soon as the quotas read are back under the threshold.
 
 The Kanban’s header says so on a line of its own, for example “Autopilot paused: 5-hour quota at 95% (resumes at 2:30 PM)” or “Autopilot paused: weekly quota at 96% (resumes on Friday, October 2 at 9:30 AM)”, with a “Resume now” button. The “To do” cards say “Waiting: autopilot paused”. Agents already at work carry on.
 

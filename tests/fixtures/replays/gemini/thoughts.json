@@ -1,0 +1,49 @@
+{
+  "about": "Une réflexion « **sujet**\\ndescription » puis la réponse (ESC-273, faux serveur).",
+  "agent": {
+    "cwd": "C:\\tmp\\esc273\\proj2",
+    "engine": "gemini",
+    "mode": "default",
+    "model": "auto"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": null,
+    "sessionId": "00625a25-d6cf-4313-bc0f-4f9056159b77",
+    "status": "done",
+    "tokens": 1220,
+    "touchedFiles": []
+  },
+  "flux": "../../gemini/17-thoughts-and-chunks.jsonl",
+  "items": [
+    {
+      "images": 0,
+      "kind": "user",
+      "queued": false,
+      "text": "pense bien"
+    },
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": "**Analyse**\nJe regarde la demande avant de répondre."
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "Voici la réponse."
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "gemini",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 1220
+    }
+  ]
+}

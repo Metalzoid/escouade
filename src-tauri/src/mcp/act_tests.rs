@@ -112,10 +112,11 @@ async fn the_acting_tools_say_what_they_take_and_that_they_change_things() {
         assert!(v["description"].as_str().unwrap().len() > 60, "{name}: {v}");
         // They change something: the client must not take them for reads.
         assert_eq!(v["annotations"]["readOnlyHint"], false, "{name}: {v}");
-        // Only an approval may reach beyond Escouade (it may push and open a pull request).
+        // Only an approval (it may push and open a pull request) and the sharing of the docs (it
+        // pushes) may reach beyond Escouade.
         assert_eq!(
             v["annotations"]["openWorldHint"],
-            *name == "approve_ticket",
+            matches!(*name, "approve_ticket" | "share_docs"),
             "{name}: {v}"
         );
         // And of the board's flow, only an approval and a deletion cannot be taken back.
@@ -791,6 +792,58 @@ async fn a_ticket_is_started_by_hand_and_the_scheduler_takes_it() {
 }
 
 #[tokio::test]
+async fn pause_past_the_quota_holds_back_the_autopilot_alone_never_a_ticket_started_by_hand() {
+    let h = harness("mcp-act-start-past-threshold");
+    let p = project(&h).await;
+    let a = made(&h, &p, "Malgré le seuil [ok]").await;
+    // The weekly window past « Pause au-delà du quota »: the autopilot is paused. Set before the
+    // client connects: saving the settings starts the server again.
+    h.set_settings(|s| s.quota_pause = 95);
+    let end = h.core.pause_now() + 3_600_000;
+    h.core.record_usage(
+        PRINCIPAL,
+        Reading::claude((
+            None,
+            Some(RateWindow {
+                pct: 97.0,
+                resets_at: Some(end),
+            }),
+        )),
+    );
+    assert!(h.core.autopilot_pause().is_some());
+    assert!(h.core.project_hold(&p.id, EngineId::Claude).is_some());
+    // Started by hand, it goes (the user, 2026-10-28): the scheduler gives it an agent.
+    assert!(h.core.project_limit(&p.id, EngineId::Claude).is_none());
+    let c = external(&h).await;
+    let v = read(&c, "start_ticket", json!({ "ticket": a.key })).await;
+    assert_eq!(v["key"], a.key.as_str());
+    h.wait("the ticket to start past the threshold", |h| {
+        stored(h, &a.id).column != Column::Todo
+    })
+    .await;
+    // A window used up holds it back, by hand too.
+    let b = made(&h, &p, "À la limite").await;
+    h.core.record_usage(
+        PRINCIPAL,
+        Reading::claude((
+            None,
+            Some(RateWindow {
+                pct: 100.0,
+                resets_at: Some(end),
+            }),
+        )),
+    );
+    let limit = refused(&c, "start_ticket", json!({ "ticket": b.key })).await;
+    assert!(limit.contains("100 %"), "{limit}");
+    h.wait("its turn to end", |h| {
+        stored(h, &a.id).column == Column::Review
+    })
+    .await;
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
 async fn a_ticket_is_not_started_while_the_autopilot_is_paused_the_board_is_full_or_it_waits() {
     let h = harness("mcp-act-start-guards");
     let p = project(&h).await;
@@ -907,11 +960,13 @@ async fn an_agent_is_created_in_a_project_with_its_first_message_and_the_user_s_
     let id = v["id"].as_str().unwrap().to_string();
     assert_eq!(v["name"], "agent-1");
     assert_eq!(v.as_object().unwrap().len(), 2);
-    // Made as the window makes one, but the sidebar's selection is the user's.
+    // Made as the window makes one, but the sidebar's selection is the user's. Its first message
+    // names it, in the background: its name is waited for, then read as it is.
+    h.wait("its name", |h| h.agent(&id).named).await;
     let meta = h.agent(&id);
     assert_eq!(
         (meta.project_id.as_str(), meta.name.as_str()),
-        (p.id.as_str(), "agent-1")
+        (p.id.as_str(), "bonjour-l-fake")
     );
     assert!(meta.worktree.is_none());
     assert!(!h.core.ui.read().selected_agent.contains_key(&p.id));
@@ -5114,6 +5169,64 @@ async fn a_ticket_set_on_codex_in_a_claude_project_takes_the_models_of_codex_and
         json!({ "project": p.id, "model": "opus", "effort": "max" }),
     )
     .await;
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn several_tickets_started_one_after_the_other_all_start() {
+    let h = harness("mcp-act-start-in-a-row");
+    let p = project(&h).await;
+    let a = made(&h, &p, "Un [ok]").await;
+    let b = made(&h, &p, "Deux [ok]").await;
+    let d = made(&h, &p, "Trois [ok]").await;
+    // Its worktree's setup takes a while: the next start comes while the first is under way.
+    let slow = if cfg!(windows) {
+        "Start-Sleep -Seconds 2"
+    } else {
+        "sleep 2"
+    };
+    h.set_worktree_steps(&p.id, vec![crate::core_tests::wt_step(slow, "")], vec![]);
+    let c = external(&h).await;
+    for t in [&a, &b, &d] {
+        tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+        let v = read(&c, "start_ticket", json!({ "ticket": t.key })).await;
+        assert_eq!(v["starting"], true);
+    }
+    for t in [&a, &b, &d] {
+        h.wait("each ticket to start", |h| {
+            stored(h, &t.id).column != Column::Todo
+        })
+        .await;
+    }
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_the_board_does_not_start_after_the_tool_checked_says_why_and_stays_to_do() {
+    let h = harness("mcp-act-start-met-limit");
+    let p = project(&h).await;
+    let a = made(&h, &p, "Un [ok]").await;
+    let c = external(&h).await;
+    let end = h.core.pause_now() + 3_600_000;
+    // A pass of the board is under way (a launch in progress): the one this call asks for waits.
+    let gate = h.core.board_lock.lock().await;
+    let call = refused(&c, "start_ticket", json!({ "ticket": a.key }));
+    // The usage limit is met after the tool's checks, before the pass comes to the ticket.
+    let driver = async {
+        while !stored(&h, &a.id).forced {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        window_used(&h, "principal", 100.0, end);
+        drop(gate);
+    };
+    let (said, ()) = tokio::join!(call, driver);
+    assert!(said.contains("100 %"), "{said}");
+    let t = stored(&h, &a.id);
+    assert_eq!(t.column, Column::Todo);
+    assert!(!t.forced);
+    assert_eq!(entry(&h).outcome, "refused");
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }

@@ -9,6 +9,7 @@ import branches from './branches';
 import common from './common';
 import composer from './composer';
 import conv from './conv';
+import docs from './docs';
 import editor from './editor';
 import errors from './errors';
 import format from './format';
@@ -16,6 +17,8 @@ import git from './git';
 import handover from './handover';
 import integrations from './integrations';
 import mcp from './mcp';
+import memory from './memory';
+import codeindex from './codeindex';
 import nav from './nav';
 import plan from './plan';
 import prs from './prs';
@@ -28,6 +31,7 @@ import stats from './stats';
 import subagents from './subagents';
 import wizard from './wizard';
 import voice from './voice';
+import plugins from './plugins';
 import workflow from './workflow';
 import workflowSettings from './workflowSettings';
 
@@ -39,6 +43,7 @@ export const en = defineCatalog({
   integrations,
   boardSettings,
   board,
+  docs,
   stats,
   nav,
   git,
@@ -50,6 +55,8 @@ export const en = defineCatalog({
   accounts,
   handover,
   mcp,
+  memory,
+  codeindex,
   branches,
   plan,
   prs,
@@ -61,4 +68,5 @@ export const en = defineCatalog({
   workflowSettings,
   share,
   workflow,
+  plugins,
 });

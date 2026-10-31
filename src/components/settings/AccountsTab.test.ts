@@ -6,12 +6,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
 // Links open in the user's browser: noted instead.
 const opened = vi.hoisted(() => [] as string[]);
-vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn(async (u: string) => void opened.push(u)), openPath: vi.fn() }));
+vi.mock('../../lib/opener', () => ({ openUrl: vi.fn(async (u: string) => void opened.push(u)), openPath: vi.fn() }));
 
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { Account, AccountStatus, ClosedProject } from '../../lib/types';
-import { agent, BARE_ENGINE, CURSOR_ENGINE, CLAUDE_ENGINE, fakeBackend, project, resetApp, SETTINGS, usageOf } from '../../test/ipc';
+import {
+  agent,
+  AGY_ENGINE,
+  BARE_ENGINE,
+  CURSOR_ENGINE,
+  CLAUDE_ENGINE,
+  GEMINI_ENGINE,
+  VIBE_ENGINE,
+  fakeBackend,
+  project,
+  resetApp,
+  SETTINGS,
+  usageOf,
+} from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
@@ -248,6 +261,104 @@ describe('AccountsTab', () => {
     // Its key, given again; the machine's signs in by agent login.
     await userEvent.click(within(team).getByRole('button', { name: 'Changer la clé…' }));
     expect(app.modal).toEqual({ kind: 'account', accountId: 'equipe' });
+  });
+
+  it('shows what a Vibe account spent today with its budget, links Mistral’s console and gives its key again (ESC-267)', async () => {
+    const TEAM: Account = { id: 'vibe-equipe', name: 'Équipe', engine: 'vibe', configDir: 'C:\\equipe', claudePath: '', active: true };
+    app.engines = [CLAUDE_ENGINE, VIBE_ENGINE];
+    app.settings = { ...SETTINGS, accounts: [PRINCIPAL, TEAM] };
+    app.usage = { ...app.usage, accounts: [{ ...usageOf('vibe-equipe', {}), todayCost: 0.37 }] };
+    opened.length = 0;
+    backend({
+      account_status: (a: { id: string }) =>
+        a.id === 'vibe-equipe' ? { connected: true, email: 'clé …wxyz', dir: 'C:\\equipe', stamp: null } : status()(a),
+    });
+    render(SettingsModal, { tab: 'accounts' });
+    const team = screen.getAllByRole('listitem', { name: 'Équipe' })[0];
+    expect(await within(team).findByText('Connecté · clé …wxyz')).toBeInTheDocument();
+    // Its cost told, no quota: the day's cost and a budget stand in, and its usage is on Mistral's console.
+    expect(within(team).getByText('0,37 $')).toBeInTheDocument();
+    expect(within(team).getByRole('textbox', { name: 'Budget par jour ($)' })).toBeInTheDocument();
+    await userEvent.click(within(team).getByRole('button', { name: 'Usage sur admin.mistral.ai' }));
+    expect(opened).toEqual(['https://admin.mistral.ai/organization/usage']);
+    await userEvent.click(within(team).getByRole('button', { name: 'Changer la clé…' }));
+    expect(app.modal).toEqual({ kind: 'account', accountId: 'vibe-equipe' });
+  });
+
+  it('links an Antigravity account to its plans, says its quota is in its /usage, and gives its key again (ESC-271)', async () => {
+    const AGY_MAIN: Account = { id: 'principal-agy', name: 'Principal', engine: 'agy', configDir: '', claudePath: '', active: true };
+    const TEAM: Account = { id: 'agy-equipe', name: 'Équipe', engine: 'agy', configDir: 'C:\\equipe', claudePath: '', active: true };
+    app.engines = [CLAUDE_ENGINE, AGY_ENGINE];
+    app.settings = { ...SETTINGS, accounts: [PRINCIPAL, AGY_MAIN, TEAM] };
+    opened.length = 0;
+    backend({
+      account_status: (a: { id: string }) =>
+        a.id === 'agy-equipe'
+          ? { connected: true, email: 'clé …wxyz', dir: 'C:\\equipe', stamp: null }
+          : a.id === 'principal-agy'
+            ? { connected: false, email: null, dir: 'C:\\Users\\ada\\.gemini', stamp: null }
+            : status()(a),
+    });
+    render(SettingsModal, { tab: 'accounts' });
+    const team = screen.getAllByRole('listitem', { name: 'Équipe' })[0];
+    expect(await within(team).findByText('Connecté · clé …wxyz')).toBeInTheDocument();
+    // Neither cost nor budget: Antigravity tells tokens alone.
+    expect(within(team).queryByRole('textbox', { name: 'Budget par jour ($)' })).not.toBeInTheDocument();
+    const usage = within(team).getByRole('button', { name: 'Usage sur antigravity.google' });
+    await userEvent.hover(usage);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      /son quota \(par groupe de modèles, hebdomadaire\) se lit par \/usage dans son interface/,
+    );
+    await userEvent.unhover(usage);
+    await userEvent.click(usage);
+    expect(opened).toEqual(['https://antigravity.google/docs/plans']);
+    await userEvent.click(within(team).getByRole('button', { name: 'Changer la clé…' }));
+    expect(app.modal).toEqual({ kind: 'account', accountId: 'agy-equipe' });
+    // The machine's, not signed in: by agy in a terminal.
+    const main = screen.getAllByRole('listitem', { name: 'Principal' }).find((l) => within(l).queryByText('Usage sur antigravity.google'))!;
+    await userEvent.click(within(main).getByRole('button', { name: 'Se connecter…' }));
+    expect(app.modal).toEqual({ kind: 'account', accountId: 'principal-agy' });
+  });
+
+  it('links a Gemini account to its usage, signs one in by Google and gives another its key again (ESC-275)', async () => {
+    const MAIN: Account = { id: 'principal-gemini', name: 'Principal', engine: 'gemini', configDir: '', claudePath: '', active: true };
+    const PERSO: Account = { id: 'gemini-perso', name: 'Perso', engine: 'gemini', configDir: 'C:\\perso', claudePath: '', active: true };
+    const CLE: Account = { ...PERSO, id: 'gemini-cle', name: 'Clé', configDir: 'C:\\cle', apiKey: true };
+    app.engines = [CLAUDE_ENGINE, GEMINI_ENGINE];
+    app.settings = { ...SETTINGS, accounts: [PRINCIPAL, MAIN, PERSO, CLE] };
+    opened.length = 0;
+    backend({
+      account_status: (a: { id: string }) =>
+        a.id === 'gemini-cle'
+          ? { connected: true, email: 'clé …wxyz', dir: 'C:\\cle', stamp: null }
+          : a.id === 'gemini-perso'
+            ? { connected: true, email: 'moi@exemple.fr', dir: 'C:\\perso', stamp: 't' }
+            : a.id === 'principal-gemini'
+              ? { connected: true, email: null, dir: 'C:\\Users\\ada\\.gemini', stamp: null }
+              : status()(a),
+    });
+    render(SettingsModal, { tab: 'accounts' });
+    const cle = screen.getAllByRole('listitem', { name: 'Clé' })[0];
+    expect(await within(cle).findByText('Connecté · clé …wxyz')).toBeInTheDocument();
+    expect(within(cle).queryByRole('textbox', { name: 'Budget par jour ($)' })).not.toBeInTheDocument();
+    const usage = within(cle).getByRole('button', { name: 'Usage sur aistudio.google.com' });
+    await userEvent.hover(usage);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(/son usage se lit par \/stats dans son interface/);
+    await userEvent.unhover(usage);
+    await userEvent.click(usage);
+    expect(opened).toEqual(['https://aistudio.google.com/usage']);
+    await userEvent.click(within(cle).getByRole('button', { name: 'Changer la clé…' }));
+    expect(app.modal).toEqual({ kind: 'account', accountId: 'gemini-cle' });
+    // Signed in to Google by gemini in its folder: signed in again there.
+    const perso = screen.getAllByRole('listitem', { name: 'Perso' })[0];
+    expect(await within(perso).findByText('Connecté · moi@exemple.fr')).toBeInTheDocument();
+    await userEvent.click(within(perso).getByRole('button', { name: 'Se reconnecter…' }));
+    expect(app.modal).toEqual({ kind: 'account', accountId: 'gemini-perso' });
+    // The machine's: a key of the app's, nothing to sign in here (~/.gemini is never touched).
+    const main = screen
+      .getAllByRole('listitem', { name: 'Principal' })
+      .find((l) => within(l).queryByText('Usage sur aistudio.google.com'))!;
+    expect(within(main).queryByRole('button', { name: /Se connecter|Se reconnecter|Changer la clé/ })).not.toBeInTheDocument();
   });
 
   it('shows what an account of a harness without a quota spent today, in the place of the gauges', async () => {

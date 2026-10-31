@@ -8,6 +8,7 @@ export default defineZone('shell', {
     cantStart: 'Can’t start: {error}',
     noAgent: 'No agents in this project.',
     newAgent: 'New agent',
+    projectPrs: 'Project PRs and CI',
   },
   welcome: {
     intro: 'Add a project to run agents, follow their questions, and open terminals.',
@@ -62,6 +63,12 @@ export default defineZone('shell', {
       },
       none: 'No git repository · one will be initialized',
     },
+  },
+  /** The page's process ended while it showed a project (ESC-290): loaded again without it. */
+  pageCrash: {
+    project: 'The interface stopped while showing “{project}”: it was reloaded without that project.',
+    other: 'The interface stopped: it was reloaded.',
+    reopen: 'Reopen',
   },
   /** The update downloaded, its notes once installed, and the toasts about it. */
   update: {

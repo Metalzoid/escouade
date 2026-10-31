@@ -5,7 +5,7 @@
 // the user lets it (`approveAndTest`; the backend refuses a recipe that was not approved all the same). With isola,
 // what runs is the commands of the worktree's .isola.toml, which the agent can write too: that file is what is shown.
 
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { openUrl } from './opener';
 import { fNum } from './format';
 import { t } from './i18n';
 import { api } from './ipc';
@@ -330,7 +330,7 @@ async function launchTest(agent: Agent, project: Project) {
         line.detail = t('runs.flow.waitingFor', { host: host(probe) });
         for (;;) {
           if (over()) return false;
-          const up = await api.httpReady(probe).catch(() => false);
+          const up = await api.httpReady(probe, agent.id).catch(() => false);
           if (over()) return false;
           if (up) {
             line.state = 'ready';
@@ -416,7 +416,7 @@ async function launchTest(agent: Agent, project: Project) {
           exited(line, cmd, run);
           return false;
         }
-        const up = await api.httpReady(url).catch(() => false);
+        const up = await api.httpReady(url, agent.id).catch(() => false);
         if (over()) return false;
         if (up) {
           line.state = 'ready';

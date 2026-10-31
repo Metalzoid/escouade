@@ -844,7 +844,7 @@ pub(crate) fn clear_pastes(dir: &Path) {
 
 /// The interface in a terminal of the harness of the agent `m` (« Vue <harness> »), and its name;
 /// refused for a harness that has none.
-fn view_of(m: &AgentMeta) -> Result<(&'static dyn TerminalView, &'static str)> {
+pub(crate) fn view_of(m: &AgentMeta) -> Result<(&'static dyn TerminalView, &'static str)> {
     let harness = crate::engine::of(m);
     match harness.terminal() {
         Some(view) => Ok((view, harness.name())),
@@ -1402,7 +1402,7 @@ impl<R: Runtime> Core<R> {
         let dir = self.data.root().join("tui");
         std::fs::create_dir_all(&dir)?;
         let settings_file = dir.join(format!("{id}.json"));
-        let config_dir = accounts::config_dir(&account, &settings);
+        let config_dir = self.view_dir(id, harness, &account, &settings);
         if !view.resumes_any() {
             self.settle_session(view, id, &settings, &account, &program, &config_dir)
                 .await;
@@ -1476,11 +1476,13 @@ impl<R: Runtime> Core<R> {
         // « Projet privé »: the paths its tools are refused.
         let fence = self.agent_fence(id);
         let (url, command) = (hook_url(port), crate::engine::terminal::hook_command());
+        let home = harness.agent_home_var().map(|_| self.data.agent_home(id));
         let started_from = view.launch(&TerminalLaunch {
             meta: &meta,
             session: new_session.as_deref(),
             remote: remote.as_deref(),
             private_file: &settings_file,
+            home: home.as_deref(),
             hooks: HookServer {
                 url: &url,
                 token_var: TOKEN_VAR,
@@ -1609,7 +1611,7 @@ impl<R: Runtime> Core<R> {
         };
         let spawned = self.pty.spawn_program(
             info.clone(),
-            &program,
+            &view.program(&program),
             &args,
             &cwd,
             size,
@@ -1876,10 +1878,26 @@ impl<R: Runtime> Core<R> {
         }
     }
 
+    /// Where the interface of the agent `id` keeps its sessions: the agent's own configuration
+    /// folder when its harness gives it one (`Engine::agent_home_var`: Mistral Vibe keeps them
+    /// there), else its account's.
+    fn view_dir(
+        &self,
+        id: &str,
+        harness: &dyn crate::engine::Engine,
+        account: &Account,
+        settings: &Settings,
+    ) -> PathBuf {
+        match harness.agent_home_var() {
+            Some(_) => self.data.agent_home(id),
+            None => accounts::config_dir(account, settings),
+        }
+    }
+
     /// What the agent's interface wrote in its transcript since the last read.
     pub(crate) fn read_transcript(self: &Arc<Self>, id: &str) {
         let Ok(h) = self.agent(id) else { return };
-        let (view, gen, known, offset, account, sid) = {
+        let (view, gen, known, offset, account, sid, harness) = {
             let rt = h.lock();
             let Some(t) = rt.tui.as_ref() else { return };
             let Ok((view, _)) = view_of(&rt.meta) else {
@@ -1892,23 +1910,41 @@ impl<R: Runtime> Core<R> {
                 t.offset,
                 rt.meta.account.clone(),
                 rt.meta.session_id.clone(),
+                crate::engine::of(&rt.meta),
             )
+        };
+        let find = || {
+            let settings = self.settings.read().clone();
+            let account = accounts::get(&settings, &account);
+            let dir = self.view_dir(id, harness, &account, &settings);
+            sid.as_deref().and_then(|s| view.find_log(&dir, s))
         };
         // Not written yet when the interface started: looked for until it is.
         let path = match known.clone() {
             Some(p) => p,
             None => {
-                let settings = self.settings.read().clone();
-                let account = accounts::get(&settings, &account);
-                let Some(found) =
-                    sid.and_then(|s| view.find_log(&accounts::config_dir(&account, &settings), &s))
-                else {
+                let Some(found) = find() else {
                     return;
                 };
                 found
             }
         };
-        let (lines, next) = match read_lines(&path, offset) {
+        let read = read_lines(&path, offset);
+        // Read to its end (or gone), a log that moves goes on in its next file, read from its start.
+        let moved = match &read {
+            Ok((lines, _)) if !lines.is_empty() => None,
+            _ if view.log_moves() => find().filter(|p| *p != path),
+            _ => None,
+        };
+        let (path, read) = match moved {
+            Some(next) => {
+                log::info!("agent {id}: its log goes on in {}", next.display());
+                let read = read_lines(&next, 0);
+                (next, read)
+            }
+            None => (path, read),
+        };
+        let (lines, next) = match read {
             Ok(read) => read,
             Err(e) => {
                 log::debug!("agent {id}: transcript not read: {e}");
@@ -2581,8 +2617,8 @@ async fn answer<R: Runtime>(
     core: &Weak<Core<R>>,
     port: u16,
 ) -> Response<Full<Bytes>> {
-    let reply = |status: StatusCode, body: &'static str| {
-        let mut r = Response::new(Full::new(Bytes::from_static(body.as_bytes())));
+    let reply = |status: StatusCode, body: &str| {
+        let mut r = Response::new(Full::new(Bytes::from(body.to_string())));
         *r.status_mut() = status;
         r.headers_mut().insert(
             header::CONTENT_TYPE,
@@ -2628,9 +2664,14 @@ async fn answer<R: Runtime>(
     if let (Some(event), Some(map)) = (event, hook.as_object_mut()) {
         map.insert(EVENT_KEY.into(), Value::String(event));
     }
+    // A search for a symbol is answered with a line that points to the code index: context only,
+    // never a decision (`codeindex::hint`).
+    let advice = core
+        .index_hint(&agent, &hook)
+        .map_or_else(|| "{}".to_string(), |v| v.to_string());
     // Off the connection: the interface does not wait for what Escouade makes of it.
     tauri::async_runtime::spawn_blocking(move || core.on_tui_hook(&agent, hook));
-    reply(StatusCode::OK, "{}")
+    reply(StatusCode::OK, &advice)
 }
 
 #[cfg(test)]

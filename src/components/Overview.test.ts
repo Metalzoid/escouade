@@ -438,10 +438,13 @@ describe('Overview', () => {
 
   it('asks to answer a proposed plan in its agent, not on the spot', () => {
     backend();
-    resetApp({ agents: [asking([permission({ tool: 'ExitPlanMode', arg: '## Plan' })], { id: 'a1' })] });
+    resetApp({
+      agents: [asking([permission({ tool: 'ExitPlanMode', arg: '## Plan' })], { id: 'a1', mode: 'plan', planFrom: 'acceptEdits' })],
+    });
     render(Overview);
     const row = screen.getByRole('listitem', { name: /refacto-auth/ });
-    expect(within(row).getByText('Claude propose un plan')).toBeInTheDocument();
+    // And the mode its work resumes in once approved (ESC-277).
+    expect(within(row).getByText('Claude propose un plan · reprendra en Édits auto')).toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: 'Autoriser' })).not.toBeInTheDocument();
     expect(within(row).getByRole('button', { name: 'Répondre' })).toBeInTheDocument();
   });

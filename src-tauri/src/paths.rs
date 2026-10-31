@@ -334,6 +334,21 @@ impl DataDir {
         self.0.join("agent-homes").join(name)
     }
 
+    /// The installed plugins' copies, one folder per plugin, by its id (`plugins`).
+    pub fn plugins_dir(&self) -> PathBuf {
+        self.0.join("plugins")
+    }
+
+    /// The plugins' journals, one file per plugin, by its id (`plugins::runtime`).
+    pub fn plugin_logs_dir(&self) -> PathBuf {
+        self.0.join("plugin-logs")
+    }
+
+    /// The list of the installed plugins: where each comes from and its fingerprint.
+    pub fn plugins_file(&self) -> PathBuf {
+        self.0.join("plugins.json")
+    }
+
     /// The MCP configs the agents' processes are started with (`--mcp-config`), one per agent.
     pub fn mcp_agents(&self) -> PathBuf {
         self.0.join("mcp")
@@ -388,6 +403,25 @@ impl DataDir {
             "_"
         };
         self.0.join("projects").join(name)
+    }
+
+    /// The code index of a project (`codeindex`): recomputed from its files, of this machine,
+    /// never in the project.
+    pub fn code_index_db(&self, project_id: &str) -> PathBuf {
+        self.project_files(project_id).join("code-index.db")
+    }
+
+    /// The embedding model's folder (`vectors`, ESC-252): downloaded once for every project, of this machine.
+    #[allow(dead_code)] // no caller until the Docs tickets
+    pub fn vectors_model(&self, model_id: &str) -> PathBuf {
+        let name = if is_plain_id(model_id) { model_id } else { "_" };
+        self.0.join("vectors").join(name)
+    }
+
+    /// The index of a project's docs and their vectors: recomputed from the documents, so never in the project.
+    #[allow(dead_code)] // idem
+    pub fn vectors_index(&self, project_id: &str) -> PathBuf {
+        self.project_files(project_id).join("vectors.db")
     }
 
     /// What the last reading of a project's workflows found (`workflow`), of this machine: never in

@@ -21,7 +21,17 @@ vi.mock('../../lib/terminals', () => ({
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { Account, AccountStatus } from '../../lib/types';
-import { BARE_ENGINE, CURSOR_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp, SETTINGS } from '../../test/ipc';
+import {
+  AGY_ENGINE,
+  BARE_ENGINE,
+  CURSOR_ENGINE,
+  CLAUDE_ENGINE,
+  GEMINI_ENGINE,
+  VIBE_ENGINE,
+  fakeBackend,
+  resetApp,
+  SETTINGS,
+} from '../../test/ipc';
 import AccountModal from './AccountModal.svelte';
 
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
@@ -195,7 +205,7 @@ describe('AccountModal', () => {
         account_shareable: () => [],
         account_machine: () => ({ found: true, added: true, connected: true, signsIn: true, email: null, dir: '' }),
         account_create: () => KEYED,
-        account_cursor_key: () => KEPT,
+        account_key: () => KEPT,
       });
       render(AccountModal, { engine: 'cursor' });
       expect(await screen.findByRole('dialog', { name: 'Ajouter un compte Cursor CLI' })).toBeInTheDocument();
@@ -210,9 +220,9 @@ describe('AccountModal', () => {
       expect(add).toBeDisabled();
       await userEvent.type(key, 'cle-essai-0000000000abcd');
       await userEvent.click(add);
-      await waitFor(() => expect(b.called('account_cursor_key')).toHaveLength(1));
+      await waitFor(() => expect(b.called('account_key')).toHaveLength(1));
       expect(b.called('account_create')[0].args).toEqual({ name: 'Équipe', share: [], mode: 'link', engine: 'cursor' });
-      expect(b.called('account_cursor_key')[0].args).toEqual({ id: 'equipe', key: 'cle-essai-0000000000abcd' });
+      expect(b.called('account_key')[0].args).toEqual({ id: 'equipe', key: 'cle-essai-0000000000abcd' });
       expect(term.opened).toEqual([]);
       expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
     });
@@ -221,7 +231,7 @@ describe('AccountModal', () => {
       app.settings.accounts = [PRINCIPAL, KEYED];
       let n = 0;
       const b = backend([KEPT], {
-        account_cursor_key: () => (n++ === 0 ? Promise.reject('Ce n’est pas une clé d’API de Cursor') : KEPT),
+        account_key: () => (n++ === 0 ? Promise.reject('Ce n’est pas une clé d’API de Cursor') : KEPT),
       });
       render(AccountModal, { accountId: 'equipe' });
       expect(await screen.findByRole('dialog', { name: 'Clé d’API du compte « Équipe »' })).toBeInTheDocument();
@@ -232,8 +242,196 @@ describe('AccountModal', () => {
       expect(app.modal).toEqual({ kind: 'account' });
       await userEvent.clear(screen.getByLabelText('Clé d’API'));
       await userEvent.type(screen.getByLabelText('Clé d’API'), 'cle-essai-0000000000abcd{Enter}');
-      await waitFor(() => expect(b.called('account_cursor_key')).toHaveLength(2));
+      await waitFor(() => expect(b.called('account_key')).toHaveLength(2));
       expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
+    });
+  });
+
+  describe('a Mistral Vibe account by its API key (ESC-267)', () => {
+    const KEYED: Account = {
+      ...PRO,
+      id: 'vibe-equipe',
+      name: 'Équipe',
+      engine: 'vibe',
+      configDir: 'C:\\Users\\ada\\.escouade\\vibe\\equipe',
+    };
+    const KEPT: AccountStatus = { connected: true, email: 'clé …wxyz', dir: KEYED.configDir, stamp: null };
+
+    beforeEach(() => {
+      app.engines = [CLAUDE_ENGINE, VIBE_ENGINE];
+      app.enginesFound = ['claude', 'vibe'];
+    });
+
+    it('adds a new one by its name and its Mistral key, kept in the keychain: no terminal', async () => {
+      const b = backend([OUT], {
+        account_shareable: () => [],
+        account_machine: () => ({ found: true, added: true, connected: true, signsIn: true, email: null, dir: '' }),
+        account_create: () => KEYED,
+        account_key: () => KEPT,
+      });
+      render(AccountModal, { engine: 'vibe' });
+      expect(await screen.findByRole('dialog', { name: 'Ajouter un compte Mistral Vibe' })).toBeInTheDocument();
+      expect(screen.getByText('La clé d’API d’un autre compte Mistral, gardée dans le trousseau du système.')).toBeInTheDocument();
+      const key = screen.getByLabelText('Clé d’API');
+      expect(key).toHaveAttribute('type', 'password');
+      expect(key).toHaveAttribute('placeholder', 'Sur console.mistral.ai, API Keys');
+      expect(screen.getByText(/donnée aux agents de ce compte par MISTRAL_API_KEY/)).toBeInTheDocument();
+      await userEvent.type(screen.getByRole('textbox', { name: 'Nom' }), 'Équipe');
+      await userEvent.type(key, 'cle-mistral-000000000wxyz');
+      await userEvent.click(screen.getByRole('button', { name: 'Ajouter le compte' }));
+      await waitFor(() => expect(b.called('account_key')).toHaveLength(1));
+      expect(b.called('account_create')[0].args).toEqual({ name: 'Équipe', share: [], mode: 'link', engine: 'vibe' });
+      expect(b.called('account_key')[0].args).toEqual({ id: 'vibe-equipe', key: 'cle-mistral-000000000wxyz' });
+      expect(term.opened).toEqual([]);
+      expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
+    });
+  });
+
+  describe('a Gemini CLI account (ESC-275)', () => {
+    const GOOGLE: Account = {
+      ...PRO,
+      id: 'gemini-perso',
+      name: 'Perso',
+      engine: 'gemini',
+      configDir: 'C:\\Users\\ada\\.escouade\\gemini\\perso',
+    };
+    const KEYED: Account = { ...PRO, id: 'gemini-cle', name: 'Clé', engine: 'gemini', configDir: 'C:\\Users\\ada\\.escouade\\gemini\\cle' };
+    const apart = {
+      found: true,
+      added: false,
+      connected: false,
+      signsIn: true,
+      signsInLater: false,
+      apart: true,
+      email: null,
+      dir: 'C:\\Users\\ada\\.gemini',
+    };
+    const SIGNED: AccountStatus = { connected: true, email: 'moi@exemple.fr', dir: GOOGLE.configDir, stamp: 't1' };
+
+    beforeEach(() => {
+      app.engines = [CLAUDE_ENGINE, GEMINI_ENGINE];
+      app.enginesFound = ['claude', 'gemini'];
+      app.settings.accounts = [];
+    });
+
+    it('says why the machine’s account is not offered, and signs a new one in to Google by gemini in a terminal', async () => {
+      const b = backend([OUT, OUT, SIGNED], {
+        account_machine: () => apart,
+        account_shareable: () => [],
+        account_create: () => GOOGLE,
+      });
+      render(AccountModal, { engine: 'gemini' });
+      expect(await screen.findByText(/Gemini CLI garde sa connexion Google dans ~\/.gemini/)).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: /Le compte de la machine/ })).toBeDisabled();
+      await waitFor(() => expect(screen.getByRole('radio', { name: /Un nouveau compte/ })).toBeChecked());
+      expect(screen.getByRole('radio', { name: /Compte Google/ })).toBeChecked();
+      expect(screen.queryByLabelText('Clé d’API')).not.toBeInTheDocument();
+      await userEvent.type(screen.getByRole('textbox', { name: 'Nom' }), 'Perso');
+      await userEvent.click(screen.getByRole('button', { name: 'Créer et se connecter' }));
+      await waitFor(() => expect(term.opened).toEqual(['gemini-perso']));
+      expect(b.called('account_key')).toHaveLength(0);
+      const dialog = await screen.findByRole('dialog', { name: 'Se connecter au compte « Perso »' });
+      const said = within(dialog).getByRole('status');
+      expect(said).toHaveTextContent('gemini ouvre ton navigateur sur ton compte Google. Escouade ne voit jamais tes identifiants.');
+      await vi.advanceTimersByTimeAsync(4000);
+      await waitFor(() => expect(said).toHaveTextContent('Connecté au compte moi@exemple.fr'));
+    });
+
+    it('adds a new one by its Gemini API key, which it goes by from then on', async () => {
+      const b = backend([OUT], {
+        account_machine: () => apart,
+        account_shareable: () => [],
+        account_create: () => KEYED,
+        account_key: () => ({ connected: true, email: 'clé …wxyz', dir: KEYED.configDir, stamp: null }),
+      });
+      render(AccountModal, { engine: 'gemini' });
+      await userEvent.click(await screen.findByRole('radio', { name: /Clé d’API/ }));
+      const key = screen.getByLabelText('Clé d’API', { selector: 'input' });
+      expect(key).toHaveAttribute('placeholder', 'Sur aistudio.google.com, Get API key');
+      await userEvent.type(screen.getByRole('textbox', { name: 'Nom' }), 'Clé');
+      await userEvent.type(key, 'AIzaCleGemini000000wxyz');
+      await userEvent.click(screen.getByRole('button', { name: 'Ajouter le compte' }));
+      await waitFor(() => expect(b.called('account_key')).toHaveLength(1));
+      expect(b.called('account_create')[0].args).toEqual({ name: 'Clé', share: [], mode: 'link', engine: 'gemini' });
+      expect(b.called('account_key')[0].args).toEqual({ id: 'gemini-cle', key: 'AIzaCleGemini000000wxyz' });
+      expect(term.opened).toEqual([]);
+    });
+  });
+
+  describe('an Antigravity CLI account (ESC-271)', () => {
+    const AGY_MAIN: Account = { id: 'principal-agy', name: 'Principal', engine: 'agy', configDir: '', claudePath: '', active: true };
+    const KEYED: Account = { ...PRO, id: 'agy-equipe', name: 'Équipe', engine: 'agy', configDir: 'C:\\Users\\ada\\.escouade\\agy\\equipe' };
+    const machine = (over: Record<string, unknown> = {}) => ({
+      found: true,
+      added: false,
+      connected: false,
+      signsIn: true,
+      signsInLater: true,
+      email: null,
+      dir: 'C:\\Users\\ada\\.gemini',
+      ...over,
+    });
+    const SIGNED: AccountStatus = { connected: true, email: null, dir: 'C:\\Users\\ada\\.gemini', stamp: 'keychain' };
+
+    beforeEach(() => {
+      app.engines = [CLAUDE_ENGINE, AGY_ENGINE];
+      app.enginesFound = ['claude', 'agy'];
+      app.settings.accounts = [];
+    });
+
+    it('adds the machine’s account not signed in yet, then signs it in by agy in the terminal until its keychain has it', async () => {
+      const b = backend([OUT, OUT, SIGNED], { account_machine: () => machine(), account_add_machine: () => AGY_MAIN });
+      render(AccountModal, { engine: 'agy' });
+      const offered = await screen.findByRole('radio', { name: /Le compte de la machine/ });
+      await waitFor(() => expect(offered).toBeChecked());
+      expect(offered).toBeEnabled();
+      expect(
+        screen.getByText('Antigravity CLI n’est pas encore connecté sur cette machine : tu t’y connectes juste après, dans un terminal'),
+      ).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Ajouter ce compte' }));
+      await waitFor(() => expect(b.called('account_add_machine')).toHaveLength(1));
+      expect(app.settings.accounts).toEqual([AGY_MAIN]);
+      // Its sign-in, by agy itself: Escouade never sees the credentials.
+      const dialog = await screen.findByRole('dialog', { name: 'Se connecter au compte « Principal »' });
+      expect(term.opened).toEqual(['principal-agy']);
+      const said = within(dialog).getByRole('status');
+      expect(said).toHaveTextContent('agy ouvre ton navigateur sur ton compte Google. Escouade ne voit jamais tes identifiants.');
+      await vi.advanceTimersByTimeAsync(4000);
+      // No email to wait for: its keychain's entry alone says it.
+      await vi.advanceTimersByTimeAsync(2000);
+      await waitFor(() => expect(said).toHaveTextContent('Connecté'));
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(term.disposed).toEqual(['term-1']);
+    });
+
+    it('adds the machine’s account signed in already as it is, and a new one by its Gemini API key', async () => {
+      const b = backend([OUT], {
+        account_machine: () => machine({ connected: true }),
+        account_add_machine: () => AGY_MAIN,
+        account_shareable: () => [],
+        account_create: () => KEYED,
+        account_key: () => ({ connected: true, email: 'clé …wxyz', dir: KEYED.configDir, stamp: null }),
+      });
+      const { unmount } = render(AccountModal, { engine: 'agy' });
+      await screen.findByText('Antigravity CLI est connecté sur cette machine');
+      await userEvent.click(screen.getByRole('button', { name: 'Ajouter ce compte' }));
+      await waitFor(() => expect(b.called('account_add_machine')).toHaveLength(1));
+      expect(term.opened).toEqual([]);
+      unmount();
+      app.modal = { kind: 'account' };
+      render(AccountModal, { engine: 'agy' });
+      await userEvent.click(await screen.findByRole('radio', { name: /Un nouveau compte/ }));
+      expect(screen.getByText('La clé d’API Gemini d’un autre compte Google, gardée dans le trousseau du système.')).toBeInTheDocument();
+      const key = screen.getByLabelText('Clé d’API');
+      expect(key).toHaveAttribute('placeholder', 'Sur aistudio.google.com, Get API key');
+      expect(screen.getByText(/donnée aux agents de ce compte par GEMINI_API_KEY/)).toBeInTheDocument();
+      await userEvent.type(screen.getByRole('textbox', { name: 'Nom' }), 'Équipe');
+      await userEvent.type(key, 'AIzaCleGemini000000wxyz');
+      await userEvent.click(screen.getByRole('button', { name: 'Ajouter le compte' }));
+      await waitFor(() => expect(b.called('account_key')).toHaveLength(1));
+      expect(b.called('account_create')[0].args).toEqual({ name: 'Équipe', share: [], mode: 'link', engine: 'agy' });
+      expect(b.called('account_key')[0].args).toEqual({ id: 'agy-equipe', key: 'AIzaCleGemini000000wxyz' });
+      expect(term.opened).toEqual([]);
     });
   });
 

@@ -79,7 +79,7 @@ Quand un ticket revient chez son agent après un « Renvoyer », des tests en 
 
 ## La pause près de la limite du quota
 
-Le réglage « Pause au-delà du quota » (Réglages › Kanban, « pour tous les projets ») prend 80 %, 90 %, 95 % ou 100 % (par défaut). Dès que la fenêtre de 5 h ou la fenêtre hebdomadaire d’un compte atteint ce seuil, aucun ticket ne démarre sur lui avant la remise à zéro de la fenêtre. La file repart d’elle-même 30 secondes après cette remise à zéro, ou dès que les quotas lus repassent sous le seuil.
+Le réglage « Pause au-delà du quota » (Réglages › Kanban, « pour tous les projets ») prend 80 %, 90 %, 95 % ou 100 % (par défaut). Dès que la fenêtre de 5 h ou la fenêtre hebdomadaire d’un compte atteint ce seuil, le pilote auto ne démarre aucun ticket sur lui avant la remise à zéro de la fenêtre. Ce seuil ne retient que le pilote auto : un ticket lancé à la main (« Lancer », ou `start_ticket` d’un agent) part quand même, et seule une limite d’usage atteinte le retient. La file repart d’elle-même 30 secondes après cette remise à zéro, ou dès que les quotas lus repassent sous le seuil.
 
 L’en-tête du Kanban le dit sur une ligne à part, par exemple « Pilote auto en pause : quota de 5 h à 95 % (reprise à 14:30) » ou « Pilote auto en pause : quota hebdo à 96 % (reprise le vendredi 2 octobre à 09:30) », avec un bouton « Reprendre maintenant ». Les cartes « À faire » disent « En attente : pilote auto en pause ». Les agents déjà au travail continuent.
 

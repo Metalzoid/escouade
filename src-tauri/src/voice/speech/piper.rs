@@ -201,7 +201,7 @@ pub fn runtime_path() -> PathBuf {
 }
 
 /// ONNX Runtime made ready, once: loaded from its library where it is not linked in.
-fn runtime() -> Result<()> {
+pub fn runtime() -> Result<()> {
     static READY: std::sync::OnceLock<std::result::Result<(), String>> = std::sync::OnceLock::new();
     READY
         .get_or_init(|| {

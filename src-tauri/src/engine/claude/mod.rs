@@ -139,6 +139,7 @@ pub fn caps() -> EngineCaps {
         sandbox: false,
         usage_page: None,
         accounts_by_key: false,
+        read_only: true,
     }
 }
 
@@ -416,6 +417,15 @@ fn conversation_args(s: &Spawn) -> Vec<String> {
         a.extend(["--effort".into(), s.effort.clone()]);
     }
     a.extend(["--permission-mode".into(), s.mode.clone()]);
+    // A discussion (ESC-261): its tools that write or run a command taken away, whatever its mode
+    // becomes (a plan approved puts it in another). In one value, comma separated, as the Agent
+    // SDK gives them: what follows is not read as more.
+    if s.read_only {
+        a.push(format!(
+            "--disallowedTools={}",
+            crate::discussion::WRITES.join(",")
+        ));
+    }
     if let Some(p) = s.append_prompt.as_deref().filter(|p| !p.trim().is_empty()) {
         // On one line: a `.cmd` launcher (npm's claude.cmd) takes no argument with line breaks.
         let one_line = p.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -900,7 +910,19 @@ impl EngineProcess for ClaudeProcess {
 
     fn answer_permission(&self, request_id: &str, answer: PermissionAnswer) -> Result<()> {
         let response = match answer {
-            PermissionAnswer::Allow { call, input } => allowed(&call, input),
+            PermissionAnswer::Allow {
+                call,
+                input,
+                resume,
+            } => {
+                let mut r = allowed(&call, input);
+                // A plan approved: Claude Code would leave Plan for `default` (ESC-277).
+                if let Some(mode) = resume {
+                    r["updatedPermissions"] =
+                        json!([{ "type": "setMode", "mode": mode, "destination": "session" }]);
+                }
+                r
+            }
             PermissionAnswer::Always { call, input, rules } => {
                 let mut r = allowed(&call, input);
                 r["updatedPermissions"] = rules;
@@ -1309,6 +1331,28 @@ mod tests {
             ..Default::default()
         };
         assert!(!claude_args(&blank).contains(&"--append-system-prompt".to_string()));
+    }
+
+    #[test]
+    fn a_discussion_has_its_tools_that_write_taken_away_in_every_mode() {
+        let refused = "--disallowedTools=Edit,Write,MultiEdit,NotebookEdit,Bash".to_string();
+        for mode in ["default", "plan", "acceptEdits", "bypassPermissions"] {
+            let m = AgentMeta {
+                mode: mode.into(),
+                append_prompt: Some("Tu es l’agent rédacteur de spec.".into()),
+                discussion: Some(Default::default()),
+                ..Default::default()
+            };
+            let a = claude_args(&m);
+            assert!(a.contains(&refused), "{mode}: {a:?}");
+            // Before the instructions, which are not read as a tool.
+            let at = |x: &str| a.iter().position(|y| y == x).unwrap();
+            assert!(at(&refused) < at("--append-system-prompt"));
+        }
+        // Another agent keeps them.
+        assert!(!claude_args(&AgentMeta::default())
+            .iter()
+            .any(|x| x.starts_with("--disallowedTools")));
     }
 
     #[test]

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { openUrl } from '@tauri-apps/plugin-opener';
+  import { openUrl } from '../../lib/opener';
   import { onMount } from 'svelte';
   import {
     accountDefaults,
@@ -20,17 +20,20 @@
   import {
     byKey as goesByKey,
     capsOf,
+    dayCostStandsIn,
     defaultModelOf,
     effortsOf,
     engineName,
     modelsOf,
     modesOf,
     offered,
+    showsCost,
     usagePage,
+    usageSite,
   } from '../../lib/engines';
   import { EFFORTS, MODES } from '../../lib/models';
   import { fList, fPct, fUsd, tildify } from '../../lib/format';
-  import { t } from '../../lib/i18n';
+  import { t, type Key } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
@@ -42,6 +45,18 @@
   import Icon from '../Icon.svelte';
   import QuotaMeter from '../QuotaMeter.svelte';
   import { tip } from '../../lib/tip';
+
+  /**
+   * What the link to a harness's usage page says: its cost told, its quota not (Mistral Vibe); its quota in its own
+   * interface alone (Antigravity CLI's `/usage`, ESC-271); else its dashboard (Cursor CLI).
+   */
+  const USAGE_HINTS: Partial<Record<EngineId, Key>> = {
+    agy: 'accounts.tab.usageHintInterface',
+    gemini: 'accounts.tab.usageHintGemini',
+  };
+  function usageHint(engine: EngineId): Key {
+    return USAGE_HINTS[engine] ?? (showsCost({ engine }) ? 'accounts.tab.usageHintCost' : 'accounts.tab.usageHint');
+  }
 
   // The accounts, a group per harness in « Ordre des harness ». Each change goes to the backend at once (`account_*`,
   // `engine_order_set`), not through the modal's draft: an account is made, signed in and removed on the disk, which
@@ -215,8 +230,8 @@
     };
   }
 
-  /** A harness without a quota (OpenCode): a budget of the day stands in for it; not for one whose usage is on its own page (Cursor CLI, which tells no cost). */
-  const noQuota = (engine: EngineId) => capsOf(engine)?.quota === 'none' && !usagePage(engine);
+  /** A harness without a quota (OpenCode, Mistral Vibe): a budget of the day stands in for it; not for one whose usage is on its own page only (Cursor CLI, which tells no cost). */
+  const noQuota = (engine: EngineId) => dayCostStandsIn(engine);
 
   /** « Budget par jour ($) » left: empty (or 0) for none; refused, as it was. */
   async function commitBudget(a: Account, input: HTMLInputElement) {
@@ -261,7 +276,8 @@
   }
 
   /** An account of Cursor CLI other than its machine's: signed in by its API key (ESC-43). */
-  const byKey = (a: Account) => goesByKey(engineOfAccount(a)) && !isPrincipal(a);
+  // Gemini CLI's (ESC-275): as it was added, its key or its Google sign-in.
+  const byKey = (a: Account) => (goesByKey(engineOfAccount(a)) || !!a.apiKey) && !isPrincipal(a);
 
   const blurOnEnter = (e: KeyboardEvent) => {
     if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
@@ -324,11 +340,15 @@
               </span>
               <span class="quota">
                 {#if a.active && usagePage(g.engine)}
-                  <!-- Neither quota nor cost told to Escouade (Cursor CLI): its dashboard says its usage (ESC-43). -->
+                  <!-- No quota told to Escouade (Cursor CLI, nor its cost, ESC-43; Mistral Vibe, ESC-267): its own page says its usage. -->
                   <button
                     class="btn ghost small usage"
-                    use:tip={t('accounts.tab.usageHint', { harness })}
-                    onclick={() => app.run(openUrl(usagePage(g.engine)!))}><Icon name="ext" size={12} />{t('accounts.tab.usage')}</button
+                    use:tip={t(usageHint(g.engine), {
+                      harness,
+                      site: usageSite(g.engine),
+                    })}
+                    onclick={() => app.run(openUrl(usagePage(g.engine)!))}
+                    ><Icon name="ext" size={12} />{t('accounts.tab.usage', { site: usageSite(g.engine) })}</button
                   >
                 {/if}
                 {#each meters as m (m.minutes ?? 'credits')}
@@ -381,7 +401,8 @@
                 onblur={(e) => commit(a, e.currentTarget, 'claudePath')}
               />
               <span class="end">
-                {#if status}
+                {#if status && !(engineOfAccount(a) === 'gemini' && isPrincipal(a))}
+                  <!-- Gemini's machine's account is a key of the app's: nothing to sign in here (its ~/.gemini is never touched). -->
                   <!-- Not signed in, or out of date: to sign in. Signed in: to sign in again (another claude.ai account, say). -->
                   <button class="btn" onclick={() => (app.modal = { kind: 'account', accountId: a.id })}>
                     {byKey(a)

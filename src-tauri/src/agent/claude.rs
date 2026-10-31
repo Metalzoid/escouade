@@ -73,8 +73,7 @@ impl AgentRt {
             }
             "status" => {
                 if let Some(mode) = f["permissionMode"].as_str() {
-                    if self.meta.mode != mode {
-                        self.meta.mode = mode.to_string();
+                    if self.meta.set_mode(mode) {
                         fx.agent_changed = true;
                         fx.save = true;
                     }
@@ -950,6 +949,7 @@ impl AgentRt {
                     let allowed = PermissionAnswer::Allow {
                         call: tool_use_id.clone(),
                         input: input.clone(),
+                        resume: None,
                     };
                     if self
                         .proc
@@ -993,14 +993,17 @@ impl AgentRt {
                 }
                 let view = pending_view(rid, &tool, req, &input, &self.meta.cwd).always_as(&item);
                 self.append(item, fx);
-                self.add_pending(PendingReq {
-                    item_id: rid.to_string(),
-                    tool_use_id,
-                    input,
-                    suggestions,
-                    view,
-                    since: now_ms(),
-                });
+                self.add_pending(
+                    PendingReq {
+                        item_id: rid.to_string(),
+                        tool_use_id,
+                        input,
+                        suggestions,
+                        view,
+                        since: now_ms(),
+                    },
+                    fx,
+                );
                 self.set_status(AgentStatus::Waiting, fx);
                 fx.notify = Some(AgentAlert::new(NotifyKind::Question, body));
                 fx.agent_changed = true;

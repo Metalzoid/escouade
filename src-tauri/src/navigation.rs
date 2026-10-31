@@ -111,7 +111,7 @@ fn judge(request: Request, url: &Url, dev: Option<&Url>, open: impl FnOnce(&Url)
 fn open_outside(url: &Url) {
     let (address, shown) = (url.to_string(), shown(url));
     tauri::async_runtime::spawn_blocking(move || {
-        if let Err(e) = tauri_plugin_opener::open_url(&address, None::<&str>) {
+        if let Err(e) = crate::outside::open(crate::outside::What::Url(&address)) {
             log::error!("{shown} not opened outside: {e}");
         }
     });
@@ -185,6 +185,12 @@ fn on_the_app<R: Runtime>(app: &AppHandle<R>) -> bool {
     window
         .url()
         .is_ok_and(|url| destination(&url, home.dev.as_ref()) == Destination::App)
+}
+
+/// `go_home`, at once: the page's process ended, nothing is left to ask it (`pagecrash`).
+#[cfg_attr(not(any(target_os = "linux", windows)), allow(dead_code))]
+pub fn load_home<R: Runtime>(app: &AppHandle<R>) {
+    go_home(app);
 }
 
 /// Takes the window to its home page and shows it, whatever state it was in (hidden in the tray,

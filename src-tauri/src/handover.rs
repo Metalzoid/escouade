@@ -871,6 +871,10 @@ impl<R: Runtime> Core<R> {
             // the handover file tells it.
             rt.clear_pending(&mut fx);
             rt.meta.status = AgentStatus::Done;
+            rt.fact(crate::facts::Body::AgentHandover {
+                from: rt.meta.engine.to_string(),
+                to: target.to_string(),
+            });
             rt.meta.engine = target;
             rt.meta.account = account;
             rt.meta.session_id = None;
@@ -878,7 +882,7 @@ impl<R: Runtime> Core<R> {
             rt.meta.fork_of = None;
             rt.meta.fork_at = None;
             rt.meta.model = model;
-            rt.meta.mode = mode;
+            rt.meta.set_mode(&mode);
             if !to.supports_effort(&rt.meta.model) {
                 rt.meta.effort = String::new();
             } else if !to.efforts().contains(&rt.meta.effort.as_str()) {

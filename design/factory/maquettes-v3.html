@@ -1,0 +1,316 @@
+<h2>L’onglet Docs, version 3 : la piste B, et la carte de la piste C pour la spécification</h2>
+<p class="subtitle">La piste B, avec « Nouvelle discussion » qui laisse choisir entre discussion et brainstorm, les décisions dans un registre à part, et les documents rangés comme un drive. Dis-moi ce qui cloche, écran par écran.</p>
+
+<style>
+  .esc { --p: oklch(0.72 0.12 250); --frame: color-mix(in oklch, var(--p) 8%, #08090a); --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
+    --raise: color-mix(in oklch, var(--p) 6%, #15161a); --raise2: color-mix(in oklch, var(--p) 6%, #1b1c20); --line: rgba(255,255,255,.075);
+    --line2: rgba(255,255,255,.12); --text: #f7f8f8; --soft: #d0d3d8; --muted: #989da6; --run: oklch(0.79 0.15 155); --wait: oklch(0.84 0.14 82);
+    --add: oklch(0.8 0.13 155); --brand: #35c1bd; --pink: oklch(0.72 0.13 340);
+    font: 12.5px/1.45 Inter, "Segoe UI", system-ui, sans-serif; color: var(--text); background: var(--frame); border-radius: 10px;
+    overflow: hidden; display: grid; grid-template-columns: 46px 268px 1fr; grid-template-rows: 34px 1fr 24px; height: 640px; text-align: left; }
+  .esc * { box-sizing: border-box; }
+  .esc .top { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 0 12px; color: var(--soft); }
+  .esc .top b { color: var(--text); }
+  .esc .top .search { margin: 0 auto; width: 300px; height: 22px; border-radius: 6px; background: var(--raise); color: var(--muted); padding: 3px 10px; font-size: 11.5px; }
+  .esc .rail { display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 6px; }
+  .esc .tile { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; font-weight: 700; font-size: 11px; color: #111; }
+  .esc .side { padding: 6px 10px 8px 4px; display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: hidden; }
+  .esc .tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; background: var(--raise); border-radius: 8px; padding: 3px; gap: 2px; }
+  .esc .tabs span { text-align: center; padding: 4px 0; border-radius: 6px; color: var(--muted); font-weight: 550; }
+  .esc .tabs span.on { background: var(--raise2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line2); }
+  .esc .main { background: var(--panel); border-radius: 10px 0 0 0; border: 1px solid var(--line); border-right: 0; border-bottom: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .esc .status { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 0 12px; color: var(--muted); font-size: 11px; }
+  .esc .status .share { margin-left: auto; color: var(--wait); }
+  .esc .grp { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; margin: 4px 0 0 6px; }
+  .esc .it { display: flex; align-items: center; gap: 7px; padding: 4px 8px; border-radius: 6px; color: var(--soft); white-space: nowrap; overflow: hidden; }
+  .esc .it.on { background: var(--raise2); color: var(--text); }
+  .esc .it .r { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .esc .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--run); }
+  .esc .dot.w { background: var(--wait); } .esc .dot.g { background: var(--muted); } .esc .dot.b { background: var(--brand); }
+  .esc .warn { color: var(--wait); }
+  .esc .ask { height: 26px; border-radius: 7px; background: var(--raise); color: var(--muted); padding: 5px 10px; box-shadow: inset 0 0 0 1px var(--line); }
+  .esc .btn { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: 6px; background: var(--raise2); box-shadow: inset 0 0 0 1px var(--line2); color: var(--text); font-weight: 550; font-size: 11.5px; white-space: nowrap; }
+  .esc .btn.pri { background: #f2f3f5; color: #111; box-shadow: none; }
+  .esc .btn.wbtn { background: oklch(from var(--wait) l c h / .16); box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / .4); color: var(--wait); }
+  .esc .file { display: flex; align-items: center; gap: 7px; padding: 4px 8px; color: var(--soft); }
+  .esc .file i { font-style: normal; font-size: 9.5px; font-weight: 700; padding: 1px 4px; border-radius: 3px; background: var(--raise2); color: var(--muted); }
+  .esc .drop { margin: 2px 6px; padding: 7px; border: 1px dashed var(--line2); border-radius: 7px; color: var(--muted); text-align: center; font-size: 11.5px; }
+  .esc .hd { padding: 14px 22px 10px; border-bottom: 1px solid var(--line); display: flex; align-items: flex-start; gap: 12px; }
+  .esc .hd h4 { margin: 0; font-size: 17px; font-weight: 650; }
+  .esc .crumb { color: var(--muted); font-size: 11.5px; margin-bottom: 3px; }
+  .esc .meta { color: var(--muted); font-size: 11.5px; margin-top: 3px; }
+  .esc .acts { margin-left: auto; display: flex; gap: 6px; }
+  .esc .body { padding: 14px 22px; overflow: hidden; }
+  .esc .drift { border-radius: 8px; padding: 9px 12px; background: oklch(from var(--wait) l c h / .07); box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / .32); margin-bottom: 14px; }
+  .esc .drift b { color: var(--wait); }
+  .esc .drift .row { display: flex; gap: 6px; margin-top: 8px; }
+  .esc code { font: 11.5px "JetBrains Mono", Consolas, monospace; background: var(--raise2); padding: 0 4px; border-radius: 4px; color: var(--soft); }
+  .esc .doc h5 { font-size: 13.5px; margin: 12px 0 4px; font-weight: 650; }
+  .esc .doc p, .esc .doc li { color: var(--soft); margin: 0 0 4px; }
+  .esc .doc ul { margin: 0 0 6px; padding-left: 18px; }
+  .esc .src { display: inline-flex; gap: 4px; align-items: center; font-size: 11px; padding: 1px 7px; border-radius: 10px; background: rgba(255,255,255,.06); color: var(--muted); margin-right: 4px; }
+  .esc .card { border-radius: 9px; padding: 8px 10px; background: rgba(255,255,255,.035); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 3px; }
+  .esc .card.on { background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px var(--line2); }
+  .esc .card .n { display: flex; align-items: center; gap: 7px; font-weight: 650; }
+  .esc .card .n .st { margin-left: auto; font-size: 11px; font-weight: 550; }
+  .esc .card .m { color: var(--muted); font-size: 11.5px; }
+  .esc .split { display: grid; grid-template-columns: 1fr 1fr; min-height: 0; flex: 1; }
+  .esc .conv { padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid var(--line); overflow: hidden; }
+  .esc .me { align-self: flex-end; max-width: 88%; background: var(--raise2); box-shadow: inset 0 0 0 1px var(--line2); border-radius: 9px; padding: 8px 11px; }
+  .esc .ai { color: var(--soft); }
+  .esc .q { border-radius: 8px; padding: 8px 10px; background: oklch(from var(--wait) l c h / .07); box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / .32); display: grid; gap: 6px; }
+  .esc .opt { display: inline-flex; gap: 6px; align-items: center; padding: 3px 8px; border-radius: 6px; background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px var(--line2); font-weight: 550; font-size: 11.5px; }
+  .esc .opt kbd { font: 10px Inter, sans-serif; padding: 0 4px; border-radius: 3px; background: rgba(255,255,255,.1); color: var(--muted); }
+  .esc .compose { margin-top: auto; border-radius: 9px; box-shadow: inset 0 0 0 1px var(--line2); background: var(--raise); padding: 8px 10px; color: var(--muted); }
+  .esc .draft { padding: 14px 18px; overflow: hidden; display: flex; flex-direction: column; gap: 9px; }
+  .esc .draft h6 { margin: 0; font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  .esc .chg { border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line); padding: 8px 10px; }
+  .esc .chg .t { font-weight: 650; margin-bottom: 4px; display: flex; gap: 6px; }
+  .esc .chg .t span { margin-left: auto; color: var(--muted); font-weight: 500; font-size: 11px; }
+  .esc .plus { color: var(--add); } .esc .minus { color: oklch(0.74 0.14 22); text-decoration: line-through; }
+  .esc .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .esc .ch { border-radius: 9px; padding: 10px 12px; background: rgba(255,255,255,.035); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 5px; }
+  .esc .ch.w { box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / .45); }
+  .esc .ch .t { font-weight: 650; display: flex; align-items: center; gap: 6px; }
+  .esc .ch .s { color: var(--soft); font-size: 11.5px; }
+  .esc .ch .f { color: var(--muted); font-size: 11px; display: flex; gap: 8px; }
+  .esc .pill { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 10px; margin-left: auto; }
+  .esc .pill.ok { color: var(--run); background: oklch(from var(--run) l c h / .12); }
+  .esc .pill.w { color: var(--wait); background: oklch(from var(--wait) l c h / .14); }
+  .esc .pill.g { color: var(--muted); background: rgba(255,255,255,.07); }
+  .esc .feed { display: grid; gap: 9px; padding: 0 6px; }
+  .esc .feed div { color: var(--soft); font-size: 11.5px; }
+  .esc .feed div span { display: block; color: var(--muted); font-size: 10.5px; }
+  .esc .health { display: flex; gap: 14px; color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .esc .health b { color: var(--text); }
+</style>
+<style>
+  .esc .badge { font-size: 10px; font-weight: 650; padding: 0 6px; border-radius: 4px; line-height: 16px; }
+  .esc .badge.bs { color: oklch(0.82 0.11 300); background: oklch(0.7 0.13 300 / .16); }
+  .esc .badge.di { color: var(--brand); background: rgba(53,193,189,.14); }
+  .esc .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center; }
+  .esc .modal { width: 560px; border-radius: 12px; background: var(--raise); box-shadow: 0 0 0 1px var(--line2), 0 20px 60px rgba(0,0,0,.5); padding: 18px 20px; display: grid; gap: 12px; }
+  .esc .modal h4 { margin: 0; font-size: 15px; }
+  .esc .kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .esc .kind { border-radius: 10px; padding: 12px; box-shadow: inset 0 0 0 1px var(--line2); display: grid; gap: 6px; align-content: start; }
+  .esc .kind.on { box-shadow: inset 0 0 0 1.5px oklch(0.75 0.12 300); background: oklch(0.7 0.13 300 / .07); }
+  .esc .kind b { font-size: 13px; }
+  .esc .kind p { margin: 0; color: var(--soft); font-size: 11.5px; }
+  .esc .kind .ex { color: var(--muted); font-size: 11px; font-style: italic; }
+  .esc .field { display: grid; gap: 4px; }
+  .esc .field span { color: var(--muted); font-size: 11px; }
+  .esc .field div { height: 28px; border-radius: 7px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line2); padding: 6px 10px; color: var(--soft); }
+  .esc .mfoot { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+  .esc .mfoot .l { margin-right: auto; color: var(--muted); font-size: 11px; }
+  .esc table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .esc th { text-align: left; color: var(--muted); font-weight: 550; font-size: 11px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .esc td { padding: 7px 8px; border-bottom: 1px solid var(--line); color: var(--soft); vertical-align: top; }
+  .esc tr.on td { background: rgba(255,255,255,.04); }
+  .esc td b { color: var(--text); font-weight: 600; }
+  .esc .detail { border-left: 1px solid var(--line); padding: 14px 18px; display: grid; gap: 8px; align-content: start; overflow: hidden; }
+  .esc .detail h5 { margin: 0; font-size: 14px; }
+  .esc .detail .k { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; }
+  .esc .detail p { margin: 0; color: var(--soft); font-size: 12px; }
+  .esc .folders { padding: 12px 8px; border-right: 1px solid var(--line); display: grid; gap: 2px; align-content: start; }
+  .esc .files { padding: 12px 16px; display: grid; gap: 10px; align-content: start; }
+  .esc .fgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .esc .fcard { border-radius: 9px; box-shadow: inset 0 0 0 1px var(--line); padding: 10px; display: grid; gap: 6px; }
+  .esc .fcard .ic { height: 54px; border-radius: 6px; background: var(--raise2); display: grid; place-items: center; font-weight: 700; color: var(--muted); font-size: 12px; }
+  .esc .fcard .nm { font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .esc .fcard .mt { color: var(--muted); font-size: 10.5px; }
+  .esc .read { color: var(--run); font-size: 10.5px; }
+  .esc .shot { margin: 14px 0 28px; }
+  .esc-sec h3 { margin: 26px 0 4px; }
+  .esc-sec p { margin: 0 0 8px; }
+</style>
+
+<div class="esc-sec">
+  <h3>1. L’onglet Docs : les discussions en cartes, la spec qui se rédige à côté</h3>
+  <p>Une seule liste de discussions, chacune marquée « Brainstorm » ou « Discussion ». Sous elle, les trois espaces : la spécification, les décisions, les documents.</p>
+  <div class="esc shot">
+    <div class="top"><b>portail-adherents</b><span>docs</span><span class="search">Rechercher</span><span>Éditeur</span></div>
+    <div class="rail"><div class="tile" style="background:oklch(0.72 0.12 250)">PA</div><div class="tile" style="background:oklch(0.7 0.13 155)">DA</div></div>
+    <div class="side">
+      <div class="tabs"><span>Agents 2</span><span>Kanban 7</span><span class="on">Docs</span></div>
+      <div class="it" style="color:var(--text)">＋ Nouvelle discussion<span class="r">Ctrl B</span></div>
+      <div class="card on"><div class="n"><span class="dot b"></span>Relance des adhésions<span class="st" style="color:var(--wait)">Question</span></div><div class="m"><span class="badge bs">Brainstorm</span> Claire · Opus 5.5 · 2 documents</div></div>
+      <div class="card"><div class="n"><span class="dot"></span>Paiement en 4 fois ?<span class="st" style="color:var(--run)">Répond</span></div><div class="m"><span class="badge di">Discussion</span> Guillaume · Sonnet 5.5</div></div>
+      <div class="card"><div class="n"><span class="dot g"></span>Tarif famille<span class="st" style="color:var(--muted)">Versé</span></div><div class="m"><span class="badge bs">Brainstorm</span> Hier · 2 pages · ADR-014</div></div>
+      <div class="grp" style="margin-top:8px">Espaces</div>
+      <div class="it"><span class="dot w"></span>Spécification<span class="r warn">12 pages · 1 écart</span></div>
+      <div class="it"><span class="dot"></span>Décisions<span class="r">14</span></div>
+      <div class="it"><span class="dot g"></span>Documents<span class="r">4 dossiers · 11</span></div>
+    </div>
+    <div class="main">
+      <div class="hd" style="padding:10px 18px"><div><h4 style="font-size:15px">Relance des adhésions expirées <span class="badge bs" style="vertical-align:middle">Brainstorm</span></h4><div class="meta">Avec l’agent de brainstorm · Claire (MOA) · branche docs</div></div>
+        <div class="acts"><span class="btn">Ouvrir la page</span><span class="btn pri">Verser dans la spec</span></div></div>
+      <div class="split">
+        <div class="conv">
+          <div class="me">On veut relancer les adhérents dont l’adhésion expire. Le détail est dans le CR de l’atelier.<div style="margin-top:6px"><span class="src">Documents › Comptes rendus › CR atelier du 22/10</span></div></div>
+          <div class="ai"><b>Usages.</b> Trois relances, à J-30, J-7 et J+3 : c’est ce que font les mutuelles et les salles de sport, qui ajoutent souvent un lien de paiement en un clic.<br><b>RGPD.</b> L’e-mail de relance relève de l’exécution du contrat ; le SMS demanderait un consentement à part, et une durée de conservation du numéro.</div>
+          <div class="q"><b>Les relances partent-elles aussi par SMS ?</b><div><span class="opt"><kbd>1</kbd>E-mail seulement</span> <span class="opt"><kbd>2</kbd>E-mail et SMS, avec consentement</span></div></div>
+          <div class="compose">Répondre à l’agent…</div>
+        </div>
+        <div class="draft">
+          <h6>Ce qui ira dans la spec</h6>
+          <div class="chg"><div class="t">Espace adhérent › Relances<span>nouvelle section</span></div>
+            <div class="plus">+ Trois relances par e-mail : 30 et 7 jours avant l’échéance, puis 3 jours après, avec un lien de paiement.</div>
+            <div class="plus">+ Un adhérent peut couper les relances depuis son espace.</div></div>
+          <div class="chg"><div class="t">Notifications<span>1 phrase</span></div>
+            <div class="minus">Aucune notification n’est planifiée.</div>
+            <div class="plus">Les relances d’adhésion sont planifiées chaque nuit.</div></div>
+          <h6>Décision proposée</h6>
+          <div class="chg"><div class="t">ADR-015 · Relances par e-mail seulement<span>proposée</span></div><div style="color:var(--soft)">Pas de SMS : consentement et coût. À revoir si le taux de renouvellement baisse.</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="status"><span>2 agents actifs</span><span class="share">Docs sur la branche <b>docs</b> · rien à partager</span></div>
+  </div>
+
+  <h3>2. La spécification : la carte des sujets, et l’arbre comme un Confluence</h3>
+  <p>L’espace s’ouvre sur la carte (piste C) : chaque sujet, son état face au code, ses tickets et ses décisions. À gauche, l’arbre des pages, rangé automatiquement sujet par sujet : une page nouvelle trouve seule sa place. Un clic ouvre la page, avec son écart en haut.</p>
+  <div class="esc shot">
+    <div class="top"><b>portail-adherents</b><span>docs</span><span class="search">Rechercher</span><span>Éditeur</span></div>
+    <div class="rail"><div class="tile" style="background:oklch(0.72 0.12 250)">PA</div><div class="tile" style="background:oklch(0.7 0.13 155)">DA</div></div>
+    <div class="side">
+      <div class="tabs"><span>Agents 2</span><span>Kanban 7</span><span class="on">Docs</span></div>
+      <div class="it" style="color:var(--text)">＋ Nouvelle discussion<span class="r">Ctrl B</span></div>
+      <div class="card"><div class="n"><span class="dot b"></span>Relance des adhésions<span class="st" style="color:var(--wait)">Question</span></div><div class="m"><span class="badge bs">Brainstorm</span> Claire · 2 documents</div></div>
+      <div class="grp" style="margin-top:8px">Espaces</div>
+      <div class="it on"><span class="dot w"></span>Spécification<span class="r warn">1 écart</span></div>
+      <div class="it"><span class="dot"></span>Décisions<span class="r">14</span></div>
+      <div class="it"><span class="dot g"></span>Documents<span class="r">11</span></div>
+    </div>
+    <div class="main">
+      <div class="hd" style="padding:12px 18px"><div><h4 style="font-size:15px">Spécification</h4><div class="health"><span><b>10</b> pages à jour</span><span class="warn"><b style="color:inherit">1</b> écart avec le code</span><span><b>1</b> brouillon</span><span>comparée au code il y a 2 h</span></div></div>
+        <div class="acts"><span class="btn">Demander à la spec</span><span class="btn pri">Nouvelle page</span></div></div>
+      <div style="display:grid;grid-template-columns:230px 1fr;flex:1;min-height:0">
+        <div class="folders">
+          <div class="it" style="color:var(--text)">▾ Adhésion en ligne</div>
+          <div class="it" style="padding-left:22px"><span class="dot"></span>Formulaire</div>
+          <div class="it" style="padding-left:22px"><span class="dot"></span>Pièces justificatives</div>
+          <div class="it" style="padding-left:22px"><span class="dot"></span>Validation par le bureau</div>
+          <div class="it" style="color:var(--text)">▾ Paiement</div>
+          <div class="it" style="padding-left:22px"><span class="dot"></span>Moyens de paiement</div>
+          <div class="it" style="padding-left:22px"><span class="dot w"></span>En plusieurs fois<span class="r warn">écart</span></div>
+          <div class="it" style="padding-left:22px"><span class="dot"></span>Tarif famille<span class="r">nouveau</span></div>
+          <div class="it">▸ Espace adhérent</div>
+          <div class="it">▸ Notifications<span class="r">brouillon</span></div>
+          <div class="it">▸ Back-office</div>
+        </div>
+        <div class="body" style="padding:14px 16px">
+          <div class="grid">
+            <div class="ch"><div class="t">Adhésion en ligne<span class="pill ok">À jour</span></div><div class="s">Formulaire, pièces, validation par le bureau.</div><div class="f"><span>3 pages</span><span>4 tickets</span><span>2 décisions</span></div></div>
+            <div class="ch w"><div class="t">Paiement<span class="pill w">1 écart</span></div><div class="s">La spec dit 3 fois au plus ; le code accepte 4 échéances (DEM-31).</div><div class="f"><span>3 pages</span><span>3 tickets</span><span>4 décisions</span></div></div>
+            <div class="ch"><div class="t">Espace adhérent<span class="pill ok">À jour</span></div><div class="s">Carte d’adhérent, reçus fiscaux, famille.</div><div class="f"><span>4 pages</span><span>6 tickets</span><span>1 décision</span></div></div>
+            <div class="ch"><div class="t">Notifications<span class="pill g">Brouillon</span></div><div class="s">E-mails de bienvenue et de reçu ; relances en brainstorm.</div><div class="f"><span>1 page</span><span>0 ticket</span><span>1 proposée</span></div></div>
+            <div class="ch"><div class="t">Back-office<span class="pill ok">À jour</span></div><div class="s">Validation des adhésions, exports.</div><div class="f"><span>2 pages</span><span>5 tickets</span><span>1 décision</span></div></div>
+            <div class="ch" style="border:1px dashed var(--line2);box-shadow:none;place-items:center;color:var(--muted);text-align:center">Ce qui a bougé<br><span style="font-size:11px">Claire a enrichi Paiement · 10:42<br>DEM-31 a mis Paiement à jour · hier</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="status"><span>2 agents actifs</span><span class="share">Docs sur la branche <b>docs</b> · 2 changements à partager</span></div>
+  </div>
+
+  <h3>3. « Nouvelle discussion » : discussion ou brainstorm</h3>
+  <p>La discussion parle à un agent rédacteur de spec, pour interroger la spec ou la mettre à jour simplement. Le brainstorm parle à un agent produit, façon BMAD, pour faire mûrir une idée.</p>
+  <div class="esc shot" style="position:relative">
+    <div class="top"><b>portail-adherents</b><span>docs</span><span class="search">Rechercher</span><span>Éditeur</span></div>
+    <div class="rail"><div class="tile" style="background:oklch(0.72 0.12 250)">PA</div></div>
+    <div class="side"><div class="tabs"><span>Agents 2</span><span>Kanban 7</span><span class="on">Docs</span></div></div>
+    <div class="main"></div>
+    <div class="status"></div>
+    <div class="scrim">
+      <div class="modal">
+        <h4>Nouvelle discussion</h4>
+        <div class="kinds">
+          <div class="kind"><b><span class="badge di">Discussion</span></b><p>Interroger la spec ou la mettre à jour simplement, avec un agent rédacteur de spec qui connaît la doc, les décisions et le code.</p><div class="ex">« Que dit la spec sur le paiement en plusieurs fois ? »<br>« Ajoute que le reçu fiscal part par e-mail. »</div></div>
+          <div class="kind on"><b><span class="badge bs">Brainstorm</span></b><p>Faire mûrir une idée avec un agent produit : usages, découverte, conformité et RGPD, ce que font d’autres secteurs. Il propose des fonctionnalités, des pages de spec et des décisions.</p><div class="ex">« On voudrait un tarif famille. »</div></div>
+        </div>
+        <div class="field"><span>Sujet</span><div>Relance des adhésions expirées</div></div>
+        <div class="field"><span>Documents à lui donner</span><div>CR atelier du 22/10 · Cahier des charges v3 · ＋</div></div>
+        <div class="mfoot"><span class="l">Opus 5.5 · compte Principal · branche docs</span><span class="btn">Annuler</span><span class="btn pri">Commencer</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>4. Les décisions : un registre, pas un document</h3>
+  <p>Une liste numérotée et datée de chaque décision : ce qu’elle change, pourquoi, ce qu’elle remplace, et d’où elle vient (brainstorm, ticket, discussion). Une décision acceptée ne se réécrit pas : une nouvelle la remplace.</p>
+  <div class="esc shot">
+    <div class="top"><b>portail-adherents</b><span>docs</span><span class="search">Rechercher</span><span>Éditeur</span></div>
+    <div class="rail"><div class="tile" style="background:oklch(0.72 0.12 250)">PA</div></div>
+    <div class="side">
+      <div class="tabs"><span>Agents 2</span><span>Kanban 7</span><span class="on">Docs</span></div>
+      <div class="it" style="color:var(--text)">＋ Nouvelle discussion<span class="r">Ctrl B</span></div>
+      <div class="grp">Espaces</div>
+      <div class="it"><span class="dot w"></span>Spécification<span class="r warn">1 écart</span></div>
+      <div class="it on"><span class="dot"></span>Décisions<span class="r">14</span></div>
+      <div class="it"><span class="dot g"></span>Documents<span class="r">11</span></div>
+    </div>
+    <div class="main">
+      <div class="hd" style="padding:12px 18px"><div><h4 style="font-size:15px">Décisions</h4><div class="meta">14 décisions · 12 acceptées · 1 proposée · 1 remplacée</div></div>
+        <div class="acts"><span class="btn">Toutes ▾</span><span class="btn pri">Proposer une décision</span></div></div>
+      <div style="display:grid;grid-template-columns:1.35fr 1fr;flex:1;min-height:0">
+        <div style="padding:6px 12px;overflow:hidden">
+          <table>
+            <tr><th>N°</th><th>Décision</th><th>État</th><th>A changé</th><th>Date</th></tr>
+            <tr><td>015</td><td><b>Relances par e-mail seulement</b><br>Brainstorm « Relance des adhésions »</td><td><span class="pill w" style="margin:0">Proposée</span></td><td>Espace adhérent, Notifications</td><td>Auj.</td></tr>
+            <tr class="on"><td>014</td><td><b>Tarif famille à partir de 3 membres</b><br>Brainstorm « Tarif famille »</td><td><span class="pill ok" style="margin:0">Acceptée</span></td><td>Adhésion en ligne, Paiement</td><td>Hier</td></tr>
+            <tr><td>013</td><td><b>Paiement en 4 fois</b><br>Ticket DEM-31</td><td><span class="pill ok" style="margin:0">Acceptée</span></td><td>Paiement</td><td>24/10</td></tr>
+            <tr><td>009</td><td><b>Paiement en 3 fois au plus</b><br>Cahier des charges v3</td><td><span class="pill g" style="margin:0">Remplacée</span></td><td>Paiement · par 013</td><td>02/10</td></tr>
+            <tr><td>004</td><td><b>Paiement par Stripe</b><br>Discussion « Prestataire de paiement »</td><td><span class="pill ok" style="margin:0">Acceptée</span></td><td>Paiement, Architecture</td><td>18/09</td></tr>
+          </table>
+        </div>
+        <div class="detail">
+          <div class="k">ADR-014 · acceptée hier par Claire (MOA)</div>
+          <h5>Tarif famille à partir de 3 membres</h5>
+          <div class="k">Contexte</div><p>Les familles adhèrent membre par membre et paient plein tarif ; le CR du 22/10 demande un geste.</p>
+          <div class="k">Décision</div><p>−20 % sur chaque membre dès le troisième, dans le même foyer.</p>
+          <div class="k">Conséquences</div><p>Un foyer à déclarer à l’adhésion ; reçus fiscaux par membre inchangés.</p>
+          <div class="k">A changé dans la spec</div><p><span class="src">Adhésion en ligne +4 −0</span><span class="src">Paiement +2 −1</span></p>
+          <div class="k">Liens</div><p><span class="src">DEM-38</span><span class="src">Brainstorm « Tarif famille »</span><span class="src">CR atelier du 22/10</span></p>
+        </div>
+      </div>
+    </div>
+    <div class="status"><span>2 agents actifs</span><span class="share">Docs sur la branche <b>docs</b> · rien à partager</span></div>
+  </div>
+
+  <h3>5. Les documents : un drive, avec des dossiers</h3>
+  <p>Tout ce qu’on dépose : cahiers des charges, comptes rendus, maquettes, pièces juridiques. On range en dossiers, on glisse-dépose ; les agents les lisent et s’y réfèrent.</p>
+  <div class="esc shot">
+    <div class="top"><b>portail-adherents</b><span>docs</span><span class="search">Rechercher</span><span>Éditeur</span></div>
+    <div class="rail"><div class="tile" style="background:oklch(0.72 0.12 250)">PA</div></div>
+    <div class="side">
+      <div class="tabs"><span>Agents 2</span><span>Kanban 7</span><span class="on">Docs</span></div>
+      <div class="it" style="color:var(--text)">＋ Nouvelle discussion<span class="r">Ctrl B</span></div>
+      <div class="grp">Espaces</div>
+      <div class="it"><span class="dot w"></span>Spécification<span class="r warn">1 écart</span></div>
+      <div class="it"><span class="dot"></span>Décisions<span class="r">14</span></div>
+      <div class="it on"><span class="dot g"></span>Documents<span class="r">11</span></div>
+    </div>
+    <div class="main">
+      <div class="hd" style="padding:12px 18px"><div><div class="crumb">Documents › Comptes rendus</div><h4 style="font-size:15px">Comptes rendus</h4></div>
+        <div class="acts"><span class="btn">Rechercher dans les documents</span><span class="btn">Nouveau dossier</span><span class="btn pri">Déposer des fichiers</span></div></div>
+      <div style="display:grid;grid-template-columns:200px 1fr;flex:1;min-height:0">
+        <div class="folders">
+          <div class="it">▸ Cahiers des charges<span class="r">2</span></div>
+          <div class="it on">▾ Comptes rendus<span class="r">4</span></div>
+          <div class="it" style="padding-left:22px">2026</div>
+          <div class="it">▸ Maquettes<span class="r">3</span></div>
+          <div class="it">▸ Juridique<span class="r">2</span></div>
+        </div>
+        <div class="files">
+          <div class="fgrid">
+            <div class="fcard"><div class="ic">DOCX</div><div class="nm">CR atelier du 22/10</div><div class="mt">Claire · 48 Ko · il y a 5 j</div><div class="read">✓ lu par les agents · cité 3 fois</div></div>
+            <div class="fcard"><div class="ic">PDF</div><div class="nm">CR comité du 08/10</div><div class="mt">Claire · 210 Ko · il y a 19 j</div><div class="read">✓ lu par les agents</div></div>
+            <div class="fcard"><div class="ic">MD</div><div class="nm">Notes réunion bureau</div><div class="mt">Guillaume · 6 Ko · il y a 1 mois</div><div class="read">✓ lu par les agents</div></div>
+            <div class="fcard"><div class="ic">PDF</div><div class="nm">CR kick-off</div><div class="mt">Claire · 1,2 Mo · il y a 2 mois</div><div class="read" style="color:var(--muted)">lecture en cours…</div></div>
+          </div>
+          <div class="drop" style="margin:4px 0;padding:16px">Glisse des fichiers ici pour les ranger dans « Comptes rendus »</div>
+        </div>
+      </div>
+    </div>
+    <div class="status"><span>2 agents actifs</span><span class="share">Docs sur la branche <b>docs</b> · 1 changement à partager</span></div>
+  </div>
+</div>

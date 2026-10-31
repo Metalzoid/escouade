@@ -138,3 +138,65 @@ export function keepCopilot() {
     console.log(`copilot: config put back, ${ours.length} sessions and ${added.length} entries of %LOCALAPPDATA%\\copilot taken out`);
   };
 }
+
+/**
+ * Mistral Vibe: the user's ~/.vibe (its config, its trust, its hooks; its key is in the system's keychain, never read)
+ * as it was, byte for byte. Escouade gives each agent a VIBE_HOME of its own and should write nothing there: what
+ * changed is put back and said, a file added naming the test's folders taken out.
+ */
+export function keepVibe() {
+  const home = path.join(HOME, '.vibe');
+  const list = () =>
+    fs.existsSync(home)
+      ? (fs.readdirSync(home, { recursive: true, encoding: 'utf8' }) as string[]).filter((f) => fs.statSync(path.join(home, f)).isFile())
+      : [];
+  const saved = new Map(list().map((f) => [f, fs.readFileSync(path.join(home, f))]));
+  return () => {
+    const changed: string[] = [];
+    for (const [name, bytes] of saved) {
+      const file = path.join(home, name);
+      if (!fs.existsSync(file) || !fs.readFileSync(file).equals(bytes)) {
+        changed.push(name);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, bytes);
+      }
+    }
+    const added = list().filter((f) => !saved.has(f));
+    for (const f of added) if (ours(path.join(home, f))) fs.rmSync(path.join(home, f), { force: true });
+    console.log(
+      `vibe: ~/.vibe ${changed.length || added.length ? `changed (${[...changed, ...added].join(', ')}), put back` : 'as it was, byte for byte'}`,
+    );
+  };
+}
+
+/**
+ * Antigravity CLI (ESC-272): each agent has a home of its own, so the user's ~/.gemini (which Gemini CLI shares) is never
+ * to be touched. Its files are listed by size and date only, never read (`google_accounts.json` above all, and its logs,
+ * which hold the account's address), and nothing is written back: a session of `agy` the user runs meanwhile writes its
+ * own logs there. What changed is told.
+ */
+export function keepAgy(who = 'agy') {
+  const home = path.join(HOME, '.gemini');
+  const list = () =>
+    new Map(
+      fs.existsSync(home)
+        ? (fs.readdirSync(home, { recursive: true, encoding: 'utf8' }) as string[]).flatMap((f) => {
+            try {
+              const st = fs.statSync(path.join(home, f));
+              return st.isFile() ? [[f, `${st.size}:${st.mtimeMs}`] as const] : [];
+            } catch {
+              return [];
+            }
+          })
+        : [],
+    );
+  const before = list();
+  return () => {
+    const after = list();
+    const changed = [...after].filter(([f, m]) => before.get(f) !== m).map(([f]) => f);
+    const gone = [...before.keys()].filter((f) => !after.has(f));
+    console.log(
+      `${who}: ~/.gemini ${changed.length || gone.length ? `changed (${[...changed, ...gone].join(', ')}): a session of the user's?` : 'untouched'}`,
+    );
+  };
+}

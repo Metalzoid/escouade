@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from '../Icon.svelte';
-  import { openUrl } from '@tauri-apps/plugin-opener';
+  import { openUrl } from '../../lib/opener';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { voiceKey, voicesFor } from '../../lib/online-voice.svelte';
@@ -219,7 +219,7 @@
   }
   .own {
     font-size: 10.5px;
-    color: var(--accent);
+    color: var(--p-ink);
   }
   .small {
     height: 24px;

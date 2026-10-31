@@ -122,7 +122,8 @@ export default {
     autoAssignDesc: 'Un agent libre prend le prochain ticket « À faire »',
     quotaPause: 'Pause au-delà du quota',
     quotaPauseHint: 'pour tous les projets',
-    quotaPauseDesc: 'Aucun ticket ne démarre tant que la fenêtre de 5 h ou la fenêtre hebdomadaire dépasse ce seuil.',
+    quotaPauseDesc:
+      'Le pilote auto ne démarre aucun ticket tant que la fenêtre de 5 h ou la fenêtre hebdomadaire dépasse ce seuil. Un ticket lancé à la main part quand même.',
 
     parallel: 'En parallèle',
     parallelDesc: 'Au-delà, les tickets « À faire » attendent une place libre',

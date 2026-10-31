@@ -61,6 +61,44 @@ describe('Stats', () => {
     resetApp({ projects: [project()] });
   });
 
+  it('shows the code index per project: answers, their tokens and the file reading avoided as a high estimate, no dollars (ESC-307)', async () => {
+    resetApp({ projects: [project({ codeIndexChoice: true })] });
+    fakeBackend({
+      stats: (a: any) => ({
+        ...view(a.range),
+        indexByProject: [
+          { agentId: '', projectId: 'p1', calls: 12, filesTokens: 900_000, answerTokens: 40_000, savedTokens: 860_000, savedCost: 3.44 },
+        ],
+      }),
+    });
+    render(Stats);
+    await loaded();
+    const table = await screen.findByRole('table', { name: 'Index du code' });
+    const row = within(table).getAllByRole('row')[1];
+    expect(row).toHaveTextContent(project().name);
+    expect(row).toHaveTextContent('12');
+    const cells = within(row)
+      .getAllByRole('cell')
+      .map((c) => c.textContent?.replace(/\s/g, ' '));
+    expect(cells.slice(1)).toEqual(['12', '40,0 k', '860,0 k']);
+    await userEvent.hover(within(table).getByText('Lecture de fichiers évitée (estimation haute)'));
+    expect(await screen.findByText(/pas une économie mesurée/)).toBeInTheDocument();
+    expect(screen.queryByText(/Dollars économisés/)).toBeNull();
+  });
+
+  it('says the index answered nothing over the period, and shows nothing of it when no project has turned it on', async () => {
+    resetApp({ projects: [project({ codeIndexChoice: true })] });
+    fakeBackend({ stats: (a: any) => view(a.range) });
+    const { unmount } = render(Stats);
+    await loaded();
+    expect(screen.getByText('Aucune réponse de l’index sur la période.')).toBeInTheDocument();
+    unmount();
+    resetApp({ projects: [project()] });
+    render(Stats);
+    await loaded();
+    expect(screen.queryByText('Index du code')).toBeNull();
+  });
+
   it('shows the KPIs of the period', async () => {
     fakeBackend({ stats: (a: any) => view(a.range) });
     render(Stats);

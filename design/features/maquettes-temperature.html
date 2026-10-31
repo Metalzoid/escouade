@@ -1,0 +1,155 @@
+<h2>Le thermomètre du cache, version simple : des degrés</h2>
+<p class="subtitle">Juste un chiffre, de 100 °C (le cache vient de servir) à 0 °C (il expire), dont la couleur passe du rouge-orangé au bleu à mesure que l’expiration approche. Le détail reste au survol.</p>
+
+<style>
+  .esc { --p: oklch(0.72 0.12 250); --frame: color-mix(in oklch, var(--p) 8%, #08090a); --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
+    --raise: color-mix(in oklch, var(--p) 6%, #15161a); --raise2: color-mix(in oklch, var(--p) 6%, #1b1c20); --line: rgba(255,255,255,.075);
+    --line2: rgba(255,255,255,.12); --text: #f7f8f8; --soft: #d0d3d8; --muted: #989da6; --run: oklch(0.79 0.15 155); --wait: oklch(0.84 0.14 82);
+    --add: oklch(0.8 0.13 155); --brand: #35c1bd; --pink: oklch(0.72 0.13 340);
+    font: 12.5px/1.45 Inter, "Segoe UI", system-ui, sans-serif; color: var(--text); background: var(--frame); border-radius: 10px;
+    overflow: hidden; display: grid; grid-template-columns: 46px 268px 1fr; grid-template-rows: 34px 1fr 24px; height: 640px; text-align: left; }
+  .esc * { box-sizing: border-box; }
+  .esc .top { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 0 12px; color: var(--soft); }
+  .esc .top b { color: var(--text); }
+  .esc .top .search { margin: 0 auto; width: 300px; height: 22px; border-radius: 6px; background: var(--raise); color: var(--muted); padding: 3px 10px; font-size: 11.5px; }
+  .esc .rail { display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 6px; }
+  .esc .tile { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; font-weight: 700; font-size: 11px; color: #111; }
+  .esc .side { padding: 6px 10px 8px 4px; display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: hidden; }
+  .esc .tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; background: var(--raise); border-radius: 8px; padding: 3px; gap: 2px; }
+  .esc .tabs span { text-align: center; padding: 4px 0; border-radius: 6px; color: var(--muted); font-weight: 550; }
+  .esc .tabs span.on { background: var(--raise2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line2); }
+  .esc .main { background: var(--panel); border-radius: 10px 0 0 0; border: 1px solid var(--line); border-right: 0; border-bottom: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .esc .status { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 0 12px; color: var(--muted); font-size: 11px; }
+  .esc .status .share { margin-left: auto; color: var(--wait); }
+  .esc .grp { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; margin: 4px 0 0 6px; }
+  .esc .it { display: flex; align-items: center; gap: 7px; padding: 4px 8px; border-radius: 6px; color: var(--soft); white-space: nowrap; overflow: hidden; }
+  .esc .it.on { background: var(--raise2); color: var(--text); }
+  .esc .it .r { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .esc .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--run); }
+  .esc .dot.w { background: var(--wait); } .esc .dot.g { background: var(--muted); } .esc .dot.b { background: var(--brand); }
+  .esc .warn { color: var(--wait); }
+  .esc .ask { height: 26px; border-radius: 7px; background: var(--raise); color: var(--muted); padding: 5px 10px; box-shadow: inset 0 0 0 1px var(--line); }
+  .esc .btn { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: 6px; background: var(--raise2); box-shadow: inset 0 0 0 1px var(--line2); color: var(--text); font-weight: 550; font-size: 11.5px; white-space: nowrap; }
+  .esc .btn.pri { background: #f2f3f5; color: #111; box-shadow: none; }
+  .esc .btn.wbtn { background: oklch(from var(--wait) l c h / .16); box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / .4); color: var(--wait); }
+  .esc .file { display: flex; align-items: center; gap: 7px; padding: 4px 8px; color: var(--soft); }
+  .esc .file i { font-style: normal; font-size: 9.5px; font-weight: 700; padding: 1px 4px; border-radius: 3px; background: var(--raise2); color: var(--muted); }
+  .esc .drop { margin: 2px 6px; padding: 7px; border: 1px dashed var(--line2); border-radius: 7px; color: var(--muted); text-align: center; font-size: 11.5px; }
+  .esc .hd { padding: 14px 22px 10px; border-bottom: 1px solid var(--line); display: flex; align-items: flex-start; gap: 12px; }
+  .esc .hd h4 { margin: 0; font-size: 17px; font-weight: 650; }
+  .esc .crumb { color: var(--muted); font-size: 11.5px; margin-bottom: 3px; }
+  .esc .meta { color: var(--muted); font-size: 11.5px; margin-top: 3px; }
+  .esc .acts { margin-left: auto; display: flex; gap: 6px; }
+  .esc .body { padding: 14px 22px; overflow: hidden; }
+  .esc .drift { border-radius: 8px; padding: 9px 12px; background: oklch(from var(--wait) l c h / .07); box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / .32); margin-bottom: 14px; }
+  .esc .drift b { color: var(--wait); }
+  .esc .drift .row { display: flex; gap: 6px; margin-top: 8px; }
+  .esc code { font: 11.5px "JetBrains Mono", Consolas, monospace; background: var(--raise2); padding: 0 4px; border-radius: 4px; color: var(--soft); }
+  .esc .doc h5 { font-size: 13.5px; margin: 12px 0 4px; font-weight: 650; }
+  .esc .doc p, .esc .doc li { color: var(--soft); margin: 0 0 4px; }
+  .esc .doc ul { margin: 0 0 6px; padding-left: 18px; }
+  .esc .src { display: inline-flex; gap: 4px; align-items: center; font-size: 11px; padding: 1px 7px; border-radius: 10px; background: rgba(255,255,255,.06); color: var(--muted); margin-right: 4px; }
+  .esc .card { border-radius: 9px; padding: 8px 10px; background: rgba(255,255,255,.035); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 3px; }
+  .esc .card.on { background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px var(--line2); }
+  .esc .card .n { display: flex; align-items: center; gap: 7px; font-weight: 650; }
+  .esc .card .n .st { margin-left: auto; font-size: 11px; font-weight: 550; }
+  .esc .card .m { color: var(--muted); font-size: 11.5px; }
+  .esc .split { display: grid; grid-template-columns: 1fr 1fr; min-height: 0; flex: 1; }
+  .esc .conv { padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid var(--line); overflow: hidden; }
+  .esc .me { align-self: flex-end; max-width: 88%; background: var(--raise2); box-shadow: inset 0 0 0 1px var(--line2); border-radius: 9px; padding: 8px 11px; }
+  .esc .ai { color: var(--soft); }
+  .esc .q { border-radius: 8px; padding: 8px 10px; background: oklch(from var(--wait) l c h / .07); box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / .32); display: grid; gap: 6px; }
+  .esc .opt { display: inline-flex; gap: 6px; align-items: center; padding: 3px 8px; border-radius: 6px; background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px var(--line2); font-weight: 550; font-size: 11.5px; }
+  .esc .opt kbd { font: 10px Inter, sans-serif; padding: 0 4px; border-radius: 3px; background: rgba(255,255,255,.1); color: var(--muted); }
+  .esc .compose { margin-top: auto; border-radius: 9px; box-shadow: inset 0 0 0 1px var(--line2); background: var(--raise); padding: 8px 10px; color: var(--muted); }
+  .esc .draft { padding: 14px 18px; overflow: hidden; display: flex; flex-direction: column; gap: 9px; }
+  .esc .draft h6 { margin: 0; font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  .esc .chg { border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line); padding: 8px 10px; }
+  .esc .chg .t { font-weight: 650; margin-bottom: 4px; display: flex; gap: 6px; }
+  .esc .chg .t span { margin-left: auto; color: var(--muted); font-weight: 500; font-size: 11px; }
+  .esc .plus { color: var(--add); } .esc .minus { color: oklch(0.74 0.14 22); text-decoration: line-through; }
+  .esc .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .esc .ch { border-radius: 9px; padding: 10px 12px; background: rgba(255,255,255,.035); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 5px; }
+  .esc .ch.w { box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / .45); }
+  .esc .ch .t { font-weight: 650; display: flex; align-items: center; gap: 6px; }
+  .esc .ch .s { color: var(--soft); font-size: 11.5px; }
+  .esc .ch .f { color: var(--muted); font-size: 11px; display: flex; gap: 8px; }
+  .esc .pill { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 10px; margin-left: auto; }
+  .esc .pill.ok { color: var(--run); background: oklch(from var(--run) l c h / .12); }
+  .esc .pill.w { color: var(--wait); background: oklch(from var(--wait) l c h / .14); }
+  .esc .pill.g { color: var(--muted); background: rgba(255,255,255,.07); }
+  .esc .feed { display: grid; gap: 9px; padding: 0 6px; }
+  .esc .feed div { color: var(--soft); font-size: 11.5px; }
+  .esc .feed div span { display: block; color: var(--muted); font-size: 10.5px; }
+  .esc .health { display: flex; gap: 14px; color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .esc .health b { color: var(--text); }
+</style>
+<style>.esc .deg{font:700 12px/1 "JetBrains Mono",Consolas,monospace;letter-spacing:-.02em;margin-left:auto}
+  .esc .th { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .esc .th .tube { position: relative; width: 34px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; }
+  .esc .th .tube i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
+  .esc .hot { color: oklch(0.8 0.15 55); } .esc .hot .tube i { background: linear-gradient(90deg, oklch(0.75 0.16 40), oklch(0.82 0.15 70)); width: 100%; }
+  .esc .cool { color: oklch(0.8 0.08 220); } .esc .cool .tube i { background: linear-gradient(90deg, oklch(0.72 0.1 230), oklch(0.8 0.12 70)); width: 32%; }
+  .esc .cold { color: oklch(0.72 0.1 245); } .esc .cold .tube i { background: oklch(0.6 0.1 245); width: 0%; }
+  .esc .unk { color: var(--muted); } .esc .unk .tube i { width: 0; }
+  .esc .glyph { font-size: 12px; }
+  .esc .acard { border-radius: 9px; padding: 8px 10px; background: rgba(255,255,255,.035); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 3px; }
+  .esc .acard .l1 { display: flex; align-items: center; gap: 7px; font-weight: 650; }
+  .esc .acard .l1 .s { margin-left: auto; font-size: 11px; font-weight: 550; }
+  .esc .acard .l2 { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+  .esc .acard .l2 .th { margin-left: auto; }
+  .esc .eng { font-size: 10px; font-weight: 700; padding: 0 5px; border-radius: 4px; background: rgba(255,255,255,.08); color: var(--soft); }
+  .esc .tip { position: absolute; width: 330px; border-radius: 10px; background: var(--raise2); box-shadow: 0 0 0 1px var(--line2), 0 16px 40px rgba(0,0,0,.5); padding: 11px 13px; display: grid; gap: 6px; font-size: 12px; z-index: 3; }
+  .esc .tip b { color: var(--text); }
+  .esc .tip .row { display: flex; justify-content: space-between; color: var(--soft); }
+  .esc .tip .row span:last-child { color: var(--text); font-weight: 600; }
+  .esc .tip .bar3 { height: 8px; border-radius: 4px; overflow: hidden; display: flex; }
+  .esc .tip .bar3 i { display: block; height: 100%; }
+  .esc .tip .note { color: var(--muted); font-size: 11px; }
+  .esc .stat { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .esc .stat div { border-radius: 9px; box-shadow: inset 0 0 0 1px var(--line); padding: 10px 12px; }
+  .esc .stat b { display: block; font-size: 18px; } .esc .stat span { color: var(--muted); font-size: 11px; }
+  .esc-sec h3 { margin: 26px 0 4px; } .esc-sec p { margin: 0 0 8px; } .esc .shot { margin: 14px 0 28px; }
+</style>
+
+<div class="esc-sec">
+  <h3>1. Les cartes d’agent et l’en-tête de la conversation</h3>
+  <p>Quatre agents, quatre états. Le survol de la jauge donne le détail du dernier tour et ce que coûterait le prochain s’il partait à froid.</p>
+  <div class="esc shot" style="position:relative">
+    <div class="top"><b>portail-adherents</b><span>main</span><span class="search">Rechercher</span><span>Éditeur</span></div>
+    <div class="rail"><div class="tile" style="background:oklch(0.72 0.12 250)">PA</div><div class="tile" style="background:oklch(0.7 0.13 155)">DA</div></div>
+    <div class="side">
+      <div class="tabs"><span class="on">Agents 4</span><span>Kanban 6</span><span>Docs</span></div>
+      <div class="acard" style="background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px var(--line2)"><div class="l1"><span class="dot"></span>dem-41-relances<span class="s" style="color:var(--run)">En cours</span></div>
+        <div class="l2"><span class="eng">Claude</span>Opus 5.5 · 12 min<span class="deg" style="color:oklch(0.72 0.19 35)">100 °C</span></div></div>
+      <div class="acard"><div class="l1"><span class="dot g"></span>revue-dem-31<span class="s" style="color:var(--muted)">Tour fini</span></div>
+        <div class="l2"><span class="eng">Codex</span>GPT-6 Luna · 4 min<span class="deg" style="color:oklch(0.78 0.09 220)">27 °C</span></div></div>
+      <div class="acard"><div class="l1"><span class="dot g"></span>export-compta<span class="s" style="color:var(--muted)">Tour fini</span></div>
+        <div class="l2"><span class="eng">Claude</span>Sonnet 5.5 · 18 min<span class="deg" style="color:oklch(0.68 0.12 255)">0 °C</span></div></div>
+      <div class="acard"><div class="l1"><span class="dot g"></span>maquette-accueil<span class="s" style="color:var(--muted)">Tour fini</span></div>
+        <div class="l2"><span class="eng">Cursor</span>Auto · 2 min<span class="deg" style="color:var(--muted)">— °C</span></div></div>
+    </div>
+    <div class="main">
+      <div class="hd" style="padding:12px 18px;align-items:center"><div><h4 style="font-size:15px">revue-dem-31</h4><div class="meta">Codex · GPT-6 Luna · portail-adherents</div></div>
+        <div class="acts" style="align-items:center;gap:14px;color:var(--muted);font-size:11.5px"><span>Contexte <b style="color:var(--text)">142 k</b></span><span>Coût <b style="color:var(--text)">0,61 $</b></span><span class="deg" style="color:oklch(0.78 0.09 220);font-size:14px;margin-left:0">27 °C</span></div></div>
+      <div class="body" style="color:var(--muted)">…conversation…</div>
+      <div class="tip" style="right:24px;top:96px">
+        <b style="color:oklch(0.78 0.09 220)">Cache : 27 °C</b>
+        <div class="note">Dernier tour il y a 3 min 40 · expire dans 1 min 20 (le cache de Codex vit environ 5 min sans activité).</div>
+        <div class="bar3"><i style="width:91%;background:oklch(0.8 0.15 55)"></i><i style="width:6%;background:oklch(0.72 0.1 245)"></i><i style="width:3%;background:rgba(255,255,255,.35)"></i></div>
+        <div class="row"><span>Lus depuis le cache (chauds)</span><span>129 k · 91 %</span></div>
+        <div class="row"><span>Mis en cache (froids)</span><span>9 k</span></div>
+        <div class="row"><span>Nouveaux, plein tarif</span><span>4 k</span></div>
+        <div class="row"><span>Économisé sur ce tour</span><span>≈ 0,36 $</span></div>
+        <div class="note">Si le prochain message part à froid : ≈ 142 k tokens relus, ≈ 0,47 $ au lieu de ≈ 0,05 $.</div>
+      </div>
+    </div>
+    <div class="status"><span>4 actifs</span><span style="margin-left:auto">Cache aujourd’hui : ≈ 3,10 $ économisés</span></div>
+  </div>
+
+  <h3>2. L’échelle</h3>
+  <p>La température baisse avec le temps qui reste avant l’expiration ; la couleur suit.</p>
+  <div class="esc shot" style="display:block;height:auto;padding:18px 22px">
+    <div class="stat" style="grid-template-columns:repeat(5,1fr)"><div><span class="deg" style="color:oklch(0.72 0.19 35)">100 °C</span><span style="display:block;margin-top:6px">Le cache vient de servir.</span></div><div><span class="deg" style="color:oklch(0.8 0.15 70)">64 °C</span><span style="display:block;margin-top:6px">Il tient encore la moitié de sa durée.</span></div><div><span class="deg" style="color:oklch(0.78 0.09 220)">27 °C</span><span style="display:block;margin-top:6px">Il refroidit : bientôt expiré.</span></div><div><span class="deg" style="color:oklch(0.68 0.12 255)">0 °C</span><span style="display:block;margin-top:6px">Expiré ou cassé : le prochain tour relira tout.</span></div><div><span class="deg" style="color:var(--muted)">— °C</span><span style="display:block;margin-top:6px">Le harness ne dit rien de son cache.</span></div></div>
+  </div>
+</div>

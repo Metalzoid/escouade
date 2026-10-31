@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { openUrl } from '@tauri-apps/plugin-opener';
+  import { openUrl } from '../../lib/opener';
   import { accountName, newAgentDefaults, pauseOf } from '../../lib/accounts';
   import {
     APPROVE_LABEL,
@@ -33,6 +33,8 @@
   import { isMulti, repoLabel, touchedRepos } from '../../lib/repos';
   import { alsoOn, authorName, hueOf, initialOf, isMine, isTheirs, sharedFile, theirsLine } from '../../lib/sharing';
   import { shareTicket } from '../../lib/share-actions';
+  import { docsStore } from '../../lib/docs.svelte';
+  import { pageTitle } from '../../lib/planning';
 
   const uid = $props.id();
 
@@ -439,6 +441,22 @@
       ><Icon name="branch" size={14} /><span>{t('repos.card.changed', { repos: changedRepos.join(', ') })}</span></span
     >
   {/if}
+  {#if ticket.pages?.length}
+    <!-- The pages of the spec it implements (« Planifier », ESC-262): each opens in the Docs tab. -->
+    <span class="spec-line" data-ticket-pages
+      ><Icon name="file" size={14} /><span class="pages"
+        >{#each ticket.pages as path, i (path)}{#if i}{', '}{/if}<button
+            class="page"
+            aria-label={t('docs.plan.openPage', { name: pageTitle(path, docsStore.tree[ticket.projectId]) })}
+            onclick={(e) => {
+              e.stopPropagation();
+              app.openDocs(ticket.projectId, 'spec', path);
+            }}
+            onkeydown={(e) => e.stopPropagation()}>{pageTitle(path, docsStore.tree[ticket.projectId])}</button
+          >{/each}</span
+      ></span
+    >
+  {/if}
   {#if ticket.partial && (ticket.column === 'review' || ticket.column === 'done')}<span class="partial">{t('board.card.partial')}</span
     >{/if}
 
@@ -820,6 +838,34 @@
   .repos-line span {
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .spec-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .spec-line .pages {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .spec-line .page {
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--line);
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+  .spec-line .page:hover {
+    color: var(--text);
   }
   .outcome {
     justify-self: start;

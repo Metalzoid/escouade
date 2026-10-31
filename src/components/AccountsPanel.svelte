@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { openUrl } from '@tauri-apps/plugin-opener';
+  import { openUrl } from '../lib/opener';
   import { onMount } from 'svelte';
   import { accountName, metersShown, projectedDayCost, projectionLevel, projectionMode, quotaGroups } from '../lib/accounts';
-  import { capsOf, usagePage } from '../lib/engines';
+  import { capsOf, showsCost, usagePage, usageSite } from '../lib/engines';
   import { trapFocus } from '../lib/focus';
   import { fUsd } from '../lib/format';
   import { t } from '../lib/i18n';
@@ -83,6 +83,7 @@
   {#each groups as g (g.engine)}
     {@const noQuota = capsOf(g.engine)?.quota === 'none'}
     {@const page = usagePage(g.engine)}
+    {@const counted = showsCost({ engine: g.engine })}
     <section class="harness" aria-label={t('accounts.tab.group', { harness: g.name })}>
       <h3><span class="emark">{g.name.split(' ')[0]}</span>{t('accounts.tab.group', { harness: g.name })}</h3>
       {#each g.rows as r (r.account.id)}
@@ -101,15 +102,17 @@
               >{/if}</span
           >
           <!-- A harness that tells no cost (Cursor CLI) has none of the day to show. -->
-          {#if !page}<span class="today" use:tip={r.today.estimated ? estimateHint(r.today) : undefined}
+          {#if !page || counted}<span class="today" use:tip={r.today.estimated ? estimateHint(r.today) : undefined}
               >{t('accounts.panel.today', { amount: fSpentUsd(r.today) })}</span
             >{/if}
           {#if r.reasons.length}<div class="why">{r.reasons.join(' · ')}</div>{/if}
-          {#if page}
+          {#if page && !counted}
             <!-- Neither quota nor cost told to Escouade (Cursor CLI, ESC-43): where its usage is seen, and no pause for it. -->
             <div class="why">
               {t('accounts.panel.usageElsewhere', { harness: g.name })}
-              <button class="link" onclick={() => app.run(openUrl(page))}>{t('accounts.panel.usageLink')}</button>
+              <button class="link" onclick={() => app.run(openUrl(page))}
+                >{t('accounts.panel.usageLink', { site: usageSite(g.engine) })}</button
+              >
             </div>
           {:else if noQuota}
             {#if u?.dailyBudget}
@@ -131,6 +134,14 @@
               </div>
             {:else}
               <div class="why">{t('accounts.panel.noQuota')}</div>
+            {/if}
+            {#if page}
+              <!-- Its cost told, its quota not (Mistral Vibe, ESC-267): where its usage is seen. -->
+              <div class="why">
+                <button class="link" onclick={() => app.run(openUrl(page))}
+                  >{t('accounts.panel.usageLink', { site: usageSite(g.engine) })}</button
+                >
+              </div>
             {/if}
           {:else if !u || u.connected || u.meters.length}
             <!-- An account that is not signed in and was never read has no meters to show. -->

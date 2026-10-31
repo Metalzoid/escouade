@@ -5,7 +5,7 @@ import { renderDoc, type RenderedDoc } from '~/data/render';
 import { SITE, imageOf } from '~/data/site';
 
 // The pages' Markdown, each loaded when it is needed: the page shown, or all those of a language for the search.
-const SOURCES = import.meta.glob<string>('../../content/docs/*/*.md', { query: '?raw', import: 'default' });
+const SOURCES = import.meta.glob<string>('../../content/docs/*/**/*.md', { query: '?raw', import: 'default' });
 
 /** The documentation's pages, rendered with the site's addresses. */
 export function useDocs() {

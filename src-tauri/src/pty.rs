@@ -641,7 +641,13 @@ if [ -n "$browser" ]; then
   set -- "$browser" "$@"
 else
   unset BROWSER
-  if [ "$(uname)" = Darwin ]; then set -- open "$@"; else set -- xdg-open "$@"; fi
+  # Under WSLg, xdg-open usually has no browser to open: Windows' does it (wslu's wslview, else
+  # Windows' own handler through WSL's interop).
+  if [ "$(uname)" = Darwin ]; then set -- open "$@"
+  elif [ -n "$WSL_DISTRO_NAME" ] && command -v wslview >/dev/null 2>&1; then set -- wslview "$@"
+  elif [ -n "$WSL_DISTRO_NAME" ] && command -v rundll32.exe >/dev/null 2>&1; then
+    set -- rundll32.exe url.dll,FileProtocolHandler "$@"
+  else set -- xdg-open "$@"; fi
 fi
 # Its input is not Claude Code's.
 if command -v setsid >/dev/null 2>&1; then

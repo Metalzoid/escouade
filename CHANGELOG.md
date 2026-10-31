@@ -9,6 +9,73 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Nouveautés
 
 - Un message posté pendant qu’un agent travaille peut encore être modifié ou annulé avant de lui parvenir : il attend quelques secondes, ou la fin du tour chez Cursor et OpenCode, et peut aussi partir tout de suite.
+- L’onglet « PR et CI » du panneau de droite montre la PR de la branche de l’agent : sa CI vérification par vérification, le journal d’un échec, « Relancer les échecs » d’un clic, ses revues et ses déploiements. Sans agent, il liste les PR ouvertes du projet, et la carte d’un agent dit l’état de sa CI à côté de « #41 → main ».
+- Les plugins ont leur vue, ouverte par l’icône de la barre des projets : installer depuis un dossier ou un dépôt git après avoir vu d’où vient le plugin, son empreinte, ce qu’il ajoute et ce qu’il pourra faire, la permission la plus forte d’abord ; l’activer pour l’app ou projet par projet, un projet privé restant coupé d’office ; lui retirer une permission, régler ses secrets, lire son journal, le désinstaller.
+- Une nouvelle version d’un plugin est proposée, jamais installée seule, et redemande ton accord si elle demande plus que la version installée.
+- L’index du code s’allume d’un coup sur tous les projets, depuis Réglages › Projets : chaque projet le suit tant qu’il n’a pas fait son propre choix, et sa section dit d’où vient son état. Les projets sont lus un par un sans bloquer la fenêtre, et couper la case demande avant d’effacer leurs index.
+- L’index du code cherche comme tokensave, par les mots du code et sans vecteurs : il rend le code des points d’entrée d’une tâche, le corps entier d’un symbole sur demande et un texte exact, et ce qu’il dit faire économiser est compté honnêtement, plafonné à quatre fois sa réponse.
+- Un plugin peut avoir son logo : un PNG carré de 256 px au moins, déclaré dans son manifeste, que le store montre à la place de ses deux lettres et qu’Escouade lit dans le plugin installé. Les plugins livrés avec Escouade ont le logo de leur marque quand elle le permet, sinon celui de leur catégorie.
+- Le programme d’un plugin tourne à part, démarré seulement quand il sert, et Escouade le tient : un plugin qui ne répond pas à temps n’est plus attendu, celui qui plante redémarre (trois fois, puis s’arrête), celui qui prend trop de mémoire est arrêté, et chacun n’obtient que ses propres secrets. Son journal garde ce qu’il a fait et dit, et le protocole est décrit dans la documentation des plugins.
+- Les auteurs de plugins ont une commande livrée avec Escouade, `escouade-plugin` : `test` passe un plugin au banc de conformité et dit ce qui lui manque, `dev` lui envoie des faits et des demandes à la main, sans l’app.
+- Un plugin peut réagir à ce qui se passe dans Escouade : un agent qui attend, un tour fini, un ticket à tester ou mergé, un lancement prêt… Il reçoit ces événements dans son programme, ou les envoie à une adresse (un webhook vers Discord, Slack ou n8n) ou lance une commande sans une ligne de code ; un projet privé ne lui dit rien tant qu’il n’y est pas activé.
+- Un plugin s’écrit en TypeScript avec `@escouade-dev/plugin` : `npm create escouade-plugin` donne un premier plugin avec ses tests, le SDK apporte les types du protocole et des aides pour recevoir les faits et décider des autorisations, et `escouade-plugin pack` fait son archive. La documentation dit aussi comment le livrer en un seul exécutable, pour qui n’a pas Node.
+- Un plugin peut apporter un thème : d’autres couleurs pour la fenêtre, les terminaux et l’éditeur, en clair et en sombre, et sa palette de couleurs de projet. Il se choisit dans Réglages › Application › Couleurs et s’applique tout de suite ; ce qu’il ne donne pas garde la couleur d’Escouade, et ses valeurs sont filtrées pour qu’il ne charge rien ni ne masque rien.
+- Un plugin peut décider des autorisations de tes agents avant qu’elles ne t’arrivent : autoriser une commande sûre, en refuser une dangereuse avec sa raison, et te laisser le reste. Un refus l’emporte, la carte dit quel plugin a répondu (« Autorisé par Règles de l’équipe via Escouade »), et sans réponse en une demi-seconde la demande vient à toi comme avant.
+- Le store est dans l’app : la vue Plugins lit le catalogue de store.escouade.dev, le cherche sur ta machine, propose des plugins pour le projet ouvert d’après ce qu’elle y voit, et installe la dernière version compatible après avoir vérifié son archive et son sceau « Vérifié par Escouade » avec les clés de l’app. Une version retirée par Escouade est arrêtée et le dit, et « N’installer que des versions vérifiées » refuse les autres.
+- Quatre plugins d’exemple, complets et testés, à copier pour écrire le tien : un thème « Contraste élevé », un webhook Discord sans code, Slack dans le salon de chaque projet et les règles d’une équipe en TypeScript. La documentation montre leur code entier.
+- « Ouvrir dans Escouade » sur une page du store ouvre la page du plugin dans l’app, qu’elle soit lancée ou non : un lien ne fait que montrer le plugin, l’installer reste ton geste.
+- La documentation dit comment publier un plugin sur le store et préparer sa revue, et une nouvelle page, « La sécurité des plugins », dit ce que l’app vérifie, ce que le sceau « Vérifié par Escouade » couvre et ce que la revue refuse.
+- Un projet peut proposer des plugins dans son `.escouade.yml` : à son ouverture, une bande de Réglages › Projets nomme ceux qui manquent, avec leur page du store, sans rien installer seule ; « Pas pour ce projet » la fait taire. Le fichier peut aussi régler un plugin pour ce projet, jamais avec un secret.
+
+### Corrections
+
+- Les fichiers non commités ne clignotent plus à chaque rafraîchissement : « Aucun fichier modifié par cet agent » et la liste restent affichés tant que rien ne change.
+- L’index du code n’annonce plus d’économie de tokens qu’on ne mesure pas : ses réponses, les consignes des agents, les statistiques (plus de dollars) et le site disent ce qu’il trouve bien, et l’effet mesuré avec de vrais agents (faible).
+- Deux tickets menés en même temps ne proposent plus une décision sous le même numéro : une décision proposée n’a pas de numéro et reçoit le suivant du registre quand elle est acceptée, et les pages et tickets qui la citent suivent.
+- Valider un ticket n’est plus refusé pour « des modifications non commitées » après la comparaison de la spec au code : ses écarts et sa date restent sur ce poste au lieu d’être écrits dans les pages, et l’onglet Docs les montre toujours.
+- « Écrire une première spec depuis le code », et toute nouvelle discussion, ferme sa fenêtre et ouvre la discussion avec son premier message même quand les nouveaux agents s’ouvrent dans le terminal du harness : une discussion reste toujours dans sa conversation, où Escouade refuse ses écritures.
+- La carte des tickets créés par « Planifier » rejoint les cartes des sujets dans l’onglet Docs : rien n’en déborde plus, elle dit combien de tickets sont lancés, « Annuler » ne s’offre que pour ceux qui ne le sont pas encore, et elle se replie une fois tout lancé ou se ferme.
+- Une discussion qui ne peut pas démarrer ne laisse plus d’agent derrière elle : la fenêtre dit pourquoi et garde tes choix, pour recommencer ou changer de compte.
+- Sous Linux, Escouade ne relit plus le git de chaque projet en boucle quand rien ne change, ce qui pouvait faire tourner la fenêtre sans fin et la figer ; une ligne de plusieurs mégaoctets dans un diff n’est plus affichée qu’en partie.
+- L’interface ne se fige plus le temps d’une opération longue (gros dossier, git, verrou) : elle reste réactive pendant que la commande travaille, et le journal note les commandes lentes et les pauses de la fenêtre pour les diagnostiquer.
+- Quand la page de l’interface s’arrête net, Escouade la recharge sans rouvrir le projet qu’elle affichait et propose de le rouvrir : un projet qui fait tomber la page ne fige plus toute l’app.
+- La sortie d’un outil qui a lu un fichier binaire s’affiche nettoyée (caractères de contrôle rendus visibles, couleurs du terminal retirées) au lieu d’être perdue, et une sortie très longue s’affiche par morceaux.
+
+## [2.1.1] — 2026-10-29
+
+### Corrections
+
+- Sous Linux, ouvrir certains projets faisait planter la page d’Escouade, qui semblait figée : un défaut du moteur web de l’AppImage dans la mise en page de certains paragraphes, que l’app n’emploie plus sous Linux ni sous macOS.
+
+## [2.1.0] — 2026-10-29
+
+### Nouveautés
+
+- Une spec importée dans l’onglet Docs devient la seule que suivent les agents : ils sont prévenus que l’ancien fichier n’est plus la spec, sans que rien ne le touche.
+- Gemini CLI devient un huitième harness : ses agents conversent dans Escouade par ACP, avec ses modèles, ses modes, son plan à approuver et ses questions, chacun dans son propre dossier de configuration ; pas encore essayé avec un vrai compte.
+- Gemini CLI a ses comptes, chacun connecté à Google par gemini dans un terminal de la fenêtre ou par sa clé d’API, rédige ses textes par gemini -p, reprend seul après sa limite d’usage, et sa « Vue Gemini CLI » ouvre son interface sur la session de l’agent.
+- Antigravity CLI, l’agent de Google, devient un septième harness : ses agents conversent dans Escouade avec ses modèles, ses efforts et son mode Plan, et ce qu’il refuse en cours de tour t’est demandé à la fin du tour, puis repris.
+- Antigravity CLI a ses comptes : celui de la machine, ajouté et connecté par agy dans un terminal de la fenêtre, et d’autres par leur clé d’API Gemini ; quand son quota est épuisé, l’agent attend et reprend seul, ou passe sur un autre compte.
+- La « Vue Antigravity CLI » ouvre l’interface d’Antigravity dans un terminal, sur la conversation de l’agent : Escouade suit ses messages, ses outils et ses fins de tour, lui donne son serveur MCP, et le retour à la conversation reprend la même conversation.
+- Mistral Vibe devient un sixième harness : ses agents conversent, demandent leurs permissions et posent leurs questions dans Escouade, avec ses modèles, ses modes et un mode Plan joué par Escouade.
+- Mistral Vibe a plusieurs comptes, chacun par sa clé d’API Mistral, et montre ce que coûte chaque tour, dans la conversation, la barre d’état et les statistiques ; à sa limite de débit, l’agent reprend seul une minute plus tard.
+- La « Vue Mistral Vibe » ouvre l’interface de Vibe dans un terminal, sur la session de l’agent : Escouade suit ses messages, ses outils et ses fins de tour, lui donne son serveur MCP, et le retour à la conversation reprend la même session.
+- Un index du code, proposé à l’ajout d’un projet et dans ses réglages, fait trouver le code aux agents plus vite et pour moins de tokens, sans que rien ne quitte la machine ; les statistiques montrent ce qu’il a fait économiser, en tokens et en dollars.
+- Les agents d’un projet partagent une mémoire de travail, quel que soit leur harness : ils y notent les façons de faire et les écueils du projet, et Escouade propose une fois d’y reprendre ce que Claude Code avait retenu.
+- Les documents du projet ont leur drive dans l’onglet Docs : des dossiers, le glisser-déposer et une recherche ; un fichier déposé (PDF, Word, Markdown, texte) est lu sur ta machine et rangé seul dans le bon dossier, et chacun dit s’il a été lu par les agents et combien de fois il est cité.
+- Un onglet Docs rejoint Agents et Kanban : la spécification du produit, rangée par sujet sur une carte qui montre où chaque sujet en est face au code, ses pages dans un arbre, à lire, modifier et partager d’un clic avec l’équipe ; une spec que le projet a déjà s’importe découpée par ses titres.
+- Les décisions sur le produit ont leur registre, numéroté et daté : d’où vient chacune, ce qu’elle a changé dans la spec, et « Accepter » d’un clic ; une décision acceptée ne se réécrit plus, une nouvelle la remplace, et celle laissée par l’agent d’un ticket est acceptée quand tu le valides.
+- « Nouvelle discussion » dans l’onglet Docs : discute de la spec avec un agent rédacteur, ou brainstorme avec un agent produit qui pense usages, RGPD et ce que font d’autres secteurs ; ce qu’ils proposent s’affiche page par page et se verse dans la spec d’un clic, sans qu’ils touchent jamais au code.
+- La spec suit le code : l’agent d’un ticket met à jour les pages qu’il touche et laisse une décision, puis, le ticket validé, un agent compare ces pages au code et montre les écarts sur la carte des sujets et en haut de la page, à régler d’un clic ; « Comparer au code » le refait à la demande.
+- « Planifier » transforme les changements de la spec en tickets : un agent planificateur lit ce qui a changé, le code et le Kanban, puis crée dans « À faire » les tickets nécessaires, sans doublon et sans les lancer, liés aux pages qu’ils implémentent ; « Annuler » les retire.
+
+### Corrections
+
+- Un nouvel agent d’un harness sans mode Auto (Cursor CLI, Mistral Vibe, Antigravity CLI, Gemini CLI, OpenCode) part en « Demander », et non plus en un Auto qu’il n’a pas.
+- « Approuver le plan » reprend dans le mode d’avant le Plan, Auto par exemple, et non plus en « Demander », avec chaque harness ; le bouton dit ce mode.
+- Un ticket lancé à la main part même au-delà de « Pause au-delà du quota » : ce seuil ne retient plus que le pilote auto.
+- Un ticket lancé à la main qui ne peut pas partir le dit, avec la raison, au lieu de rester « À faire » sans rien dire.
+- Sous WSLg, les liens, les fichiers et les dossiers s’ouvrent dans Windows, au lieu de ne rien faire.
 
 ## [2.0.5] — 2026-10-27
 

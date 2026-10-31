@@ -1,6 +1,6 @@
 // Global application state (Svelte 5 runes) fed by the backend event channel.
 
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { openUrl } from './opener';
 import { api } from './ipc';
 import { applyConvOps, dropConversation, releaseIdle } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
@@ -10,6 +10,7 @@ import { fileSearches } from './editor/search.svelte';
 import { ancestors, movedPath } from './editor/tree';
 import { trees } from './editor/trees.svelte';
 import { bgRow } from './bgtasks';
+import type { DocsSpaceId } from './docs';
 import { basename, isAbsPath, relPath } from './format';
 import { setLang, t } from './i18n';
 import { dictation } from './dictation.svelte';
@@ -29,6 +30,8 @@ import type {
   Agent,
   AgentStatus,
   AutopilotPause,
+  DiscussionPreset,
+  DocsConflict,
   FileTree,
   GitInfo,
   LangInfo,
@@ -49,6 +52,7 @@ import type {
   UiEvent,
   UiState,
   Usage,
+  OfferedMemory,
 } from './types';
 
 /** What an agent's header, too narrow, no longer shows (ESC-166): « … » offers it in its menu. */
@@ -82,6 +86,8 @@ export type Modal =
   | { kind: 'telemetry' }
   /** The first launch's other question (ESC-190): the user's name for the team; `then`, what waited for it (a share). */
   | { kind: 'teamName'; projectId?: string; then?: () => void }
+  /** ESC-255: what Claude Code remembers of a project, offered once to its shared memory, memory by memory. */
+  | { kind: 'claudeMemory'; projectId: string; offered: OfferedMemory[] }
   /**
    * On a tab (Claude Code by default) and, for a project's tabs, a project (the one on screen by default),
    * scrolled to a section of it; `resume`: with the draft it had, back from a modal it opened; `suggest`: Claude
@@ -120,6 +126,11 @@ export type Modal =
       onCancel?: () => void;
     }
   | { kind: 'rename'; title: string; value: string; onSubmit: (v: string) => void | Promise<void> }
+  /**
+   * « Nouvelle discussion » of the Docs tab (ESC-261), its role and subject given by a gesture of the spec (« Mettre la spec
+   * à jour », « Écrire une première spec ») with the first message it sends.
+   */
+  | { kind: 'newDiscussion'; projectId: string; preset?: DiscussionPreset }
   /** « Ajouter un compte… » (a new Claude account, then its sign-in), or « Se connecter… » for the account `accountId`. */
   /** `back`: the settings' tab it came from and goes back to (Comptes Claude by default). */
   | { kind: 'account'; accountId?: string; back?: SettingsTab; engine?: EngineId; reserveFor?: string }
@@ -250,6 +261,8 @@ export interface EditorState {
 
 class AppState {
   ready = $state(false);
+  /** Counts the `escouade://` links told (STORE-11): the view Plugins takes them (App.svelte). */
+  deepLinks = $state(0);
   projects = $state<Project[]>([]);
   agents = $state<Record<string, Agent>>({});
   ui = $state<UiState>({ activeProject: null, view: 'project', selectedAgent: {} });
@@ -332,6 +345,12 @@ class AppState {
   toasts = $state<Toast[]>([]);
   now = $state(Date.now());
   gitTick = $state(0);
+  /** Each project's shared memory changed this many times (ESC-255): its settings' list reads it again. */
+  memoryTicks = $state<Record<string, number>>({});
+  /** A project's « Index du code » changed (ESC-293): read, erased, waiting for its reading. */
+  codeIndexTicks = $state<Record<string, number>>({});
+  /** The download of the vectors' model under way (ESC-254): bytes so far, of `total`; null when none is. */
+  vectorsProgress = $state<{ done: number; total: number } | null>(null);
   update = $state<UpdateInfo | null>(null);
   /** When the automatic restart for the update comes (the backend warned of it), if one is planned. */
   restartAt = $state<number | null>(null);
@@ -357,8 +376,22 @@ class AppState {
   tickets = $state<Record<string, Ticket>>({});
   /** Projects whose board fills the main area (not saved). */
   board = $state<Record<string, boolean>>({});
+  /** Projects whose Docs tab (ESC-258) fills the main area, in place of the agents and the board (not saved). */
+  docs = $state<Record<string, boolean>>({});
+  /** The space of the Docs tab each project shows: the spec, the decisions or the documents. */
+  docsSpace = $state<Record<string, DocsSpaceId>>({});
+  /** The page of the spec each project shows; none: the map of the subjects. */
+  docsPage = $state<Record<string, string | null>>({});
+  /** The discussion (its agent's id) each project's Docs tab shows (ESC-261); none: the space chosen. */
+  docsDiscussion = $state<Record<string, string | null>>({});
+  /** A page of the spec just made: it opens to be written. */
+  docsEdit = $state<string | null>(null);
   /** Why no ticket of a project's board starts (its target branch has no commit yet, or is gone), by project. */
   boardIssues = $state<Record<string, string>>({});
+  /** What each project's docs have to share (ESC-257), by project id: the status bar says « N changements à partager ». */
+  docsShare = $state<Record<string, { pending: number; conflict: DocsConflict | null }>>({});
+  /** The pages of each project being compared to the code (ESC-263). */
+  docsComparing = $state<Record<string, string[]>>({});
   /** Why no ticket of any board starts for now (a quota window, a usage limit), as the backend says. */
   autopilotPause = $state<AutopilotPause | null>(null);
   /** The same for the paused projects that prefer an account, by project (they wait for that account alone). */
@@ -372,6 +405,8 @@ class AppState {
   project = $derived(this.projects.find((p) => p.id === this.ui.activeProject) ?? null);
   /** The board of the project on screen is shown. */
   boardOn = $derived(this.ui.view === 'project' && !!this.project && !!this.board[this.project.id]);
+  /** The Docs tab of the project on screen is shown (ESC-258). */
+  docsOn = $derived(this.ui.view === 'project' && !!this.project && !!this.docs[this.project.id] && !this.board[this.project.id]);
   /** The editor of the project on screen is open, and on screen: the statistics hide it. */
   editorOn = $derived(this.ui.view === 'project' && !!(this.project && this.editor[this.project.id]?.on));
   split = $derived(this.ui.layout === 'split');
@@ -462,6 +497,28 @@ class AppState {
     return () => void this.ticketDoneHooks.delete(f);
   }
 
+  /**
+   * The page's process ended while it showed a project (ESC-290): the page came back without it, and offers it again.
+   * Never opened by itself, a page that crashes on it would crash again at each load.
+   */
+  tellPageCrash(crash: { projectId: string | null; agentId: string | null }) {
+    const project = crash.projectId ? this.projects.find((p) => p.id === crash.projectId) : undefined;
+    if (!project) {
+      this.toast(t('shell.pageCrash.other'), 'error');
+      return;
+    }
+    const reopen = () => {
+      if (crash.agentId && this.agents[crash.agentId]) this.selectAgent(crash.agentId);
+      else this.selectProject(project.id);
+    };
+    this.toast(
+      t('shell.pageCrash.project', { project: project.name }),
+      'error',
+      { label: t('shell.pageCrash.reopen'), onClick: reopen },
+      60_000,
+    );
+  }
+
   /** A version that did not install: the app restarts no more by itself for it, the user tries again or not. */
   tellFailedUpdate(version: string) {
     // The update's window, open, already says why its restart failed.
@@ -550,7 +607,8 @@ class AppState {
     this.ui = { ...s.ui, view: s.ui.view || 'project', selectedAgent: s.ui.selectedAgent ?? {} };
     this.overviewFrom = 'project';
     if (!this.ui.activeProject || !this.projects.some((p) => p.id === this.ui.activeProject)) {
-      this.ui.activeProject = this.projects[0]?.id ?? null;
+      // Never the one the page crashed on (ESC-290): it is offered again, not opened.
+      this.ui.activeProject = this.projects.find((p) => p.id !== s.pageCrash?.projectId)?.id ?? null;
     }
     this.settings = s.settings;
     this.usage = s.usage;
@@ -566,6 +624,7 @@ class AppState {
     this.enginesFound = s.enginesFound ?? (s.claudeFound ? ['claude'] : []);
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
+    if (s.pageCrash) this.tellPageCrash(s.pageCrash);
     // Not answered yet (closed without a choice: asked again at the next start).
     if (s.settings.telemetry === null) this.modal = { kind: 'telemetry' };
     // The user's name for the shared tickets (ESC-190), asked once, after the statistics' question.
@@ -666,9 +725,18 @@ class AppState {
       case 'mcpActivity':
         mcp.take(e);
         break;
+      case 'deepLink':
+        this.deepLinks++;
+        break;
       case 'voice':
         dictation.take(e.voice);
         conversation.take(e.voice);
+        break;
+      case 'docsShare':
+        this.docsShare[e.projectId] = { pending: e.pending, conflict: e.conflict };
+        break;
+      case 'docsCompared':
+        this.docsComparing[e.projectId] = e.comparing;
         break;
       case 'boardIssue':
         if (e.issue) this.boardIssues[e.projectId] = e.issue;
@@ -683,6 +751,15 @@ class AppState {
         break;
       case 'conv':
         applyConvOps(e.agentId, e.ops);
+        break;
+      case 'memory':
+        this.memoryTicks[e.projectId] = (this.memoryTicks[e.projectId] ?? 0) + 1;
+        break;
+      case 'codeIndex':
+        this.codeIndexTicks[e.projectId] = (this.codeIndexTicks[e.projectId] ?? 0) + 1;
+        break;
+      case 'vectorsDownload':
+        this.vectorsProgress = { done: e.done, total: e.total };
         break;
       case 'git':
         this.git[e.projectId] = e.git;
@@ -847,6 +924,12 @@ class AppState {
     this.persistUi();
   }
 
+  /** Shows the view Plugins (PLG-4, choice 213) in place of the project or the statistics. */
+  openPlugins() {
+    this.ui.view = 'plugins';
+    this.persistUi();
+  }
+
   /** Shows « Vue d’ensemble » (every agent of every project) in place of the project or the statistics. */
   openOverview() {
     if (this.ui.view === 'overview') return;
@@ -973,6 +1056,7 @@ class AppState {
     this.selectedTerm[a.projectId] = null;
     this.selectedLaunch[a.projectId] = null;
     this.board[a.projectId] = false;
+    this.docs[a.projectId] = false;
     const ed = this.editor[a.projectId];
     if (ed?.on) {
       ed.source = a.worktree ? a.id : 'project';
@@ -990,6 +1074,7 @@ class AppState {
     if (id) {
       this.selectedLaunch[p.id] = null;
       this.board[p.id] = false;
+      this.docs[p.id] = false;
       this.closeEditor(p.id);
     }
   }
@@ -1001,6 +1086,7 @@ class AppState {
     if (commandId) {
       this.selectedTerm[p.id] = null;
       this.board[p.id] = false;
+      this.docs[p.id] = false;
       this.closeEditor(p.id);
     }
   }
@@ -1011,6 +1097,7 @@ class AppState {
     this.ui.activeProject = projectId;
     this.ui.view = 'project';
     this.board[projectId] = true;
+    this.docs[projectId] = false;
     this.selectedTerm[projectId] = null;
     this.selectedLaunch[projectId] = null;
     this.closeEditor(projectId);
@@ -1019,6 +1106,42 @@ class AppState {
 
   closeBoard(projectId = this.ui.activeProject) {
     if (projectId) this.board[projectId] = false;
+  }
+
+  /**
+   * Shows the Docs tab of a project (ESC-258), on `space` when given (and on `page` of the spec), in place of the agents,
+   * the board, a terminal, a launch log and the editor.
+   */
+  openDocs(projectId = this.ui.activeProject, space?: DocsSpaceId, page?: string | null) {
+    if (!projectId) return;
+    this.ui.activeProject = projectId;
+    this.ui.view = 'project';
+    this.board[projectId] = false;
+    this.docs[projectId] = true;
+    if (space) this.docsSpace[projectId] = space;
+    if (page !== undefined) this.docsPage[projectId] = page;
+    // A space chosen: the discussion open leaves the main area.
+    if (space) this.docsDiscussion[projectId] = null;
+    this.selectedTerm[projectId] = null;
+    this.selectedLaunch[projectId] = null;
+    this.closeEditor(projectId);
+    this.persistUi();
+  }
+
+  /** Shows the discussion `agentId` (ESC-261) in its project's Docs tab. */
+  openDiscussion(projectId: string, agentId: string) {
+    this.openDocs(projectId);
+    this.docsDiscussion[projectId] = agentId;
+  }
+
+  /** « Nouvelle discussion » (Ctrl+B in the Docs tab). */
+  newDiscussion(projectId = this.ui.activeProject, preset?: DiscussionPreset) {
+    if (!projectId) return;
+    this.modal = { kind: 'newDiscussion', projectId, preset };
+  }
+
+  closeDocs(projectId = this.ui.activeProject) {
+    if (projectId) this.docs[projectId] = false;
   }
 
   /** A project as the backend now has it (its board settings, mostly). */
@@ -1068,6 +1191,7 @@ class AppState {
     this.ui.activeProject = projectId;
     this.ui.view = 'project';
     this.board[projectId] = false;
+    this.docs[projectId] = false;
     this.selectedTerm[projectId] = null;
     this.selectedLaunch[projectId] = null;
     // Always work through the stored `$state` proxies, not the raw objects the `??=` expressions return:
@@ -1207,6 +1331,7 @@ class AppState {
     if (this.ui.activeProject === id) this.ui.activeProject = this.projects[0]?.id ?? null;
     delete this.editor[id];
     delete this.board[id];
+    delete this.docs[id];
     delete this.boardIssues[id];
     buffers.closeProject(id);
     trees.closeProject(id);
@@ -1315,6 +1440,7 @@ class AppState {
     const next = list[(idx + 1) % list.length];
     if (this.ui.view !== 'project' || this.ui.activeProject !== next.projectId) this.selectProject(next.projectId);
     this.board[next.projectId] = false;
+    this.docs[next.projectId] = false;
     this.cardFocus = { id: next.id, n: this.cardFocus.n + 1 };
   }
 

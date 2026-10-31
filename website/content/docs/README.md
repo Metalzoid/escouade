@@ -1,6 +1,6 @@
 # La documentation d’Escouade
 
-Les pages de `/docs` (français) et `/en/docs` (anglais) du site. Une page est un fichier Markdown par langue, de même nom : `fr/<slug>.md` et `en/<slug>.md`. Leur ordre, leurs groupes et leurs adresses sont dans `app/data/docs.ts` ; une page qui n’y est pas n’est pas publiée, et une page qui y est doit exister dans les deux langues (les tests le vérifient).
+Les pages de `/docs` (français) et `/en/docs` (anglais) du site. Une page est un fichier Markdown par langue, de même nom : `fr/<slug>.md` et `en/<slug>.md` ; les pages d’une section sont dans son dossier (`fr/plugins/manifest.md`, de slug `plugins/manifest`). Leur ordre, leurs groupes et leurs adresses sont dans `app/data/docs.ts` ; une page qui n’y est pas n’est pas publiée, et une page qui y est doit exister dans les deux langues (les tests le vérifient).
 
 ## Forme d’une page
 
@@ -22,7 +22,7 @@ Du texte, des listes, des tableaux.
 
 ## Liens
 
-- Vers une autre page de la doc : son slug seul, `[le pilote auto](autopilot)`, ou avec une section, `[les modes de permission](managing-agents#modes-de-permission)`. L’ancre d’une section est son titre en minuscules, sans accents, chaque suite de caractères qui ne sont ni lettres ni chiffres remplacée par un `-` (« Modes de permission » → `modes-de-permission`, « Données locales » → `donnees-locales`). Le site en fait de vraies adresses ; un lien vers une page ou une section qui n’existe pas fait échouer les tests.
+- Vers une autre page de la doc : son slug seul, `[le pilote auto](autopilot)` ou `[le manifeste](plugins/manifest)`, ou avec une section, `[les modes de permission](managing-agents#modes-de-permission)`. L’ancre d’une section est son titre en minuscules, sans accents, chaque suite de caractères qui ne sont ni lettres ni chiffres remplacée par un `-` (« Modes de permission » → `modes-de-permission`, « Données locales » → `donnees-locales`). Le site en fait de vraies adresses ; un lien vers une page ou une section qui n’existe pas fait échouer les tests.
 - Vers l’extérieur : l’adresse complète (`https://…`).
 - Vers la page « Offrir un café » : `[offrir un café](support:)`, que le site remplace par celle de la langue de la page (`SUPPORT` de `app/data/site.ts`).
 

@@ -7,7 +7,7 @@ import { app } from './state.svelte';
 const server = vi.hoisted(() => ({ check: vi.fn(), opened: [] as string[] }));
 // Only the check is replaced: the trouble the backend reports is the real class, the one the updater tests for.
 vi.mock('./update-check', async (original) => ({ ...(await original<typeof import('./update-check')>()), check: server.check }));
-vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn(async (url: string) => void server.opened.push(url)) }));
+vi.mock('./opener', () => ({ openUrl: vi.fn(async (url: string) => void server.opened.push(url)) }));
 
 import { UpdateTrouble } from './update-check';
 import { checkForUpdate, watchForUpdates } from './updater';

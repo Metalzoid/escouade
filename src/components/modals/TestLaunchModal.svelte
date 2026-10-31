@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { openUrl } from '@tauri-apps/plugin-opener';
+  import { openUrl } from '../../lib/opener';
   import { onDestroy } from 'svelte';
   import { engineName } from '../../lib/engines';
   import { t } from '../../lib/i18n';

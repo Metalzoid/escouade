@@ -8,7 +8,8 @@
 //! posted as `?event=<name>`, a name of letters and digits only.
 //!
 //! Without the token it exits at once and does nothing: a hook declared where the user's own
-//! sessions read it too leaves them alone. It always exits with 0 and writes nothing, whatever
+//! sessions read it too leaves them alone. It always exits with 0 and writes nothing but the line of
+//! context Escouade may answer (a pointer to the code index, ESC-253), whatever
 //! happens: the harness goes on as without it, and decides nothing on its word.
 //!
 //! Only the standard library, so that it starts fast and weighs little.
@@ -30,7 +31,13 @@ fn main() {
     if let Some(token) = var(TOKEN_VAR) {
         if let Some(url) = var(URL_VAR) {
             let url = with_event(&url, std::env::args().nth(1).as_deref());
-            let _ = post(&url, &token, std::io::stdin().lock());
+            if let Some((200, body)) = post(&url, &token, std::io::stdin().lock()) {
+                // Only what Escouade adds to the context (a pointer to the code index): the
+                // plain `{}` of every other event says nothing.
+                if body.starts_with('{') && body != "{}" {
+                    let _ = writeln!(std::io::stdout(), "{body}");
+                }
+            }
         }
     }
     std::process::exit(0);
@@ -83,8 +90,8 @@ fn request(t: &Target, token: &str, body: &[u8]) -> Vec<u8> {
 }
 
 /// Posts what `input` holds (`MAX_BODY` at most) to `url` with `token`: the status the server
-/// answered, None when it could not be reached or the address is not the loopback's.
-fn post(url: &str, token: &str, input: impl Read) -> Option<u16> {
+/// answered and its body, None when it could not be reached or the address is not the loopback's.
+fn post(url: &str, token: &str, input: impl Read) -> Option<(u16, String)> {
     let t = target(url)?;
     let mut body = Vec::new();
     input.take(MAX_BODY).read_to_end(&mut body).ok()?;
@@ -94,8 +101,10 @@ fn post(url: &str, token: &str, input: impl Read) -> Option<u16> {
     stream.write_all(&request(&t, token, &body)).ok()?;
     let mut answer = Vec::new();
     let _ = stream.take(16 << 10).read_to_end(&mut answer);
-    let line = String::from_utf8_lossy(&answer);
-    line.split_whitespace().nth(1)?.parse().ok()
+    let text = String::from_utf8_lossy(&answer);
+    let status = text.split_whitespace().nth(1)?.parse().ok()?;
+    let body = text.split_once("\r\n\r\n").map_or("", |(_, b)| b.trim());
+    Some((status, body.to_string()))
 }
 
 #[cfg(test)]
@@ -190,7 +199,7 @@ mod tests {
     fn it_posts_what_it_reads_and_tells_the_answer() {
         let (url, served) = one_request(200);
         let event = br#"{"hook_event_name":"Stop","session_id":"s1"}"#;
-        assert_eq!(post(&url, "tok", &event[..]), Some(200));
+        assert_eq!(post(&url, "tok", &event[..]), Some((200, "{}".to_string())));
         let got = served.join().unwrap();
         assert!(got.contains("Authorization: Bearer tok"));
         assert!(got.ends_with(std::str::from_utf8(event).unwrap()));

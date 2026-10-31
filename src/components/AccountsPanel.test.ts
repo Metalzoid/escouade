@@ -3,12 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
-import { agent, BARE_ENGINE, CURSOR_ENGINE, CLAUDE_ENGINE, resetApp, usageOf } from '../test/ipc';
+import { agent, BARE_ENGINE, CURSOR_ENGINE, CLAUDE_ENGINE, VIBE_ENGINE, resetApp, usageOf } from '../test/ipc';
 import type { Account, AccountUsage, RateWindow } from '../lib/types';
 import AccountsPanel from './AccountsPanel.svelte';
 
 const opened = vi.hoisted(() => [] as string[]);
-vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn(async (u: string) => void opened.push(u)) }));
+vi.mock('../lib/opener', () => ({ openUrl: vi.fn(async (u: string) => void opened.push(u)) }));
 
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
 const PRO: Account = { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true };
@@ -249,6 +249,23 @@ describe('AccountsPanel with the accounts of two harnesses (ESC-30)', () => {
     expect(within(cursor).getByText(/Cursor CLI ne donne ni son usage ni son coût à Escouade/)).toBeInTheDocument();
     await userEvent.click(within(cursor).getByRole('button', { name: 'Voir l’usage sur cursor.com' }));
     expect(opened).toEqual(['https://cursor.com/dashboard?tab=usage']);
+  });
+
+  it('shows what a Vibe account spent today, with no quota and its usage on Mistral’s console (ESC-267)', async () => {
+    const VIBE_MAIN: Account = { id: 'principal-vibe', name: 'Principal', engine: 'vibe', configDir: '', claudePath: '', active: true };
+    app.engines = [CLAUDE_ENGINE, VIBE_ENGINE];
+    app.settings.accounts = [PRINCIPAL, VIBE_MAIN];
+    app.usage.current = { claude: 'principal', vibe: 'principal-vibe' };
+    app.usage.accounts = [read('principal', { fiveHour: win(10) }), { ...read('principal-vibe', { engine: 'vibe' }), todayCost: 0.37 }];
+    opened.length = 0;
+    render(AccountsPanel, { onclose: () => {} });
+    const vibe = within(panel()).getByRole('region', { name: 'Comptes Mistral Vibe' });
+    expect(within(vibe).queryByRole('meter')).not.toBeInTheDocument();
+    expect(within(vibe).getByText(/Aujourd.hui.:.0,37/)).toBeInTheDocument();
+    expect(within(vibe).getByText('Pas de quota : seul le coût de ses tours compte.')).toBeInTheDocument();
+    expect(within(vibe).queryByText(/ne donne ni son usage ni son coût/)).not.toBeInTheDocument();
+    await userEvent.click(within(vibe).getByRole('button', { name: 'Voir l’usage sur admin.mistral.ai' }));
+    expect(opened).toEqual(['https://admin.mistral.ai/organization/usage']);
   });
 
   it('groups the accounts by harness, each with its current one first', () => {

@@ -83,7 +83,7 @@ async function keepInside(page: Page) {
     const fetch = window.fetch.bind(window);
     window.fetch = (input, init) => {
       const command = decodeURIComponent(String(input instanceof Request ? input.url : input));
-      if (/plugin:opener\|(open_url|open_path|reveal_item_in_dir)/.test(command))
+      if (/\/(plugin:opener\|)?(open_url|open_path|reveal_item_in_dir)(\?|$)/.test(command))
         return Promise.resolve(new Response('null', { headers: { 'Content-Type': 'application/json', 'Tauri-Response': 'ok' } }));
       return fetch(input, init);
     };

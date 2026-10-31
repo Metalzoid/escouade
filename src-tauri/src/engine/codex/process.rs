@@ -189,7 +189,7 @@ impl CodexProcess {
                             if line.trim().is_empty() {
                                 continue;
                             }
-                            match serde_json::from_str::<Value>(&line) {
+                            match crate::text::json_line(&line) {
                                 Ok(msg) => {
                                     let held = read(&msg, &pending, &fired, &state, &on_frame);
                                     // Messages held while the turn started go into it now.
@@ -363,7 +363,7 @@ impl CodexProcess {
         // Fenced, its mode's profile (`mode_params`), declared by its process's options
         // (`fence_args`); none in « Sans permissions », whose sandbox is none.
         if p.get("permissions").is_none() {
-            p["sandbox"] = json!(super::sandbox_mode(&s.settings.mode));
+            p["sandbox"] = json!(super::sandbox_mode(s.settings.sandboxed()));
         }
         match &self.start {
             Start::New => {
@@ -691,8 +691,8 @@ impl EngineProcess for CodexProcess {
         if super::is_plan_approval(request_id) {
             let lang = i18n::claude();
             let text = match answer {
-                PermissionAnswer::Allow { .. } => {
-                    self.state.lock().settings.mode = "default".into();
+                PermissionAnswer::Allow { resume, .. } => {
+                    self.state.lock().settings.mode = resume.unwrap_or_else(|| "default".into());
                     implement_plan(lang)
                 }
                 PermissionAnswer::Always { .. } => {

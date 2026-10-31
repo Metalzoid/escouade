@@ -217,12 +217,21 @@ fn no_engine_puts_the_token_on_the_command_line() {
 /// The engines that give their agents Escouade's server at the launch of their process: all but
 /// OpenCode, whose server is shared by the agents of an account and gives each agent's folder its
 /// entry by its API (`engine/opencode/process.rs`, `give_escouade`; tested in `opencode_tests`),
-/// and Cursor CLI, whose session is given it on its input (`mcpServers` of `session/new`; tested
-/// in `engine/cursor`).
+/// and Cursor CLI and Mistral Vibe, whose session is given it on its input (`mcpServers` of
+/// `session/new`; tested in `engine/cursor` and `agent/vibe_tests.rs`).
 fn gives_the_server() -> Vec<&'static dyn Engine> {
     crate::engine::registry::all()
         .into_iter()
-        .filter(|e| !matches!(e.id(), EngineId::Opencode | EngineId::Cursor))
+        .filter(|e| {
+            !matches!(
+                e.id(),
+                EngineId::Opencode
+                    | EngineId::Cursor
+                    | EngineId::Vibe
+                    | EngineId::Agy
+                    | EngineId::Gemini
+            )
+        })
         .collect()
 }
 

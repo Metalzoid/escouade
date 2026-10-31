@@ -1,0 +1,7 @@
+{
+  "_source": "D'après le code et la doc, à vérifier avec un compte. Essayé contre le faux serveur : un 429 revient en erreur JSON-RPC {code: 429, message: <message du serveur>} (13-rate-limit-429.jsonl). Dans le code, le chemin du statut 429 attrapé après coup donne {code: 429, message: \"Rate limit exceeded. Try again later.\"}. Le vrai message de quota (par minute ou par jour, RESOURCE_EXHAUSTED, avec ou sans nouvelles tentatives avant l'erreur) et la durée avant l'erreur ne se voient qu'avec un vrai compte.",
+  "error": {
+    "code": 429,
+    "message": "Rate limit exceeded. Try again later."
+  }
+}

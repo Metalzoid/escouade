@@ -69,6 +69,9 @@ pub(crate) struct Settings {
     /// The paths its tools are refused (« Projet privé »), as OpenCode names them: rules of its
     /// session, after its mode's (`rules`).
     pub fence: Vec<String>,
+    /// A discussion of the Docs tab (ESC-261): its edits and commands refused, whatever its mode
+    /// (`session_rules`).
+    pub read_only: bool,
 }
 
 /// The provider and the model of `<provider>/<model>` (a model's id may hold more slashes).
@@ -109,6 +112,21 @@ pub(crate) fn rules(mode: &str, fence: &[String]) -> Value {
     ];
     all.extend(fence_rules(fence));
     Value::Array(all)
+}
+
+/// The rules of the session of an agent of `s`: its mode's, its fence's, and for a discussion
+/// (ESC-261) every edit and command refused, last so that they win whatever came before. Refused by
+/// OpenCode itself, never a card: Escouade's tools (an MCP server's) stay as they were.
+pub(crate) fn session_rules(s: &Settings) -> Value {
+    let mut all = rules(&s.mode, &s.fence);
+    if s.read_only {
+        if let Value::Array(a) = &mut all {
+            for p in ["edit", "bash"] {
+                a.push(json!({ "permission": p, "pattern": "*", "action": "deny" }));
+            }
+        }
+    }
+    all
 }
 
 /// « Projet privé » (ESC-140): each path of a fence refused to the tools that take a path (`read`,
@@ -395,6 +413,7 @@ pub fn caps() -> EngineCaps {
         sandbox: false,
         usage_page: None,
         accounts_by_key: false,
+        read_only: true,
     }
 }
 
@@ -664,6 +683,7 @@ impl Engine for Opencode {
             effort: spawn.effort.clone(),
             mode: spawn.mode.clone(),
             fence: crate::fence::spelled(&spawn.fence, &spawn.program),
+            read_only: spawn.read_only,
         };
         let instructions = spawn.append_prompt.clone().filter(|p| !p.trim().is_empty());
         let opts = process::Opts {
@@ -830,6 +850,44 @@ mod tests {
                 "C:/code/secret/*"
             ]
         );
+    }
+
+    #[test]
+    fn a_discussion_has_its_edits_and_commands_refused_in_every_mode() {
+        // As OpenCode reads them: the last rule of the permission (patterns `*` here).
+        let last = |s: &Settings, p: &str| {
+            session_rules(s)
+                .as_array()
+                .unwrap()
+                .iter()
+                .rev()
+                .find(|r| r["permission"] == p)
+                .map(|r| r["action"].as_str().unwrap().to_string())
+                .unwrap()
+        };
+        for mode in ["default", "acceptEdits", "plan", "bypassPermissions"] {
+            let s = Settings {
+                mode: mode.into(),
+                fence: vec!["C:/code/secret".into()],
+                read_only: true,
+                ..Default::default()
+            };
+            assert_eq!(last(&s, "edit"), "deny", "{mode}");
+            assert_eq!(last(&s, "bash"), "deny", "{mode}");
+            // Reads, the web and the paths outside go as the mode says.
+            assert_eq!(
+                last(&s, "webfetch"),
+                rules(mode, &[])[4]["action"],
+                "{mode}"
+            );
+        }
+        // Another agent: its mode's rules alone.
+        let s = Settings {
+            mode: "default".into(),
+            ..Default::default()
+        };
+        assert_eq!(session_rules(&s), rules("default", &[]));
+        assert_eq!(last(&s, "edit"), "allow");
     }
 
     #[test]

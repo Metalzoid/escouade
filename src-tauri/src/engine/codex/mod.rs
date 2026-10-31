@@ -74,6 +74,25 @@ pub(crate) struct Settings {
     /// The paths its sandbox refuses (« Projet privé »), as Codex names them: a permissions
     /// profile of Escouade's in place of the sandbox of its mode (`fence_profile`).
     pub fence: Vec<String>,
+    /// A discussion of the Docs tab (ESC-261): read only whatever its mode (`Settings::sandboxed`).
+    pub read_only: bool,
+}
+
+impl Settings {
+    /// The mode its sandbox is of: Plan's, read only, for a discussion.
+    pub(crate) fn sandboxed(&self) -> &str {
+        sandboxed(&self.mode, self.read_only)
+    }
+}
+
+/// The mode whose sandbox an agent in `mode` has: Plan's, read only, when it is `read_only` (a
+/// discussion, ESC-261), which writes nothing but through Escouade's tools; its own otherwise.
+pub(crate) fn sandboxed(mode: &str, read_only: bool) -> &str {
+    if read_only {
+        "plan"
+    } else {
+        mode
+    }
 }
 
 /// « Projet privé » (ESC-140): Codex's permissions profiles, its sandbox with the paths of a fence
@@ -144,7 +163,7 @@ pub(crate) fn sandbox_mode(mode: &str) -> &'static str {
 /// Escouade's modes in Codex (docs/TODO-1.8.md, « Composer : modèles, effort, modes »): its approval
 /// policy, its sandbox, who reviews the approvals, and its collaboration mode (the mode Plan).
 pub(crate) fn mode_params(s: &Settings, _cwd: &str) -> Value {
-    let (approval, sandbox, reviewer) = match s.mode.as_str() {
+    let (approval, sandbox, reviewer) = match s.sandboxed() {
         "plan" => ("on-request", json!({ "type": "readOnly" }), "user"),
         "bypassPermissions" => ("never", json!({ "type": "dangerFullAccess" }), "user"),
         "auto" => ("on-request", workspace_write(), "auto_review"),
@@ -153,7 +172,7 @@ pub(crate) fn mode_params(s: &Settings, _cwd: &str) -> Value {
         _ => ("on-request", workspace_write(), "user"),
     };
     let profile = (!s.fence.is_empty())
-        .then(|| fence_profile(&s.mode))
+        .then(|| fence_profile(s.sandboxed()))
         .flatten();
     let collaboration = if s.mode == "plan" { "plan" } else { "default" };
     let mut settings = json!({ "model": s.model, "developer_instructions": null });
@@ -388,6 +407,7 @@ pub fn caps() -> EngineCaps {
         sandbox: true,
         usage_page: None,
         accounts_by_key: false,
+        read_only: true,
     }
 }
 
@@ -415,7 +435,7 @@ fn args(s: &Spawn) -> Vec<String> {
         let paths = crate::fence::spelled(&s.fence, &s.program);
         a.extend(fence_args(
             &paths,
-            fence_profile(&s.mode).unwrap_or(FENCE_PROFILE),
+            fence_profile(sandboxed(&s.mode, s.read_only)).unwrap_or(FENCE_PROFILE),
         ));
     }
     if !matches!(s.escouade, Escouade::Denied { .. }) || declared() {
@@ -692,6 +712,7 @@ impl Engine for Codex {
             effort: spawn.effort.clone(),
             mode: spawn.mode.clone(),
             fence: crate::fence::spelled(&spawn.fence, &spawn.program),
+            read_only: spawn.read_only,
         };
         let instructions = spawn.append_prompt.clone().filter(|p| !p.trim().is_empty());
         let opts = process::Opts {
@@ -799,6 +820,39 @@ mod tests {
                 "permissions.escouade-fence={extends=\"escouade-fence-plan\", filesystem={\":workspace_roots\"=\"write\", \":tmpdir\"=\"write\"}}",
             ]
         );
+    }
+
+    #[test]
+    fn a_discussion_is_read_only_in_every_mode_its_collaboration_its_own() {
+        let of = |mode: &str, fence: Vec<String>| {
+            mode_params(
+                &Settings {
+                    mode: mode.into(),
+                    fence,
+                    read_only: true,
+                    ..Default::default()
+                },
+                "C:/p",
+            )
+        };
+        for mode in ["default", "acceptEdits", "auto", "bypassPermissions"] {
+            let p = of(mode, Vec::new());
+            assert_eq!(p["sandboxPolicy"]["type"], "readOnly", "{mode}");
+            assert_eq!(p["approvalPolicy"], "on-request", "{mode}");
+            assert_eq!(p["approvalsReviewer"], "user", "{mode}");
+            // Not made to plan: it answers.
+            assert_eq!(p["collaborationMode"]["mode"], "default", "{mode}");
+            // Fenced: the read only profile.
+            let p = of(mode, vec!["C:/code/secret".into()]);
+            assert_eq!(p["permissions"], FENCE_PLAN_PROFILE, "{mode}");
+        }
+        let s = Settings {
+            mode: "default".into(),
+            read_only: true,
+            ..Default::default()
+        };
+        assert_eq!(sandbox_mode(s.sandboxed()), "read-only");
+        assert_eq!(sandboxed("acceptEdits", false), "acceptEdits");
     }
 
     #[test]

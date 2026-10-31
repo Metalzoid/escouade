@@ -22,6 +22,9 @@
   --frame: color-mix(in oklch, var(--p) 8%, #08090a);
   --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
   --raise: color-mix(in oklch, var(--p) 6%, #15161a);
+  /* The two kinds of discussion of the Docs tab (ESC-261). */
+  --disc: oklch(0.8 0.11 185);
+  --brain: oklch(0.8 0.12 300);
   --raise-2: color-mix(in oklch, var(--p) 6%, #1b1c20);
   --well: color-mix(in oklch, var(--p) 2%, #0a0b0d);
   /* Hairlines, hovers and reliefs are the ink at low alpha: white here, near black in the light theme. */
@@ -117,24 +120,6 @@
   --r: 10px;
   --r-sm: 7px;
 
-  /*
-   * The names of the 1.x design, which the components not yet redrawn still read (lots 2 to 11 of the 2.0 move them to
-   * the tokens above): each is one of the new tokens, so they follow the theme too.
-   */
-  --bg: var(--frame);
-  --elev: var(--raise);
-  --elev2: var(--raise-2);
-  --user: var(--raise);
-  --term: var(--well);
-  --line2: var(--line-2);
-  --accent: var(--p-ink);
-  --accent-soft: color-mix(in oklch, var(--p) var(--sel), transparent);
-  --accent-ink: var(--on-primary);
-  --ok: var(--run);
-  --wait-soft: var(--wait-bg);
-  --wait-ring: oklch(from var(--wait) l c h / 0.6);
-  --ui: var(--font);
-
   color-scheme: dark;
   transition: --p 0.7s var(--ease);
 }
@@ -147,6 +132,8 @@
   --frame: color-mix(in oklch, var(--p) 7%, #f0f1f3);
   --panel: color-mix(in oklch, var(--p) 2.5%, #fdfdfd);
   --raise: color-mix(in oklch, var(--p) 4%, #f4f5f7);
+  --disc: oklch(0.5 0.1 185);
+  --brain: oklch(0.5 0.16 300);
   --raise-2: color-mix(in oklch, var(--p) 5%, #eceef1);
   --well: color-mix(in oklch, var(--p) 2.5%, #f6f7f9);
   --fg-rgb: 15, 17, 22;
@@ -320,7 +307,7 @@ input::placeholder {
 
 @keyframes ccPulse {
   0% {
-    box-shadow: 0 0 0 0 var(--wait-ring);
+    box-shadow: 0 0 0 0 oklch(from var(--wait) l c h / 0.6);
   }
   70% {
     box-shadow: 0 0 0 6px transparent;
@@ -695,6 +682,16 @@ kbd,
   flex: none;
 }
 
+/* ---------- WebKit ---------- */
+/* WebKitGTK 2.50 (the AppImage's) aborts its web process in `text-wrap: pretty`, on some paragraphs only
+   (InlineContentConstrainer::prettifyRange, an index out of range): the page died the moment a project showing one
+   was opened (ESC-290). WKWebView shares that code. Under WebKit, text wraps plainly; WebView2 keeps it pretty. */
+:root.webkit *,
+:root.webkit *::before,
+:root.webkit *::after {
+  text-wrap-style: auto !important;
+}
+
 /* ---------- markdown ---------- */
 /* The agent's answer (2.0 design): a softer white than the interface's, code and its blocks in a frame. */
 .md {
@@ -820,7 +817,7 @@ kbd,
   height: 34px;
   padding: 0 6px 0 12px;
   border-bottom: 1px solid var(--line);
-  font-family: var(--ui);
+  font-family: var(--font);
   font-size: 12px;
   color: var(--muted);
 }
@@ -832,7 +829,7 @@ kbd,
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
-  font-family: var(--ui);
+  font-family: var(--font);
   font-size: 11px;
   cursor: pointer;
 }
@@ -857,18 +854,18 @@ kbd,
 
 .md th,
 .md td {
-  border: 1px solid var(--line2);
+  border: 1px solid var(--line-2);
   padding: 5px 10px;
   text-align: left;
 }
 
 .md th {
-  background: var(--elev);
+  background: var(--raise);
 }
 
 .md hr {
   border: none;
-  border-top: 1px solid var(--line2);
+  border-top: 1px solid var(--line-2);
   margin: 14px 0;
 }
 

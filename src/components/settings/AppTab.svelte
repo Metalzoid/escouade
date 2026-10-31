@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { openPath, openUrl } from '@tauri-apps/plugin-opener';
+  import { openPath, openUrl } from '../../lib/opener';
   import { tildify } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';

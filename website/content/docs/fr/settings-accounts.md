@@ -95,7 +95,7 @@ Le seuil se règle dans l’onglet [« Kanban »](settings-board), pas ici, ma
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
-| « Pause au-delà du quota » (pour tous les projets) | Aucun ticket ne démarre tant que la fenêtre de 5 h ou la fenêtre hebdomadaire atteint ou dépasse ce seuil. Choix : 80 %, 90 %, 95 % ou 100 %. | 100 % |
+| « Pause au-delà du quota » (pour tous les projets) | Le pilote auto ne démarre aucun ticket tant que la fenêtre de 5 h ou la fenêtre hebdomadaire atteint ou dépasse ce seuil ; un ticket lancé à la main part quand même. Choix : 80 %, 90 %, 95 % ou 100 %. | 100 % |
 
 Un compte dont une fenêtre a passé le seuil est écarté au profit du suivant de son harness, et le panneau des quotas le marque « au-delà du seuil de pause ou de changement de compte » (il compte aussi « Changer de compte à »). Le pilote auto se met en pause harness par harness : un ticket attend que l’un des comptes de son harness repasse sous le seuil, pendant que ceux d’un autre harness démarrent. Un harness sans quota ne le met jamais en pause.
 

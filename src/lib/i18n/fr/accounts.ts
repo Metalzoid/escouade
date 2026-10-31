@@ -24,12 +24,21 @@ export default {
     down: 'Descendre {name}',
     signIn: 'Se connecter…',
     signInAgain: 'Se reconnecter…',
-    /** A Cursor account other than the machine's: its API key given again (ESC-43). */
+    /** A Cursor or Mistral Vibe account other than the machine's: its API key given again (ESC-43, ESC-267). */
     changeKey: 'Changer la clé…',
-    /** A harness that tells Escouade neither quota nor cost (Cursor CLI): its dashboard. */
-    usage: 'Usage sur cursor.com',
+    /** A harness that tells Escouade no quota (Cursor CLI, Mistral Vibe): its own page; `{site}`: « cursor.com ». */
+    usage: 'Usage sur {site}',
     usageHint:
       '{harness} ne donne pas son usage à Escouade : son tableau de bord le montre (l’usage inclus du mois, la remise à zéro). Une limite atteinte arrête le tour sur une carte qui le dit.',
+    /** Antigravity CLI (ESC-271): its tokens told, its quota in its interface alone. */
+    usageHintInterface:
+      '{harness} ne donne à Escouade que les jetons de ses tours : son quota (par groupe de modèles, hebdomadaire) se lit par /usage dans son interface, et {site} dit ce que chaque forfait inclut. Une limite atteinte arrête le tour sur une carte qui le dit ; l’agent réessaie seul une heure plus tard, ou passe sur un autre compte selon tes réglages.',
+    /** Gemini CLI (ESC-275): its tokens told, its usage in its interface alone (/stats), its page for a key. */
+    usageHintGemini:
+      '{harness} ne donne à Escouade que les jetons de ses tours : son usage se lit par /stats dans son interface, et {site} le montre pour une clé d’API. Une limite atteinte arrête le tour sur une carte qui le dit ; l’agent réessaie seul quand Gemini le dit (une heure plus tard pour son quota du jour), ou passe sur un autre compte selon tes réglages.',
+    /** Mistral Vibe (ESC-267): its cost told, its quota not. */
+    usageHintCost:
+      '{harness} donne à Escouade le coût de chaque tour, pas de quota : {site} montre l’usage et la facture du compte. Une limite de débit arrête le tour sur une carte qui le dit, et l’agent reprend seul une minute plus tard.',
     remove: 'Supprimer',
     add: 'Ajouter un compte…',
     /** A harness installed without an account (ESC-128): nothing starts on it. */
@@ -96,6 +105,8 @@ export default {
     machineConnectedNoEmail: '{harness} est connecté sur cette machine',
     machineFound: '{harness} est installé sur cette machine',
     machineNotConnected: '{harness} n’est pas connecté sur cette machine',
+    /** Antigravity CLI (ESC-271): added first, signed in just after by agy in the terminal of the window. */
+    machineSignInLater: '{harness} n’est pas encore connecté sur cette machine : tu t’y connectes juste après, dans un terminal',
     machineAdded: 'Déjà ajouté',
     machineChecking: 'Vérification…',
     machineHint: 'Son dossier habituel, tel quel : ses réglages, sa connexion et ses conversations ({path}).',
@@ -155,6 +166,50 @@ export default {
         'Gardée dans le trousseau du système, donnée aux agents de ce compte par CURSOR_API_KEY, jamais écrite dans un fichier ni sur une ligne de commande. Leurs tours vont au compte Cursor de cette clé ; le compte de la machine reste la connexion d’agent login.',
       create: 'Ajouter le compte',
       saveKey: 'Enregistrer la clé',
+    },
+    /** Antigravity CLI (ESC-271): the machine's account is its Google sign-in (agy), a new one its Gemini API key. */
+    agy: {
+      nothingToShare:
+        'Rien à partager : chaque agent Antigravity a son propre dossier, où Escouade écrit ses règles et où il garde ses conversations.',
+      neverShared:
+        'La connexion Google d’Antigravity CLI est celle de la machine : elle reste dans le trousseau du système, et un dossier ne la déplace pas.',
+      signInHint:
+        'Connecte-toi dans le terminal ci-dessous : agy ouvre ton navigateur sur ton compte Google. Escouade ne voit jamais tes identifiants.',
+      newHintKey: 'La clé d’API Gemini d’un autre compte Google, gardée dans le trousseau du système.',
+      keyPlaceholder: 'Sur aistudio.google.com, Get API key',
+      keyHint:
+        'Gardée dans le trousseau du système, donnée aux agents de ce compte par GEMINI_API_KEY, jamais écrite dans un fichier ni sur une ligne de commande. Leurs tours vont à l’API Gemini de cette clé (ses modèles seulement) ; le compte de la machine reste la connexion Google d’agy.',
+    },
+    /** Gemini CLI (ESC-275): a new account is its Google sign-in, made by gemini in a terminal of its folder, or its API key. */
+    gemini: {
+      nothingToShare:
+        'Rien à partager : chaque agent Gemini a son propre GEMINI_CLI_HOME, où Escouade écrit ses réglages et ses règles et où il garde ses sessions.',
+      neverShared:
+        'La connexion Google de ce compte reste dans son dossier, où gemini l’écrit : Escouade la donne à ses agents par GOOGLE_APPLICATION_CREDENTIALS sans jamais la lire. ~/.gemini n’est jamais touché.',
+      signInHint:
+        'Connecte-toi dans le terminal ci-dessous : gemini ouvre ton navigateur sur ton compte Google. Escouade ne voit jamais tes identifiants.',
+      newHintKey: 'Une connexion Google faite par gemini dans un terminal, ou une clé d’API Gemini gardée dans le trousseau du système.',
+      keyPlaceholder: 'Sur aistudio.google.com, Get API key',
+      keyHint:
+        'Gardée dans le trousseau du système, donnée aux agents de ce compte par GEMINI_API_KEY, jamais écrite dans un fichier ni sur une ligne de commande. Leurs tours vont à l’API Gemini de cette clé.',
+      machineApart:
+        'Gemini CLI garde sa connexion Google dans ~/.gemini, qu’Escouade ne touche pas : ajoute un nouveau compte, connecté par gemini ou par une clé d’API. Une clé GEMINI_API_KEY de la machine en ferait le compte de la machine.',
+      way: 'Connexion',
+      google: 'Compte Google',
+      googleHint: 'gemini s’y connecte dans un terminal, juste après',
+      apiKey: 'Clé d’API',
+      apiKeyHint: 'Une clé d’API Gemini, d’aistudio.google.com',
+    },
+    /** Mistral Vibe (ESC-267): the machine's account is the key of vibe --setup, a new one its API key. */
+    vibe: {
+      nothingToShare: 'Rien à partager : chaque agent Vibe a son propre VIBE_HOME, où « Pour cet agent » garde ses règles et ses sessions.',
+      neverShared:
+        'La clé de Mistral Vibe (vibe --setup) est celle de la machine : elle reste dans le trousseau du système, et un dossier de configuration ne la déplace pas.',
+      signInHint: 'Donne ta clé d’API dans le terminal ci-dessous : vibe --setup la garde dans le trousseau du système.',
+      newHintKey: 'La clé d’API d’un autre compte Mistral, gardée dans le trousseau du système.',
+      keyPlaceholder: 'Sur console.mistral.ai, API Keys',
+      keyHint:
+        'Gardée dans le trousseau du système, donnée aux agents de ce compte par MISTRAL_API_KEY, jamais écrite dans un fichier ni sur une ligne de commande. Leurs tours sont facturés au compte Mistral de cette clé ; le compte de la machine reste la clé de vibe --setup.',
     },
     restart: 'Relancer',
     done: 'Terminé',
@@ -257,7 +312,7 @@ export default {
     noQuota: 'Pas de quota : seul le coût de ses tours compte.',
     /** Cursor CLI (ESC-43): it tells Escouade neither its quota nor its cost. */
     usageElsewhere: '{harness} ne donne ni son usage ni son coût à Escouade.',
-    usageLink: 'Voir l’usage sur cursor.com',
+    usageLink: 'Voir l’usage sur {site}',
     budget: 'Budget par jour',
     budgetReset: 'Remise à zéro à minuit.',
     projectionNote:

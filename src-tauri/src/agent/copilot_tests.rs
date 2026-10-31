@@ -302,6 +302,15 @@ fn safe_requests_go_without_a_card_only_when_a_process_answers_them() {
     assert!(rt.cp_safe(&write));
     let npm = json!({ "kind": "shell", "fullCommandText": "npm test", "commands": [{ "identifier": "npm test" }] });
     assert!(!rt.cp_safe(&npm));
+    // A discussion of the Docs tab (ESC-261): its reads alone, in any mode.
+    rt.meta.discussion = Some(Default::default());
+    let commit = json!({ "kind": "shell", "fullCommandText": "git commit -m x", "commands": [{ "identifier": "git commit" }] });
+    for mode in ["default", "acceptEdits", "auto"] {
+        rt.meta.mode = mode.into();
+        assert!(!rt.cp_safe(&write), "{mode}");
+        assert!(!rt.cp_safe(&commit), "{mode}");
+        assert!(rt.cp_safe(&read), "{mode}");
+    }
     assert!(inside(
         "c:/users/user/appdata/local/temp/esc23/wt-agent1/x",
         WT

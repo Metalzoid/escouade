@@ -42,6 +42,10 @@ pub(crate) struct CursorState {
     /// A recorded stream: the `session/load` under way (its request's id), whose replay is left
     /// out.
     loading: Option<Value>,
+    /// What the turn spent, as Mistral Vibe told it (`agent/vibe.rs`): Cursor tells nothing.
+    pub(super) spent: Option<TurnRow>,
+    /// The turn met Mistral Vibe's rate limit: when it goes on (`agent/vibe.rs`).
+    pub(super) limited_until: Option<i64>,
 }
 
 /// A call's id as Escouade keeps it: Cursor's has a line break in it (`call-…-0\nfc_…_0`).
@@ -166,8 +170,7 @@ impl AgentRt {
     }
 
     fn cu_set_mode(&mut self, mode: &str, fx: &mut Effects) {
-        if self.meta.mode != mode {
-            self.meta.mode = mode.to_string();
+        if self.meta.set_mode(mode) {
             fx.agent_changed = true;
             fx.save = true;
         }
@@ -183,11 +186,14 @@ impl AgentRt {
             let resumed = self.meta.session_id.is_some();
             self.reset_plan(fx);
             if resumed && start == "new" {
+                // Mistral Vibe and Antigravity CLI, whose translation this is too (`agent/vibe.rs`,
+                // `agent/agy.rs`), say their own name.
+                let who = crate::engine::of(&self.meta).speaker();
                 self.notice(
                     "warn",
                     tr!(
-                        "La session Cursor n’a pas pu être reprise : nouvelle session (contexte vidé)",
-                        "The Cursor session couldn’t be resumed: new session (context cleared)"
+                        "La session {who} n’a pas pu être reprise : nouvelle session (contexte vidé)",
+                        "The {who} session couldn’t be resumed: new session (context cleared)"
                     ),
                     fx,
                 );
@@ -566,6 +572,7 @@ impl AgentRt {
             let allowed = PermissionAnswer::Allow {
                 call: call.clone(),
                 input: Value::Null,
+                resume: None,
             };
             if self
                 .proc
@@ -626,14 +633,17 @@ impl AgentRt {
         let req = json!({ "description": description, "decision_reason": reason });
         let view = pending_view(rid, &tool, &req, &input, &self.meta.cwd).always_as(&item);
         self.append(item, fx);
-        self.add_pending(PendingReq {
-            item_id: rid.to_string(),
-            tool_use_id: call,
-            input: input.clone(),
-            suggestions: Value::Null,
-            view,
-            since: now_ms(),
-        });
+        self.add_pending(
+            PendingReq {
+                item_id: rid.to_string(),
+                tool_use_id: call,
+                input: input.clone(),
+                suggestions: Value::Null,
+                view,
+                since: now_ms(),
+            },
+            fx,
+        );
         self.set_status(AgentStatus::Waiting, fx);
         fx.notify = Some(AgentAlert::new(
             NotifyKind::Question,
@@ -676,14 +686,17 @@ impl AgentRt {
         });
         self.append(item, fx);
         let view = pending_view(rid, "AskUserQuestion", &Value::Null, &input, &self.meta.cwd);
-        self.add_pending(PendingReq {
-            item_id: rid.to_string(),
-            tool_use_id: call,
-            input: input.clone(),
-            suggestions: Value::Null,
-            view,
-            since: now_ms(),
-        });
+        self.add_pending(
+            PendingReq {
+                item_id: rid.to_string(),
+                tool_use_id: call,
+                input: input.clone(),
+                suggestions: Value::Null,
+                view,
+                since: now_ms(),
+            },
+            fx,
+        );
         self.set_status(AgentStatus::Waiting, fx);
         fx.notify = Some(AgentAlert::new(
             NotifyKind::Question,
@@ -719,14 +732,17 @@ impl AgentRt {
         });
         self.append(item, fx);
         let view = pending_view(rid, "ExitPlanMode", &Value::Null, &input, &self.meta.cwd);
-        self.add_pending(PendingReq {
-            item_id: rid.to_string(),
-            tool_use_id: rid.to_string(),
-            input: input.clone(),
-            suggestions: Value::Null,
-            view,
-            since: now_ms(),
-        });
+        self.add_pending(
+            PendingReq {
+                item_id: rid.to_string(),
+                tool_use_id: rid.to_string(),
+                input: input.clone(),
+                suggestions: Value::Null,
+                view,
+                since: now_ms(),
+            },
+            fx,
+        );
         self.set_status(AgentStatus::Waiting, fx);
         fx.notify = Some(AgentAlert::new(
             NotifyKind::Question,
@@ -790,9 +806,17 @@ impl AgentRt {
             self.cu_close(&who, fx);
         }
         let interrupted = std::mem::take(&mut self.interrupted);
-        let refused = crate::engine::cursor::refusal(&self.turn_text).filter(|_| !interrupted);
+        // Cursor's refusals are its texts: none for Mistral Vibe nor Antigravity CLI, whose errors
+        // are told apart.
+        let refused = crate::engine::cursor::refusal(&self.turn_text)
+            .filter(|_| !interrupted && self.meta.engine == crate::model::EngineId::Cursor);
         let mut error = std::mem::take(&mut self.cursor.error).filter(|_| !interrupted);
         let mut limited = false;
+        // Mistral Vibe's rate limit: « limité », its resume planned.
+        if let Some(at) = self.cursor.limited_until.take().filter(|_| !interrupted) {
+            limited = true;
+            fx.limited = Some(Some(at));
+        }
         if let (Some(refusal), None) = (refused, &error) {
             let by_key =
                 self.meta.account != crate::accounts::principal_id(crate::model::EngineId::Cursor);
@@ -806,6 +830,16 @@ impl AgentRt {
         }
         let failed = error.is_some();
         self.cursor.reports.clear();
+        let spent = self.cursor.spent.take();
+        let (cost, tokens) = spent
+            .as_ref()
+            .map_or((0.0, 0), |r| (r.cost, r.input + r.cache + r.output));
+        if let Some(row) = spent.filter(|_| tokens > 0) {
+            self.meta.tokens += tokens;
+            self.meta.cost += cost;
+            fx.turns.push(row);
+        }
+        // A resume planned is over (the core plans the next one, `fx.limited`).
         if self.meta.resume_at.take().is_some() {
             fx.save = true;
             fx.agent_changed = true;
@@ -833,8 +867,8 @@ impl AgentRt {
         let took = self.active_since.map(|since| (now_ms() - since).max(0));
         let item = json!({
             "kind": "turn", "id": new_id(), "ts": now_ms(), "durationMs": took,
-            // ACP tells neither: nothing is shown of them (`CostKind::None`).
-            "cost": 0.0, "tokens": 0, "isError": failed, "interrupted": interrupted, "error": error, "limited": limited,
+            // Cursor's ACP tells neither: nothing is shown of them (`CostKind::None`); Vibe's both.
+            "cost": cost, "tokens": tokens, "isError": failed, "interrupted": interrupted, "error": error, "limited": limited,
             "engine": self.meta.engine,
         });
         self.append(item, fx);

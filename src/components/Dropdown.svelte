@@ -35,6 +35,7 @@
     title,
     searchable = false,
     onFavorite,
+    shownLabel,
   }: {
     caption: string;
     value: string;
@@ -52,6 +53,8 @@
     searchable?: boolean;
     /** A star on each option, which marks it as a favorite or no longer. */
     onFavorite?: (value: string, favorite: boolean) => void;
+    /** What the chip says of a value none of its options has (an effort its model's menu leaves out: Mistral Vibe's). */
+    shownLabel?: string;
   } = $props();
 
   let query = $state('');
@@ -94,7 +97,7 @@
     else items[(at + (down ? 1 : -1) + items.length) % items.length].focus();
   }
 
-  const shown = $derived(options.find((o) => o.value === value)?.label ?? (value || '—'));
+  const shown = $derived(options.find((o) => o.value === value)?.label ?? shownLabel ?? (value || '—'));
   const label = $derived(t('nav.dropdown.label', { caption, shown }));
 
   // Escape closes the menu first, before it can reach the composer (where it interrupts Claude).

@@ -1,8 +1,8 @@
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { openUrl } from './opener';
 import { describe, expect, it, vi } from 'vitest';
 
 // The system's browser is never started: what it was asked to open is looked at.
-vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn(async () => {}) }));
+vi.mock('./opener', () => ({ openUrl: vi.fn(async () => {}) }));
 
 import { setLang } from './i18n';
 import { handleMarkdownClick, renderMarkdown } from './markdown';

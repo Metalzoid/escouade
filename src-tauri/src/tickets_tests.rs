@@ -2173,22 +2173,40 @@ async fn nothing_starts_while_a_window_is_used_past_the_threshold_until_it_reads
         .ticket_create(&p.id, draft("Patienter [ok]", &[], 5))
         .await
         .unwrap();
+    let u = h
+        .core
+        .ticket_create(&p.id, draft("Patienter aussi [ok]", &[], 5))
+        .await
+        .unwrap();
     h.wait_board_idle().await;
     assert_eq!(h.ticket(&t.id).column, Column::Todo);
+    assert_eq!(h.ticket(&u.id).column, Column::Todo);
     assert_eq!(
         h.pauses(),
         [
             json!({ "reason": "window", "minutes": 10080, "pct": 96.0, "until": end + RESUME_MARGIN_MS })
         ]
     );
-    // Launched by hand ("Lancer", the autopilot off), it waits too.
+    // Launched by hand ("Lancer", the autopilot off), it starts: « Pause au-delà du quota » holds
+    // back the autopilot alone (the user, 2026-10-28).
     h.set_board(&p.id, |s| s.autopilot = false);
     h.core.ticket_start(&t.id).unwrap();
+    h.wait_ticket(&t.id, "started by hand past the threshold", |t| {
+        t.column != Column::Todo
+    })
+    .await;
+    // Its agent read the fake CLI's quota, well under: the window past the threshold again.
+    h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
+        .await;
+    h.record_usage("principal", Reading::claude((None, week)))
+        .await;
+    // The autopilot on again, the other one still waits for the window.
+    h.set_board(&p.id, |s| s.autopilot = true);
     h.wait_board_idle().await;
-    assert_eq!(h.ticket(&t.id).column, Column::Todo);
+    assert_eq!(h.ticket(&u.id).column, Column::Todo);
     // Read under it, the tickets go by themselves.
     h.core.refresh_usage().await;
-    h.wait_ticket(&t.id, "started under the threshold", |t| {
+    h.wait_ticket(&u.id, "started under the threshold", |t| {
         t.column != Column::Todo
     })
     .await;
@@ -4555,7 +4573,7 @@ async fn a_merge_conflict_in_the_project_folder_leaves_the_users_untracked_files
 
 /// The project's repository gets a remote that reads as GitHub's but is a local bare repository
 /// (a git `insteadOf` rule): pushes work, without network.
-fn github_remote(h: &Harness, r: &Path) -> PathBuf {
+pub(crate) fn github_remote(h: &Harness, r: &Path) -> PathBuf {
     let bare = h.dir.join("remote.git");
     git(
         &h.dir,
@@ -5896,7 +5914,7 @@ fn test_run(h: &Harness, agent: &AgentMeta, term_id: &str) -> bool {
     if !test_terminal(h, agent, term_id) {
         return false;
     }
-    h.core.track_test_run(&agent.id, term_id).unwrap();
+    h.core.track_test_run(&agent.id, term_id, "run").unwrap();
     true
 }
 
@@ -5949,7 +5967,7 @@ async fn no_test_launch_starts_while_its_ticket_is_being_validated() {
         if test_terminal(&h, &agent, "tk-run-during") {
             let e = h
                 .core
-                .track_test_run(&agent.id, "tk-run-during")
+                .track_test_run(&agent.id, "tk-run-during", "run")
                 .unwrap_err()
                 .to_string();
             assert_eq!(
@@ -6060,12 +6078,12 @@ async fn an_archived_or_deleted_agent_has_no_test_launch() {
     assert_eq!(h.agent(&a.id).port_base, None);
     assert!(h.core.test_run_spec(&a.id, "run", 0).is_err());
     // A launch started as it was archived is stopped as soon as it is tracked.
-    assert!(h.core.track_test_run(&a.id, "tk-late-1").is_err());
+    assert!(h.core.track_test_run(&a.id, "tk-late-1", "run").is_err());
     assert!(!tracks_runs_of(&h, &a.id));
     // Likewise once it is deleted.
     let b = h.core.create_agent(&p.id, None).await.unwrap().meta;
     h.core.delete_agent(&b.id, false).await.unwrap();
-    assert!(h.core.track_test_run(&b.id, "tk-late-2").is_err());
+    assert!(h.core.track_test_run(&b.id, "tk-late-2", "run").is_err());
     assert!(!tracks_runs_of(&h, &b.id));
 }
 
@@ -7404,8 +7422,9 @@ async fn a_ticket_started_with_a_model_and_an_effort_keeps_them_until_it_is_star
         .ticket_create(&p.id, draft("Au choix [ok]", &[], 5))
         .await
         .unwrap();
-    // Nothing starts meanwhile: what is written on the ticket can be read before its agent goes.
-    h.core.pause_after_limit("principal");
+    // Nothing starts meanwhile (no pass of the board comes to it): what is written on the ticket
+    // can be read before its agent goes.
+    let gate = h.core.board_lock.lock().await;
     let own = |h: &Harness| {
         let t = h.ticket(&t.id);
         (t.forced, t.model, t.effort)
@@ -7437,7 +7456,8 @@ async fn a_ticket_started_with_a_model_and_an_effort_keeps_them_until_it_is_star
     assert_eq!(h.ticket(&t.id).column, Column::Todo);
 
     // Once it has started nothing is written: it is not « À faire » any more.
-    h.core.autopilot_resume();
+    drop(gate);
+    h.core.schedule();
     h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
         .await;
     assert_eq!(h.agent_of(&t.id).model, "haiku");

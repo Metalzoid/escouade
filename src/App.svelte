@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { applyAppearance, themeChoice } from './lib/appearance';
+  import { applyPluginTheme, chosenTheme } from './lib/plugin-theme.svelte';
+  import { plugins } from './lib/plugins-view.svelte';
   import { DEFAULT_FONT_SIZE, watchZoom } from './lib/display.svelte';
   import { t } from './lib/i18n';
   import { api } from './lib/ipc';
@@ -12,7 +14,9 @@
   import { watchForUpdates } from './lib/updater';
   import { watchPresence } from './lib/presence';
   import { createWarmer } from './lib/warm';
+  import { offerClaudeMemory } from './lib/memory';
   import Board from './components/board/Board.svelte';
+  import DocsView from './components/docs/DocsView.svelte';
   import TicketForm from './components/board/TicketForm.svelte';
   import MergedBranchesModal from './components/branches/MergedBranchesModal.svelte';
   import NewBranchModal from './components/branches/NewBranchModal.svelte';
@@ -37,12 +41,14 @@
   import { isMulti } from './lib/repos';
   import NewProjectModal from './components/modals/NewProjectModal.svelte';
   import RenameModal from './components/modals/RenameModal.svelte';
+  import NewDiscussionModal from './components/docs/NewDiscussionModal.svelte';
   import SettingsModal from './components/modals/SettingsModal.svelte';
   import TestLaunchModal from './components/modals/TestLaunchModal.svelte';
   import ImportModal from './components/modals/ImportModal.svelte';
   import TelemetryModal from './components/modals/TelemetryModal.svelte';
   import TeamNameModal from './components/modals/TeamNameModal.svelte';
   import UpdateModal from './components/modals/UpdateModal.svelte';
+  import ClaudeMemoryModal from './components/modals/ClaudeMemoryModal.svelte';
   import Overview from './components/Overview.svelte';
   import ProjectRail from './components/ProjectRail.svelte';
   import { railWidth } from './lib/rail-width.svelte';
@@ -50,6 +56,8 @@
   import RunView from './components/RunView.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import Stats from './components/Stats.svelte';
+  import PluginsSide from './components/plugins/PluginsSide.svelte';
+  import PluginsView from './components/plugins/PluginsView.svelte';
   import StatusBar from './components/StatusBar.svelte';
   import TerminalView from './components/TerminalView.svelte';
   import TitleBar from './components/TitleBar.svelte';
@@ -80,6 +88,20 @@
     if (app.ready) applyAppearance(themeChoice(app.settings.theme));
   });
 
+  // « Couleurs » (PLG-7): the plugins read once the settings are, then the theme chosen among those of the plugins on,
+  // at once and as either changes; none (or its plugin off or gone), Escouade's colours.
+  $effect(() => {
+    if (app.ready) untrack(() => void plugins.load());
+  });
+  $effect(() => {
+    if (plugins.loaded) applyPluginTheme(chosenTheme(app.settings.pluginTheme));
+  });
+  // The links `escouade://plugin/<id>` (STORE-11): the one the app was started with, then each one handed over.
+  $effect(() => {
+    void app.deepLinks;
+    if (app.ready) untrack(() => void plugins.takeLinks());
+  });
+
   // « Zoom de l’interface » as saved, held to what the window holds, once the settings are read (the backend zoomed the
   // window before showing it: this is for a page loaded again, and for a window resized), then the sizes of the
   // terminals and of the editor, as they change.
@@ -94,6 +116,13 @@
     document.documentElement.style.setProperty('--editor-font', `${size}px`);
   });
 
+  // What Claude Code remembers of the project on screen, offered once to its shared memory (ESC-255), when no other
+  // window is open.
+  $effect(() => {
+    const id = app.ui.view === 'project' ? app.ui.activeProject : null;
+    if (app.ready && !app.modal && id) untrack(() => void offerClaudeMemory(id));
+  });
+
   const warmSelected = createWarmer((id) => api.warmAgent(id).catch(() => {}));
   $effect(() => warmSelected(app.agent));
 
@@ -104,6 +133,7 @@
     void app.runCommand;
     void app.editorOn;
     void app.boardOn;
+    void app.docsOn;
     void app.ui.view;
     app.markSeen();
   });
@@ -152,6 +182,9 @@
       <div class="work"><Overview /></div>
     {:else if app.ui.view === 'stats'}
       <div class="work"><Stats /></div>
+    {:else if app.ui.view === 'plugins'}
+      <PluginsSide />
+      <div class="work"><PluginsView /></div>
     {:else if app.project}
       {@const project = app.project}
       <Sidebar {project} />
@@ -159,6 +192,10 @@
         {#if app.boardOn}
           {#key project.id}
             <Board {project} />
+          {/key}
+        {:else if app.docsOn}
+          {#key project.id}
+            <DocsView {project} />
           {/key}
         {:else if app.editorOn}
           {#key project.id}
@@ -192,7 +229,18 @@
           <div class="noagent">
             <span>{t('shell.app.noAgent')}</span>
             <button class="btn primary" onclick={() => app.newAgent()}><Icon name="plus" size={14} />{t('shell.app.newAgent')}</button>
+            <!-- The project's open pull requests (ESC-305), in the side panel's « PR et CI » tab without an agent. -->
+            <button
+              class="btn ghost"
+              onclick={() => {
+                app.panelTab = 'hosts';
+                app.filesOpen = true;
+              }}><Icon name="pr" size={14} />{t('shell.app.projectPrs')}</button
+            >
           </div>
+          {#if app.split || app.filesOpen}
+            <SidePanel {project} agent={null} />
+          {/if}
         {/if}
       </div>
     {:else}
@@ -228,6 +276,8 @@
   {#key app.modal}
     <ConfirmModal {...app.modal} />
   {/key}
+{:else if app.modal?.kind === 'newDiscussion'}
+  <NewDiscussionModal projectId={app.modal.projectId} preset={app.modal.preset} />
 {:else if app.modal?.kind === 'rename'}
   <RenameModal title={app.modal.title} value={app.modal.value} onSubmit={app.modal.onSubmit} />
 {:else if app.modal?.kind === 'account'}
@@ -238,6 +288,8 @@
   <ImportModal projectId={app.modal.projectId} />
 {:else if app.modal?.kind === 'update' && app.update}
   <UpdateModal version={app.update.version} notes={app.update.notes} back={app.modal.back} />
+{:else if app.modal?.kind === 'claudeMemory'}
+  <ClaudeMemoryModal projectId={app.modal.projectId} offered={app.modal.offered} />
 {:else if app.modal?.kind === 'telemetry'}
   <TelemetryModal />
 {:else if app.modal?.kind === 'teamName'}

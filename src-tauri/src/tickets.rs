@@ -34,6 +34,16 @@ pub(crate) fn quota_lost(lang: Lang) -> String {
     tr_in!(lang, "limite d'usage atteinte", "usage limit reached")
 }
 
+/// Why the pass of the board did not start a ticket launched by hand: the ticket goes back to
+/// « À faire » as it was, and the tool or the window that launched it says so.
+#[derive(Debug, Clone)]
+pub(crate) enum StartRefusal {
+    /// A usage limit holds its account(s) back.
+    Held(board::Held),
+    /// Anything else, said as is.
+    Text(String),
+}
+
 /// The reason a ticket is blocked by an error, on one line (a git error may run over many; the
 /// whole error goes to the log): the contexts the app gave, then git's `fatal:` or `error:` line,
 /// the one that tells why, when there is one; else the first line, as `board::turn_end` does with
@@ -370,6 +380,9 @@ pub struct TicketDraft {
     /// « Partager avec l'équipe » (ESC-190): shared, or no longer; None, absent: as it is (a new
     /// ticket: as « Partager chaque nouveau ticket » of its project says).
     pub shared: Option<bool>,
+    /// The pages and decisions it implements (« Planifier », ESC-262); None: as they are.
+    pub pages: Option<Vec<String>>,
+    pub decisions: Option<Vec<crate::docs::Ref>>,
 }
 
 /// A field that is there, null or not: Some, its value (null: None); absent, it is None by its
@@ -438,7 +451,7 @@ impl<R: Runtime> Core<R> {
         check: impl FnOnce(&[Ticket]) -> Result<C>,
         f: impl FnOnce(&mut Ticket, C) -> Result<T>,
     ) -> Result<T> {
-        let (out, ticket, change) = {
+        let (out, ticket, change, column) = {
             let mut tickets = self.tickets.write();
             let i = tickets
                 .iter()
@@ -447,10 +460,20 @@ impl<R: Runtime> Core<R> {
             let checked = check(&tickets)?;
             let t = &mut tickets[i];
             let before = t.external.is_some().then(|| t.clone());
+            let column = t.column;
             let out = f(t, checked)?;
             let change = before.and_then(|b| integrations::sync::change_of(&b, t));
-            (out, t.clone(), change)
+            (out, t.clone(), change, column)
         };
+        if ticket.column != column {
+            self.facts.emit(
+                crate::facts::Body::TicketColumn {
+                    from: crate::facts::column_word(column),
+                    to: crate::facts::column_word(ticket.column),
+                },
+                crate::facts::About::ticket(&ticket.id),
+            );
+        }
         if let Some(change) = change {
             self.sync_external(ticket.clone(), change);
         }
@@ -588,6 +611,8 @@ impl<R: Runtime> Core<R> {
             account,
             model: trimmed(d.model.as_deref()),
             effort: trimmed(d.effort.as_deref()),
+            pages: d.pages.clone().unwrap_or_default(),
+            decisions: d.decisions.clone().unwrap_or_default(),
             ..Default::default()
         };
         let pushed = {
@@ -621,6 +646,12 @@ impl<R: Runtime> Core<R> {
         self.hub.emit(UiEvent::Ticket {
             ticket: ticket.clone(),
         });
+        self.facts.emit(
+            crate::facts::Body::TicketCreated {
+                column: crate::facts::column_word(ticket.column),
+            },
+            crate::facts::About::ticket(&ticket.id),
+        );
         self.request_save();
         self.schedule();
         if share {
@@ -1011,10 +1042,35 @@ impl<R: Runtime> Core<R> {
             }
             Ok(())
         })?;
+        self.start_refusals.lock().remove(id);
         self.telemetry
             .track(Event::TicketStarted { autopilot: false });
         self.schedule();
         Ok(())
+    }
+
+    /// What became of a ticket launched by hand, waited for up to `within`: `Ok(true)` once it
+    /// left « À faire », `Err` with the reason when the pass did not start it, `Ok(false)` when
+    /// the pass has not come to it yet (behind another launch under way): it stays queued.
+    pub(crate) async fn wait_started(
+        &self,
+        id: &str,
+        within: Duration,
+    ) -> Result<bool, StartRefusal> {
+        let end = tokio::time::Instant::now() + within;
+        loop {
+            if let Some(why) = self.start_refusals.lock().remove(id) {
+                return Err(why);
+            }
+            match self.ticket(id) {
+                Ok(t) if t.column == Column::Todo => {}
+                _ => return Ok(true),
+            }
+            if tokio::time::Instant::now() >= end {
+                return Ok(false);
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
     }
 
     /// The ticket goes, and no other waits for it any more; one "En cours" or "À tester" has its
@@ -1059,6 +1115,8 @@ impl<R: Runtime> Core<R> {
             }
         }
         remove_images(self.data.ticket_dir(id)).await;
+        // The copy of the docs its agent wrote on a fixed branch, never poured (ESC-263).
+        self.docs_drop_ticket(&t.project_id, &t.key);
         for ticket in freed {
             self.hub.emit(UiEvent::Ticket { ticket });
         }
@@ -1349,23 +1407,42 @@ impl<R: Runtime> Core<R> {
     /// No ticket of the project on `engine` may start now: every account of that harness it may go
     /// to waits for its quota (an agent waiting for its reset, a window over the threshold, a usage
     /// limit with no resume).
-    fn held(&self, project_id: &str, engine: EngineId) -> bool {
-        self.project_hold(project_id, engine).is_some()
+    /// Launched by hand (`by_hand`), by a usage limit alone (`project_limit`).
+    fn held(&self, project_id: &str, engine: EngineId, by_hand: bool) -> bool {
+        self.project_hold_as(project_id, engine, by_hand).is_some()
     }
 
     /// What holds back the tickets, and the new agents, of the project on `engine`, if anything
     /// does (`board::project_hold`): every account of that harness it may go to is held, and then
     /// until the first of them is free again. Another harness is not held by it, and one without a
     /// quota is never held but by a usage limit. The tools that act refuse by it.
+    #[cfg(test)]
     pub(crate) fn project_hold(&self, project_id: &str, engine: EngineId) -> Option<board::Held> {
+        self.project_hold_as(project_id, engine, false)
+    }
+
+    /// What holds back a ticket or a new agent of the project asked for by hand, by a tool of
+    /// Escouade's server as by the window's buttons: a usage limit alone (a window used up, an
+    /// agent waiting for its reset, a pause after a limit). « Pause au-delà du quota » and the
+    /// day's budget hold back the autopilot, never a hand (the user, 2026-10-28).
+    pub(crate) fn project_limit(&self, project_id: &str, engine: EngineId) -> Option<board::Held> {
+        self.project_hold_as(project_id, engine, true)
+    }
+
+    fn project_hold_as(
+        &self,
+        project_id: &str,
+        engine: EngineId,
+        by_hand: bool,
+    ) -> Option<board::Held> {
         let settings = accounts::for_project(&self.settings.read(), engine, Some(project_id));
         let preferred = self
             .project(project_id)
             .ok()
             .and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
-        let threshold = board::quota_threshold(settings.quota_pause);
+        let threshold = hold_threshold(settings.quota_pause, by_hand);
         let accounts = accounts::candidates(&settings, preferred.as_deref());
-        let usage = self.usage.lock().accounts.clone();
+        let usage = hold_usage(&self.usage.lock().accounts, by_hand);
         let hold = self.hold.lock().clone();
         let waiting = self.quota_paused();
         board::project_hold(
@@ -1378,14 +1455,21 @@ impl<R: Runtime> Core<R> {
         )
     }
 
-    /// What holds back anything that spends the account's quota, a message to one of its agents
-    /// included, if anything does (`board::account_hold`). An account the settings do not know is
-    /// Principal, as for `quota_paused`.
-    pub(crate) fn account_hold(&self, account: &str) -> Option<board::Held> {
+    /// What holds back what spends the account's quota when asked for by hand (`project_limit`),
+    /// a message to one of its agents included: a usage limit alone.
+    pub(crate) fn account_limit(&self, account: &str) -> Option<board::Held> {
+        self.account_hold_as(account, true)
+    }
+
+    /// What holds back anything that spends the account's quota, if anything does
+    /// (`board::account_hold`): for the autopilot (`by_hand` false), « Pause au-delà du quota »
+    /// and the day's budget too. An account the settings do not know is Principal, as for
+    /// `quota_paused`.
+    fn account_hold_as(&self, account: &str, by_hand: bool) -> Option<board::Held> {
         let settings = self.settings.read().clone();
         let id = accounts::get(&settings, account).id;
-        let threshold = board::quota_threshold(settings.quota_pause);
-        let usage = self.usage.lock().accounts.clone();
+        let threshold = hold_threshold(settings.quota_pause, by_hand);
+        let usage = hold_usage(&self.usage.lock().accounts, by_hand);
         let hold = self.hold.lock().clone();
         let waiting = self.quota_paused();
         board::account_hold(&usage, &id, threshold, &hold, &waiting, self.pause_now())
@@ -1468,24 +1552,48 @@ impl<R: Runtime> Core<R> {
                     if !self.claude_missing.swap(true, Ordering::AcqRel) {
                         log::info!("board: Claude Code not found, no ticket starts until it is");
                     }
+                    self.refuse_forced(
+                        &p,
+                        &StartRefusal::Text(tr!(
+                            "Claude Code est introuvable : aucun ticket ne démarre tant qu’il ne l’est pas.",
+                            "Claude Code was not found: no ticket starts until it is."
+                        )),
+                    );
                     continue;
                 }
             }
-            // Held (`held`), none starts, even launched by hand. Looked at again for each project
+            // Held (`ticket_held`), none starts: the autopilot's by « Pause au-delà du quota »
+            // too, one launched by hand by a usage limit alone. Looked at again for each project
             // and each start: one started in this pass, or already at work, may meet the usage
             // limit while the pass goes on (each start takes seconds).
             // Each ticket by the accounts of its own harness.
             let engine_of = |t: &Ticket| t.engine.unwrap_or_else(|| p.engine());
+            // One launched by hand that a usage limit holds back (it may have been met since the
+            // tool checked) says so, rather than wait in « À faire » with nothing said.
+            let launched: Vec<Ticket> = self
+                .tickets
+                .read()
+                .iter()
+                .filter(|t| t.project_id == p.id && t.column == Column::Todo && t.forced)
+                .cloned()
+                .collect();
+            for t in launched {
+                if let Some(held) = self.ticket_hold(&p, &t, engine_of(&t)) {
+                    self.refuse_start(&p, &t.id, StartRefusal::Held(held));
+                }
+            }
             let ids = {
                 let tickets = self.tickets.read().clone();
-                let mut held: HashMap<EngineId, bool> = HashMap::new();
+                let mut held: HashMap<(EngineId, bool), bool> = HashMap::new();
                 board::to_start(&tickets, &p.id, &p.board, |t| {
                     let e = engine_of(t);
                     // One set on an account waits for that account alone (ESC-153).
                     if !t.account.is_empty() {
                         return self.ticket_held(&p, t, e);
                     }
-                    *held.entry(e).or_insert_with(|| self.held(&p.id, e))
+                    *held
+                        .entry((e, t.forced))
+                        .or_insert_with(|| self.held(&p.id, e, t.forced))
                 })
             };
             // A board that told why nothing starts is looked at again even with nothing to start:
@@ -1498,6 +1606,7 @@ impl<R: Runtime> Core<R> {
                 if self.set_board_issue(&p.id, Some(issue.clone())) {
                     log::info!("board of {}: {issue}", p.name);
                 }
+                self.refuse_forced(&p, &StartRefusal::Text(issue));
                 continue;
             }
             // Every ticket's branch starts from the target: while it has no commit yet (a new
@@ -1519,12 +1628,17 @@ impl<R: Runtime> Core<R> {
                     log::info!("board of {}: {why}", p.name);
                 }
             }
-            if issue.is_some() {
+            if let Some(issue) = issue {
+                self.refuse_forced(&p, &StartRefusal::Text(issue));
                 continue;
             }
             for id in ids {
                 let Ok(t) = self.ticket(&id) else { continue };
-                if self.ticket_held(&p, &t, engine_of(&t)) {
+                if let Some(held) = self.ticket_hold(&p, &t, engine_of(&t)) {
+                    // Met while this pass started the ones before it.
+                    if t.forced {
+                        self.refuse_start(&p, &id, StartRefusal::Held(held));
+                    }
                     continue;
                 }
                 self.start_ticket(&p, &id).await;
@@ -1794,10 +1908,72 @@ impl<R: Runtime> Core<R> {
 
     /// Whether the ticket may not start now for want of an account (`held`): one set on an account
     /// waits for that account alone (ESC-153), else for those of its harness.
+    /// Launched by hand, a ticket waits for a usage limit alone: « Pause au-delà du quota » and the
+    /// day's budget hold back the autopilot (the user, 2026-10-28).
     fn ticket_held(&self, project: &Project, t: &Ticket, engine: EngineId) -> bool {
+        self.ticket_hold(project, t, engine).is_some()
+    }
+
+    /// What holds the ticket back (`ticket_held`), if anything does.
+    fn ticket_hold(&self, project: &Project, t: &Ticket, engine: EngineId) -> Option<board::Held> {
         match self.pinned(project, t, engine) {
-            Some(id) => self.account_hold(&id).is_some(),
-            None => self.held(&project.id, engine),
+            Some(id) => self.account_hold_as(&id, t.forced),
+            None => self.project_hold_as(&project.id, engine, t.forced),
+        }
+    }
+
+    /// A ticket launched by hand that the pass did not start goes back as it was (« À faire », not
+    /// forced) and the reason is kept for whoever launched it (`start_refusals`), and told to the
+    /// window: else it stays « À faire » with nothing said.
+    fn refuse_start(self: &Arc<Self>, project: &Project, id: &str, why: StartRefusal) {
+        let back = self.edit_ticket(id, |t| {
+            let ours = t.column == Column::Todo && t.forced;
+            if ours {
+                t.forced = false;
+            }
+            Ok(ours)
+        });
+        if !back.unwrap_or(false) {
+            return;
+        }
+        let text = self.refusal_text(&why);
+        log::info!("ticket {id}: not started: {text}");
+        self.start_refusals.lock().insert(id.to_string(), why);
+        let key = self.ticket(id).map(|t| t.key).unwrap_or_default();
+        self.alert(
+            NotifyKind::Ticket,
+            project.name.clone(),
+            tr!(
+                "{key} n’est pas parti : {text}",
+                "{key} did not start: {text}",
+                key = key,
+                text = text
+            ),
+            UiEvent::FocusBoard {
+                project_id: project.id.clone(),
+            },
+        );
+    }
+
+    /// `refuse_start` for every ticket of the project launched by hand and waiting.
+    fn refuse_forced(self: &Arc<Self>, project: &Project, why: &StartRefusal) {
+        let ids: Vec<String> = self
+            .tickets
+            .read()
+            .iter()
+            .filter(|t| t.project_id == project.id && t.column == Column::Todo && t.forced)
+            .map(|t| t.id.clone())
+            .collect();
+        for id in ids {
+            self.refuse_start(project, &id, why.clone());
+        }
+    }
+
+    /// What was said of a refused start, as the tools say it.
+    pub(crate) fn refusal_text(&self, why: &StartRefusal) -> String {
+        match why {
+            StartRefusal::Held(held) => crate::mcp::act::why(self, held),
+            StartRefusal::Text(text) => text.clone(),
         }
     }
 
@@ -1815,6 +1991,40 @@ impl<R: Runtime> Core<R> {
                 && t.column != Column::Done
                 && !t.account.is_empty()
         })
+    }
+
+    /// The instructions added to a ticket's agent: its protocol, within the room its harness gives
+    /// it, then the code index's rule when the project has turned the index on (the room is kept
+    /// for it first, so the criteria give way before the rule does).
+    pub(crate) fn ticket_instructions(
+        &self,
+        project: &Project,
+        lang: i18n::Lang,
+        t: &Ticket,
+        ports: Option<u16>,
+        isola: bool,
+        follow: Option<&str>,
+    ) -> String {
+        let engine = crate::engine::by_id(t.engine.unwrap_or(project.engine()));
+        let rule = self
+            .code_index_on(project)
+            .then(|| crate::codeindex::hint::rule(lang));
+        let room = engine.instructions_room().map(|r| crate::engine::Room {
+            max: r
+                .max
+                .saturating_sub(rule.as_deref().map_or(0, |x| (r.weigh)(&format!(" {x}"))))
+                // The shared memory's line, added after it (`core::with_memory`).
+                .saturating_sub((r.weigh)(&crate::memory::instruction(lang)) + 1)
+                // And the spec in Escouade's (ESC-278), added before it.
+                .saturating_sub(follow.map_or(0, |f| (r.weigh)(f) + 1)),
+            weigh: r.weigh,
+        });
+        let mut p = board::protocol_prompt_for(lang, t, ports, isola, room);
+        if let Some(rule) = rule {
+            p.push(' ');
+            p.push_str(&rule);
+        }
+        p
     }
 
     /// The ticket's agent: its worktree on `<prefix><key>` (`ticket/<key>`) from the target branch, its block of
@@ -1854,6 +2064,7 @@ impl<R: Runtime> Core<R> {
         let isola = isola::cli().is_some() && isola::configured_on(&project.path, from).await;
         // Reserved at once: no other start or launch preparation gets this block meanwhile.
         let ports = if isola { None } else { self.reserve_ports() };
+        let follow = self.docs_follow(project, lang).await;
         let made = self
             .create_agent_with(
                 &project.id,
@@ -1865,14 +2076,15 @@ impl<R: Runtime> Core<R> {
                     mode: Some(mode),
                     name: Some(board::ticket_agent_name(t)),
                     worktree: new_branch,
-                    // Within the room its harness gives it.
-                    append_prompt: Some(board::protocol_prompt_for(
+                    // Within the room its harness gives it, the code index's rule included, and what
+                    // it is told of the shared memory after it (`core::with_memory`).
+                    append_prompt: Some(self.ticket_instructions(
+                        project,
                         lang,
                         t,
                         ports,
                         isola,
-                        crate::engine::by_id(t.engine.unwrap_or(project.engine()))
-                            .instructions_room(),
+                        follow.as_deref(),
                     )),
                     ticket_id: Some(t.id.clone()),
                     port_base: ports,
@@ -1885,6 +2097,8 @@ impl<R: Runtime> Core<R> {
                     new_branch: false,
                     // Set apart from Remote Control by hand for its earlier agent: so is this one.
                     remote_off: t.remote_off,
+                    cwd: None,
+                    discussion: None,
                 },
             )
             .await;
@@ -1983,21 +2197,35 @@ impl<R: Runtime> Core<R> {
             end => end,
         };
         let lang = self.lang().claude;
+        let mut reported = None;
         let Ok(next) = self.edit_ticket(&ticket_id, |t| {
             // A ticket started again has another agent: the old one's turns never move it.
             if t.agent_id.as_deref() != Some(agent_id) {
                 return Ok(board::Next::default());
             }
+            let reports = t.column == Column::Doing
+                && matches!(end, TurnEnd::Finished(_))
+                && report.as_ref().is_some_and(|r| r.criteria.is_some());
             // Stopped by the usage limit, a blocked ticket stays as it is: its block already
             // tells why it does not move (its resume lost, cancelled or failed, whether that
             // came before this reading or after), and its agent's next finished turn is read.
             if limited && t.blocked.is_some() {
                 return Ok(board::Next::default());
             }
-            Ok(board::turn_end(lang, t, &end, report.as_ref(), now_ms()))
+            let next = board::turn_end(lang, t, &end, report.as_ref(), now_ms());
+            if reports {
+                reported = Some((t.criteria.iter().filter(|c| c.ok).count(), t.criteria.len()));
+            }
+            Ok(next)
         }) else {
             return;
         };
+        if let Some((met, total)) = reported {
+            self.facts.emit(
+                crate::facts::Body::TicketReport { met, total },
+                crate::facts::About::ticket(&ticket_id),
+            );
+        }
         if let Some(text) = next.send {
             let _ = self.send_or_block(&ticket_id, agent_id, text).await;
         }
@@ -2550,6 +2778,12 @@ impl<R: Runtime> Core<R> {
             t.step = Some(tr!("Validation…", "Approving…"));
             Ok(t.clone())
         })
+        .inspect(|t| {
+            self.facts.emit(
+                crate::facts::Body::TicketApproved {},
+                crate::facts::About::ticket(&t.id),
+            )
+        })
     }
 
     /// The approval `approve_begin` started: its validation, a failed step blocking the ticket,
@@ -2602,6 +2836,10 @@ impl<R: Runtime> Core<R> {
             let env = testlaunch::port_env(meta.port_base);
             let run =
                 testlaunch::run_tests(&shell, &wt.path, command, &env, TEST_LIMIT, lang).await?;
+            self.facts.emit(
+                crate::facts::Body::TestsResult { passed: run.passed },
+                crate::facts::About::ticket(&t.id),
+            );
             if !run.passed {
                 // Its agent archived or deleted during the tests: the ticket went back to do (and
                 // maybe on with another agent); the old agent is told nothing (it would start again).
@@ -2622,6 +2860,26 @@ impl<R: Runtime> Core<R> {
                     .await;
                 return Ok(());
             }
+        }
+        // What it changed, for the pages of the spec it touches (ESC-263), read before the commit and
+        // the merge, against where its branch left the target.
+        let changed = if wt.is_multi() {
+            Vec::new()
+        } else {
+            crate::docscompare::changed_files(&wt.path, &target).await
+        };
+        // The decisions its agent left are accepted by this validation (docs/FACTORY.md), before
+        // the commit, so they are merged with the ticket. One that cannot be written stops nothing.
+        match self
+            .docs_accept_ticket_decisions(&project.id, &agent_id, &t.key, &target)
+            .await
+        {
+            Ok(n) if !n.is_empty() => {
+                log::info!("ticket {}: decisions {n:?} accepted", t.key);
+                self.docs_changed(&project.id).await;
+            }
+            Ok(_) => {}
+            Err(e) => log::warn!("ticket {}: its decisions not accepted: {e:#}", t.key),
         }
         // The files copied from the project into the worktree (`.env`…), the list the copy took:
         // never committed, merged or pushed. Git ignores them, so only an agent that forced one in
@@ -2701,7 +2959,17 @@ impl<R: Runtime> Core<R> {
                 }
                 "pr" => {
                     self.set_step(&t.id, "Push…");
-                    self.open_pr(t, &s, &wt, &target, message).await?
+                    let o = self.open_pr(t, &s, &wt, &target, message).await?;
+                    if let Some(url) = &o.url {
+                        self.facts.emit(
+                            crate::facts::Body::PrOpened {
+                                url: url.clone(),
+                                target: target.clone(),
+                            },
+                            crate::facts::About::ticket(&t.id),
+                        );
+                    }
+                    o
                 }
                 "push" => {
                     self.set_step(&t.id, "Push…");
@@ -2724,6 +2992,11 @@ impl<R: Runtime> Core<R> {
             .agent(&agent_id)
             .ok()
             .and_then(|h| h.lock().proc.clone());
+        let merged = (s.action == "merge" && !nothing).then(|| crate::facts::Body::TicketMerged {
+            target: target.clone(),
+            commit: outcome.commit.clone(),
+            url: outcome.url.clone(),
+        });
         self.edit_ticket(&t.id, |x| {
             // Its agent archived or deleted meanwhile: it went back to do, and stays there.
             if !validating(x, &agent_id) {
@@ -2741,6 +3014,33 @@ impl<R: Runtime> Core<R> {
             x.cost = cost;
             Ok(())
         })?;
+        if let Some(merged) = merged {
+            self.facts.emit(merged, crate::facts::About::ticket(&t.id));
+        }
+        // Validated: on a fixed branch of the docs, the spec and decisions its agent wrote are poured
+        // there now, never before; then the pages it touches are compared to the code, once merged.
+        let poured = match self.docs_pour_ticket(&project.id, &t.key).await {
+            Ok(p) => p,
+            Err(e) => {
+                log::warn!(
+                    "ticket {}: its docs not poured on the docs branch: {e:#}",
+                    t.key
+                );
+                None
+            }
+        };
+        if let Some(p) = &poured {
+            self.facts.emit(
+                crate::facts::Body::DocsFiled {
+                    pages: p.pages.len(),
+                },
+                crate::facts::About::ticket(&t.id),
+            );
+            self.docs_changed(&project.id).await;
+        }
+        if s.action == "merge" && !nothing {
+            self.docs_after_ticket(&project.id, &t.key, changed, poured);
+        }
         if s.action != "keep" {
             // Done whatever becomes of its agent: its work went where it was sent, and "Réessayer"
             // on it would have nothing left to do.
@@ -3119,6 +3419,13 @@ impl<R: Runtime> Core<R> {
             return self.agent_resolves(&t.id).await;
         }
         let ask = s.conflict != "abort";
+        self.facts.emit(
+            crate::facts::Body::TicketConflict {
+                target: target.to_string(),
+                files: files.clone(),
+            },
+            crate::facts::About::ticket(&t.id),
+        );
         let reason = conflict_reason(i18n::ui(), target, &files, ask);
         let agent_id = t.agent_id.clone().unwrap_or_default();
         self.edit_ticket(&t.id, |x| {
@@ -3286,6 +3593,12 @@ impl<R: Runtime> Core<R> {
             board::back_to_work(t);
             Ok((t.key.clone(), agent_id))
         })?;
+        self.facts.emit(
+            crate::facts::Body::TicketRejected {
+                comment: comment.chars().take(2000).collect(),
+            },
+            crate::facts::About::ticket(id),
+        );
         self.send_or_block(
             id,
             &agent_id,
@@ -3527,7 +3840,7 @@ impl<R: Runtime> Core<R> {
     /// The terminal `term_id` is one of the agent's test launches, kept to be stopped with them.
     /// One started as the agent was archived or deleted, or as its ticket's validation began
     /// (after its launches were stopped), is stopped at once: the error tells why.
-    pub fn track_test_run(&self, agent_id: &str, term_id: &str) -> Result<()> {
+    pub fn track_test_run(&self, agent_id: &str, term_id: &str, name: &str) -> Result<()> {
         self.test_runs
             .lock()
             .entry(agent_id.to_string())
@@ -3546,7 +3859,49 @@ impl<R: Runtime> Core<R> {
             self.stop_test_runs(agent_id);
             return Err(e);
         }
+        self.facts.emit(
+            crate::facts::Body::LaunchStarted {
+                run: name.to_string(),
+            },
+            self.about_agent(agent_id),
+        );
         Ok(())
+    }
+
+    /// A test launch of the agent answers at `url` (the window's look at it, `http_ready`).
+    pub fn test_run_ready(&self, agent_id: &str, url: &str) {
+        if self.test_runs.lock().contains_key(agent_id) {
+            self.facts.emit(
+                crate::facts::Body::LaunchReady {
+                    url: url.to_string(),
+                },
+                self.about_agent(agent_id),
+            );
+        }
+    }
+
+    /// The terminal `term_id` ended: when it was an agent's test launch, it stopped.
+    pub fn test_run_ended(&self, term_id: &str) {
+        let agent = {
+            let mut runs = self.test_runs.lock();
+            let agent = runs
+                .iter()
+                .find(|(_, ids)| ids.iter().any(|i| i == term_id))
+                .map(|(a, _)| a.clone());
+            if let Some(a) = &agent {
+                if let Some(ids) = runs.get_mut(a) {
+                    ids.retain(|i| i != term_id);
+                    if ids.is_empty() {
+                        runs.remove(a);
+                    }
+                }
+            }
+            agent
+        };
+        if let Some(a) = agent {
+            self.facts
+                .emit(crate::facts::Body::LaunchStopped {}, self.about_agent(&a));
+        }
     }
 
     /// The agent's test launches stop (its validation, archive or deletion, its project closed),
@@ -3555,6 +3910,10 @@ impl<R: Runtime> Core<R> {
         let ids = self.test_runs.lock().remove(agent_id).unwrap_or_default();
         for id in ids {
             self.pty.kill(&id);
+            self.facts.emit(
+                crate::facts::Body::LaunchStopped {},
+                self.about_agent(agent_id),
+            );
         }
         let dir = self
             .agent(agent_id)
@@ -3721,4 +4080,29 @@ pub(crate) fn same_dir(a: &str, b: &str) -> bool {
             norm(a) == norm(b)
         }
     }
+}
+
+/// The threshold of a window that holds back a start: « Pause au-delà du quota » for the
+/// autopilot, a window used up (100 %) for a start asked by hand (`Core::project_limit`).
+fn hold_threshold(saved: u32, by_hand: bool) -> u32 {
+    if by_hand {
+        100
+    } else {
+        board::quota_threshold(saved)
+    }
+}
+
+/// The accounts' usage a hold reads: for a start asked by hand, without their day's budget, which
+/// pauses the autopilot alone (`Core::project_limit`).
+fn hold_usage(usage: &[AccountUsage], by_hand: bool) -> Vec<AccountUsage> {
+    usage
+        .iter()
+        .cloned()
+        .map(|mut u| {
+            if by_hand {
+                u.daily_budget = None;
+            }
+            u
+        })
+        .collect()
 }

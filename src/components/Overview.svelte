@@ -6,7 +6,7 @@
   import Rich from '../lib/i18n/Rich.svelte';
   import { api } from '../lib/ipc';
   import { menu } from '../lib/menu.svelte';
-  import { modelLabel } from '../lib/models';
+  import { modeLabel, modelLabel, planResume } from '../lib/models';
   import { keyLabel } from '../lib/platform';
   import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
   import { can, showsCost, speakerOf } from '../lib/engines';
@@ -366,7 +366,7 @@
               req?.kind === 'question'
                 ? req.questions.map((q) => q.question).join(' · ')
                 : req
-                  ? t('stats.overview.proposesPlan', { engine: speakerOf(a.engine) })
+                  ? t('stats.overview.proposesPlanThen', { engine: speakerOf(a.engine), mode: modeLabel(planResume(a)) })
                   : a.terminal
                     ? t('stats.overview.waitsInTerminal')
                     : t('stats.overview.waitsForAnswer', { engine: speakerOf(a.engine) })}

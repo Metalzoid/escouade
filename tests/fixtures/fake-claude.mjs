@@ -39,7 +39,8 @@
 // What Escouade tells it is read in French or in English (« Langue des textes rédigés par Claude »):
 // each scenario below is recognized in both, its answers stay the same.
 // Started with --append-system-prompt (a ticket's protocol; not what a copy of an agent is told of
-// its new folder, « Cette conversation a été copiée… », “This conversation was copied…”), it plays the ticket's agent: it writes
+// its new folder, « Cette conversation a été copiée… », “This conversation was copied…”, nor what
+// every agent is told of the shared memory, « Le projet a une mémoire partagée… »), it plays the ticket's agent: it writes
 // <key>.txt ("Boucle n") in its folder and ends each turn with an ```escouade report (criteria and
 // "avancement"). The ticket's title, in the protocol, steers it: [ok] every criterion met at once,
 // [jamais] none ever, [sans-bilan] no report, [lent] a turn that lasts 30 s, [recette] a launch
@@ -50,7 +51,17 @@
 // history), [tenace] a process that lasts 5 s once its input is closed, [rien] no file written (nothing
 // to merge), [dans:api] its file written in that folder instead (each one named; ESC-169); by default criterion n is
 // met from loop n on. "faits-workflow: [...]" in its ticket (ESC-197) plays those facts first, then holds its turn 10 min
-// as [lent] does: the agent of a ticket under way that follows a workflow too.
+// as [lent] does: the agent of a ticket under way that follows a workflow too. [spec:<project>] (ESC-263): before its first
+// report it keeps the spec as its protocol asks, by Escouade's docs tools (its --mcp-config server): the page
+// paiement/echeances written (« Quatre échéances au plus (<key>). [écart] ») and a decision proposed. In one-shot mode, a page
+// compared to the code (<spec-page>) gets a gap when it says [écart] (none otherwise; [muet]: the model fails).
+// In one-shot mode, « Planifier » (ESC-262, <changed-page>) gets a ticket per page changed, each after the one before (see
+// the planner's branch below).
+// [proposer:<project>] in a message (ESC-261, a discussion of the Docs tab): by the same tools, the page
+// espace-adherent/relances written (« Trois relances par e-mail… »), the page notifications/general changed when it is there,
+// and a decision proposed (« Relances par e-mail seulement »), then « Proposé dans la spec. ». The message of « Mettre la spec à
+// jour » (« (.escouade/spec/<path>.md) ne dit pas ce que fait le code ») makes the spec writer propose that page without its
+// [écart], « Mis à jour d’après le code par le faux claude. » after it (the project named by its instructions).
 // "[worktree <branch>]" in a message goes into a worktree of its own as Claude Code's EnterWorktree does (ESC-161): made
 // under <repository>/.claude/worktrees/<branch with non-alphanumerics replaced by -> on the new branch <branch> (or
 // gone into again), the session goes on there (the `cwd` of its entries), kept in its first folder's project folder.
@@ -383,6 +394,63 @@ if (argv[0] === 'mcp') {
       });
       if (input.includes('[invente]')) workflows.push({ id: 'inconnu|x', steps: [], transitions: [] });
       const result = `Voici.\n\n\`\`\`json\n${JSON.stringify({ workflows })}\n\`\`\``;
+      process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
+      return;
+    }
+    // « Planifier » (ESC-262): one ticket per page changed (« Implémenter : <title> »), each after the one before, the
+    // first with the decisions; then again the first (twice in the list) and each ticket of the board whose title says
+    // [doublon] (one the board has): Escouade leaves those out. A page that says [muet]: the model fails.
+    if (input.includes('<changed-page ') || input.includes('<decision number=')) {
+      const changed = [...input.matchAll(/<changed-page path="([^"]*)" title="([^"]*)">\n([\s\S]*?)\n<\/changed-page>/g)];
+      if (changed.some((c) => c[3].includes('[muet]'))) {
+        process.stderr.write('model unavailable\n');
+        process.exit(1);
+      }
+      // A decision by its ref: its number (« 0003 »), or a proposal's id.
+      const decisions = [...input.matchAll(/<decision ref="([^"]+)"/g)].map((m) => (/^\d+$/.test(m[1]) ? Number(m[1]) : m[1]));
+      const tickets = changed.map((c, i) => ({
+        title: `Implémenter : ${c[2]}`,
+        description: `D’après la page ${c[1]} de la spec.`,
+        criteria: [`${c[2]} : fait comme la page le dit`, 'Tests passés'],
+        after: i ? [String(i)] : [],
+        pages: [c[1], 'inconnu/page'],
+        decisions: i ? [] : decisions,
+      }));
+      if (!tickets.length && decisions.length)
+        tickets.push({ title: 'Appliquer les décisions', description: '', criteria: ['Fait'], after: [], pages: [], decisions });
+      if (tickets.length) tickets.push({ ...tickets[0], title: tickets[0].title.toUpperCase() });
+      const board = input.match(/<board>\n([\s\S]*?)\n?<\/board>/)?.[1] ?? '';
+      for (const line of board.split('\n')) {
+        const m = line.match(/^\S+ \[\w+\] (.*?)(?: — .*)?$/);
+        if (m && m[1].includes('[doublon]')) tickets.push({ title: m[1], description: '', criteria: [], after: [], pages: [] });
+      }
+      const result = `Planifié.\n\n\`\`\`json\n${JSON.stringify({ tickets })}\n\`\`\``;
+      process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
+      return;
+    }
+    // A page of the spec compared to the code (ESC-263): a gap when its text says [écart], on the first file of code of the
+    // folder it reads (else its first file) and one outside of it; none otherwise. [muet] in it: the model fails.
+    const compared = input.match(/<spec-page path="([^"]*)"[^>]*>\n([\s\S]*?)\n<\/spec-page>/);
+    if (compared) {
+      if (compared[2].includes('[muet]')) {
+        process.stderr.write('model unavailable\n');
+        process.exit(1);
+      }
+      const files = fs
+        .readdirSync(process.cwd(), { withFileTypes: true })
+        .filter((e) => e.isFile() && !e.name.startsWith('.'))
+        .map((e) => e.name)
+        .sort();
+      const first = files.find((f) => /\.(ts|rs|js|py)$/.test(f)) ?? files[0];
+      const gaps = compared[2].includes('[écart]')
+        ? [
+            {
+              text: 'La page dit quatre échéances ; le code en accepte encore trois au plus.',
+              code: [first, '../dehors.txt'].filter(Boolean),
+            },
+          ]
+        : [];
+      const result = `Comparé.\n\n\`\`\`json\n${JSON.stringify({ gaps })}\n\`\`\``;
       process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
       return;
     }
@@ -918,12 +986,25 @@ function startSession() {
   let slowTimer = null;
   let floodTimer = null;
   let asked = false;
+  // The spec kept once ([spec:<project>], ESC-263).
+  let specKept = false;
   // The subagent of "sous-agent long" while it runs, until a `stop_task` of its task: { task, call, description }.
   let longAgent = null;
   const replay = argv.includes('--replay-user-messages');
   const appended = argv.includes('--append-system-prompt') ? (argv[argv.indexOf('--append-system-prompt') + 1] ?? '') : '';
-  // What a copy of an agent is told of its folder is no ticket's protocol: it plays a plain agent.
-  const copied = ['Cette conversation a été copiée', 'This conversation was copied'];
+  // What a copy of an agent is told of its folder, what every agent is told of the shared memory (ESC-255) or a discussion
+  // of the Docs tab of its role (ESC-261) is no ticket's protocol: it plays a plain agent.
+  const copied = [
+    'Cette conversation a été copiée',
+    'This conversation was copied',
+    'Le projet a une mémoire partagée',
+    'The project has a memory shared',
+    // A discussion of the Docs tab (ESC-261): its role, no ticket.
+    'Tu es l’agent rédacteur de spec',
+    'Tu es l’agent produit',
+    'You are the spec writer',
+    'You are the product agent',
+  ];
   const sys = copied.some((c) => appended.startsWith(c)) ? '' : appended;
   let remoteSent = false;
   let entries = 0;
@@ -1058,6 +1139,47 @@ function startSession() {
     });
   }
 
+  // Escouade's tools, called as Claude Code would through the server its --mcp-config file names.
+  async function escouadeTool(name, args) {
+    const file = argv[argv.indexOf('--mcp-config') + 1];
+    const server = JSON.parse(fs.readFileSync(file, 'utf8')).mcpServers.escouade;
+    let session = null;
+    const post = async (body) => {
+      const headers = { ...server.headers, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' };
+      if (session) headers['Mcp-Session-Id'] = session;
+      const r = await fetch(server.url, { method: 'POST', headers, body: JSON.stringify(body) });
+      session = r.headers.get('mcp-session-id') ?? session;
+      const t = await r.text();
+      return t ? JSON.parse(t.startsWith('{') ? t : (t.match(/^data: (.*)$/m)?.[1] ?? 'null')) : null;
+    };
+    await post({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'fake-claude', version: '1' } },
+    });
+    await post({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    const done = await post({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } });
+    if (done?.error || done?.result?.isError) throw new Error(`${name}: ${JSON.stringify(done)}`);
+    return done?.result;
+  }
+
+  async function keepSpec(project, key) {
+    await escouadeTool('write_spec_page', {
+      project,
+      path: 'paiement/echeances',
+      title: 'Échéances',
+      body: `# Échéances\n\nQuatre échéances au plus (${key}). [écart]`,
+    });
+    await escouadeTool('propose_decision', {
+      project,
+      title: `Quatre échéances (${key})`,
+      context: 'Les clients demandent une échéance de plus.',
+      decision: 'Quatre échéances au plus.',
+      consequences: 'L’échéancier change.',
+    });
+  }
+
   function ticketTurn(text) {
     const key = sys.match(/ticket ([A-Z]+-\d+)/)?.[1] ?? 'TIC-0';
     const count = Number(sys.match(/(?:Critères d'acceptation|Acceptance criteria) \((\d+)\)/)?.[1] ?? 1);
@@ -1075,6 +1197,16 @@ function startSession() {
     if (all.includes('[lent]')) {
       streamText('Je commence…');
       slowTimer = setTimeout(() => result(), 30_000);
+      return;
+    }
+    // [spec:<project>] (ESC-263): a ticket that changes how the product behaves keeps the spec, as its protocol asks,
+    // once: the page paiement/echeances written and a decision left by Escouade's docs tools.
+    const specProject = all.match(/\[spec:([^\]]+)\]/)?.[1];
+    if (specProject && !specKept) {
+      specKept = true;
+      keepSpec(specProject, key)
+        .catch((e) => process.stderr.write(`spec: ${e.stack}\n`))
+        .finally(() => ticketTurn(text));
       return;
     }
     const file = `${key.toLowerCase()}.txt`;
@@ -1722,6 +1854,22 @@ function startSession() {
       parent_tool_use_id: null,
       ...extra,
     });
+  }
+
+  // ---------- "sorties piégées" (ESC-290) ----------
+
+  // A Bash call that read a binary file and a minified one: NUL and control characters, a terminal's escapes, a lone
+  // half of a UTF-16 pair, then a line of 5 MB. What the page must show without drawing it raw nor whole.
+  function trappedOutputs() {
+    const wav = Buffer.alloc(4096);
+    for (let i = 0; i < wav.length; i++) wav[i] = (i * 37 + 11) % 256;
+    Buffer.from('RIFF\0\0\0\0WAVEfmt ', 'latin1').copy(wav);
+    const binary = 'cat \x1b[31m' + wav.toString('latin1') + '\x1b[0m fin \ud83c';
+    const id = 'toolu_trap_' + process.pid;
+    assistant({ type: 'tool_use', id, name: 'Bash', input: { command: 'cat "bank 1.bnk" minified.json' } });
+    toolResult(id, binary + '\n' + 'x'.repeat(5_000_000));
+    streamText('Lu.');
+    result();
   }
 
   // ---------- "faits-workflow" ----------
@@ -2434,6 +2582,7 @@ function startSession() {
       return;
     }
     if (text.includes('envoie des fichiers')) return sendFiles(text);
+    if (text.includes('sorties piégées')) return trappedOutputs();
     if (sys) return ticketTurn(text);
     const facts = /faits-workflow(-erreur)?:\s*(\[[\s\S]*\])/.exec(text);
     if (facts) {
@@ -2564,6 +2713,63 @@ function startSession() {
       );
       streamText('Rapport reçu.');
       result();
+      return;
+    }
+    // « Mettre la spec à jour » (ESC-261): the spec writer proposes the page from the code, its [écart] gone.
+    const gapPage = text.match(/\(\.escouade\/spec\/(.+?)\.md\) (?:ne dit pas ce que fait le code|doesn’t say what the code does)/)?.[1];
+    const writerOf = appended.match(/(?:du projet « ([^»]+) »|of the project “([^”]+)”)/);
+    if (gapPage && writerOf) {
+      const project = (writerOf[1] ?? writerOf[2]).trim();
+      (async () => {
+        const read = await escouadeTool('read_spec_page', { project, path: gapPage });
+        const old = JSON.parse(read.content[0].text).body;
+        await escouadeTool('write_spec_page', {
+          project,
+          path: gapPage,
+          body: `${old.replace(/\s*\[écart\]/g, '')}\n\nMis à jour d’après le code par le faux claude.`,
+        });
+      })()
+        .then(() => streamText('Page proposée d’après le code.'))
+        .catch((e) => {
+          process.stderr.write(`mise à jour: ${e.stack}\n`);
+          streamText(`Échec : ${e.message}`);
+        })
+        .finally(() => result());
+      return;
+    }
+    // [proposer:<project>] (ESC-261): what a discussion proposes for the spec, by Escouade's docs tools.
+    const proposeIn = text.match(/\[proposer:([^\]]+)\]/)?.[1];
+    if (proposeIn) {
+      (async () => {
+        await escouadeTool('write_spec_page', {
+          project: proposeIn,
+          path: 'espace-adherent/relances',
+          title: 'Relances',
+          subject: 'Espace adhérent',
+          body: 'Trois relances par e-mail : 30 et 7 jours avant l’échéance, puis 3 jours après.\nUn adhérent peut couper les relances depuis son espace.',
+        });
+        const tree = await escouadeTool('get_spec_tree', { project: proposeIn });
+        if (tree?.content?.[0]?.text?.includes('notifications/general'))
+          await escouadeTool('write_spec_page', {
+            project: proposeIn,
+            path: 'notifications/general',
+            body: 'Les relances d’adhésion sont planifiées chaque nuit.',
+          });
+        await escouadeTool('propose_decision', {
+          project: proposeIn,
+          title: 'Relances par e-mail seulement',
+          context: 'Les SMS demandent un consentement à part.',
+          decision: 'Pas de SMS.',
+          consequences: 'À revoir si le renouvellement baisse.',
+          pages: ['espace-adherent/relances'],
+        });
+      })()
+        .then(() => streamText('Proposé dans la spec.'))
+        .catch((e) => {
+          process.stderr.write(`proposer: ${e.stack}\n`);
+          streamText(`Échec : ${e.message}`);
+        })
+        .finally(() => result());
       return;
     }
     if (text.includes('lire-fichier ') || text.includes('modifier-fichier ')) {
@@ -2763,8 +2969,11 @@ function startSession() {
       toolResult(p.tuid, r.behavior === 'allow' ? 'contenu du fichier' : `Refusé : ${r.message}`);
       streamText(`${p.tool} : ${r.behavior}`);
     } else if (r.behavior === 'allow' && p.plan) {
+      // As Claude Code: out of Plan in the mode its answer sets (`setMode`), else `default` (ESC-277).
+      const mode = (r.updatedPermissions ?? []).find((u) => u.type === 'setMode')?.mode ?? 'default';
+      out({ type: 'system', subtype: 'status', status: null, permissionMode: mode, session_id: sessionId });
       toolResult(p.tuid, 'Plan approuvé');
-      streamText(r.updatedPermissions ? 'Plan approuvé (édits acceptés).' : 'Plan approuvé.');
+      streamText(mode === 'acceptEdits' ? 'Plan approuvé (édits acceptés).' : 'Plan approuvé.');
     } else if (r.behavior === 'allow') {
       toolResult(p.tuid, 'build supprimé', { tool_use_result: { stdout: 'build supprimé', stderr: '', interrupted: false } });
       streamText(r.updatedPermissions ? 'Commande exécutée (règle enregistrée).' : 'Commande exécutée.');

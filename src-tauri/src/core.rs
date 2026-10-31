@@ -147,7 +147,8 @@ const MODELS_KEPT_MS: i64 = 24 * 3600 * 1000;
 
 /// Whether the models of an account of `engine` are read by account, without an agent: Claude
 /// Code's (`initialize`, ESC-124), and since ESC-186 Codex's (`model/list`), Copilot CLI's
-/// (`models.list`), Cursor CLI's (`cursor/list_available_models`) and OpenCode's (`opencode models`).
+/// (`models.list`), Cursor CLI's (`cursor/list_available_models`) and OpenCode's (`opencode models`); since
+/// ESC-266 Mistral Vibe's (the `configOptions` of a `session/new`).
 fn reads_account_models(engine: EngineId) -> bool {
     matches!(
         engine,
@@ -156,6 +157,9 @@ fn reads_account_models(engine: EngineId) -> bool {
             | EngineId::Copilot
             | EngineId::Cursor
             | EngineId::Opencode
+            | EngineId::Vibe
+            | EngineId::Agy
+            | EngineId::Gemini
     )
 }
 
@@ -776,6 +780,10 @@ pub struct AgentOptions {
     /// Set apart from Remote Control from the start (`AgentMeta::remote_off`): a ticket's next
     /// agent, when the user set the ticket's previous one apart.
     pub remote_off: bool,
+    /// Works in this folder (where the project's docs are) when it has no worktree of its own.
+    pub cwd: Option<String>,
+    /// A discussion of the Docs tab (ESC-261).
+    pub discussion: Option<crate::discussion::Discussion>,
 }
 
 /// What a copy takes of its original, read while no turn of the original ran.
@@ -846,6 +854,20 @@ pub struct Core<R: Runtime = Wry> {
     /// The accounts whose models are being read (`read_account_models`): one reading at a time.
     models_reading: Mutex<HashSet<String>>,
     pub git: GitService,
+    /// The projects' code indexes (`codeindex`).
+    pub(crate) codeindex: crate::codeindex::Service,
+    /// The installed plugins (`plugins`).
+    pub plugins: Arc<crate::plugins::Plugins>,
+    /// The store in the app (STORE-9): its catalogue and its revocation list, cached.
+    pub store: Arc<crate::plugins::store::Store>,
+    /// Their processes (`plugins::runtime`): started at their first activation, closed with the app.
+    pub(crate) plugin_runtime: Arc<crate::plugins::runtime::Runtime>,
+    /// The facts' bus (PLG-5): what happened, told where the state changes.
+    pub facts: crate::facts::Bus,
+    /// What hands the facts to the plugins (`plugins::events`).
+    pub(crate) plugin_events: Arc<crate::plugins::events::Dispatch>,
+    /// The download of the vectors' model under way (ESC-254), by its flag to call it off.
+    pub(crate) vectors_download: Mutex<Option<Arc<std::sync::atomic::AtomicBool>>>,
     pub git_cache: RwLock<HashMap<String, GitInfo>>,
     pub pty: PtyManager,
     spawn_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
@@ -896,11 +918,16 @@ pub struct Core<R: Runtime = Wry> {
     pub unsaved: AtomicUsize,
     /// The agents the window holds a message for (`outbox.svelte.ts`).
     pub held: Mutex<HashSet<String>>,
+    /// What the page showed when its process ended abnormally, until the page told it (ESC-290).
+    pub page_crash: Mutex<Option<crate::pagecrash::PageCrash>>,
     /// Work under way outside of an agent's turn that a restart would cut (`Core::working`): a
     /// ticket being started, a validation and its cleanup, a message being delivered, a merge.
     pub(crate) works: AtomicUsize,
     /// One scheduling pass of the board at a time.
     pub(crate) board_lock: tokio::sync::Mutex<()>,
+    /// Why a ticket launched by hand was not started by the pass that took it up (`StartRefusal`),
+    /// until it is launched again: the tool that launched it says it.
+    pub(crate) start_refusals: Mutex<HashMap<String, crate::tickets::StartRefusal>>,
     /// Agents whose turn the app's previous stop cut (active when saved): their tickets go on.
     pub(crate) cut_turns: Mutex<Vec<String>>,
     /// The GitHub CLI, when installed (pull requests).
@@ -928,6 +955,9 @@ pub struct Core<R: Runtime = Wry> {
     /// Blocks of ports reserved for agents being made, or being given one: taken until the agent
     /// holds its own.
     pub(crate) ports_reserved: Mutex<Vec<u16>>,
+    /// What each project's docs have to share, as last told to the window, and the conflict a
+    /// « Partager » stopped on (`docsshare`).
+    pub(crate) docs_shares: Mutex<HashMap<String, crate::docsshare::Memo>>,
     /// One validation's merge at a time per repository (`merge_lock`).
     pub(crate) merge_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     /// One change of the Claude accounts' settings at a time (the accounts' tab, the window's
@@ -998,6 +1028,13 @@ pub struct Core<R: Runtime = Wry> {
     /// (tests only: the wait is `NAMING_LIMIT`).
     #[cfg(test)]
     pub(crate) naming_ms: AtomicU64,
+    /// The conversation's ops handed to the window so far, sent or buffered (tests only: the
+    /// stream bench, `fluxbench`, tells by it the lines that made something).
+    #[cfg(test)]
+    pub(crate) conv_ops: AtomicU64,
+    /// The names that came for an agent gone meanwhile and were dropped (tests only).
+    #[cfg(test)]
+    pub(crate) names_dropped: AtomicU64,
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
@@ -1013,6 +1050,10 @@ pub struct Core<R: Runtime = Wry> {
     /// Scheduling passes asked for (`schedule`) and not over yet (tests only).
     #[cfg(test)]
     pub(crate) passes_queued: AtomicUsize,
+    /// The model of the vectors the tests give (tests only: none is downloaded).
+    #[cfg(test)]
+    pub(crate) test_embedder:
+        parking_lot::Mutex<Option<std::sync::Arc<dyn crate::vectors::embed::Embedder>>>,
     /// How far ahead of the real clock the autopilot's pauses and the retries of the syncs go by,
     /// in milliseconds (tests only: the end of a pause, or a retry's time, without waiting for
     /// it).
@@ -1322,6 +1363,25 @@ pub(crate) fn auto_resume(lang: i18n::Lang) -> String {
     tr_in!(lang, "continue", "continue")
 }
 
+/// The instructions of a new agent: those it is given (a ticket's protocol…), then what it is told of the project's
+/// shared memory (ESC-255), so that every harness reads and writes it.
+pub(crate) fn with_memory(lang: i18n::Lang, given: Option<String>) -> Option<String> {
+    let line = crate::memory::instruction(lang);
+    Some(match given.filter(|g| !g.trim().is_empty()) {
+        Some(g) => format!("{g} {line}"),
+        None => line,
+    })
+}
+
+/// `given` with what the agent is told of a spec that lives in Escouade (ESC-278, `Space::follow_rule`) after it.
+pub(crate) fn with_follow(given: Option<String>, follow: Option<&str>) -> Option<String> {
+    match (given.filter(|g| !g.trim().is_empty()), follow) {
+        (Some(g), Some(f)) => Some(format!("{g} {f}")),
+        (None, Some(f)) => Some(f.to_string()),
+        (g, None) => g,
+    }
+}
+
 /// What the Claude of a copy of an agent is told at every start: its conversation names the
 /// original's folder (`from`) everywhere, it works in `path`.
 pub(crate) fn copied_conversation(lang: i18n::Lang, from: &str, path: &str) -> String {
@@ -1542,11 +1602,15 @@ pub(crate) fn blank_project(path: &str) -> Project {
         remote_control: false,
         engine: None,
         private: false,
+        docs_branch: String::new(),
         shared: Default::default(),
         shared_on_limit: false,
+        claude_memory_asked: false,
         workflow_fixes: Vec::new(),
         workflows_auto_read: true,
         workflows_in_repo: true,
+        code_index: None,
+        code_index_before: false,
     }
 }
 
@@ -1660,6 +1724,18 @@ fn below_root(root: &str, path: &str) -> Option<String> {
 }
 
 impl<R: Runtime> Core<R> {
+    /// Reads the store's catalogue and revocation list again (through Réglages › Réseau), and
+    /// hands them to the plugins: a version withdrawn stops, the updates of the store are offered.
+    pub async fn refresh_store(&self) {
+        let settings = self.settings.read().clone();
+        match crate::plugins::store::client(&settings) {
+            Ok(http) => self.store.refresh(&http, crate::i18n::ui()).await,
+            Err(e) => log::warn!("the store's client: {e}"),
+        }
+        self.plugins
+            .apply_store(self.store.revocations(), self.store.offers());
+    }
+
     pub fn load(app: AppHandle<R>, data: DataDir) -> (Arc<Self>, mpsc::UnboundedReceiver<String>) {
         if let Err(e) = data.ensure() {
             log::error!("cannot create data dir: {e}");
@@ -1761,10 +1837,40 @@ impl<R: Runtime> Core<R> {
                 .map(|s| s.inner().clone())
                 .unwrap_or_default()
         };
+        let plugins = crate::plugins::Plugins::load(data.clone(), env!("CARGO_PKG_VERSION"));
+        let store = Arc::new(crate::plugins::store::Store::load(
+            &data,
+            crate::plugins::store::store_url(),
+            crate::plugins::store::mirror_url(),
+            env!("CARGO_PKG_VERSION"),
+        ));
+        // What was cached applies from the start: a version withdrawn stays stopped offline.
+        plugins.apply_store(store.revocations(), store.offers());
+        let plugin_runtime = crate::plugins::runtime::Runtime::new(
+            plugins.clone(),
+            secrets.clone(),
+            &data,
+            env!("CARGO_PKG_VERSION"),
+            crate::plugins::runtime::Limits::default(),
+        );
+        let plugin_events = crate::plugins::events::Dispatch::new(
+            plugins.clone(),
+            plugin_runtime.clone(),
+            secrets.clone(),
+            crate::plugins::events::QUEUE,
+        );
+        let facts = crate::facts::Bus::new();
+        facts.subscribe(plugin_events.clone());
         let core = Arc::new_cyclic(|me| Self {
             me: me.clone(),
             telemetry,
             stats: Stats::open(&data.stats_db()),
+            codeindex: crate::codeindex::Service::new(data.clone()),
+            plugin_runtime,
+            facts,
+            plugin_events,
+            plugins,
+            store,
             app,
             data,
             hub: Hub::default(),
@@ -1793,6 +1899,7 @@ impl<R: Runtime> Core<R> {
                     .collect(),
             ),
             models_reading: Mutex::default(),
+            vectors_download: Mutex::default(),
             git,
             git_cache: RwLock::default(),
             pty: PtyManager::default(),
@@ -1820,8 +1927,10 @@ impl<R: Runtime> Core<R> {
             quitting: AtomicBool::new(false),
             unsaved: AtomicUsize::new(0),
             held: Mutex::default(),
+            page_crash: Mutex::default(),
             works: AtomicUsize::new(0),
             board_lock: tokio::sync::Mutex::new(()),
+            start_refusals: Mutex::new(HashMap::new()),
             cut_turns: Mutex::new(cut_turns),
             gh: RwLock::new(locate_gh()),
             test_runs: Mutex::default(),
@@ -1833,6 +1942,7 @@ impl<R: Runtime> Core<R> {
             switching: Mutex::default(),
             switch_told: Mutex::default(),
             ports_reserved: Mutex::default(),
+            docs_shares: Mutex::default(),
             merge_locks: Mutex::default(),
             claude_accounts_lock: Mutex::default(),
             accounts: RwLock::new(accounts),
@@ -1865,6 +1975,10 @@ impl<R: Runtime> Core<R> {
             #[cfg(test)]
             naming_ms: AtomicU64::new(NAMING_LIMIT.as_millis() as u64),
             #[cfg(test)]
+            conv_ops: AtomicU64::new(0),
+            #[cfg(test)]
+            names_dropped: AtomicU64::new(0),
+            #[cfg(test)]
             alerts: Mutex::default(),
             #[cfg(test)]
             relabels: Mutex::default(),
@@ -1875,11 +1989,24 @@ impl<R: Runtime> Core<R> {
             #[cfg(test)]
             passes_queued: AtomicUsize::new(0),
             #[cfg(test)]
+            test_embedder: parking_lot::Mutex::new(None),
+            #[cfg(test)]
             clock_ahead: std::sync::atomic::AtomicI64::new(0),
         });
         core.usage.lock().set_today(&core.stats.today_by_account());
+        // The names in the facts are the core's; each agent tells its own.
+        let resolver: std::sync::Weak<dyn crate::facts::Resolve> =
+            Arc::downgrade(&(core.clone() as Arc<dyn crate::facts::Resolve>));
+        core.facts.resolve_with(resolver);
+        let place: std::sync::Weak<dyn crate::plugins::events::Place> =
+            Arc::downgrade(&(core.clone() as Arc<dyn crate::plugins::events::Place>));
+        core.plugin_events.place_with(place.clone());
+        core.plugin_runtime.place_with(place);
+        for h in core.agents.read().values() {
+            h.lock().facts = core.facts.emitter();
+        }
         // The API keys of the Cursor accounts, which their processes go by (ESC-43).
-        core.load_cursor_keys();
+        core.load_account_keys();
         // The images pasted in the interfaces a week ago or more, also when nobody pastes any more.
         crate::tui::clear_pastes(&core.pastes_dir());
         // The copies of joined files a window left half written, the drafts' of a day ago, and
@@ -1889,8 +2016,21 @@ impl<R: Runtime> Core<R> {
         (core, rx)
     }
 
+    /// `app.started` on the facts' bus (PLG-5).
+    pub(crate) fn tell_started(&self) {
+        self.facts.emit(
+            crate::facts::Body::AppStarted {
+                version: env!("CARGO_PKG_VERSION").to_string(),
+            },
+            crate::facts::About::default(),
+        );
+    }
+
     pub fn start(self: &Arc<Self>, git_rx: mpsc::UnboundedReceiver<String>) {
         let projects = self.projects.read().clone();
+        self.tell_started();
+        // The plugins that decide run before the first permission asked (PLG-8).
+        crate::plugins::decide::warm(&self.plugins, &self.plugin_runtime);
         self.telemetry.track(self.started_event());
         if !cfg!(test) {
             self.telemetry.spawn();
@@ -1913,16 +2053,23 @@ impl<R: Runtime> Core<R> {
                 c.sync_all_shared();
             });
         }
+        // The newer versions of the installed plugins, looked for once at the start (PLG-4): offered in
+        // the view Plugins, never installed by themselves.
+        if !cfg!(test) {
+            let plugins = self.plugins.clone();
+            tauri::async_runtime::spawn(async move { plugins.check_updates().await });
+            // The store's catalogue and revocation list (STORE-9): at the start, then every 6 hours.
+            let c = self.clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    c.refresh_store().await;
+                    tokio::time::sleep(crate::plugins::store::EVERY).await;
+                }
+            });
+        }
         let c = self.clone();
         tauri::async_runtime::spawn(async move { c.git_loop(git_rx).await });
-        let c = self.clone();
-        tauri::async_runtime::spawn(async move {
-            loop {
-                c.conv_flush.notified().await;
-                tokio::time::sleep(Duration::from_millis(16)).await;
-                c.flush_conv();
-            }
-        });
+        tauri::async_runtime::spawn(self.clone().conv_flusher());
         let c = self.clone();
         tauri::async_runtime::spawn(async move {
             loop {
@@ -2130,6 +2277,9 @@ impl<R: Runtime> Core<R> {
     pub fn save_settings(self: &Arc<Self>, mut s: Settings) -> Result<()> {
         // The MCP server's port is the backend's own (`sync_mcp`): the window's copy may be older.
         s.mcp_port = self.settings.read().mcp_port;
+        // « Index du code sur tous les projets » is `set_code_index_all`'s (ESC-293): the window's
+        // draft may be older.
+        s.code_index_all = self.settings.read().code_index_all;
         // The user's id is the backend's too (`ensure_identity`): a window's copy may be older.
         if s.user_id.is_empty() {
             s.user_id = self.settings.read().user_id.clone();
@@ -2352,6 +2502,25 @@ impl<R: Runtime> Core<R> {
         self.agents.read().contains_key(id)
     }
 
+    /// What a fact of the agent `id` is about: the agent and its project (`facts`).
+    pub(crate) fn about_agent(&self, id: &str) -> crate::facts::About {
+        match self.agent(id) {
+            Ok(h) => {
+                let rt = h.lock();
+                crate::facts::About::agent(id, &rt.meta.name, &rt.meta.project_id)
+            }
+            // Gone: its project unknown, the fact goes to no plugin that could not see it.
+            Err(_) => crate::facts::About {
+                agent: Some(crate::facts::Named {
+                    id: id.to_string(),
+                    name: String::new(),
+                }),
+                private: Some(true),
+                ..Default::default()
+            },
+        }
+    }
+
     pub(crate) fn emit_agent(&self, h: &AgentHandle) {
         let view = h.lock().view();
         if !self.is_registered(&view.meta.id) {
@@ -2392,6 +2561,8 @@ impl<R: Runtime> Core<R> {
     /// Streaming deltas are buffered and sent at most every 16 ms (merged); any other op first
     /// flushes the agent's buffered deltas so the UI sees every op in order.
     fn emit_conv(&self, agent_id: &str, ops: Vec<ConvOp>) {
+        #[cfg(test)]
+        self.conv_ops.fetch_add(ops.len() as u64, Ordering::AcqRel);
         let only_deltas = ops.iter().all(|o| matches!(o, ConvOp::Delta { .. }));
         let mut buf = self.conv_buffer.lock();
         let was_empty = buf.is_empty();
@@ -2410,6 +2581,22 @@ impl<R: Runtime> Core<R> {
             agent_id: agent_id.to_string(),
             ops,
         });
+    }
+
+    /// Sends the buffered deltas 16 ms after the first of them (`emit_conv`), for good; the stream
+    /// bench (INT-0, `fluxbench`) runs it as the app does.
+    pub(crate) async fn conv_flusher(self: Arc<Self>) {
+        loop {
+            self.conv_flush.notified().await;
+            tokio::time::sleep(Duration::from_millis(16)).await;
+            self.flush_conv();
+        }
+    }
+
+    /// Whether deltas of the agent `id` wait in the buffer for `conv_flusher`.
+    #[cfg(test)]
+    pub(crate) fn conv_pending(&self, id: &str) -> bool {
+        self.conv_buffer.lock().contains_key(id)
     }
 
     /// Sends every buffered delta now.
@@ -2438,14 +2625,42 @@ impl<R: Runtime> Core<R> {
             fx.turns.iter().map(|t| t.cost).sum(),
             fx.turn_end.as_ref(),
         );
+        // Before the turn's end is shown: whoever sees a limited turn finds its resume planned.
+        if let Some(windows) = fx.rate {
+            // The quota of the account the agent's process runs on.
+            let account = self.account_of(id);
+            self.update_usage(|u| {
+                u.record(&account, usage::Reading::Windows(windows), now_ms());
+                if let Some(overage) = fx.overage {
+                    u.account_mut(&account).overage = overage;
+                }
+            });
+            // The autopilot pauses (or goes on) as the quotas just read say.
+            self.pause_tick();
+            // Read after its turn ended (Claude Code tells it after the result): its account may
+            // just have passed « Changer de compte à » (ESC-148).
+            self.switch_soon(id);
+        }
+        let limited = fx.limited.is_some();
+        if let Some(resets_at) = fx.limited {
+            self.plan_resume(id, resets_at);
+        }
         if !fx.ops.is_empty() {
             self.emit_conv(id, fx.ops);
         }
         let changed = view.is_some();
+        // The view given was taken before its resume was planned: told as it is now, else the
+        // window would be shown the agent without it, after the one `set_resume` sent.
+        let view = match view {
+            Some(_) if limited => self.agent(id).ok().map(|h| h.lock().view()),
+            view => view,
+        };
         if let Some(v) = view.filter(|_| self.is_registered(id)) {
             self.hub.emit(UiEvent::Agent { agent: v });
         }
         if !fx.turns.is_empty() {
+            // The end of a turn: the code it changed is read by the index (ESC-251).
+            self.code_index_event(project_id);
             self.stats
                 .record_turns(&self.account_of(id), id, project_id, &fx.turns);
             {
@@ -2463,24 +2678,6 @@ impl<R: Runtime> Core<R> {
             {
                 self.pause_tick();
             }
-        }
-        if let Some(windows) = fx.rate {
-            // The quota of the account the agent's process runs on.
-            let account = self.account_of(id);
-            self.update_usage(|u| {
-                u.record(&account, usage::Reading::Windows(windows), now_ms());
-                if let Some(overage) = fx.overage {
-                    u.account_mut(&account).overage = overage;
-                }
-            });
-            // The autopilot pauses (or goes on) as the quotas just read say.
-            self.pause_tick();
-            // Read after its turn ended (Claude Code tells it after the result): its account may
-            // just have passed « Changer de compte à » (ESC-148).
-            self.switch_soon(id);
-        }
-        if let Some(resets_at) = fx.limited {
-            self.plan_resume(id, resets_at);
         }
         if fx.sign_in_lost {
             self.sign_in_lost_soon(id);
@@ -2500,18 +2697,112 @@ impl<R: Runtime> Core<R> {
         if changed {
             self.update_tray();
         }
-        if let Some(alert) = fx.notify {
-            // A ticket's agent at work: its board tells when the ticket is ready or blocked; its
-            // questions still call for the user.
-            // Nor a turn's end the window follows with a message it holds.
-            let next = alert.kind == NotifyKind::Done && self.held.lock().contains(id);
-            if (alert.kind == NotifyKind::Question || !self.ticket_doing(id)) && !next {
-                self.notify_agent(alert, project_id, id, name);
-            }
+        // The plugins that decide answer first (PLG-8): the user is told only if they leave it.
+        let notify = if fx.asked.is_empty() {
+            fx.notify
+        } else {
+            self.plugins_decide(id, project_id, name, fx.asked, fx.notify)
+        };
+        if let Some(alert) = notify {
+            self.notify_agent_now(alert, id, project_id, name);
         }
         if let Some(end) = fx.turn_end {
+            self.facts.emit(
+                crate::facts::turn_ended(&end),
+                crate::facts::About::agent(id, name, project_id),
+            );
             self.on_turn_end(id, end);
         }
+    }
+
+    fn notify_agent_now(
+        self: &Arc<Self>,
+        alert: AgentAlert,
+        id: &str,
+        project_id: &str,
+        name: &str,
+    ) {
+        // A ticket's agent at work: its board tells when the ticket is ready or blocked; its
+        // questions still call for the user. Nor a turn's end the window follows with a message
+        // it holds.
+        let next = alert.kind == NotifyKind::Done && self.held.lock().contains(id);
+        if (alert.kind == NotifyKind::Question || !self.ticket_doing(id)) && !next {
+            self.notify_agent(alert, project_id, id, name);
+        }
+    }
+
+    /// The permissions `asked` go first to the plugins that decide in the project (PLG-8,
+    /// `plugins::decide`): what they allow or refuse is answered by them, named on the card
+    /// (« Autorisé par <plugin> via Escouade »); what they leave goes to the user, told then by
+    /// `alert`. Gives `alert` back when no plugin decides there.
+    fn plugins_decide(
+        self: &Arc<Self>,
+        id: &str,
+        project_id: &str,
+        name: &str,
+        asked: Vec<crate::plugins::decide::Asked>,
+        alert: Option<AgentAlert>,
+    ) -> Option<AgentAlert> {
+        use crate::facts::Resolve;
+        use crate::plugins::decide;
+        let mut about = crate::facts::About::agent(id, name, project_id);
+        let private = self.resolve(&mut about).unwrap_or(true);
+        let deciders = decide::deciders(&self.plugins, project_id, private);
+        if deciders.is_empty() {
+            return alert;
+        }
+        let mut subjects = serde_json::json!({
+            "project": {
+                "id": project_id,
+                "name": about.project.map(|p| p.name).unwrap_or_default(),
+                "private": private,
+            },
+            "agent": { "id": id, "name": about.agent.map(|a| a.name).unwrap_or_default() },
+        });
+        if let Some(t) = about.ticket {
+            subjects["ticket"] = serde_json::json!({ "id": t.id, "key": t.key, "title": t.title });
+        }
+        let (me, id, project_id, name) = (
+            self.clone(),
+            id.to_string(),
+            project_id.to_string(),
+            name.to_string(),
+        );
+        tauri::async_runtime::spawn(async move {
+            let mut left = false;
+            for a in asked {
+                let arg: String = a.arg.chars().take(200).collect();
+                let what = format!("{} {arg}", a.tool);
+                let params = decide::params(&a, subjects.clone());
+                let verdict =
+                    decide::decide(&me.plugin_runtime, &deciders, &params, what.trim()).await;
+                let answered = match &verdict {
+                    decide::Verdict::Allow { by } => {
+                        me.answer_permission_by(&id, &a.request_id, "allow", None, Some(by))
+                    }
+                    decide::Verdict::Deny { by, message } => me.answer_permission_by(
+                        &id,
+                        &a.request_id,
+                        "deny",
+                        message.clone(),
+                        Some(by),
+                    ),
+                    decide::Verdict::Ask => {
+                        left = true;
+                        continue;
+                    }
+                };
+                match answered {
+                    Ok(()) => log::info!("agent {id}: {verdict:?} for {}", a.request_id),
+                    // Answered meanwhile (the user in the window, a client), or its process gone.
+                    Err(e) => log::info!("agent {id}: {verdict:?} not given: {e:#}"),
+                }
+            }
+            if let Some(alert) = alert.filter(|_| left) {
+                me.notify_agent_now(alert, &id, &project_id, &name);
+            }
+        });
+        None
     }
 
     pub(crate) fn on_frame(self: &Arc<Self>, h: &AgentHandle, gen: u64, frame: Value) {
@@ -2922,7 +3213,7 @@ impl<R: Runtime> Core<R> {
         // An account removed meanwhile: another of its harness, else refused (ESC-128).
         let account = self.agent_account(h)?;
         // A Cursor account without its key would run as the machine's sign-in (ESC-43).
-        accounts::cursor_ready(&account)?;
+        accounts::key_ready(&account)?;
         let program = accounts::program(&account, &settings)
             .ok_or_else(|| anyhow!(engine::missing_line(harness.id(), i18n::ui())))?;
         // A version older than the tested ones is refused, with its reason.
@@ -4402,6 +4693,8 @@ impl<R: Runtime> Core<R> {
         // Their tokens go with the app: their MCP configs too.
         self.mcp.clear_agent_configs();
         self.pty.kill_all();
+        // The plugins are asked to `shutdown`, then their jobs end (a second at most).
+        self.plugin_runtime.shutdown();
         self.save_now();
         // The usage statistics of the last minute, if they can leave in time.
         self.telemetry.flush_at_exit();
@@ -4774,6 +5067,13 @@ impl<R: Runtime> Core<R> {
 
     pub async fn interrupt(self: &Arc<Self>, id: &str) -> Result<()> {
         if self.interrupt_tui(id)? {
+            // An interface that tells nothing of a turn it stopped (Gemini CLI): over here.
+            let _ = self.with_agent(id, |rt, fx| {
+                if let Ok((view, _)) = crate::tui::view_of(&rt.meta) {
+                    view.interrupted(rt, fx);
+                }
+                Ok(())
+            });
             return Ok(());
         }
         let h = self.agent(id)?;
@@ -5427,7 +5727,8 @@ impl<R: Runtime> Core<R> {
         by: Option<&str>,
     ) -> Result<()> {
         self.with_agent(id, |rt, fx| {
-            rt.answer_permission_by(request_id, decision, message, by, fx)
+            let auto = self.takes_auto(rt.meta.engine, &rt.meta.account, &rt.meta.model);
+            rt.answer_permission_in(request_id, decision, message, by, auto, fx)
         })
     }
 
@@ -5439,6 +5740,15 @@ impl<R: Runtime> Core<R> {
         mode: Option<String>,
     ) -> Result<()> {
         let h = self.agent(id)?;
+        // A discussion of the Docs tab stays in a mode that asks before a write (ESC-261).
+        if let Some(m) = mode.as_deref() {
+            if h.lock().meta.discussion.is_some() && !crate::discussion::MODES.contains(&m) {
+                bail!(tr!(
+                    "Une discussion ne modifie jamais le code : elle reste en mode « Demander » ou « Plan ».",
+                    "A discussion never changes the code: it stays in “Ask” or “Plan” mode."
+                ));
+            }
+        }
         let proc = {
             let mut rt = h.lock();
             if let Some(m) = &model {
@@ -5448,7 +5758,7 @@ impl<R: Runtime> Core<R> {
                 rt.meta.effort = e.clone();
             }
             if let Some(m) = &mode {
-                rt.meta.mode = m.clone();
+                rt.meta.set_mode(m);
             }
             rt.proc.clone()
         };
@@ -5602,6 +5912,8 @@ impl<R: Runtime> Core<R> {
             }
         };
         let engine = o.engine.unwrap_or_else(|| project.engine());
+        // Whatever the agent is (ticket, discussion, planner…), a spec in Escouade is the one to follow.
+        let follow = self.docs_follow(&project, self.lang().claude).await;
         let mut meta = AgentMeta {
             id: new_id(),
             project_id: project_id.to_string(),
@@ -5619,16 +5931,32 @@ impl<R: Runtime> Core<R> {
             cwd: project.path.clone(),
             created_at: now_ms(),
             last_activity: now_ms(),
+            // Never a discussion (ESC-289): it stays in its conversation, where Escouade refuses its
+            // writes; its first message is sent at its making.
             terminal: settings.terminal_view
                 && o.ticket_id.is_none()
+                && o.discussion.is_none()
                 && crate::engine::by_id(engine).terminal().is_some(),
             attached: settings.terminal_view
                 && o.ticket_id.is_none()
+                && o.discussion.is_none()
                 && crate::engine::by_id(engine).attaches(),
             remote_off: o.remote_off || o.copy_of.as_ref().is_some_and(|c| c.remote_off),
-            ticket_id: o.ticket_id,
-            append_prompt: o.append_prompt,
+            ticket_id: o.ticket_id.clone(),
+            // The code index's rule, for an agent that has no ticket's protocol (which carries it),
+            // then what every agent is told of the shared memory.
+            append_prompt: with_memory(
+                self.lang().claude,
+                with_follow(
+                    o.append_prompt.or_else(|| {
+                        (self.code_index_on(&project) && o.ticket_id.is_none())
+                            .then(|| crate::codeindex::hint::rule(self.lang().claude))
+                    }),
+                    follow.as_deref(),
+                ),
+            ),
             port_base: o.port_base,
+            discussion: o.discussion.clone(),
             ..Default::default()
         };
         // The one asked for if the settings know it as an account of the agent's harness
@@ -5645,7 +5973,12 @@ impl<R: Runtime> Core<R> {
         let defaults = accounts::defaults(accounts::find(&settings, &meta.account), engine);
         meta.model = self.model_for(engine, o.model.unwrap_or(defaults.model));
         meta.effort = o.effort.unwrap_or(defaults.effort);
-        meta.mode = o.mode.unwrap_or(defaults.mode);
+        meta.mode = o.mode.unwrap_or_else(|| defaults.mode.clone());
+        // Started in Plan: its plan approved, it goes on in its mode of departure, the ticket's or
+        // the board's (`o.mode`), else its account's, else the app's (ESC-277).
+        if meta.mode == "plan" {
+            meta.plan_from = Some(defaults.mode).filter(|m| m != "plan");
+        }
         let conversations = self.data.conversations();
         // A copy's conversation is written first: when it cannot be, nothing was made for it.
         if let Some(c) = &o.copy_of {
@@ -5800,11 +6133,17 @@ impl<R: Runtime> Core<R> {
                         Some(wsl) => wsl.linux_path(p).unwrap_or_else(|| p.to_string()),
                         None => p.to_string(),
                     };
-                    meta.append_prompt = Some(copied_conversation(
+                    meta.append_prompt = with_memory(
                         self.lang().claude,
-                        &shown(&from.path),
-                        &shown(&path),
-                    ));
+                        with_follow(
+                            Some(copied_conversation(
+                                self.lang().claude,
+                                &shown(&from.path),
+                                &shown(&path),
+                            )),
+                            follow.as_deref(),
+                        ),
+                    );
                 }
                 meta.cwd = path.clone();
                 // Out of the project's folder (its « Dossier des worktrees » beside it): watched too.
@@ -5845,6 +6184,9 @@ impl<R: Runtime> Core<R> {
             }
             None => {}
         }
+        if let Some(cwd) = o.cwd.as_ref().filter(|_| meta.worktree.is_none()) {
+            meta.cwd = cwd.clone();
+        }
         let id = meta.id.clone();
         let fresh = meta.worktree.clone();
         let h = Arc::new(Mutex::new(AgentRt::new(meta, &conversations)));
@@ -5858,6 +6200,21 @@ impl<R: Runtime> Core<R> {
             h.lock().notice("warn", text, &mut fx);
         }
         self.agents.write().insert(id.clone(), h.clone());
+        {
+            let mut rt = h.lock();
+            rt.facts = self.facts.emitter();
+            let m = &rt.meta;
+            rt.fact(crate::facts::Body::AgentCreated {
+                harness: m.engine.to_string(),
+                model: m.model.clone(),
+            });
+            if let Some(wt) = &fresh {
+                rt.fact(crate::facts::Body::WorktreeCreated {
+                    branch: wt.branch.clone(),
+                    path: wt.path.clone(),
+                });
+            }
+        }
         // Its new worktree is set up (dependencies…) before it takes a message.
         let setting_up = fresh
             .as_ref()
@@ -6202,7 +6559,7 @@ impl<R: Runtime> Core<R> {
         // As at an agent's making: the folders taken are read, and one taken, in turn.
         let creating = self.create_lock.lock().await;
         let project_id = h.lock().meta.project_id.clone();
-        // A name come meanwhile waits for the branch, then renames it (`apply_generated_name`).
+        // A name come meanwhile waits for the branch, then renames it (`apply_name_to`).
         let naming_lock = self.spawn_lock(&format!("naming-{project_id}"));
         let naming_guard = naming_lock.lock().await;
         let made = match self.project(&project_id) {
@@ -6290,6 +6647,10 @@ impl<R: Runtime> Core<R> {
             if let Some((_, wt)) = &setup {
                 rt.meta.cwd = wt.path.clone();
                 rt.meta.worktree = Some(wt.clone());
+                rt.fact(crate::facts::Body::WorktreeCreated {
+                    branch: wt.branch.clone(),
+                    path: wt.path.clone(),
+                });
             }
             for text in warnings {
                 rt.notice("warn", text, fx);
@@ -6621,10 +6982,36 @@ impl<R: Runtime> Core<R> {
         .await
     }
 
+    /// `read_project` in `cwd` (a folder of `project_id`'s), within `limit` (ESC-263: the
+    /// comparison of the spec to the code).
+    pub(crate) async fn read_folder(
+        &self,
+        project_id: &str,
+        cwd: &Path,
+        system: &str,
+        prompt: &str,
+        limit: Duration,
+    ) -> Result<String> {
+        self.ask_harness(Ask {
+            weight: Weight::Reading,
+            cwd,
+            system,
+            prompt,
+            limit,
+            agent: None,
+            project: Some(project_id),
+        })
+        .await
+    }
+
+    /// The agent `id` named after `prompt` by the writer model. The name is the agent's that asked
+    /// for it: one closed meanwhile (its project closed, the agent deleted) takes none, nor does
+    /// the agent its project's history gives back, though it has the same id (ESC-300).
     pub(crate) async fn auto_name(self: &Arc<Self>, id: &str, prompt: &str) {
+        let Ok(h) = self.agent(id) else { return };
         match self.generate_name(id, prompt).await {
             Ok(Some(slug)) => {
-                if let Err(e) = self.apply_generated_name(id, &slug).await {
+                if let Err(e) = self.apply_name_to(&h, id, &slug).await {
                     log::warn!("auto-naming failed: {e:#}");
                 }
             }
@@ -6764,7 +7151,7 @@ impl<R: Runtime> Core<R> {
             .unwrap_or(EngineId::Claude);
         let engine = engine::by_id(id);
         let account = self.account_for(id, agent, project)?;
-        accounts::cursor_ready(&account)?;
+        accounts::key_ready(&account)?;
         let settings = self.settings.read().clone();
         let program = accounts::program(&account, &settings).ok_or_else(|| {
             // Claude Code by its command, as before there was a choice.
@@ -6856,14 +7243,40 @@ impl<R: Runtime> Core<R> {
         Ok(name_from_answer(&answer))
     }
 
+    /// The name `slug` given to the agent `id` as it is now, as Haiku's would (tests only).
+    #[cfg(test)]
     pub(crate) async fn apply_generated_name(self: &Arc<Self>, id: &str, slug: &str) -> Result<()> {
         let h = self.agent(id)?;
+        self.apply_name_to(&h, id, slug).await
+    }
+
+    /// Whether `h` is still the agent `id` of the app: neither closed with its project nor
+    /// deleted, nor an older handle of an agent its project's history gave back.
+    fn is_live(&self, h: &AgentHandle, id: &str) -> bool {
+        self.agents
+            .read()
+            .get(id)
+            .is_some_and(|live| Arc::ptr_eq(live, h))
+    }
+
+    /// The name `slug` given by Haiku to `h`, the agent `id` as it was when its name was asked:
+    /// suffixed when another agent of the project has it, its branch renamed first.
+    async fn apply_name_to(self: &Arc<Self>, h: &AgentHandle, id: &str, slug: &str) -> Result<()> {
         let project_id = h.lock().meta.project_id.clone();
         // One agent named at a time in a project, from the names taken to the name set: two named
         // at once with the same name (the branch renames are awaited in between) would both find
         // it free.
         let naming = self.spawn_lock(&format!("naming-{project_id}"));
         let naming_guard = naming.lock().await;
+        // Gone meanwhile: nothing is renamed, branch or name. The closing of its project takes
+        // this lock to put each agent out (`remove_project`): one still there now stays until its
+        // branch and its name are both set, and its history keeps them.
+        if !self.is_live(h, id) {
+            log::info!("agent {id}: gone before its name came, the name is dropped");
+            #[cfg(test)]
+            self.names_dropped.fetch_add(1, Ordering::AcqRel);
+            return Ok(());
+        }
         let taken: Vec<String> = self
             .project_agents(&project_id)
             .iter()
@@ -6883,7 +7296,7 @@ impl<R: Runtime> Core<R> {
         // is on its last branch (renamed or not), so that whoever sees it named (a commit
         // proposed meanwhile) does not find git in the middle of the rename.
         let renamed = self
-            .rename_agent_branch(&h, &project_id, &name)
+            .rename_agent_branch(h, &project_id, &name)
             .await
             .ok()
             .flatten();
@@ -6895,14 +7308,20 @@ impl<R: Runtime> Core<R> {
             // (Named by the user meanwhile: their name stands.)
             let named_now = !rt.meta.named;
             if named_now {
-                rt.meta.name = name.clone();
+                let was = std::mem::replace(&mut rt.meta.name, name.clone());
                 rt.meta.named = true;
+                if was != name {
+                    rt.fact(crate::facts::Body::AgentRenamed {
+                        from: was,
+                        to: name.clone(),
+                    });
+                }
             }
             (named_now, rt.proc.clone(), self.session_title(&rt))
         };
         // The name is set: the next one in the project need not wait for the session rename.
         drop(naming_guard);
-        self.emit_agent(&h);
+        self.emit_agent(h);
         self.request_save();
         if !named_now {
             return Ok(());
@@ -6920,9 +7339,13 @@ impl<R: Runtime> Core<R> {
         }
         let h = self.agent(id)?;
         let project_id = h.lock().meta.project_id.clone();
-        // Never across Haiku naming it (`apply_generated_name`): the branch first, as it does.
+        // Never across Haiku naming it (`apply_name_to`): the branch first, as it does.
         let naming = self.spawn_lock(&format!("naming-{project_id}"));
         let naming_guard = naming.lock().await;
+        // Closed while it waited: its history keeps the name it had.
+        if !self.is_live(&h, id) {
+            return Err(agent_not_found());
+        }
         let (renamed, kept) = match self
             .rename_agent_branch(&h, &project_id, &slugify(name))
             .await
@@ -6935,8 +7358,14 @@ impl<R: Runtime> Core<R> {
             if let (Some(branch), Some(w)) = (renamed, rt.meta.worktree.as_mut()) {
                 w.branch = branch;
             }
-            rt.meta.name = name.to_string();
+            let was = std::mem::replace(&mut rt.meta.name, name.to_string());
             rt.meta.named = true;
+            if was != name {
+                rt.fact(crate::facts::Body::AgentRenamed {
+                    from: was,
+                    to: name.to_string(),
+                });
+            }
             (rt.proc.clone(), self.session_title(&rt))
         };
         drop(naming_guard);
@@ -7070,6 +7499,7 @@ impl<R: Runtime> Core<R> {
                 if rt.meta.status.is_active() {
                     rt.set_status(AgentStatus::Done, fx);
                 }
+                rt.fact(crate::facts::Body::AgentStopped { removed: false });
             }
             fx.save = true;
             Ok(())
@@ -7138,6 +7568,7 @@ impl<R: Runtime> Core<R> {
                 .take()
                 .map(|t| (t.term_id, crate::tui::quit_key(&rt.meta)));
             rt.conv.delete_file();
+            rt.fact(crate::facts::Body::AgentStopped { removed: true });
             (
                 rt.meta.project_id.clone(),
                 rt.meta.worktree.clone(),
@@ -7750,6 +8181,10 @@ impl<R: Runtime> Core<R> {
         let _ = self.refresh_repos(&project.id, true).await;
         let project = self.project(&project.id).unwrap_or(project);
         self.watch_project(&project);
+        // « Index du code sur tous les projets » on and followed: read like the others (ESC-293).
+        if self.code_index_on(&project) {
+            self.queue_code_index(vec![project.id.clone()]);
+        }
         if reopened {
             // Its tickets may start, its agents are counted, its Remote Control ones are
             // reachable again as they are when the app starts.
@@ -7759,6 +8194,12 @@ impl<R: Runtime> Core<R> {
             // The syncs its tickets left waiting while it was closed go again.
             self.retry_syncs_of(&ticket_ids);
         }
+        self.facts.emit(
+            crate::facts::Body::ProjectAdded {
+                path: project.path.clone(),
+            },
+            crate::facts::About::project(&project.id),
+        );
         // The project is made whatever becomes of its first agent: told (no account serves a new
         // project, say), never an error that would have the window ask, and make it, again.
         if let Some(model) = first_agent {
@@ -7778,8 +8219,10 @@ impl<R: Runtime> Core<R> {
         let worktree_dir = p.worktree_dir.trim().to_string();
         let agent_prefix = p.agent_branch_prefix.trim().to_string();
         let ticket_prefix = p.ticket_branch_prefix.trim().to_string();
+        let docs_branch = p.docs_branch.trim().to_string();
         let path = self.project(&p.id)?.path;
         if let Some(why) = paths::worktrees_root_problem(&path, &worktree_dir)
+            .or_else(|| crate::docsbranch::branch_problem(&docs_branch))
             .or_else(|| git::branch_prefix_problem(&agent_prefix))
             .or_else(|| git::branch_prefix_problem(&ticket_prefix))
         {
@@ -7803,6 +8246,7 @@ impl<R: Runtime> Core<R> {
             .ok_or_else(project_not_found)?;
         let before = cur.clone();
         let account_changed = cur.account != account;
+        cur.docs_branch = docs_branch;
         let remote_changed = cur.remote_control != p.remote_control;
         let renamed = cur.name != p.name;
         cur.remote_control = p.remote_control;
@@ -7884,6 +8328,97 @@ impl<R: Runtime> Core<R> {
     /// « Logo » (ESC-167): the image of the file `source` copied under the project in place of its
     /// letters, or (None) no logo. A file refused (too heavy, unreadable, of another format) leaves
     /// the project as it was. Returns the project.
+    /// A project's shared memory changed (ESC-255): the window reads it again.
+    pub fn memory_changed(&self, project_id: &str) {
+        self.hub.emit(UiEvent::Memory {
+            project_id: project_id.to_string(),
+        });
+    }
+
+    /// The memories of the project's shared memory, by name.
+    pub fn memories(&self, id: &str) -> Result<Vec<crate::memory::Memory>> {
+        crate::memory::list(&crate::memory::dir_of(&self.project(id)?))
+    }
+
+    /// « Oublier » of the settings: a memory's file removed.
+    pub fn forget_memory(&self, id: &str, name: &str) -> Result<()> {
+        if !crate::memory::forget(&crate::memory::dir_of(&self.project(id)?), name)? {
+            bail!(tr!(
+                "Aucun souvenir « {name} » dans la mémoire du projet.",
+                "No memory “{name}” in the project's memory."
+            ));
+        }
+        self.facts.emit(
+            crate::facts::Body::MemoryForgotten {
+                memory: name.to_string(),
+            },
+            crate::facts::About::project(id),
+        );
+        self.memory_changed(id);
+        Ok(())
+    }
+
+    /// The folders Claude Code keeps the memory of `p` in: one under each Claude account's configuration folder
+    /// (`accounts::config_dir`, never the machine user's own in the tests). Read, never written.
+    fn claude_memory_dirs(&self, p: &Project) -> Vec<PathBuf> {
+        let settings = self.settings.read().clone();
+        let mut out: Vec<PathBuf> = Vec::new();
+        for a in settings
+            .accounts
+            .iter()
+            .filter(|a| a.engine == EngineId::Claude)
+        {
+            let dir = crate::memory::claude_dir(&accounts::config_dir(a, &settings), &p.path);
+            if !out.contains(&dir) {
+                out.push(dir);
+            }
+        }
+        out
+    }
+
+    /// What Claude Code remembers of the project, offered once to its shared memory: nothing once it was offered
+    /// (taken or not), nor when Claude Code has none.
+    pub fn claude_memory_offer(&self, id: &str) -> Result<Vec<crate::memory::Offered>> {
+        let p = self.project(id)?;
+        if p.claude_memory_asked {
+            return Ok(Vec::new());
+        }
+        Ok(crate::memory::claude_offer(
+            &self.claude_memory_dirs(&p),
+            &crate::memory::dir_of(&p),
+        ))
+    }
+
+    /// « Reprendre » of the window: the memories of Claude Code the user ticked, written into the project's; the
+    /// offer is not made again.
+    pub fn claude_memory_take(&self, id: &str, names: &[String]) -> Result<Project> {
+        let p = self.project(id)?;
+        if !names.is_empty() {
+            let offered = crate::memory::claude_offer(
+                &self.claude_memory_dirs(&p),
+                &crate::memory::dir_of(&p),
+            );
+            crate::memory::claude_take(&offered, names, &crate::memory::dir_of(&p))?;
+            self.memory_changed(id);
+        }
+        self.claude_memory_asked(id)
+    }
+
+    /// The offer of Claude Code's memory made: never again for this project.
+    pub fn claude_memory_asked(&self, id: &str) -> Result<Project> {
+        let updated = {
+            let mut projects = self.projects.write();
+            let cur = projects
+                .iter_mut()
+                .find(|x| x.id == id)
+                .ok_or_else(project_not_found)?;
+            cur.claude_memory_asked = true;
+            cur.clone()
+        };
+        self.request_save();
+        Ok(updated)
+    }
+
     pub fn set_project_logo(&self, id: &str, source: Option<&str>) -> Result<Project> {
         self.project(id)?;
         let file = match source {
@@ -7973,6 +8508,20 @@ impl<R: Runtime> Core<R> {
             return Err(closed::approval_under_way(self.lang().ui, &key));
         }
         let project = self.project(id).ok();
+        if let Some(p) = &project {
+            // Said with its name and whether it is private: it is gone by the time the bus reads them.
+            self.facts.emit(
+                crate::facts::Body::ProjectClosed {},
+                crate::facts::About {
+                    project: Some(crate::facts::Named {
+                        id: p.id.clone(),
+                        name: p.name.clone(),
+                    }),
+                    private: Some(p.private),
+                    ..Default::default()
+                },
+            );
+        }
         let selected = self.ui.read().selected_agent.get(id).cloned();
         // Its history written before anything stops, as it is now, and again once all stopped
         // (below): an app stopped in between, its state saved without the project, still has it.
@@ -8008,6 +8557,11 @@ impl<R: Runtime> Core<R> {
             // otherwise start a process, with a token, for an agent that is gone.
             let lock = self.spawn_lock(&aid);
             let _guard = lock.lock().await;
+            // Nor out in the middle of its naming (`apply_name_to`): the name and the branch it is
+            // giving it are both set first, and kept; a name that comes later finds it gone and
+            // sets nothing. Taken after its start's lock, as a start that makes its worktree does.
+            let naming = self.spawn_lock(&format!("naming-{id}"));
+            let _naming = naming.lock().await;
             // Bound first: the map guard must not live across the agent lock and the I/O below.
             let removed = self.agents.write().remove(&aid);
             let mut worktree = None;
@@ -8093,6 +8647,8 @@ impl<R: Runtime> Core<R> {
         // lock, which it holds while it adds the ticket, so a ticket it adds before this is dropped
         // here, and none is added after.
         let tickets = self.drop_project_tickets(id);
+        // Recomputed from the files: not kept with a closed project.
+        self.codeindex.delete(id);
         if erase {
             // Nothing of it stays, not even a history a stop left half way (see `closed_list`).
             let tickets: Vec<String> = tickets.iter().map(|t| t.id.clone()).collect();
@@ -8125,14 +8681,16 @@ impl<R: Runtime> Core<R> {
 
     async fn git_loop(self: Arc<Self>, mut rx: mpsc::UnboundedReceiver<String>) {
         let mut due: HashMap<String, Instant> = HashMap::new();
+        // When each project may be read again (`git::Pace`).
         let mut last: HashMap<String, Instant> = HashMap::new();
+        let mut pace = crate::git::Pace::default();
         loop {
             let next = due.values().min().copied();
             tokio::select! {
                 msg = rx.recv() => {
                     let Some(pid) = msg else { break };
                     let now = Instant::now();
-                    let earliest = last.get(&pid).map(|t| *t + Duration::from_millis(700)).unwrap_or(now);
+                    let earliest = last.get(&pid).copied().unwrap_or(now);
                     due.entry(pid).or_insert_with(|| earliest.max(now + Duration::from_millis(150)));
                 }
                 _ = tokio::time::sleep_until(next.unwrap_or_else(Instant::now).into()), if next.is_some() => {
@@ -8146,7 +8704,11 @@ impl<R: Runtime> Core<R> {
                             continue;
                         }
                         due.remove(&pid);
-                        last.insert(pid.clone(), now);
+                        let (wait, busy) = pace.read(&pid, now);
+                        if let Some(line) = busy {
+                            log::warn!("{line}");
+                        }
+                        last.insert(pid.clone(), now + wait);
                         self.git.take_flag(&pid);
                         let c = self.clone();
                         tauri::async_runtime::spawn(async move {
@@ -8924,7 +9486,7 @@ impl<R: Runtime> Core<R> {
                     Err(e) => failed.push(format!("{} : {e:#}", crate::repos::label(&repo))),
                 }
             }
-            self.git.refresh(project_id);
+            self.git_event(project_id);
             if !failed.is_empty() {
                 bail!(failed.join("\n"));
             }
@@ -8932,7 +9494,7 @@ impl<R: Runtime> Core<R> {
         }
         let done = git::commit_paths(&root, &files, message).await;
         // Even after a refusal: a hook may have changed files (a formatter) before saying no.
-        self.git.refresh(project_id);
+        self.git_event(project_id);
         done?;
         git::text(&root, &["rev-parse", "--short", "HEAD"]).await
     }
@@ -8980,6 +9542,14 @@ impl<R: Runtime> Core<R> {
             .clone()
     }
 
+    /// A git event of the project (a commit, a branch left): its code index reads what changed.
+    fn git_event(&self, project_id: &str) {
+        self.git.refresh(project_id);
+        if let Some(me) = self.me.upgrade() {
+            me.code_index_event(project_id);
+        }
+    }
+
     /// Refreshes the git state of every project in the repository at `root`.
     async fn refresh_repo(&self, root: &str) {
         let projects: Vec<(String, String)> = self
@@ -8990,7 +9560,7 @@ impl<R: Runtime> Core<R> {
             .collect();
         for (id, _) in projects {
             if self.project_roots_of(&id).await.iter().any(|r| r == root) {
-                self.git.refresh(&id);
+                self.git_event(&id);
             }
         }
     }
@@ -9715,6 +10285,103 @@ impl<R: Runtime> Core<R> {
                 None
             }
         }
+    }
+}
+
+/// Where the plugins' commands run (`plugins::events`): the user's shell, the project's folder.
+impl<R: Runtime> crate::plugins::events::Place for Core<R> {
+    fn shell(&self) -> Option<crate::pty::ShellInfo> {
+        let settings = self.settings.read().clone();
+        crate::pty::detect_shells(&settings).into_iter().next()
+    }
+
+    fn project_path(&self, id: &str) -> Option<String> {
+        self.project(id).ok().map(|p| p.path)
+    }
+
+    fn project_plugin(
+        &self,
+        id: &str,
+        plugin: &str,
+    ) -> Option<(bool, serde_json::Map<String, serde_json::Value>)> {
+        let p = self.project(id).ok()?;
+        let settings = p
+            .shared
+            .file
+            .as_ref()
+            .and_then(|f| crate::projectfile::plugin_settings(&f.values, plugin))
+            .cloned()
+            .unwrap_or_default();
+        Some((p.private, settings))
+    }
+}
+
+/// The names of what a fact is about, and whether its project is private (`facts`). Takes the
+/// agents, then the projects, then the tickets, one at a time: the bus holds no other lock.
+impl<R: Runtime> crate::facts::Resolve for Core<R> {
+    fn resolve(&self, about: &mut crate::facts::About) -> Option<bool> {
+        // The ticket an agent is made for, before the ticket links it.
+        let mut own_ticket = None;
+        if let Some(a) = about.agent.as_mut() {
+            if let Ok(h) = self.agent(&a.id) {
+                let rt = h.lock();
+                own_ticket = rt.meta.ticket_id.clone();
+                if a.name.is_empty() {
+                    a.name = rt.meta.name.clone();
+                }
+                if about.project.is_none() {
+                    about.project = Some(crate::facts::Named {
+                        id: rt.meta.project_id.clone(),
+                        name: String::new(),
+                    });
+                }
+            }
+        }
+        {
+            let tickets = self.tickets.read();
+            let found = match (&about.ticket, &about.agent) {
+                (Some(t), _) => tickets.iter().find(|x| x.id == t.id),
+                // An agent's fact says its ticket, the one it works on.
+                (None, Some(a)) => tickets.iter().find(|x| {
+                    x.agent_id.as_deref() == Some(a.id.as_str())
+                        || own_ticket.as_deref() == Some(x.id.as_str())
+                }),
+                (None, None) => None,
+            };
+            if let Some(t) = found {
+                about.ticket = Some(crate::facts::TicketRef {
+                    id: t.id.clone(),
+                    key: t.key.clone(),
+                    title: t.title.clone(),
+                });
+                if about.project.is_none() {
+                    about.project = Some(crate::facts::Named {
+                        id: t.project_id.clone(),
+                        name: String::new(),
+                    });
+                }
+                if about.agent.is_none() {
+                    if let Some(a) = &t.agent_id {
+                        about.agent = Some(crate::facts::Named {
+                            id: a.clone(),
+                            name: String::new(),
+                        });
+                    }
+                }
+            }
+        }
+        if let Some(a) = about.agent.as_mut().filter(|a| a.name.is_empty()) {
+            if let Ok(h) = self.agent(&a.id) {
+                a.name = h.lock().meta.name.clone();
+            }
+        }
+        let p = about.project.as_mut()?;
+        let projects = self.projects.read();
+        let found = projects.iter().find(|x| x.id == p.id)?;
+        if p.name.is_empty() {
+            p.name = found.name.clone();
+        }
+        Some(found.private)
     }
 }
 

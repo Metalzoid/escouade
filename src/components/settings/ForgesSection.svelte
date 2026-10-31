@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from '../Icon.svelte';
   import { tick } from 'svelte';
-  import { openUrl } from '@tauri-apps/plugin-opener';
+  import { openUrl } from '../../lib/opener';
   import { fList } from '../../lib/format';
   import { forgeBadge } from '../../lib/forges';
   import { t } from '../../lib/i18n';

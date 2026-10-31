@@ -10,6 +10,7 @@ export default {
       label: 'Comptes',
       desc: 'Les comptes de chaque harness, les réglages de leurs nouveaux agents, et ce qui se passe à la limite',
     },
+    plugins: { label: 'Plugins', desc: 'Ce qu’ils ajoutent à Escouade, d’où ils viennent et ce qu’ils peuvent faire' },
     mcp: { label: 'Serveur MCP', desc: 'Ce que Claude et les agents peuvent faire dans Escouade, et ce qu’ils ont fait' },
     notifications: { label: 'Notifications', desc: 'Alertes visuelles et sonores' },
     projects: { label: 'Projets', desc: 'Réglages propres à chaque projet' },
@@ -82,6 +83,18 @@ export default {
     themeSystem: 'Système',
     themeLight: 'Clair',
     themeDark: 'Sombre',
+    // « Couleurs » (PLG-7): Escouade's, or a plugin's theme.
+    colors: 'Couleurs',
+    colorsDesc:
+      'Celles d’Escouade, ou celles d’un thème apporté par un plugin, en clair comme en sombre. Ce qu’un thème ne donne pas garde la couleur d’Escouade.',
+    colorsEscouade: 'Escouade',
+    colorsNone: 'Aucun thème installé. Un plugin peut en apporter un : ses couleurs et sa palette de projets.',
+    colorsFind: 'Voir les thèmes',
+    colorsGone: 'Le thème choisi n’est plus là : son plugin ({plugin}) est désactivé ou désinstallé. Escouade a repris ses couleurs.',
+    colorsDropped: {
+      one: 'Une valeur de ce thème est écartée : ce n’est pas un jeton ou une couleur permise.',
+      other: '{count} valeurs de ce thème sont écartées : ce ne sont pas des jetons ou des couleurs permises.',
+    },
     zoom: 'Zoom de l’interface',
     zoomDesc:
       'Le texte, les espacements et les icônes de toute l’application grandissent ensemble, terminaux et éditeur compris. Appliqué et enregistré tout de suite.',
@@ -297,7 +310,7 @@ export default {
     seeNotes: 'Voir les nouveautés',
     hideNotes: 'Masquer les nouveautés',
     credits: 'Crédits et licences',
-    creditsDesc: 'Piper, eSpeak NG, ONNX Runtime, whisper.cpp, et la licence et le crédit de chaque voix',
+    creditsDesc: 'Piper, eSpeak NG, ONNX Runtime, whisper.cpp, tokensave, et la licence et le crédit de chaque voix',
     creditsOpen: 'Ouvrir',
     /** `{list}`: the harnesses found, by name. */
     enginesFound: 'Harness détectés : {list}',
@@ -374,6 +387,10 @@ export default {
         'Escouade refuse d’office ce qu’il demande sur ces chemins. Rien n’est garanti en mode Bypass, ni en vue Copilot CLI, où ses demandes ne passent pas par Escouade.',
       cursor:
         'Escouade refuse d’office ses commandes qui nomment ces chemins, et ce qu’il soumet sur eux, même en mode Bypass. Ses lectures et ses écritures ne demandent rien, même hors du dossier de l’agent : Cursor ne les fait pas passer par Escouade, qui ne peut donc pas les garder.',
+      vibe: 'Refusés à ses outils de lecture et d’écriture par la config de l’agent, et Escouade refuse d’office ce qu’il demande sur eux. En mode Bypass, Vibe reste dans son agent ask pour que ces refus tiennent. Une commande de sa liste (cat, ls…) qui les lit sans demander n’est pas gardée.',
+      agy: 'Refusés à la lecture (et donc à l’écriture) par les règles de l’agent, que son mode Bypass ne lève pas, et Escouade refuse d’office ce qu’il demande sur eux. Ses commandes qui les liraient ne sont pas gardées.',
+      gemini:
+        'Refusés à ses outils de fichiers et à ses commandes qui les nomment par les règles de l’agent (--policy), que son mode Bypass (yolo) ne lève pas, et Escouade refuse d’office ce qu’il demande sur eux. Un script qui ouvre un fichier lui-même n’est pas gardé ; pas encore essayé avec un compte.',
     },
     fenceNote:
       'Une barrière pour tous les harness demanderait un compte système par projet : Escouade ne le propose pas, les harness et leurs comptes n’y suivraient pas. Un agent déjà lancé prend ce réglage avant son prochain tour (son process repart, sa conversation reste) ; une vue terminal, à son prochain lancement.',

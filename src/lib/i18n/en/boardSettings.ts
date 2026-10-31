@@ -108,7 +108,8 @@ export default defineZone('boardSettings', {
     autoAssignDesc: 'A free agent takes the next “To do” ticket',
     quotaPause: 'Pause above quota',
     quotaPauseHint: 'for all projects',
-    quotaPauseDesc: 'No ticket starts while the 5-hour window or the weekly window is above this threshold.',
+    quotaPauseDesc:
+      'The autopilot starts no ticket while the 5-hour window or the weekly window is above this threshold. A ticket launched by hand still starts.',
 
     parallel: 'In parallel',
     parallelDesc: 'Beyond that, “To do” tickets wait for a free slot',

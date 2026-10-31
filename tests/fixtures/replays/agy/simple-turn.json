@@ -1,0 +1,37 @@
+{
+  "about": "Un tour sans outil d’agy 1.4.9 (gemini-3.8-flash-low) : « pong », ses jetons, pas de coût.",
+  "agent": {
+    "cwd": "C:\tmpesc269work",
+    "engine": "agy",
+    "mode": "default",
+    "model": "gemini-3.8-flash"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": null,
+    "sessionId": "9f9031e6-987b-430c-a020-a22779883a82",
+    "status": "done",
+    "tokens": 6735,
+    "touchedFiles": []
+  },
+  "flux": "../../agy/01-simple-turn.jsonl",
+  "items": [
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "pong"
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "agy",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 6735
+    }
+  ]
+}

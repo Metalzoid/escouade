@@ -18,6 +18,8 @@ use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+mod agy;
+mod agy_tui;
 mod claude;
 mod codex;
 mod codex_tui;
@@ -27,11 +29,15 @@ mod cursor;
 mod cursor_tui;
 mod localcmd;
 // The translation of the minimal fake engine of the conformance bench (`engine/minimal/`).
+mod gemini;
+mod gemini_tui;
 #[cfg(test)]
 mod minimal;
 mod opencode;
 pub mod sidechain;
 mod transcript;
+mod vibe;
+mod vibe_tui;
 
 pub use transcript::HookOutcome;
 
@@ -84,6 +90,9 @@ pub struct Effects {
     pub agent_changed: bool,
     pub save: bool,
     pub notify: Option<AgentAlert>,
+    /// Permissions just asked, which the plugins of `permissions.decide` answer first (PLG-8):
+    /// the core holds `notify` back while they decide (`plugins::decide`).
+    pub asked: Vec<crate::plugins::decide::Asked>,
     pub turns: Vec<TurnRow>,
     pub rate: Option<Vec<crate::model::QuotaMeter>>,
     /// Whether the agent's account answers as extra usage (`isUsingOverage` of a `rate_limit_event`).
@@ -145,6 +154,9 @@ struct Counters {
 
 pub struct AgentRt {
     pub meta: AgentMeta,
+    /// Where its facts go (PLG-5): its status, its requests and their answers, told where they
+    /// change; nowhere outside the core.
+    pub(crate) facts: crate::facts::Emitter,
     pub proc: Option<Process>,
     pub gen: u64,
     pub conv: Conv,
@@ -281,6 +293,14 @@ pub struct AgentRt {
     cursor: cursor::CursorState,
     /// What the translation of OpenCode keeps between its events (`agent/opencode.rs`).
     opencode: opencode::OpencodeState,
+    /// What the translation of Mistral Vibe keeps between its updates (`agent/vibe.rs`).
+    vibe: vibe::VibeState,
+    /// What the translation of Antigravity CLI keeps between its events (`agent/agy.rs`).
+    agy: agy::AgyState,
+    /// What the translation of Gemini CLI keeps between its updates (`agent/gemini.rs`).
+    gemini: gemini::GeminiState,
+    /// What the hooks of its Gemini interface keep between them (`agent/gemini_tui.rs`).
+    gemini_tui: gemini_tui::GeminiTuiState,
 }
 
 /// A stream's process linked to claude.ai, and the session it holds there (its bridge id, when
@@ -492,6 +512,7 @@ impl AgentRt {
         Self {
             conv: Conv::new(conv_dir, &meta.id),
             meta,
+            facts: crate::facts::Emitter::default(),
             proc: None,
             gen: 0,
             active_since: None,
@@ -551,6 +572,10 @@ impl AgentRt {
             copilot: copilot::CopilotState::default(),
             cursor: cursor::CursorState::default(),
             opencode: opencode::OpencodeState::default(),
+            vibe: vibe::VibeState::default(),
+            agy: agy::AgyState::default(),
+            gemini: gemini::GeminiState::default(),
+            gemini_tui: gemini_tui::GeminiTuiState::default(),
         }
     }
 
@@ -645,6 +670,9 @@ impl AgentRt {
         self.copilot = copilot::CopilotState::default();
         self.cursor = cursor::CursorState::default();
         self.opencode = opencode::OpencodeState::default();
+        self.vibe = vibe::VibeState::default();
+        self.agy = agy::AgyState::default();
+        self.gemini = gemini::GeminiState::default();
         // What ran in the process before is gone with it.
         self.interrupt_plan();
     }
@@ -969,7 +997,11 @@ impl AgentRt {
                 t.empty_at = Some(t.typed.load(std::sync::atomic::Ordering::Acquire));
             }
         }
-        self.meta.status = status;
+        let was = std::mem::replace(&mut self.meta.status, status);
+        self.fact(crate::facts::Body::AgentStatus {
+            status: crate::facts::status_word(status),
+            was: crate::facts::status_word(was),
+        });
         self.meta.last_activity = now;
         fx.agent_changed = true;
         fx.save = true;
@@ -1126,15 +1158,47 @@ impl AgentRt {
     }
 
     /// A request comes after those waiting already: the one asked first stays the one shown
-    /// first. Asked again, a request keeps its place, and the time it first came.
-    fn add_pending(&mut self, req: PendingReq) {
+    /// first. Asked again, a request keeps its place, and the time it first came. A new permission
+    /// (not a plan to approve) goes first to the plugins that decide (`Effects::asked`, PLG-8).
+    fn add_pending(&mut self, req: PendingReq, fx: &mut Effects) {
         match self.pending.iter_mut().find(|p| p.item_id == req.item_id) {
             Some(p) => {
                 let since = p.since;
                 *p = PendingReq { since, ..req };
             }
-            None => self.pending.push(req),
+            None => {
+                let v = &req.view;
+                self.fact(if v.kind == "question" {
+                    crate::facts::Body::RequestQuestion {
+                        request_id: v.id.clone(),
+                        questions: v.questions.iter().map(|q| q.question.clone()).collect(),
+                    }
+                } else {
+                    crate::facts::Body::RequestPermission {
+                        request_id: v.id.clone(),
+                        tool: v.tool.clone(),
+                        arg: v.arg.chars().take(300).collect(),
+                    }
+                });
+                if v.kind == "permission" && v.tool != "ExitPlanMode" {
+                    fx.asked.push(crate::plugins::decide::Asked {
+                        request_id: v.id.clone(),
+                        tool: v.tool.clone(),
+                        input: trim_strings(&req.input),
+                        arg: v.arg.clone(),
+                    });
+                }
+                self.pending.push(req)
+            }
         }
+    }
+
+    /// Tells `body` of this agent on the facts' bus (PLG-5).
+    pub(crate) fn fact(&self, body: crate::facts::Body) {
+        self.facts.emit(
+            body,
+            crate::facts::About::agent(&self.meta.id, &self.meta.name, &self.meta.project_id),
+        );
     }
 
     /// The request `request_id` has its answer already: the user's, in the window, or a client's.
@@ -1206,6 +1270,12 @@ impl AgentRt {
             None => answers.clone(),
         };
         proc.answer_question(request_id, &p.tool_use_id, input)?;
+        self.fact(crate::facts::Body::RequestAnswered {
+            request_id: request_id.to_string(),
+            kind: "question".into(),
+            decision: None,
+            by: by.map(str::to_string),
+        });
         let mut patch = json!({ "answers": answers });
         answered_by(&mut patch, by);
         self.patch(&p.item_id, patch, fx);
@@ -1222,6 +1292,22 @@ impl AgentRt {
         decision: &str,
         message: Option<String>,
         by: Option<&str>,
+        fx: &mut Effects,
+    ) -> Result<()> {
+        let auto = engine::of(&self.meta).supports_auto(&self.meta.model);
+        self.answer_permission_in(request_id, decision, message, by, auto, fx)
+    }
+
+    /// `answer_permission_by`, `takes_auto` saying whether its model takes the mode `auto`
+    /// (`Core::takes_auto`): a plan approved goes on in the mode it was in before Plan
+    /// (`AgentMeta::plan_resume`, ESC-277), which its card and its Composer show at once.
+    pub fn answer_permission_in(
+        &mut self,
+        request_id: &str,
+        decision: &str,
+        message: Option<String>,
+        by: Option<&str>,
+        takes_auto: bool,
         fx: &mut Effects,
     ) -> Result<()> {
         let proc = self
@@ -1247,10 +1333,12 @@ impl AgentRt {
             message
         };
         let call = p.tool_use_id.clone();
+        let plan = p.view.tool == "ExitPlanMode";
         let answer = match decision {
             "allow" => PermissionAnswer::Allow {
                 call,
                 input: p.input.clone(),
+                resume: plan.then(|| self.meta.plan_resume(takes_auto)),
             },
             "always" => PermissionAnswer::Always {
                 call,
@@ -1271,7 +1359,29 @@ impl AgentRt {
                 }
             }
         };
+        let resumed = match &answer {
+            PermissionAnswer::Allow {
+                resume: Some(mode), ..
+            } => Some(mode.clone()),
+            PermissionAnswer::Always { .. } if plan => Some("acceptEdits".to_string()),
+            _ => None,
+        };
         proc.answer_permission(request_id, answer)?;
+        self.fact(crate::facts::Body::RequestAnswered {
+            request_id: request_id.to_string(),
+            kind: "permission".into(),
+            decision: Some(match decision {
+                "allow" | "always" => decision.to_string(),
+                _ => "deny".to_string(),
+            }),
+            by: by.map(str::to_string),
+        });
+        // Its mode now, without waiting for its harness to tell it (the Composer follows).
+        if let Some(mode) = resumed {
+            if self.meta.set_mode(&mode) {
+                fx.save = true;
+            }
+        }
         let mut patch = json!({ "decision": decision, "message": message });
         answered_by(&mut patch, by);
         self.patch(&p.item_id, patch, fx);
@@ -1377,6 +1487,47 @@ impl AgentRt {
     /// One frame of its process, translated into its conversation by its engine.
     pub fn handle_frame(&mut self, f: &Value, fx: &mut Effects) {
         engine::of(&self.meta).translate(self, f, fx);
+        if self.meta.discussion.is_some() && !self.pending.is_empty() {
+            self.discussion_answers(fx);
+        }
+    }
+
+    /// A discussion of the Docs tab (ESC-261) never changes a file nor runs a command: what it asks
+    /// for that is refused on the spot, whatever its harness; Escouade's own tools (the docs it
+    /// writes) go through without a question. The rest waits for the user, as for any agent.
+    fn discussion_answers(&mut self, fx: &mut Effects) {
+        let answers: Vec<(String, &str)> = self
+            .pending
+            .iter()
+            .filter(|p| p.view.kind == "permission")
+            .filter_map(|p| {
+                let tool = p.view.tool.as_str();
+                if crate::discussion::refused_tool(tool) {
+                    Some((p.item_id.clone(), "deny"))
+                } else if crate::discussion::allowed_tool(tool) {
+                    Some((p.item_id.clone(), "allow"))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if answers.is_empty() {
+            return;
+        }
+        for (id, decision) in answers {
+            // The refusal says itself that Escouade refused, and why.
+            let message = (decision == "deny").then(|| crate::discussion::refusal(i18n::claude()));
+            if let Err(e) = self.answer_permission_by(&id, decision, message, None, fx) {
+                log::warn!(
+                    "agent {}: discussion's answer to {id} not given: {e:#}",
+                    self.meta.id
+                );
+            }
+        }
+        // Nobody is to be called for what was answered.
+        if self.pending.is_empty() {
+            fx.notify = None;
+        }
     }
 }
 

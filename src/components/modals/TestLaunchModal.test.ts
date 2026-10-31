@@ -40,7 +40,7 @@ describe('TestLaunchModal', () => {
     expect(screen.getByText('prêt · 1,8 s')).toBeInTheDocument();
     expect(screen.getByText(/Ouvert dans le navigateur/)).toHaveTextContent('Ouvert dans le navigateur : http://localhost:4111/connexion');
     await userEvent.click(screen.getByRole('button', { name: 'Rouvrir' }));
-    expect(backend.called('plugin:opener|open_url')[0].args.url).toBe('http://localhost:4111/connexion');
+    expect(backend.called('open_url')[0].args.url).toBe('http://localhost:4111/connexion');
   });
 
   it('stops everything, or shows the log of a step', async () => {

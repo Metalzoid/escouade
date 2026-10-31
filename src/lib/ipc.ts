@@ -1,5 +1,9 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
+  CodeIndexInfo,
+  Memory,
+  VectorsModelInfo,
+  OfferedMemory,
   WorkflowRefineOutcome,
   WorkflowRefinePlan,
   WorkflowScan,
@@ -15,6 +19,9 @@ import type {
   PrFix,
   PrProposal,
   PullRequest,
+  PrDetail,
+  PrRead,
+  NoPr,
   Agent,
   AttachedFile,
   Attachment,
@@ -77,6 +84,29 @@ import type {
   SetupInfo,
   Workflow,
   WorkflowTrack,
+  DocsCandidate,
+  DocsCompared,
+  DecisionRef,
+  DocsDecision,
+  DocsCheck,
+  DiscussionPoured,
+  DocsPlan,
+  DocsPlanCancelled,
+  DiscussionStart,
+  DocsDocHit,
+  DocsDrive,
+  DocsDropped,
+  DocsFile,
+  DocsHit,
+  DocsPage,
+  DocsText,
+  DocsPending,
+  DocsShared,
+  DocsConflict,
+  DocsTree,
+  DocsDraft,
+  DocsImported,
+  DocsMoved,
 } from './types';
 
 /**
@@ -199,7 +229,7 @@ export const api = {
   /** The menu of the models of an account opened: they are read again when a day old (ESC-186), told by `accountModels`. */
   accountModelsRefresh: (id: string) => invoke<void>('account_models_refresh', { id }),
   /** The API key of a Cursor account other than its machine's (ESC-43), kept in the system's keychain; its status as it then is. */
-  accountCursorKey: (id: string, key: string) => invoke<AccountStatus>('account_cursor_key', { id, key }),
+  accountKey: (id: string, key: string) => invoke<AccountStatus>('account_key', { id, key }),
   /** What stopped the account's sign-in before it was signed in, when it is known (its program not found, an installation cut half-way); null otherwise. */
   accountSignInEnded: (id: string) => invoke<string | null>('account_sign_in_ended', { id }),
   /** The account's `claude` in an interactive terminal, to sign in with (written to and killed as a terminal). */
@@ -234,6 +264,25 @@ export const api = {
   projectLogo: (id: string) => invoke<string | null>('project_logo', { id }),
   /** The image of `path` as a logo would be taken (`data:` URL), or why it would be refused. */
   readLogo: (path: string) => invoke<string>('read_logo', { path }),
+  /** « Index du code » of a project (ESC-254): whether it is on, what it holds, what its fence leaves out. */
+  getCodeIndex: (id: string) => invoke<CodeIndexInfo>('get_code_index', { id }),
+  /** Turns it on (answers once the project is read) or off (its database erased), the project's choice; null follows the app's setting again. */
+  setCodeIndex: (id: string, enabled: boolean | null) => invoke<CodeIndexInfo>('set_code_index', { id, enabled }),
+  /** « Index du code sur tous les projets » (ESC-293), saved at once: on, the projects that follow it read one after the other; off, their index erased. How many follow it. */
+  setCodeIndexAll: (enabled: boolean) => invoke<number>('set_code_index_all', { enabled }),
+  /** « Recherche par le sens »: the vectors' model, its download (progress in `vectorsDownload`), « Annuler », « Effacer ». */
+  vectorsModel: () => invoke<VectorsModelInfo>('vectors_model'),
+  vectorsModelDownload: () => invoke<VectorsModelInfo>('vectors_model_download'),
+  vectorsModelCancel: () => invoke<void>('vectors_model_cancel'),
+  vectorsModelDelete: () => invoke<VectorsModelInfo>('vectors_model_delete'),
+  /** The project’s shared memory (ESC-255), by name. */
+  memoryList: (projectId: string) => invoke<Memory[]>('memory_list', { projectId }),
+  /** « Oublier » a memory of the project’s shared memory. */
+  memoryForget: (projectId: string, name: string) => invoke<void>('memory_forget', { projectId, name }),
+  /** What Claude Code remembers of the project, offered once: empty once offered, or when it has nothing. */
+  claudeMemoryOffer: (projectId: string) => invoke<OfferedMemory[]>('claude_memory_offer', { projectId }),
+  /** « Reprendre » the memories ticked (none: « Pas maintenant »): the offer is not made again. */
+  claudeMemoryTake: (projectId: string, names: string[]) => invoke<Project>('claude_memory_take', { projectId, names }),
   /** « Faire confiance à ces commandes »: those of the project’s `.escouade.yml` read (`hash`). */
   sharedTrust: (projectId: string, hash: string) => invoke<Project>('shared_trust', { projectId, hash }),
   /** « Exporter vers .escouade.yml » (no `keys`), or « Écrire dans .escouade.yml » of the keys given. */
@@ -386,6 +435,19 @@ export const api = {
   /** `hostRepo`: the repository it was read in, when not the target's (`PullRequest.hostRepo`). */
   agentPrFix: (id: string, number: number, fix: PrFix, hostRepo?: string) =>
     invoke<void>('agent_pr_fix', { id, number, fix, ...(hostRepo ? { hostRepo } : {}) }),
+  /** The « PR et CI » tab (ESC-305): the checks, reviews, comments and deployments of the agent's pull request. */
+  agentPrDetail: (id: string, number: number, hostRepo?: string) =>
+    invoke<PrRead<PrDetail>>('agent_pr_detail', { id, number, ...(hostRepo ? { hostRepo } : {}) }),
+  /** The end of the log of a check's job. */
+  agentPrLog: (id: string, number: number, job: string, hostRepo?: string) =>
+    invoke<PrRead<string>>('agent_pr_log', { id, number, job, ...(hostRepo ? { hostRepo } : {}) }),
+  /** « Relancer les échecs », on a click only: how many runs started. */
+  agentPrRerun: (id: string, number: number, hostRepo?: string) =>
+    invoke<number>('agent_pr_rerun', { id, number, ...(hostRepo ? { hostRepo } : {}) }),
+  /** Why the agent has no « Ouvrir une PR… »; null when it can open one. */
+  agentNoPr: (id: string) => invoke<NoPr | null>('agent_no_pr', { id }),
+  /** The open pull requests of the project, on the remote of its target. */
+  projectPrs: (projectId: string) => invoke<PrRead<{ word: string; prs: PullRequest[] }>>('project_prs', { projectId }),
   getCommands: (id: string) => invoke<SlashCommand[]>('get_commands', { id }),
   fileSuggestions: (id: string, query: string) => invoke<string[]>('file_suggestions', { id, query }),
   gitFiles: (projectId: string, agentId: string | null) => invoke<FileChange[]>('git_files', { projectId, agentId }),
@@ -396,6 +458,59 @@ export const api = {
   effectiveWorkflows: (id: string) => invoke<Workflow[]>('effective_workflows', { id }),
   /** Where each agent of the project is in its workflows, and where it has been (ESC-193). */
   getWorkflowTracks: (id: string) => invoke<WorkflowTrack[]>('get_workflow_tracks', { id }),
+  /** The spec's tree by subject, and the spec the project already has when it has no page (ESC-256). */
+  docsSpecTree: (id: string) => invoke<DocsTree>('docs_spec_tree', { id }),
+  docsDetectSpec: (id: string) => invoke<DocsCandidate[]>('docs_detect_spec', { id }),
+  docsSpecPage: (id: string, path: string) => invoke<DocsPage>('docs_spec_page', { id, path }),
+  /** `subject`: the name the page's subject is shown under (a new page's), left as it is when null. */
+  docsSpecWrite: (id: string, path: string, title: string | null, body: string | null, subject: string | null = null) =>
+    invoke<DocsPage>('docs_spec_write', { id, path, title, body, subject }),
+  /** « Comparer au code » (ESC-263): `pages`, or the whole spec when null; ends with them compared. */
+  docsCompare: (id: string, pages: string[] | null) => invoke<DocsCompared>('docs_compare', { id, pages }),
+  docsSpecSearch: (id: string, query: string) => invoke<DocsHit[]>('docs_spec_search', { id, query }),
+  docsDecisions: (id: string) => invoke<DocsDecision[]>('docs_decisions', { id }),
+  /** A new proposal (reference null), or a proposal still open revised (its id). */
+  docsDecisionPropose: (id: string, reference: DecisionRef | null, decision: Partial<DocsDecision>) =>
+    invoke<DocsDecision>('docs_decision_propose', { id, reference, decision }),
+  docsDecisionReplace: (id: string, number: number, decision: Partial<DocsDecision>) =>
+    invoke<DocsDecision>('docs_decision_replace', { id, number, decision }),
+  /** « Accepter »: a human's act, the only way to accept a decision. */
+  docsDecisionAccept: (id: string, reference: DecisionRef) => invoke<DocsDecision>('docs_decision_accept', { id, reference }),
+  docsDocuments: (id: string, folder: string | null = null) => invoke<DocsFile[]>('docs_documents', { id, folder }),
+  docsDocumentText: (id: string, path: string, from: number | null = null) => invoke<DocsText>('docs_document_text', { id, path, from }),
+  /**
+   * A file of this machine put in the drive (ESC-260): in `folder`, or filed by Escouade when null. Over 50 MB without an
+   * LFS rule that takes it, it asks to be `confirmed` first.
+   */
+  docsDocumentAdd: (id: string, folder: string | null, source: string, confirmed = false) =>
+    invoke<DocsDropped>('docs_document_add', { id, folder, source, confirmed }),
+  docsDrive: (id: string) => invoke<DocsDrive>('docs_drive', { id }),
+  docsDocumentCheck: (id: string, folder: string | null, files: { name: string; size: number }[]) =>
+    invoke<DocsCheck[]>('docs_document_check', { id, folder, files }),
+  docsDocumentMove: (id: string, path: string, folder: string) => invoke<DocsFile>('docs_document_move', { id, path, folder }),
+  docsFolderAdd: (id: string, folder: string) => invoke<string>('docs_folder_add', { id, folder }),
+  docsDocumentsSearch: (id: string, query: string) => invoke<DocsDocHit[]>('docs_documents_search', { id, query }),
+  docsPending: (id: string) => invoke<DocsPending>('docs_pending', { id }),
+  docsShare: (id: string, message: string | null = null, withCode = false) => invoke<DocsShared>('docs_share', { id, message, withCode }),
+  docsShareResolve: (id: string) => invoke<DocsConflict>('docs_share_resolve', { id }),
+  docsShareCancel: (id: string) => invoke<void>('docs_share_cancel', { id }),
+  /** « Commencer » of « Nouvelle discussion » (ESC-261): its agent, in the folder of the docs branch, sent its subject. */
+  discussionStart: (id: string, start: DiscussionStart) => invoke<Agent>('discussion_start', { id, start }),
+  /** « Verser dans la spec »: what the discussion proposes, written on the docs branch (nothing committed). */
+  discussionPour: (agent: string) => invoke<DiscussionPoured>('discussion_pour', { agent }),
+  /** « Planifier » (ESC-262): the changes poured by the discussion `agent`, or every change without tickets when null,
+   * made into tickets « À faire » by the planner (not started). */
+  docsPlan: (id: string, agent: string | null = null) => invoke<DocsPlan>('docs_plan', { id, agent }),
+  /** « Annuler » of a planning: its tickets not started yet removed, its changes to plan again. */
+  docsPlanCancel: (id: string, plan: string) => invoke<DocsPlanCancelled>('docs_plan_cancel', { id, plan }),
+  /** Takes a page (its path) or a decision (from 1) out of « Ce qui ira dans la spec ». */
+  discussionDrop: (agent: string, page: string | null, decision: number | null) =>
+    invoke<void>('discussion_drop', { agent, page, decision }),
+  /** How a spec the project has (`path`, one of `docsDetectSpec`'s) would be cut by subject (ESC-258): nothing written. */
+  docsImportPlan: (id: string, path: string) => invoke<DocsDraft[]>('docs_import_plan', { id, path }),
+  /** Writes the pages of `only` (all when null) of that cut; none overwritten. */
+  docsImport: (id: string, path: string, only: string[] | null = null) => invoke<DocsImported>('docs_import', { id, path, only }),
+  docsRecent: (id: string) => invoke<DocsMoved[]>('docs_recent', { id }),
   gitLog: (projectId: string, agentId: string | null, repo: string | null = null) =>
     invoke<GitLog>('git_log', { projectId, agentId, ...inRepo(repo) }),
   gitShow: (projectId: string, hash: string, repo: string | null = null) =>
@@ -596,7 +711,7 @@ export const api = {
   /** What an automatic restart waits for, as the window sees it. */
   updatePresence: (presence: { modal: boolean; testing: boolean; activeAt: number }) => invoke<void>('update_presence', { presence }),
   /** One HTTP request without proxy (2 s): true for any answer. */
-  httpReady: (url: string) => invoke<boolean>('http_ready', { url }),
+  httpReady: (url: string, agentId?: string) => invoke<boolean>('http_ready', { url, agentId }),
   /** The write's number, which the backend's log tells it by. */
   termWrite: (id: string, data: string) => invoke<number>('term_write', { id, data }),
   termReport: (id: string, report: TermReport) => invoke<void>('term_report', { id, report }),

@@ -1,0 +1,93 @@
+{
+  "about": "Une écriture en mode default (ESC-273, faux serveur) : son diff dans le tool_call et la permission qui répète tout l’appel, accordée une fois ; l’outil Write, le fichier touché.",
+  "agent": {
+    "cwd": "C:\\tmp\\esc273\\proj2",
+    "engine": "gemini",
+    "mode": "default",
+    "model": "auto"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": null,
+    "sessionId": "c8760362-ba8a-47cf-99cd-3bf2c88f107d",
+    "status": "done",
+    "tokens": 2440,
+    "touchedFiles": ["a.txt"]
+  },
+  "flux": "../../gemini/03-permission-write.jsonl",
+  "items": [
+    {
+      "images": 0,
+      "kind": "user",
+      "queued": false,
+      "text": "ecris le fichier"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "Je crée le fichier."
+    },
+    {
+      "input": {
+        "file_path": "C:\\tmp\\esc273\\proj2\\a.txt"
+      },
+      "kind": "tool",
+      "name": "Write",
+      "parent": null,
+      "result": {
+        "add": 1,
+        "del": 0,
+        "filePath": "C:\\tmp\\esc273\\proj2\\a.txt",
+        "isError": false,
+        "patch": [
+          {
+            "lines": ["+hello"],
+            "newStart": 1,
+            "oldStart": 0
+          }
+        ],
+        "text": ""
+      },
+      "status": "ok"
+    },
+    {
+      "alwaysScope": "agent",
+      "canAlways": true,
+      "decision": "allow",
+      "defaultNo": false,
+      "description": null,
+      "input": {
+        "file_path": "C:\\tmp\\esc273\\proj2\\a.txt"
+      },
+      "kind": "permission",
+      "patch": [
+        {
+          "lines": ["+hello"],
+          "newStart": 1,
+          "oldStart": 0
+        }
+      ],
+      "reason": null,
+      "toolName": "Write",
+      "toolUseId": "write_file__write_file_1793213289559_0"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "Terminé : {\"output\":\"Successfully created and wrote to new file: C:\\\\t"
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "gemini",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 2440
+    }
+  ]
+}

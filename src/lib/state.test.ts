@@ -504,6 +504,30 @@ describe('AppState start-up', () => {
     expect(app.failedUpdate).toBeNull();
   });
 
+  // ESC-290: the page's process ended on a project; the backend loaded the page again on none.
+  it('comes back after a crash on another project, and offers the one it crashed on without opening it', async () => {
+    resetApp();
+    await start({
+      ui: { activeProject: null, view: 'project', selectedAgent: { p1: 'a2' } },
+      pageCrash: { projectId: 'p1', agentId: 'a2' },
+    });
+    expect(app.project?.id).toBe('p2');
+    expect(app.toasts).toHaveLength(1);
+    const toast = app.toasts[0];
+    expect(toast.text).toBe('L’interface s’est arrêtée en affichant « demo-api » : elle a été rechargée sans ce projet.');
+    expect(toast.action?.label).toBe('Rouvrir');
+    toast.action!.onClick();
+    expect(app.project?.id).toBe('p1');
+    expect(app.agent?.id).toBe('a2');
+  });
+
+  it('says the interface stopped when it showed no project', async () => {
+    resetApp();
+    await start({ pageCrash: { projectId: null, agentId: null } });
+    expect(app.toasts.map((t) => t.text)).toEqual(['L’interface s’est arrêtée : elle a été rechargée.']);
+    expect(app.toasts[0].action).toBeUndefined();
+  });
+
   it('knows the version that did not install at the last try', async () => {
     resetApp();
     await start({ failedUpdate: '1.6.0' });
@@ -1343,8 +1367,8 @@ describe('board', () => {
     expect(app.ui.activeProject).toBe('p2');
     expect(app.boardOn).toBe(true);
     emit({ type: 'openUrl', url: 'https://github.com/acme/demo/compare/main...ticket/dem-1' });
-    await vi.waitFor(() => expect(backend.called('plugin:opener|open_url')).toHaveLength(1));
-    expect(backend.called('plugin:opener|open_url')[0].args.url).toBe('https://github.com/acme/demo/compare/main...ticket/dem-1');
+    await vi.waitFor(() => expect(backend.called('open_url')).toHaveLength(1));
+    expect(backend.called('open_url')[0].args.url).toBe('https://github.com/acme/demo/compare/main...ticket/dem-1');
     expect(app.toasts).toEqual([]);
   });
 
@@ -1360,14 +1384,14 @@ describe('board', () => {
     const { emit, backend } = await start(
       {},
       {
-        'plugin:opener|open_url': () => {
+        open_url: () => {
           throw 'Aucun navigateur';
         },
       },
     );
     emit({ type: 'openUrl', url: 'https://github.com/acme/demo/compare/main...ticket/dem-1' });
     await expect.poll(() => app.toasts.at(-1)).toMatchObject({ kind: 'error', text: expect.stringContaining('Aucun navigateur') });
-    expect(backend.called('plugin:opener|open_url')).toHaveLength(1);
+    expect(backend.called('open_url')).toHaveLength(1);
   });
 
   it('tells whether the ticket of an agent is under way', async () => {

@@ -73,6 +73,7 @@ impl Engine for Minimal {
             sandbox: false,
             usage_page: None,
             accounts_by_key: false,
+            read_only: false,
         }
     }
 

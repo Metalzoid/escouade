@@ -1,0 +1,4 @@
+{"m":"POST","u":"/mcp","method":"initialize","auth":"<présent:33 car.>","accept":"application/json, text/event-stream"}
+{"m":"POST","u":"/mcp","method":"notifications/initialized","auth":"<présent:33 car.>","accept":"application/json, text/event-stream"}
+{"m":"GET","u":"/mcp","auth":"<présent:33 car.>","accept":"text/event-stream"}
+{"m":"POST","u":"/mcp","method":"ping","auth":"<présent:33 car.>","accept":"application/json, text/event-stream"}

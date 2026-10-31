@@ -1,0 +1,14 @@
+└ Models & Quota
+GEMINI MODELS
+  Models within this group: Gemini Flash, Gemini Pro
+  Weekly Limit Remaining
+    [████████████████████████████████████████████████░░] 95.57%
+    Refreshes in 167h 49m
+CLAUDE AND GPT MODELS
+  Models within this group: Claude Opus, Claude Sonnet, GPT-OSS
+  [█████████████████████████████████████████████████░] 98.43%    (relevé plus tard)
+    Refreshes in 167h 58m
+  Within each group, models share a weekly limit. Quota is consumed
+  proportionally to the cost of the tokens. Thus, limits will last longer with
+  shorter tasks or using more cost-effective models. Your weekly limit is tied
+  directly to your individual tier.

@@ -9,7 +9,7 @@
   import { knowLogo, logoUrl, pickLogo } from '../../lib/project-logo.svelte';
   import { cleanLabel, cleanLetters, initials, tileText } from '../../lib/project-rail';
   import TileFace from '../TileFace.svelte';
-  import { PROJECT_COLORS } from '../../lib/theme';
+  import { projectPalette } from '../../lib/plugin-theme.svelte';
   import type { Start, StepId } from '../../lib/wizard';
   import { WizardForm } from '../../lib/wizard-form.svelte';
   import AccountStep from '../wizard/AccountStep.svelte';
@@ -38,7 +38,9 @@
   form.path = startPath;
   let name = $state(existing?.name ?? '');
   let nameTouched = !!existing;
-  const freeColor = PROJECT_COLORS.find((c) => !used.has(c)) ?? PROJECT_COLORS[0];
+  /** The project colours offered: those of the plugin's theme shown (PLG-7), else Escouade's. */
+  const palette = projectPalette();
+  const freeColor = palette.find((c) => !used.has(c)) ?? palette[0];
   let color = $state(existing?.color ?? freeColor);
   let colorTouched = !!existing;
   /** « Lettres de la tuile » (ESC-167): empty is the initials of the name. */
@@ -136,13 +138,16 @@
         ? { text: t('shell.newProject.git.missing'), color: 'var(--del)' }
         : info.repos?.length
           ? // Of several repositories (ESC-169): « 4 dépôts git : front, api, infra, docs ».
-            { text: t('repos.wizard.found', { count: info.repos.length, repos: info.repos.map(repoLabel).join(', ') }), color: 'var(--ok)' }
+            {
+              text: t('repos.wizard.found', { count: info.repos.length, repos: info.repos.map(repoLabel).join(', ') }),
+              color: 'var(--run)',
+            }
           : info.isRepo
             ? {
                 text: info.dirty
                   ? t('shell.newProject.git.repoDirty', { branch: info.branch || '—', count: info.dirty })
                   : t('shell.newProject.git.repoClean', { branch: info.branch || '—' }),
-                color: 'var(--ok)',
+                color: 'var(--run)',
               }
             : { text: t('shell.newProject.git.none'), color: 'var(--muted)' },
   );
@@ -231,6 +236,9 @@
       if (!withSettings) return void show(await saveTile(p), null);
       // Made: shown even if its settings were refused (said by a toast), to be set in Réglages › Projets.
       const saved = await form.save(p);
+      // « Indexer le code » changed from the app's setting: the project's choice, the reading in the background, the project
+      // shown at once. Left as it was, the project follows the app's setting (read by the backend when it is on).
+      if (form.codeIndex !== !!app.settings?.codeIndexAll) void app.run(api.setCodeIndex(p.id, form.codeIndex));
       await show(await saveTile(saved ?? p), agent);
     } finally {
       busy = false;
@@ -352,7 +360,7 @@
           <div class="w-fld">
             <span class="lab">{t('common.color')}</span>
             <div class="swatches">
-              {#each PROJECT_COLORS as c, i (c)}
+              {#each projectPalette(color) as c, i (c)}
                 <button
                   aria-label={t('shell.newProject.colorN', { n: i + 1 })}
                   aria-pressed={color === c}

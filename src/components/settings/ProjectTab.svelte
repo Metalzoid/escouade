@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from '../Icon.svelte';
-  import { openPath } from '@tauri-apps/plugin-opener';
+  import { openPath } from '../../lib/opener';
   import { tick, type Snippet } from 'svelte';
   import { t } from '../../lib/i18n';
   import { anyCan, choosesEngine, engineName, engineOptions } from '../../lib/engines';
@@ -12,7 +12,7 @@
   import { revealHidden } from '../../lib/recipe';
   import { settingsForm, worktreesProblems } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
-  import { PROJECT_COLORS } from '../../lib/theme';
+  import { projectPalette } from '../../lib/plugin-theme.svelte';
   import { cleanLabel, cleanLetters, initials, tileText } from '../../lib/project-rail';
   import TileFace from '../TileFace.svelte';
   import type { Account, CommitMode, LeftoverReport, Project, WorktreeStep } from '../../lib/types';
@@ -21,10 +21,14 @@
   import Row from './Row.svelte';
   import SharedMark from './SharedMark.svelte';
   import SharedSection from './SharedSection.svelte';
+  import ProposedPlugins from './ProposedPlugins.svelte';
+  import CodeIndexSection from './CodeIndexSection.svelte';
+  import MemorySection from './MemorySection.svelte';
   import StepList from './StepList.svelte';
   import Switch from './Switch.svelte';
   import WorkflowSection from './WorkflowSection.svelte';
   import WorktreeBaseField from './WorktreeBaseField.svelte';
+  import DocsBranchField from './DocsBranchField.svelte';
   import { tip } from '../../lib/tip';
   import { repoLabel } from '../../lib/repos';
   import { SHARED_DIR } from '../../lib/sharing';
@@ -118,6 +122,9 @@
     { id: 'opencode', name: 'OpenCode', kind: 'guard' },
     { id: 'copilot', name: 'Copilot CLI', kind: 'guard' },
     { id: 'cursor', name: 'Cursor CLI', kind: 'guard' },
+    { id: 'vibe', name: 'Mistral Vibe', kind: 'guard' },
+    { id: 'agy', name: 'Antigravity CLI', kind: 'guard' },
+    { id: 'gemini', name: 'Gemini CLI', kind: 'guard' },
   ] as const;
 
   /** Asks before closing it, then comes back to these settings, their draft as it was. */
@@ -235,6 +242,9 @@
   </ul>
 {/snippet}
 
+<!-- The plugins its .escouade.yml proposes and this machine lacks (PLG-14): read from the project as the backend has it. -->
+<ProposedPlugins project={live} />
+
 <Group title={t('settings.project.identity')}>
   <Row label={t('settings.project.nameLabel')}>
     <input class="field input" aria-label={t('settings.project.nameLabel')} spellcheck="false" bind:value={draft.name} />
@@ -268,7 +278,7 @@
   </Row>
   <Row label={t('common.color')} desc={t('settings.project.colorDesc')}>
     <div class="swatches" role="group" aria-label={t('common.color')}>
-      {#each PROJECT_COLORS as c, i (c)}
+      {#each projectPalette(draft.color) as c, i (c)}
         <button
           class="swatch"
           aria-label={t('settings.project.colorN', { n: i + 1 })}
@@ -497,6 +507,9 @@
   <Row label={t('settings.project.commit')} desc={t('settings.project.commitDesc')} shared="git.commit_mode">
     <Chips label={t('settings.project.commit')} options={COMMIT_MODES} bind:value={draft.commitMode} />
   </Row>
+  <Row label={t('docs.branch.label')} desc={t('docs.branch.desc')} wide>
+    <DocsBranchField bind:value={draft.docsBranch} />
+  </Row>
 </Group>
 
 <Group title={t('settings.project.worktrees')} anchor="worktrees" note={t('settings.project.worktreesNote')}>
@@ -635,6 +648,9 @@
 
 <!-- Its .escouade.yml after what it sets (2.0 design, #sg-yml): its commands that wait are also said on the Kanban. -->
 <SharedSection {project} />
+
+<CodeIndexSection {project} />
+<MemorySection {project} />
 
 <!-- The shared Kanban (ESC-190, choice 113): the name in this project, its shared tickets, « Partager chaque nouveau ticket ». -->
 <Group title={t('share.settings.projectGroup')} anchor="share">
@@ -976,7 +992,7 @@
     margin: 0;
     padding: 8px 12px;
     border-radius: 7px;
-    background: var(--wait-soft);
+    background: var(--wait-bg);
     color: var(--text);
     font-size: 12.5px;
     line-height: 1.5;

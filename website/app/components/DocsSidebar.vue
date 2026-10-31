@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { DOC_GROUPS, docPath } from '~/data/docs';
+import { DOC_GROUPS, docPath, slugOf } from '~/data/docs';
 
 // Every page, by group. Beside the page on a wide screen; over it, opened from the header, on a narrow one.
 const { lang, text } = useLang();
 const route = useRoute();
-const current = computed(() => route.params.slug);
+const current = computed(() => slugOf(route.params.slug));
 const menu = useDocsMenu();
 const nav = ref<HTMLElement>();
 

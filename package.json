@@ -1,7 +1,7 @@
 {
   "name": "escouade",
   "private": true,
-  "version": "2.0.5",
+  "version": "2.1.1",
   "license": "GPL-3.0-or-later",
   "type": "module",
   "scripts": {
@@ -15,7 +15,9 @@
     "site-shots": "playwright test -c playwright.site-shots.config.ts",
     "version:set": "node scripts/version.mjs",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "plugin-review": "npm --prefix store run plugin-review --",
+    "bench:int0": "node scripts/bench/int0.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

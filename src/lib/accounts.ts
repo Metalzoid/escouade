@@ -2,7 +2,7 @@
 // another harness's account (going on another harness is a handover, ESC-88).
 
 import { quotaUntil } from './board';
-import { engineName } from './engines';
+import { capsOf, engineName } from './engines';
 import { fDayMonth, fList, fPct, fTime } from './format';
 import { estimatedBy } from './spend';
 import { t, tIn } from './i18n';
@@ -83,7 +83,8 @@ export interface AgentDefaults {
 
 /**
  * The account's model, effort and permission mode for its new agents, else its harness's (`engine`, without an account):
- * Claude Code's Sonnet, effort `medium` and mode `auto`; no model for another harness, which runs its own default.
+ * Claude Code's Sonnet, effort `medium` and mode `auto` (« Demander » for a harness without it, as the backend has it); no model
+ * for another harness, which runs its own default.
  */
 export function accountDefaults(a: Account | undefined, engine: EngineId = a ? engineOfAccount(a) : defaultEngine()): AgentDefaults {
   const own = (v: string | undefined) => v?.trim() || undefined;
@@ -91,7 +92,7 @@ export function accountDefaults(a: Account | undefined, engine: EngineId = a ? e
   return {
     model: own(a?.defaultModel) ?? (of === 'claude' ? CLAUDE_DEFAULT_MODEL : ''),
     effort: own(a?.defaultEffort) ?? 'medium',
-    mode: own(a?.defaultMode) ?? 'auto',
+    mode: own(a?.defaultMode) ?? (capsOf(of)?.modes.some((m) => m.id === 'auto') === false ? 'default' : 'auto'),
   };
 }
 

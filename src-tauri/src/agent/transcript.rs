@@ -104,8 +104,7 @@ impl AgentRt {
             // « Shift+Tab » in the interface: the agent's mode is the one it shows.
             "permission-mode" => {
                 if let Some(mode) = e["permissionMode"].as_str() {
-                    if self.meta.mode != mode {
-                        self.meta.mode = mode.to_string();
+                    if self.meta.set_mode(mode) {
                         fx.agent_changed = true;
                         fx.save = true;
                     }
@@ -397,7 +396,7 @@ impl AgentRt {
         match self.meta.engine {
             EngineId::Codex => return self.codex_tui_end(fx),
             EngineId::Copilot => return self.copilot_tui_end(fx),
-            EngineId::Cursor => return self.cursor_tui_end(fx),
+            EngineId::Cursor | EngineId::Vibe | EngineId::Agy => return self.cursor_tui_end(fx),
             _ => {}
         }
         let mut models = serde_json::Map::new();

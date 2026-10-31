@@ -1,0 +1,156 @@
+<h2>L’écran de l’Overseer : trois façons de le penser</h2>
+<p class="subtitle">Le même instant dans les trois : tu viens de dicter trois choses, et l’Overseer t’annonce que DEM-31 est fini. Clique celle qui te parle, et dis ce que tu prendrais aux autres.</p>
+
+<style>
+  .jv { --bg: #121314; --card: rgba(255,255,255,.045); --line: rgba(255,255,255,.08); --line2: rgba(255,255,255,.14); --text: #f4f5f6; --soft: #c9ccd2; --muted: #8f949e;
+    --run: oklch(0.79 0.15 155); --wait: oklch(0.84 0.14 82); --brand: #35c1bd; --done: oklch(0.8 0.13 155);
+    position: relative; height: 640px; border-radius: 12px; overflow: hidden; color: var(--text); text-align: left;
+    font: 12.5px/1.45 Inter, "Segoe UI", system-ui, sans-serif;
+    background: radial-gradient(900px 600px at 50% 45%, rgba(53,193,189,.10), transparent 60%), var(--bg); }
+  .jv * { box-sizing: border-box; }
+  .jv .bar { position: absolute; top: 12px; left: 16px; right: 16px; display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 11.5px; }
+  .jv .bar b { color: var(--text); }
+  .jv .bar .r { margin-left: auto; }
+  .jv kbd { font: 10.5px Inter, sans-serif; padding: 1px 5px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--line2); color: var(--soft); }
+  .jv .orb { border-radius: 50%; background: radial-gradient(circle at 38% 34%, #e9fffe 0, #7fe3df 14%, #35c1bd 42%, #12625f 78%, transparent 80%);
+    box-shadow: 0 0 80px 20px rgba(53,193,189,.25); }
+  .jv .said { color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; text-align: center; }
+  .jv .sub { font-size: 17px; font-weight: 550; text-align: center; color: var(--text); }
+  .jv .heard { border-radius: 10px; background: rgba(255,255,255,.04); box-shadow: inset 0 0 0 1px var(--line); padding: 8px 12px; color: var(--soft); font-size: 11.5px; }
+  .jv .heard b { color: var(--text); font-weight: 600; }
+  .jv .heard .acts { margin-top: 5px; display: grid; gap: 2px; }
+  .jv .heard .acts span::before { content: "✓ "; color: var(--run); }
+  .jv .undo { color: var(--brand); font-weight: 600; margin-left: 6px; }
+  .jv .card { border-radius: 10px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line); padding: 9px 11px; display: grid; gap: 4px; backdrop-filter: blur(6px); }
+  .jv .card .t { display: flex; align-items: center; gap: 7px; font-weight: 600; }
+  .jv .card .m { color: var(--muted); font-size: 11px; display: flex; gap: 8px; }
+  .jv .pdot { width: 8px; height: 8px; border-radius: 3px; flex: none; }
+  .jv .k { font: 600 10.5px "JetBrains Mono", Consolas, monospace; color: var(--soft); }
+  .jv .bar2 { height: 3px; border-radius: 2px; background: rgba(255,255,255,.08); overflow: hidden; }
+  .jv .bar2 i { display: block; height: 100%; background: var(--run); border-radius: 2px; }
+  .jv .card.wait { box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / .45); background: oklch(from var(--wait) l c h / .06); }
+  .jv .card.wait .q { color: var(--wait); font-size: 11.5px; font-weight: 600; }
+  .jv .card.done { opacity: .55; }
+  .jv .pop { border-radius: 16px; padding: 16px 18px; background: linear-gradient(160deg, oklch(from var(--done) l c h / .18), rgba(255,255,255,.05));
+    box-shadow: inset 0 0 0 1.5px oklch(from var(--done) l c h / .6), 0 0 60px oklch(from var(--done) l c h / .28), 0 24px 60px rgba(0,0,0,.5); display: grid; gap: 6px; }
+  .jv .pop .h { display: flex; gap: 8px; align-items: center; font-size: 15px; font-weight: 650; }
+  .jv .pop .ok { color: var(--done); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .jv .pop .b { color: var(--soft); font-size: 12px; }
+  .jv .pop .row { display: flex; gap: 6px; margin-top: 4px; }
+  .jv .chip { font-size: 11px; padding: 3px 9px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line2); color: var(--soft); }
+  .jv .lane h6 { margin: 0 0 8px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; display: flex; gap: 6px; }
+  .jv .lane h6 b { color: var(--text); }
+  .jv .lane { display: grid; gap: 8px; align-content: start; }
+  .jv .stop { display: inline-flex; gap: 6px; align-items: center; padding: 6px 14px; border-radius: 16px; background: #f1ece6; color: #111; font-weight: 600; font-size: 12px; }
+</style>
+
+<div class="options">
+  <!-- A -->
+  <div class="option" data-choice="pont" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Le pont : L’Overseer à gauche, trois couloirs à droite</h3>
+      <p>L’orbe et ses sous-titres gardent un tiers de l’écran ; le reste est un Kanban de verre de tout ce qu’il a lancé, tous projets mêlés : en cours, en attente de toi, terminé. Une tâche finie surgit en grand au-dessus des couloirs pendant qu’il l’annonce, puis glisse dans « Terminé ».</p>
+      <div class="jv" style="margin-top:10px">
+        <div class="bar"><b>Overseer</b><span>· 4 projets · Haiku 5.5</span><span class="r"><kbd>Échap</kbd> pour quitter</span></div>
+        <div style="position:absolute;left:28px;top:52px;width:330px;bottom:24px;display:flex;flex-direction:column;align-items:center;gap:16px">
+          <div class="heard" style="width:100%"><b>Tu as dit :</b> « Lance les relances sur le portail, fais relire DEM-31 par Codex, et dis-moi où en est l’export. »
+            <div class="acts"><span>DEM-41 lancé · portail-adherents</span><span>Revue de DEM-31 confiée à Codex<a class="undo">Annuler</a></span><span>Export comptable : 2/4 critères</span></div></div>
+          <div class="orb" style="width:150px;height:150px;margin-top:22px"></div>
+          <div class="said">L’Overseer te parle</div>
+          <div class="sub" style="font-size:15.5px">« DEM-31 est fini : le paiement en 4 fois passe, et la spec est à jour. Je le valide ? »</div>
+          <div class="stop" style="margin-top:auto">■ Arrêter</div>
+        </div>
+        <div style="position:absolute;left:390px;right:22px;top:52px;bottom:24px">
+          <div class="pop" style="position:absolute;left:90px;right:90px;top:0;z-index:2">
+            <div class="ok">Terminé · à l’instant</div>
+            <div class="h"><span class="pdot" style="background:oklch(0.72 0.12 250)"></span><span class="k">DEM-31</span>Paiement en 4 fois</div>
+            <div class="b">portail-adherents · Sonnet 5.5 · 2 boucles · 0,84 $ · 6/6 critères · spec mise à jour, ADR-013</div>
+            <div class="row"><span class="chip">« Valide-le »</span><span class="chip">« Montre-moi le diff »</span><span class="chip">« Renvoie-le »</span></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;position:absolute;inset:150px 0 0 0">
+            <div class="lane"><h6>En cours <b>4</b></h6>
+              <div class="card"><div class="t"><span class="pdot" style="background:oklch(0.72 0.12 250)"></span><span class="k">DEM-41</span>Relances d’adhésion</div><div class="m"><span>portail</span><span>Opus · boucle 1/5</span></div><div class="bar2"><i style="width:18%"></i></div></div>
+              <div class="card"><div class="t"><span class="pdot" style="background:oklch(0.72 0.12 250)"></span><span class="k">DEM-31</span>Revue par Codex</div><div class="m"><span>portail</span><span>Lit le diff</span></div><div class="bar2"><i style="width:40%"></i></div></div>
+              <div class="card"><div class="t"><span class="pdot" style="background:oklch(0.7 0.13 155)"></span><span class="k">ESC-251</span>Export comptable</div><div class="m"><span>escouade</span><span>2/4 critères</span></div><div class="bar2"><i style="width:50%"></i></div></div>
+              <div class="card"><div class="t"><span class="pdot" style="background:oklch(0.72 0.13 340)"></span>Revue des dépendances</div><div class="m"><span>web-shop</span><span>planifiée · 7:00</span></div><div class="bar2"><i style="width:75%"></i></div></div>
+            </div>
+            <div class="lane"><h6>Attend ta réponse <b>2</b></h6>
+              <div class="card wait"><div class="t"><span class="pdot" style="background:oklch(0.72 0.13 340)"></span><span class="k">WS-12</span>Panier persistant</div><div class="q">« Stocker le panier 30 jours ou 7 ? »</div><div class="m"><span>web-shop · depuis 4 min</span></div></div>
+              <div class="card wait"><div class="t"><span class="pdot" style="background:oklch(0.7 0.13 155)"></span>Release 2.0.6</div><div class="q">CI verte : je pose le tag ?</div><div class="m"><span>escouade · depuis 1 min</span></div></div>
+            </div>
+            <div class="lane"><h6>Terminé aujourd’hui <b>7</b></h6>
+              <div class="card done"><div class="t"><span class="pdot" style="background:oklch(0.72 0.12 250)"></span><span class="k">DEM-38</span>Tarif famille</div><div class="m"><span>validé · 10:12</span></div></div>
+              <div class="card done"><div class="t"><span class="pdot" style="background:oklch(0.7 0.13 155)"></span><span class="k">ESC-250</span>Mise à jour dans À propos</div><div class="m"><span>publié en 2.0.5</span></div></div>
+              <div class="card done"><div class="t"><span class="pdot" style="background:oklch(0.72 0.13 340)"></span><span class="k">WS-9</span>Bug du code promo</div><div class="m"><span>fusionné · 09:40</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B -->
+  <div class="option" data-choice="orbite" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>L’orbite : tout gravite autour de l’Overseer</h3>
+      <p>L’orbe au centre ; les tâches flottent autour, en arcs : en cours en haut, ce qui t’attend à droite (ambre, plus près de lui), le terminé qui s’éloigne en bas. Une tâche finie fond vers le centre et grossit pendant qu’il parle — le plus « Minority Report », le plus spectaculaire.</p>
+      <div class="jv" style="margin-top:10px">
+        <div class="bar"><b>Overseer</b><span>· 4 projets · Haiku 5.5</span><span class="r"><kbd>Échap</kbd> pour quitter</span></div>
+        <div style="position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);width:520px;height:520px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)"></div>
+        <div style="position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);width:340px;height:340px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)"></div>
+        <div class="orb" style="position:absolute;left:50%;top:46%;width:120px;height:120px;transform:translate(-50%,-50%)"></div>
+        <div class="pop" style="position:absolute;left:50%;top:46%;transform:translate(-50%,-50%) translateY(118px);width:330px;z-index:2">
+          <div class="ok">Terminé · à l’instant</div>
+          <div class="h"><span class="pdot" style="background:oklch(0.72 0.12 250)"></span><span class="k">DEM-31</span>Paiement en 4 fois</div>
+          <div class="b">portail · 6/6 critères · spec à jour</div>
+        </div>
+        <div class="card" style="position:absolute;left:300px;top:96px;width:200px"><div class="t"><span class="pdot" style="background:oklch(0.72 0.12 250)"></span><span class="k">DEM-41</span>Relances</div><div class="bar2"><i style="width:18%"></i></div></div>
+        <div class="card" style="position:absolute;left:50%;transform:translateX(-50%);top:46px;width:200px"><div class="t"><span class="pdot" style="background:oklch(0.7 0.13 155)"></span><span class="k">ESC-251</span>Export compta</div><div class="bar2"><i style="width:50%"></i></div></div>
+        <div class="card" style="position:absolute;right:180px;top:70px;width:200px"><div class="t"><span class="pdot" style="background:oklch(0.72 0.12 250)"></span><span class="k">DEM-31</span>Revue Codex</div><div class="bar2"><i style="width:40%"></i></div></div>
+        <div class="card wait" style="position:absolute;right:120px;top:250px;width:220px"><div class="t"><span class="pdot" style="background:oklch(0.72 0.13 340)"></span><span class="k">WS-12</span>Panier persistant</div><div class="q">30 jours ou 7 ?</div></div>
+        <div class="card wait" style="position:absolute;right:150px;top:340px;width:200px"><div class="t"><span class="pdot" style="background:oklch(0.7 0.13 155)"></span>Release 2.0.6</div><div class="q">Je pose le tag ?</div></div>
+        <div class="card done" style="position:absolute;left:150px;top:300px;width:180px"><div class="t"><span class="k">DEM-38</span>Tarif famille</div></div>
+        <div class="card done" style="position:absolute;left:120px;top:380px;width:190px"><div class="t"><span class="k">ESC-250</span>À propos</div></div>
+        <div class="heard" style="position:absolute;left:20px;top:44px;width:250px"><b>Tu as dit :</b> « Lance les relances, fais relire DEM-31 par Codex… »<div class="acts"><span>3 actions faites<a class="undo">Voir</a></span></div></div>
+        <div style="position:absolute;left:0;right:0;bottom:20px;display:grid;gap:6px;justify-items:center">
+          <div class="said">L’Overseer te parle</div>
+          <div class="sub">« DEM-31 est fini : le paiement en 4 fois passe, et la spec est à jour. Je le valide ? »</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C -->
+  <div class="option" data-choice="mur" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Le mur : un panneau de verre par projet</h3>
+      <p>Chaque projet a son panneau, côte à côte, comme des écrans flottants ; dedans, ses tâches en cours et en attente. L’orbe, petite, tient le bas de l’écran avec les sous-titres. Une tâche finie s’allume dans son panneau et grandit, le temps qu’il l’annonce.</p>
+      <div class="jv" style="margin-top:10px">
+        <div class="bar"><b>Overseer</b><span>· 4 projets · Haiku 5.5</span><span class="r"><kbd>Échap</kbd> pour quitter</span></div>
+        <div style="position:absolute;left:18px;right:18px;top:46px;height:400px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+          <div class="card" style="align-content:start;gap:8px;transform:perspective(900px) rotateY(8deg)"><div class="t"><span class="pdot" style="background:oklch(0.72 0.12 250)"></span>portail-adherents</div>
+            <div class="pop" style="padding:10px 12px"><div class="ok">Terminé</div><div class="h" style="font-size:13px"><span class="k">DEM-31</span>Paiement en 4 fois</div><div class="b" style="font-size:11px">6/6 · spec à jour</div></div>
+            <div class="card"><div class="t"><span class="k">DEM-41</span>Relances</div><div class="bar2"><i style="width:18%"></i></div></div>
+            <div class="card"><div class="t"><span class="k">DEM-31</span>Revue Codex</div><div class="bar2"><i style="width:40%"></i></div></div></div>
+          <div class="card" style="align-content:start;gap:8px;transform:perspective(900px) rotateY(3deg)"><div class="t"><span class="pdot" style="background:oklch(0.72 0.13 340)"></span>web-shop</div>
+            <div class="card wait"><div class="t"><span class="k">WS-12</span>Panier persistant</div><div class="q">30 jours ou 7 ?</div></div>
+            <div class="card"><div class="t">Revue des dépendances</div><div class="m">planifiée · 7:00</div></div>
+            <div class="card done"><div class="t"><span class="k">WS-9</span>Code promo</div></div></div>
+          <div class="card" style="align-content:start;gap:8px;transform:perspective(900px) rotateY(-3deg)"><div class="t"><span class="pdot" style="background:oklch(0.7 0.13 155)"></span>escouade</div>
+            <div class="card wait"><div class="t">Release 2.0.6</div><div class="q">Je pose le tag ?</div></div>
+            <div class="card"><div class="t"><span class="k">ESC-251</span>Export compta</div><div class="bar2"><i style="width:50%"></i></div></div></div>
+          <div class="card" style="align-content:start;gap:8px;transform:perspective(900px) rotateY(-8deg);opacity:.7"><div class="t"><span class="pdot" style="background:oklch(0.74 0.12 85)"></span>demo-api</div>
+            <div class="m">Rien en cours</div></div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:18px;display:grid;gap:6px;justify-items:center">
+          <div class="orb" style="width:64px;height:64px"></div>
+          <div class="sub" style="font-size:15.5px">« DEM-31 est fini : le paiement en 4 fois passe, et la spec est à jour. Je le valide ? »</div>
+          <div class="heard" style="font-size:11px">Tu as dit : « Lance les relances, fais relire DEM-31 par Codex… » · 3 actions faites <a class="undo">Voir</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

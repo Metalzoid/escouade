@@ -7,10 +7,12 @@
   import { revealHidden } from '../../lib/recipe';
   import { answersHere, ariaEnter, enterAnswer } from '../../lib/shortcuts';
   import { speakerOf } from '../../lib/engines';
+  import { tip } from '../../lib/tip';
   import { app } from '../../lib/state.svelte';
   import { escouadeArgs, isEscouadeTool, toolArg, toolLabel } from '../../lib/tools';
   import type { PermissionItem, ToolItem } from '../../lib/types';
   import { patchLines } from '../../lib/diff';
+  import { modeLabel, planResume } from '../../lib/models';
   import Markdown from './Markdown.svelte';
   import PatchView from './PatchView.svelte';
   import Icon from '../Icon.svelte';
@@ -28,6 +30,11 @@
   let card = $state<HTMLElement>();
 
   const isPlan = $derived(item.toolName === 'ExitPlanMode');
+  // The mode its work resumes in once the plan is approved (ESC-277), as the backend puts it in.
+  const resume = $derived.by(() => {
+    const a = app.agents[agentId];
+    return isPlan && a ? modeLabel(planResume(a)) : null;
+  });
   // A request Claude Code would refuse by default: the refusal is its main button, and only a click allows it.
   const keys = $derived(pending && current && !item.defaultNo);
   // Its agent named as its harness names it (« Claude demande une autorisation »).
@@ -116,6 +123,7 @@
         onclick={() => decide('allow')}
       >
         {isPlan ? t('composer.permission.approvePlan') : t('composer.permission.allow')}
+        {#if resume}<span class="then" use:tip={t('composer.permission.resumesIn', { mode: resume })}>· {resume}</span>{/if}
         {#if keys}<kbd aria-hidden="true">{keyLabel('Ctrl+Enter')}</kbd>{/if}
       </button>
       {#if item.canAlways}
@@ -253,6 +261,11 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+  }
+  /* The mode the work resumes in, after « Approuver le plan »: said, not shouted. */
+  .then {
+    opacity: 0.72;
+    font-weight: 450;
   }
   .hint {
     color: var(--muted);

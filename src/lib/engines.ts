@@ -49,7 +49,22 @@ export function usagePage(engine: EngineId | null | undefined): string | undefin
   return capsOf(engine)?.usagePage ?? undefined;
 }
 
-/** Whether an account of `engine` other than its machine's goes by an API key rather than a sign-in (Cursor CLI, ESC-43). */
+/** The site of `usagePage(engine)`, as its link names it (« cursor.com », « admin.mistral.ai »). */
+export function usageSite(engine: EngineId | null | undefined): string {
+  const page = usagePage(engine);
+  return page ? new URL(page).hostname : '';
+}
+
+/**
+ * Whether the day's cost of an account of `engine` stands in for a quota (and its « Budget par jour ($) »): a harness
+ * without a quota that tells what its turns cost (OpenCode; Mistral Vibe, its usage page beside, ESC-267). Not Cursor CLI,
+ * whose usage is on its own page only.
+ */
+export function dayCostStandsIn(engine: EngineId | null | undefined): boolean {
+  return capsOf(engine)?.quota === 'none' && (!usagePage(engine) || showsCost({ engine }));
+}
+
+/** Whether an account of `engine` other than its machine's goes by an API key rather than a sign-in (Cursor CLI, ESC-43; Mistral Vibe, ESC-267). */
 export function byKey(engine: EngineId | null | undefined): boolean {
   return !!capsOf(engine)?.accountsByKey;
 }
@@ -89,6 +104,9 @@ const NAMES: Record<EngineId, string> = {
   copilot: 'Copilot CLI',
   cursor: 'Cursor CLI',
   opencode: 'OpenCode',
+  vibe: 'Mistral Vibe',
+  agy: 'Antigravity CLI',
+  gemini: 'Gemini CLI',
 };
 
 /** The name of a harness as the interface says it: as the backend declares it, else its usual name, else its id. */
@@ -121,9 +139,9 @@ export function showsMark(): boolean {
 
 /**
  * The harnesses whose models are read by account, without an agent (`Core::read_account_models`): Claude Code (ESC-124),
- * Codex, Copilot CLI, Cursor CLI and OpenCode (ESC-186).
+ * Codex, Copilot CLI, Cursor CLI and OpenCode (ESC-186), Mistral Vibe (ESC-266), Antigravity CLI (`agy models`, ESC-270), Gemini CLI (the `models` of its `session/new`, ESC-274).
  */
-const BY_ACCOUNT: EngineId[] = ['claude', 'codex', 'copilot', 'cursor', 'opencode'];
+const BY_ACCOUNT: EngineId[] = ['claude', 'codex', 'copilot', 'cursor', 'opencode', 'vibe', 'agy', 'gemini'];
 
 /**
  * The models the harness of `who` listed for its account, none until it has. Claude Code and Codex: those its account

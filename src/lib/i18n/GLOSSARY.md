@@ -445,6 +445,7 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | Français | Anglais | Note |
 |---|---|---|
 | Plan | Plan | le bandeau de la conversation d’un agent et la ligne de sa carte ; comme le mode de permission « Plan » |
+| Planifier | Plan tickets | le bouton de l’onglet Docs qui fait créer les tickets d’une spec modifiée (ESC-262) ; « Plan » seul est déjà le mode de permission |
 | tâche (d’un plan) | task | « 2/7 tâches » → “2/7 tasks” ; les titres des tâches sont les mots de l’agent, jamais traduits |
 | liste de tâches | task list | l’outil de Claude Code que le réglage « Les agents tiennent une liste de tâches » donne aux agents |
 | sous-agents actifs | subagents running | « 3 sous-agents actifs » → “3 subagents running” ; « Sous-agents » → “Subagents” quand l’agent n’a pas de liste de tâches |

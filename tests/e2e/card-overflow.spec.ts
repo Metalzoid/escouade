@@ -164,7 +164,7 @@ test('the other requests, the subagents and the background tasks hold in their c
   }
   // The permission answered from here, the question and the plan in their conversation.
   await expect(cards.filter({ hasText: 'npx playwright test' }).locator('.opt')).toHaveCount(2, { timeout: 30_000 });
-  for (const asked of ['Quels environnements', 'ExitPlanMode'])
+  for (const asked of ['Quels environnements', 'propose un plan · reprendra en Auto'])
     await expect(cards.filter({ hasText: asked }).locator('.in-conv')).toBeVisible({ timeout: 30_000 });
   await expect(side(page).locator('[data-sub-chip]')).toHaveCount(1, { timeout: 30_000 });
   await expect(side(page).locator('.subl .sub[data-kind]')).not.toHaveCount(0, { timeout: 30_000 });

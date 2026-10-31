@@ -105,6 +105,8 @@ pub struct InitialState {
     setup_output: HashMap<String, SetupOutput>,
     /// The languages of the interface, of the system and of the texts Claude writes.
     lang: crate::i18n::LangInfo,
+    /// What the page showed when its process last ended, for it to offer to open it again.
+    page_crash: Option<crate::pagecrash::PageCrash>,
 }
 
 // Off the main thread: finding a `claude` of WSL may start its distribution (seconds).
@@ -171,7 +173,26 @@ pub fn subscribe(
         project_pauses,
         accounts,
         setup_output,
+        page_crash: core.take_page_crash(),
     }
+}
+
+/// A link the window opens outside (the system's browser; Windows' under WSLg, `outside`): the
+/// schemes Tauri's opener allowed it, http, https, mailto and tel.
+#[tauri::command(async)]
+pub fn open_url(url: String) -> Res<()> {
+    let scheme = url.split(':').next().unwrap_or("").to_ascii_lowercase();
+    if !["http", "https", "mailto", "tel"].contains(&scheme.as_str()) {
+        return Err(err(anyhow::anyhow!("not a link Escouade opens: {scheme}:")));
+    }
+    crate::outside::open(crate::outside::What::Url(&url)).map_err(err)
+}
+
+/// A file or a folder the window opens outside (its program, the file manager; Windows' under
+/// WSLg, `outside`).
+#[tauri::command(async)]
+pub fn open_path(path: String) -> Res<()> {
+    crate::outside::open(crate::outside::What::Path(std::path::Path::new(&path))).map_err(err)
 }
 
 #[tauri::command]
@@ -249,6 +270,400 @@ pub fn claude_update_status(core: CoreState) -> crate::selfupdate::Status {
 #[tauri::command(async)]
 pub fn data_dir(core: CoreState) -> String {
     core.data.root().display().to_string()
+}
+
+/// The installed plugins (ESC-173), as last read from their folders.
+#[tauri::command(async)]
+pub fn plugins_list(core: CoreState) -> Vec<crate::plugins::PluginView> {
+    core.plugins.list(crate::i18n::ui())
+}
+
+/// What installing the plugin of a local folder would do (the install window, PLG-4): its copy
+/// set aside until `plugin_install` or `plugin_discard`.
+#[tauri::command(async)]
+pub fn plugin_inspect_folder(
+    core: CoreState,
+    path: String,
+) -> Result<crate::plugins::Preview, crate::plugins::Refusal> {
+    core.plugins
+        .inspect_folder(std::path::Path::new(path.trim()), crate::i18n::ui())
+}
+
+/// The store as last read (STORE-9): its catalogue kept on this machine, when it was read, the
+/// version this Escouade would install of each plugin, the revocation list's serial.
+#[tauri::command(async)]
+pub fn store_view(core: CoreState) -> crate::plugins::store::StoreView {
+    core.store.view()
+}
+
+/// « Pour <projet> » (choice 215): up to 6 plugins of the catalogue that what Escouade sees on this
+/// machine (a harness's program on the PATH) and in the project (ticket keys in its last 200
+/// commits) calls for, none installed, each with its reason. Read here, nothing sent.
+#[tauri::command(async)]
+pub async fn store_suggestions(
+    core: CoreState<'_>,
+    project: Option<String>,
+) -> Result<Vec<crate::plugins::store::Suggestion>, ()> {
+    use crate::plugins::store;
+    let Some(catalog) = core.store.view().catalog else {
+        return Ok(Vec::new());
+    };
+    let names: Vec<String> = catalog
+        .plugins
+        .iter()
+        .filter(|p| p.categories.iter().any(|c| c == "harness"))
+        .flat_map(|p| p.keywords.clone())
+        .collect();
+    let programs = tauri::async_runtime::spawn_blocking(move || {
+        names.into_iter().filter(|n| store::on_path(n)).collect()
+    })
+    .await
+    .unwrap_or_default();
+    let mut seen = store::Seen {
+        programs,
+        ticket_prefix: None,
+    };
+    if let Some(p) = project.and_then(|id| core.project(&id).ok()) {
+        if let Ok(log) = crate::git::text(&p.path, &["log", "-200", "--format=%s%n%b"]).await {
+            seen.ticket_prefix = store::ticket_prefix(&log);
+        }
+    }
+    let installed: Vec<String> = core
+        .plugins
+        .list(crate::i18n::ui())
+        .into_iter()
+        .map(|p| p.id)
+        .collect();
+    Ok(store::suggest(
+        &catalog,
+        env!("CARGO_PKG_VERSION"),
+        &seen,
+        &installed,
+        crate::i18n::ui(),
+        6,
+    ))
+}
+
+/// Reads the store's catalogue and revocation list again, now.
+#[tauri::command(async)]
+pub async fn store_refresh(core: CoreState<'_>) -> Result<crate::plugins::store::StoreView, ()> {
+    core.refresh_store().await;
+    Ok(core.store.view())
+}
+
+/// What installing version `version` of the store's plugin `id` would do (the last one this
+/// Escouade can run when None): downloaded, every fingerprint and the signature checked, set aside
+/// until `plugin_install` or `plugin_discard`. « N'installer que des versions vérifiées » refuses a
+/// version without the seal.
+#[tauri::command(async)]
+pub async fn plugin_inspect_store(
+    core: CoreState<'_>,
+    id: String,
+    version: Option<String>,
+) -> Result<crate::plugins::Preview, crate::plugins::Refusal> {
+    let lang = crate::i18n::ui();
+    let settings = core.settings.read().clone();
+    let http = crate::plugins::store::client(&settings)
+        .map_err(|e| crate::plugins::Refusal::other(e.to_string()))?;
+    let fetched = core
+        .store
+        .fetch(
+            &http,
+            &id,
+            version.as_deref(),
+            settings.plugins_verified_only,
+            lang,
+        )
+        .await
+        .map_err(crate::plugins::Refusal::other)?;
+    core.plugins.inspect_store(fetched, lang)
+}
+
+/// What installing the plugin of a git repository at a tag would do: cloned and set aside.
+#[tauri::command(async)]
+pub async fn plugin_inspect_git(
+    core: CoreState<'_>,
+    url: String,
+    tag: String,
+) -> Result<crate::plugins::Preview, crate::plugins::Refusal> {
+    core.plugins
+        .inspect_git(&url, &tag, crate::i18n::ui())
+        .await
+}
+
+/// What loading a plugin's folder in development in place would do.
+#[tauri::command(async)]
+pub fn plugin_inspect_dev(
+    core: CoreState,
+    path: String,
+) -> Result<crate::plugins::Preview, crate::plugins::Refusal> {
+    core.plugins
+        .inspect_dev(std::path::Path::new(path.trim()), crate::i18n::ui())
+}
+
+/// The icon of an installed plugin (PLG-13), by its id alone: a `data:image/png` address, or
+/// none (the window draws its letters). Réglages › Plugins and the store in the app show it.
+#[tauri::command(async)]
+pub fn plugin_icon(core: CoreState, id: String) -> Result<Option<String>, String> {
+    core.plugins.icon(&id)
+}
+
+/// Installs what an inspection set aside, once the user agreed: in place of the same id (an
+/// update), whose process stops and whose host is forgotten.
+#[tauri::command(async)]
+pub fn plugin_install(
+    core: CoreState,
+    token: String,
+) -> Result<crate::plugins::PluginView, crate::plugins::Refusal> {
+    let staged = core.plugins.staged(&token);
+    let view = core.plugins.install(&token, crate::i18n::ui())?;
+    core.plugin_runtime.forget(&view.id);
+    let from_store = matches!(view.origin, crate::plugins::Origin::Store { .. });
+    core.telemetry
+        .track(crate::telemetry::Event::PluginInstalled { from_store });
+    // The store's count, only with the user's consent to the statistics (docs/STORE.md §5.4).
+    if from_store && core.settings.read().telemetry == Some(true) {
+        let settings = core.settings.read().clone();
+        let (store, id, version) = (core.store.clone(), view.id.clone(), view.version.clone());
+        let update = staged.is_some_and(|(_, update)| update);
+        tauri::async_runtime::spawn(async move {
+            if let Ok(http) = crate::plugins::store::client(&settings) {
+                store.count(&http, &id, &version, update).await;
+            }
+        });
+    }
+    Ok(view)
+}
+
+/// Forgets what an inspection set aside: the user did not install it.
+#[tauri::command(async)]
+pub fn plugin_discard(core: CoreState, token: String) {
+    core.plugins.discard(&token);
+}
+
+/// Uninstalls a plugin: its process stopped, its copy, its settings, its secrets and its journal
+/// removed; `keep`: its settings and its secrets kept for a later install.
+#[tauri::command(async)]
+pub fn plugin_remove(core: CoreState, id: String, keep: Option<bool>) -> Result<bool, String> {
+    let keep = keep.unwrap_or(false);
+    let keys = core
+        .plugins
+        .get(&id, crate::i18n::ui())
+        .map(|v| v.secret_keys)
+        .unwrap_or_default();
+    core.plugin_runtime.forget(&id);
+    let gone = core.plugins.remove(&id, keep).map_err(|e| e.to_string())?;
+    if gone && !keep {
+        for k in keys {
+            if let Err(e) = core
+                .secrets
+                .delete(&crate::plugins::runtime::secret_name(&id, &k))
+            {
+                log::warn!("plugin {id}: its secret {k} stays in the keychain: {e}");
+            }
+        }
+        let log = core.plugin_runtime.journal_file(&id);
+        let _ = std::fs::remove_file(&log);
+        let mut old = log.into_os_string();
+        old.push(".1");
+        let _ = std::fs::remove_file(old);
+    }
+    Ok(gone)
+}
+
+/// A plugin installed: `None` when it is not.
+fn plugin_view(core: &CoreState, id: &str) -> Result<crate::plugins::PluginView, String> {
+    core.plugins.get(id, crate::i18n::ui()).ok_or_else(|| {
+        tr!(
+            "Ce plugin n'est plus installé.",
+            "This plugin is no longer installed."
+        )
+    })
+}
+
+/// The app's switch of a plugin: off, its process stops and nothing of it reaches a project.
+#[tauri::command(async)]
+pub fn plugin_set_enabled(
+    core: CoreState,
+    id: String,
+    on: bool,
+) -> Result<crate::plugins::PluginView, String> {
+    core.plugins
+        .choose(&id, |c| c.enabled = on)
+        .map_err(|e| e.to_string())?;
+    core.plugin_runtime.forget(&id);
+    plugin_view(&core, &id)
+}
+
+/// A plugin's switch in a project (a private one included: the user sets it there one by one).
+#[tauri::command(async)]
+pub fn plugin_set_project(
+    core: CoreState,
+    id: String,
+    project: String,
+    on: bool,
+) -> Result<crate::plugins::PluginView, String> {
+    core.plugins
+        .choose(&id, |c| {
+            c.projects.insert(project, on);
+        })
+        .map_err(|e| e.to_string())?;
+    plugin_view(&core, &id)
+}
+
+/// Takes back a permission of a plugin, or gives it again: its process stops, and the next one
+/// is given what is left (`plugins::granted`). Its program itself is not taken back: the plugin is
+/// switched off instead.
+#[tauri::command(async)]
+pub fn plugin_set_permission(
+    core: CoreState,
+    id: String,
+    word: String,
+    granted: bool,
+) -> Result<crate::plugins::PluginView, String> {
+    let view = plugin_view(&core, &id)?;
+    if !view.asks.contains(&word) || !crate::plugins::revocable(&word) {
+        return Err(tr!(
+            "Cette permission ne se retire pas : désactive le plugin à la place.",
+            "This permission cannot be taken back: switch the plugin off instead."
+        ));
+    }
+    core.plugins
+        .choose(&id, |c| {
+            c.revoked.retain(|w| w != &word);
+            if !granted {
+                c.revoked.push(word);
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    core.plugin_runtime.forget(&id);
+    plugin_view(&core, &id)
+}
+
+/// The value of a plugin's setting (one of `contributes.settings`); `null` puts it back to its
+/// default.
+#[tauri::command(async)]
+pub fn plugin_set_setting(
+    core: CoreState,
+    id: String,
+    key: String,
+    value: serde_json::Value,
+) -> Result<crate::plugins::PluginView, String> {
+    let view = plugin_view(&core, &id)?;
+    let known = view
+        .manifest
+        .as_ref()
+        .and_then(|m| m.contributes.get("settings"))
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|s| {
+            s.iter()
+                .any(|s| s.get("key").and_then(|k| k.as_str()) == Some(&key))
+        });
+    if !known {
+        return Err(format!("{key}: not a setting of {id}"));
+    }
+    core.plugins
+        .choose(&id, |c| {
+            if value.is_null() {
+                c.settings.remove(&key);
+            } else {
+                c.settings.insert(key, value);
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    plugin_view(&core, &id)
+}
+
+/// Which of a plugin's secrets are kept (their values never leave the keychain).
+#[tauri::command(async)]
+pub fn plugin_secrets(core: CoreState, id: String) -> Result<Vec<(String, bool)>, String> {
+    let view = plugin_view(&core, &id)?;
+    Ok(view
+        .secret_keys
+        .into_iter()
+        .map(|k| {
+            let set = core
+                .secrets
+                .get(&crate::plugins::runtime::secret_name(&id, &k))
+                .ok()
+                .flatten()
+                .is_some();
+            (k, set)
+        })
+        .collect())
+}
+
+/// Keeps a plugin's secret in the keychain, under its own name; empty forgets it.
+#[tauri::command(async)]
+pub fn plugin_set_secret(
+    core: CoreState,
+    id: String,
+    key: String,
+    value: String,
+) -> Result<(), String> {
+    let view = plugin_view(&core, &id)?;
+    if !view.secret_keys.contains(&key) {
+        return Err(format!("{key}: not a secret of {id}"));
+    }
+    let name = crate::plugins::runtime::secret_name(&id, &key);
+    let done = if value.is_empty() {
+        core.secrets.delete(&name)
+    } else {
+        core.secrets.set(&name, &value)
+    };
+    done.map_err(|e| e.to_string())
+}
+
+/// Where a plugin's process stands, and its journal (the oldest entry first).
+#[derive(serde::Serialize)]
+pub struct PluginRun {
+    status: crate::plugins::runtime::Status,
+    journal: Vec<crate::plugins::journal::Entry>,
+}
+
+#[tauri::command(async)]
+pub fn plugin_run(core: CoreState, id: String) -> PluginRun {
+    PluginRun {
+        status: core.plugin_runtime.status(&id),
+        journal: core.plugin_runtime.journal(&id),
+    }
+}
+
+/// Starts a plugin's process now (« Démarrer »), or again after it was stopped (« Relancer »).
+#[tauri::command(async)]
+pub fn plugin_start(core: CoreState, id: String) -> Result<PluginRun, String> {
+    let rt = &core.plugin_runtime;
+    let stopped = rt.status(&id).phase == crate::plugins::runtime::PhaseName::Stopped;
+    if stopped {
+        rt.restart(&id)
+    } else {
+        rt.start(&id)
+    }
+    .map_err(|e| e.to_string())?;
+    Ok(plugin_run(core, id))
+}
+
+/// Looks for newer versions of the installed plugins (offered, never installed).
+#[tauri::command(async)]
+pub async fn plugins_check_updates(
+    core: CoreState<'_>,
+) -> Result<Vec<crate::plugins::PluginView>, ()> {
+    core.plugins.check_updates().await;
+    Ok(core.plugins.list(crate::i18n::ui()))
+}
+
+/// The user agrees to the commands a plugin runs on facts, as they are now, or takes the
+/// agreement back (`on`: false), which stops them (PLG-5). Gives the plugin as it is now.
+#[tauri::command]
+pub fn plugin_approve_commands(
+    core: CoreState,
+    id: String,
+    on: bool,
+) -> Result<crate::plugins::PluginView, String> {
+    core.plugins
+        .approve_commands(&id, on)
+        .map_err(|e| e.to_string())?;
+    plugin_view(&core, &id)
 }
 
 /// Where the `claude` of a path of the settings is (empty: the one found by itself), the
@@ -379,12 +794,8 @@ pub async fn account_status(core: CoreState<'_>, id: String) -> Res<AccountStatu
 /// « Clé d’API » of a Cursor account (ESC-43): kept in the system keychain, its status as it then
 /// is. Never logged.
 #[tauri::command]
-pub async fn account_cursor_key(
-    core: CoreState<'_>,
-    id: String,
-    key: String,
-) -> Res<AccountStatus> {
-    core.set_cursor_key(&id, &key).await.map_err(err)
+pub async fn account_key(core: CoreState<'_>, id: String, key: String) -> Res<AccountStatus> {
+    core.set_account_key(&id, &key).await.map_err(err)
 }
 
 /// « Se connecter… »: the account's `claude` in an interactive terminal (written to, resized and
@@ -723,6 +1134,63 @@ pub fn forget_repo(core: CoreState, id: String, repo: String) -> Res<Project> {
 #[tauri::command(async)]
 pub fn set_project_logo(core: CoreState, id: String, path: Option<String>) -> Res<Project> {
     core.set_project_logo(&id, path.as_deref()).map_err(err)
+}
+
+/// « Index du code » of a project (ESC-251): whether it is on, and what the index holds.
+#[tauri::command(async)]
+pub fn get_code_index(core: CoreState, id: String) -> Res<crate::codeindex::CodeIndexInfo> {
+    core.code_index_info(&id).map_err(err)
+}
+
+/// What the code index saved the agents (ESC-253), per agent and per project: the tokens of the files
+/// its answers draw on, against the answers'. `project` narrows it to one project.
+#[tauri::command(async)]
+pub fn get_index_savings(core: CoreState, project: Option<String>) -> serde_json::Value {
+    let by = |agent| core.stats.index_savings(agent, project.as_deref());
+    serde_json::json!({ "byAgent": by(true), "byProject": by(false) })
+}
+
+/// « Recherche par le sens » (ESC-254): the vectors' model, whether it is downloaded.
+#[tauri::command(async)]
+pub fn vectors_model(core: CoreState) -> crate::vectors::wiring::VectorsModelInfo {
+    core.vectors_model_info()
+}
+
+/// Downloads the vectors' model (its progress in `UiEvent::VectorsDownload`); « Annuler » ends it with what came kept.
+#[tauri::command]
+pub async fn vectors_model_download(
+    core: CoreState<'_>,
+) -> Res<crate::vectors::wiring::VectorsModelInfo> {
+    core.vectors_model_download().await.map_err(err)
+}
+
+#[tauri::command]
+pub fn vectors_model_cancel(core: CoreState) {
+    core.vectors_model_cancel();
+}
+
+#[tauri::command(async)]
+pub fn vectors_model_delete(core: CoreState) -> Res<crate::vectors::wiring::VectorsModelInfo> {
+    core.vectors_model_delete().map_err(err)
+}
+
+/// Turns « Index du code » on (the project is read at once) or off (its database is erased) for
+/// the project; null follows « Index du code sur tous les projets » again (ESC-293).
+#[tauri::command]
+pub async fn set_code_index(
+    core: CoreState<'_>,
+    id: String,
+    enabled: Option<bool>,
+) -> Res<crate::codeindex::CodeIndexInfo> {
+    core.set_code_index(&id, enabled).await.map_err(err)
+}
+
+/// « Index du code sur tous les projets » turned on (the projects that follow it read one after
+/// the other, in the background) or off (their index erased), saved at once (ESC-293): how many
+/// projects follow it.
+#[tauri::command]
+pub async fn set_code_index_all(core: CoreState<'_>, enabled: bool) -> Res<usize> {
+    core.set_code_index_all(enabled).await.map_err(err)
 }
 
 /// The project's logo for its tile, as a `data:` URL; null when it has none.
@@ -1466,6 +1934,62 @@ pub async fn agent_pr_fix(
         .map_err(err)
 }
 
+/// The « PR et CI » tab (ESC-305): the checks, reviews, comments and deployments of the agent's
+/// pull request `number`, or why the host did not give them.
+#[tauri::command]
+pub async fn agent_pr_detail(
+    core: CoreState<'_>,
+    id: String,
+    number: u64,
+    host_repo: Option<String>,
+) -> Res<crate::prview::Read<crate::prview::PrDetail>> {
+    Ok(core
+        .agent_pr_detail(&id, number, host_repo.as_deref().unwrap_or(""))
+        .await)
+}
+
+/// The end of the log of a check's job of the agent's pull request `number`.
+#[tauri::command]
+pub async fn agent_pr_log(
+    core: CoreState<'_>,
+    id: String,
+    number: u64,
+    job: String,
+    host_repo: Option<String>,
+) -> Res<crate::prview::Read<String>> {
+    Ok(core
+        .agent_pr_log(&id, number, host_repo.as_deref().unwrap_or(""), &job)
+        .await)
+}
+
+/// « Relancer les échecs » on the agent's pull request `number`: how many runs started.
+#[tauri::command]
+pub async fn agent_pr_rerun(
+    core: CoreState<'_>,
+    id: String,
+    number: u64,
+    host_repo: Option<String>,
+) -> Res<usize> {
+    core.agent_pr_rerun(&id, number, host_repo.as_deref().unwrap_or(""))
+        .await
+        .map_err(err)
+}
+
+/// Why the agent has no « Ouvrir une PR… »; none when it can open one.
+#[tauri::command]
+pub async fn agent_no_pr(core: CoreState<'_>, id: String) -> Res<Option<crate::prview::NoPr>> {
+    core.agent_no_pr(&id).await.map_err(err)
+}
+
+/// The open pull requests of the project, or why they could not be read.
+#[tauri::command]
+pub async fn project_prs(
+    core: CoreState<'_>,
+    project_id: String,
+) -> Res<crate::prview::Read<crate::prview::ProjectPrs>> {
+    Ok(core.project_prs(&project_id).await)
+}
+
 /// The statistics of a period, of every account or (`account`) of one.
 #[tauri::command(async)]
 pub fn stats(
@@ -1824,6 +2348,7 @@ pub async fn term_spawn(
             },
             move |code| {
                 if let Some(c) = hub_core.upgrade() {
+                    c.test_run_ended(&id);
                     c.hub.emit(UiEvent::TerminalExit { id, code });
                 }
             },
@@ -1903,7 +2428,7 @@ pub fn run_start(
         output,
     );
     if let (Some(a), Ok(info)) = (&agent_id, &r) {
-        core.track_test_run(a, &info.id).map_err(err)?;
+        core.track_test_run(a, &info.id, &info.name).map_err(err)?;
     }
     counted(&core, Event::LaunchStarted, r)
 }
@@ -2220,7 +2745,8 @@ pub fn test_run_start(
         cursor_row,
         output,
     )?;
-    core.track_test_run(&agent_id, &info.id).map_err(err)?;
+    core.track_test_run(&agent_id, &info.id, &info.name)
+        .map_err(err)?;
     core.telemetry.track(Event::TestRunStarted);
     Ok(info)
 }
@@ -2349,8 +2875,13 @@ pub fn update_close(updates: State<crate::updates::Updates>, id: u32) {
 /// One HTTP request to `url` (http or https only) without proxy, 2 s at most: true for any
 /// answer.
 #[tauri::command]
-pub async fn http_ready(url: String) -> bool {
-    crate::testlaunch::http_ready(&url).await
+pub async fn http_ready(core: CoreState<'_>, url: String, agent_id: Option<String>) -> Res<bool> {
+    let up = crate::testlaunch::http_ready(&url).await;
+    // An agent's test launch answers: said on the facts' bus (PLG-5).
+    if let (true, Some(a)) = (up, agent_id) {
+        core.test_run_ready(&a, &url);
+    }
+    Ok(up)
 }
 
 // ---------- code hosts ----------
@@ -2936,6 +3467,342 @@ fn preview_text(lang: &str) -> &'static str {
     }
 }
 
+// ---------- the docs (ESC-256) ----------
+
+/// The spec's tree by subject, with what the project already has that could be imported when the
+/// spec is empty, and where the docs live (`branch`: current, or the fixed branch).
+#[tauri::command]
+pub async fn docs_spec_tree(core: CoreState<'_>, id: String) -> Res<Value> {
+    let project = core.project(&id).map_err(err)?;
+    let space = core.docs_space(&id, None).await.map_err(err)?;
+    let subjects = space.spec_tree();
+    let pages: usize = subjects.iter().map(|s| s.pages.len()).sum();
+    Ok(serde_json::json!({
+        "branch": project.docs_branch.trim(),
+        "pages": pages,
+        "subjects": subjects,
+        "existingSpec": if pages == 0 { space.detect() } else { Vec::new() },
+        "comparing": crate::docscompare::comparing(&id),
+        "planning": core.docs_planning(&id).await.ok(),
+    }))
+}
+
+/// « Comparer au code » (ESC-263): `pages`, or the whole spec when None. Ends with them compared.
+#[tauri::command]
+pub async fn docs_compare(
+    core: CoreState<'_>,
+    id: String,
+    pages: Option<Vec<String>>,
+) -> Res<crate::docscompare::Compared> {
+    core.inner().docs_compare(&id, pages).await.map_err(err)
+}
+
+/// The spec already in the project (`SPEC.md`, a `docs/` folder…), offered for import.
+#[tauri::command]
+pub async fn docs_detect_spec(core: CoreState<'_>, id: String) -> Res<Vec<crate::docs::Candidate>> {
+    Ok(core.docs_space(&id, None).await.map_err(err)?.detect())
+}
+
+#[tauri::command]
+pub async fn docs_spec_page(
+    core: CoreState<'_>,
+    id: String,
+    path: String,
+) -> Res<crate::docs::Page> {
+    core.docs_space(&id, None)
+        .await
+        .and_then(|s| s.spec_read(&path))
+        .map_err(err)
+}
+
+/// A page written from the window: the fields left out stay as they are.
+#[tauri::command]
+pub async fn docs_spec_write(
+    core: CoreState<'_>,
+    id: String,
+    path: String,
+    title: Option<String>,
+    body: Option<String>,
+    subject: Option<String>,
+) -> Res<crate::docs::Page> {
+    let space = core.docs_space(&id, None).await.map_err(err)?;
+    let changes_body = body.is_some();
+    let written = space
+        .spec_write(&path, |p| {
+            if let Some(t) = title.filter(|t| !t.trim().is_empty()) {
+                p.title = t.trim().to_string();
+            }
+            if let Some(s) = subject.filter(|s| !s.trim().is_empty()) {
+                p.subject = s.trim().to_string();
+            }
+            if let Some(b) = body {
+                p.body = b;
+            }
+        })
+        .map(|(page, _, _)| page)
+        .map_err(err);
+    // Its text written by hand is to plan (« Planifier », ESC-262); a page only made is not yet.
+    if let (Ok(page), true) = (&written, changes_body) {
+        if !page.body.trim().is_empty() {
+            core.docs_to_plan(&id, std::slice::from_ref(&page.path), &[]);
+        }
+    }
+    core.docs_changed(&id).await;
+    written
+}
+
+#[tauri::command]
+pub async fn docs_spec_search(
+    core: CoreState<'_>,
+    id: String,
+    query: String,
+) -> Res<Vec<crate::docs::Hit>> {
+    Ok(core
+        .docs_space(&id, None)
+        .await
+        .map_err(err)?
+        .spec_search(&query, 50))
+}
+
+#[tauri::command]
+pub async fn docs_decisions(core: CoreState<'_>, id: String) -> Res<Vec<crate::docs::Decision>> {
+    Ok(core.docs_space(&id, None).await.map_err(err)?.decisions())
+}
+
+/// A decision proposed from the window, or a proposal still open revised (`reference`: its id).
+#[tauri::command]
+pub async fn docs_decision_propose(
+    core: CoreState<'_>,
+    id: String,
+    reference: Option<crate::docs::Ref>,
+    decision: crate::docs::Decision,
+) -> Res<crate::docs::Decision> {
+    let out = core
+        .docs_space(&id, None)
+        .await
+        .and_then(|s| s.decision_propose(reference.as_ref(), decision))
+        .map_err(err);
+    if let Ok(d) = &out {
+        core.docs_to_plan(&id, &[], &[d.reference()]);
+    }
+    core.docs_changed(&id).await;
+    out
+}
+
+/// A proposal that replaces the accepted decision `number`.
+#[tauri::command]
+pub async fn docs_decision_replace(
+    core: CoreState<'_>,
+    id: String,
+    number: u32,
+    decision: crate::docs::Decision,
+) -> Res<crate::docs::Decision> {
+    let out = core
+        .docs_space(&id, None)
+        .await
+        .and_then(|s| s.decision_replace(number, decision))
+        .map_err(err);
+    if let Ok(d) = &out {
+        core.docs_to_plan(&id, &[], &[d.reference()]);
+    }
+    core.docs_changed(&id).await;
+    out
+}
+
+/// « Accepter »: a human accepts a proposed decision (`reference`: its id). The only way to: no
+/// MCP tool does.
+#[tauri::command]
+pub async fn docs_decision_accept(
+    core: CoreState<'_>,
+    id: String,
+    reference: crate::docs::Ref,
+) -> Res<crate::docs::Decision> {
+    let out = core
+        .docs_accept_decision(&id, &reference)
+        .await
+        .map_err(err);
+    core.docs_changed(&id).await;
+    out
+}
+
+#[tauri::command]
+pub async fn docs_documents(
+    core: CoreState<'_>,
+    id: String,
+    folder: Option<String>,
+) -> Res<Vec<crate::docs::DocInfo>> {
+    core.docs_space(&id, None)
+        .await
+        .and_then(|s| s.documents(folder.as_deref().unwrap_or_default()))
+        .map_err(err)
+}
+
+#[tauri::command]
+pub async fn docs_document_text(
+    core: CoreState<'_>,
+    id: String,
+    path: String,
+    from: Option<usize>,
+) -> Res<crate::docs::DocText> {
+    core.docs_space(&id, None)
+        .await
+        .and_then(|s| s.document_text(&path, from.unwrap_or(0), crate::docs::TEXT_CHUNK))
+        .map_err(err)
+}
+
+/// A file dropped or chosen (`source`, a file of this machine), put in the drive: in `folder` when
+/// one is given, else filed by itself (`docsdrive::place`). Over 50 MB without an LFS rule that
+/// takes it, it asks to be `confirmed`.
+#[tauri::command]
+pub async fn docs_document_add(
+    core: CoreState<'_>,
+    id: String,
+    folder: Option<String>,
+    source: String,
+    confirmed: Option<bool>,
+) -> Res<crate::docsdrive::Dropped> {
+    core.docs_drop(
+        &id,
+        folder.as_deref(),
+        std::path::Path::new(&source),
+        confirmed.unwrap_or(false),
+    )
+    .await
+    .map_err(err)
+}
+
+/// The drive: its folders, its files with who added them, how many times the agents read them and
+/// how many pages and decisions cite them.
+#[tauri::command]
+pub async fn docs_drive(core: CoreState<'_>, id: String) -> Res<crate::docsdrive::Drive> {
+    core.docs_drive(&id).await.map_err(err)
+}
+
+#[derive(serde::Deserialize)]
+pub struct NamedSize {
+    name: String,
+    size: u64,
+}
+
+/// What the window must know of files before it drops them: LFS takes them, or they are large.
+#[tauri::command]
+pub async fn docs_document_check(
+    core: CoreState<'_>,
+    id: String,
+    folder: Option<String>,
+    files: Vec<NamedSize>,
+) -> Res<Vec<crate::docsdrive::Check>> {
+    core.docs_check(
+        &id,
+        folder.as_deref().unwrap_or_default(),
+        files.into_iter().map(|f| (f.name, f.size)).collect(),
+    )
+    .await
+    .map_err(err)
+}
+
+/// A document moved to another folder (the root when empty).
+#[tauri::command]
+pub async fn docs_document_move(
+    core: CoreState<'_>,
+    id: String,
+    path: String,
+    folder: String,
+) -> Res<crate::docs::DocInfo> {
+    core.docs_move(&id, &path, &folder).await.map_err(err)
+}
+
+/// « Nouveau dossier ».
+#[tauri::command]
+pub async fn docs_folder_add(core: CoreState<'_>, id: String, folder: String) -> Res<String> {
+    core.docs_folder_add(&id, &folder).await.map_err(err)
+}
+
+/// « Rechercher dans les documents ».
+#[tauri::command]
+pub async fn docs_documents_search(
+    core: CoreState<'_>,
+    id: String,
+    query: String,
+) -> Res<Vec<crate::docsdrive::DocHit>> {
+    let space = core.docs_space(&id, None).await.map_err(err)?;
+    core.docs_search_in(&id, space, &query, 30)
+        .await
+        .map(|(hits, _)| hits)
+        .map_err(err)
+}
+
+/// What the project's docs have to share: the files, their number, the conflict being handled.
+#[tauri::command]
+pub async fn docs_pending(core: CoreState<'_>, id: String) -> Res<crate::docsshare::Pending> {
+    core.docs_pending(&id).await.map_err(err)
+}
+
+/// « Partager »: fetches, commits the changes of the docs and only them, pushes. Stops on a
+/// conflict, which is kept for `docs_share_resolve` / `docs_share_cancel`.
+#[tauri::command]
+pub async fn docs_share(
+    core: CoreState<'_>,
+    id: String,
+    message: Option<String>,
+    with_code: Option<bool>,
+) -> Res<crate::docsshare::Shared> {
+    core.docs_share(&id, message.as_deref(), with_code.unwrap_or(false))
+        .await
+        .map_err(err)
+}
+
+/// « L'agent résout » a conflict of the docs.
+#[tauri::command]
+pub async fn docs_share_resolve(
+    core: CoreState<'_>,
+    id: String,
+) -> Res<crate::docsshare::Conflict> {
+    core.docs_share_resolve(&id).await.map_err(err)
+}
+
+/// « Annuler » a conflict of the docs.
+#[tauri::command]
+pub async fn docs_share_cancel(core: CoreState<'_>, id: String) -> Res<()> {
+    core.docs_share_cancel(&id).await.map_err(err)
+}
+
+/// How the spec found at `path` (one of `docs_detect_spec`'s) would be cut into pages: nothing written.
+#[tauri::command]
+pub async fn docs_import_plan(
+    core: CoreState<'_>,
+    id: String,
+    path: String,
+) -> Res<Vec<crate::docsimport::Draft>> {
+    core.docs_space(&id, None)
+        .await
+        .and_then(|s| s.import_plan(&path))
+        .map_err(err)
+}
+
+/// « Importer », once the user agreed to the cut: the pages of `only` (all when left out), none overwritten.
+#[tauri::command]
+pub async fn docs_import(
+    core: CoreState<'_>,
+    id: String,
+    path: String,
+    only: Option<Vec<String>>,
+) -> Res<crate::docsimport::Imported> {
+    let out = core
+        .docs_space(&id, None)
+        .await
+        .and_then(|s| s.import(&path, only.as_deref()))
+        .map_err(err);
+    core.docs_changed(&id).await;
+    out
+}
+
+/// « Ce qui a bougé »: the last committed changes of the spec.
+#[tauri::command]
+pub async fn docs_recent(core: CoreState<'_>, id: String) -> Res<Vec<crate::docsshare::Moved>> {
+    core.docs_recent(&id).await.map_err(err)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2953,7 +3820,7 @@ mod tests {
         let lib = include_str!("lib.rs");
         let handler = lib
             .split_once("generate_handler![")
-            .and_then(|(_, rest)| rest.split_once("])"))
+            .and_then(|(_, rest)| rest.split_once(']'))
             .map(|(list, _)| list)
             .expect("the handler list");
         for name in ["stop_bg_task", "task_output"] {
@@ -3022,4 +3889,93 @@ mod tests {
             .unwrap();
         assert!(back && again.id == p.id);
     }
+}
+
+/// The project's shared memory (ESC-255), as « Mémoire partagée » of its settings lists it.
+#[tauri::command(async)]
+pub fn memory_list(core: CoreState, project_id: String) -> Res<Vec<crate::memory::Memory>> {
+    core.memories(&project_id).map_err(err)
+}
+
+/// « Oublier » of a memory, in the project's settings.
+#[tauri::command(async)]
+pub fn memory_forget(core: CoreState, project_id: String, name: String) -> Res<()> {
+    core.forget_memory(&project_id, &name).map_err(err)
+}
+
+/// What Claude Code remembers of the project, offered once: none once offered.
+#[tauri::command(async)]
+pub fn claude_memory_offer(
+    core: CoreState,
+    project_id: String,
+) -> Res<Vec<crate::memory::Offered>> {
+    core.claude_memory_offer(&project_id).map_err(err)
+}
+
+/// « Reprendre » the memories ticked (none: « Pas maintenant »); the offer is not made again.
+#[tauri::command(async)]
+pub fn claude_memory_take(core: CoreState, project_id: String, names: Vec<String>) -> Res<Project> {
+    core.claude_memory_take(&project_id, &names).map_err(err)
+}
+
+/// « Commencer » of « Nouvelle discussion » (ESC-261): a discussion or a brainstorm of the Docs
+/// tab, its agent in the folder of the docs branch, sent its subject.
+#[tauri::command]
+pub async fn discussion_start(
+    core: CoreState<'_>,
+    id: String,
+    start: crate::discussion::Start,
+) -> Res<AgentView> {
+    let agent = core.discussion_start(&id, start).await.map_err(err)?;
+    core.telemetry
+        .track(Event::AgentCreated { worktree: false });
+    Ok(agent)
+}
+
+/// « Verser dans la spec »: what the discussion `agent` proposes, written on the docs branch.
+#[tauri::command]
+pub async fn discussion_pour(core: CoreState<'_>, agent: String) -> Res<crate::discussion::Poured> {
+    core.discussion_pour(&agent).await.map_err(err)
+}
+
+/// « Planifier » (ESC-262): the changes of the discussion `agent` poured, or every change of the
+/// spec without tickets when None, made into tickets « À faire » by the planner.
+#[tauri::command]
+pub async fn docs_plan(
+    core: CoreState<'_>,
+    id: String,
+    agent: Option<String>,
+) -> Res<crate::docsplan::Plan> {
+    core.inner()
+        .docs_plan(&id, agent.as_deref())
+        .await
+        .map_err(err)
+}
+
+/// « Annuler » of a planning: its tickets not started yet removed, its changes to plan again.
+#[tauri::command]
+pub async fn docs_plan_cancel(
+    core: CoreState<'_>,
+    id: String,
+    plan: String,
+) -> Res<crate::docsplan::Cancelled> {
+    core.inner().docs_plan_cancel(&id, &plan).await.map_err(err)
+}
+
+/// Takes a proposal out of « Ce qui ira dans la spec »: a page, or a decision (from 1).
+#[tauri::command]
+pub fn discussion_drop(
+    core: CoreState,
+    agent: String,
+    page: Option<String>,
+    decision: Option<usize>,
+) -> Res<()> {
+    core.discussion_drop(&agent, page.as_deref(), decision)
+        .map_err(err)
+}
+
+/// The links `escouade://` not yet taken (STORE-11): what they ask, for the window, once.
+#[tauri::command]
+pub fn deep_links_take(inbox: State<'_, crate::deeplink::Inbox>) -> Vec<crate::deeplink::DeepLink> {
+    inbox.take()
 }

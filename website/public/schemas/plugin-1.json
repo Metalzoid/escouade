@@ -1,0 +1,530 @@
+{
+  "$id": "https://escouade.dev/schemas/plugin-1.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "activation": {
+      "description": "What starts it (`event:ticket.column`, `account:github`); without any, it does not run.",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "author": {
+      "properties": {
+        "email": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "url": {
+          "pattern": "^https?://.",
+          "type": "string"
+        }
+      },
+      "required": ["name"],
+      "type": "object"
+    },
+    "contributes": {
+      "description": "Its extension points.",
+      "properties": {
+        "accounts": {
+          "description": "A kind of account its points share.",
+          "items": {
+            "properties": {
+              "id": {
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
+                "type": "string"
+              },
+              "name": {
+                "description": "One text, or a text by language (`en` first, then `fr`).",
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "anyOf": [
+                      {
+                        "required": ["en"]
+                      },
+                      {
+                        "required": ["fr"]
+                      }
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "required": ["id"],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "badges": {
+          "description": "Badges of the cards.",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "commands": {
+          "description": "Commands run on an event.",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "escouadeYml": {
+          "description": "Its keys of .escouade.yml.",
+          "type": "object"
+        },
+        "forges": {
+          "description": "Code hosts: pull requests, CI, deployments.",
+          "items": {
+            "properties": {
+              "account": {
+                "description": "The id of one of `contributes.accounts`.",
+                "type": "string"
+              },
+              "id": {
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
+                "type": "string"
+              },
+              "name": {
+                "description": "One text, or a text by language (`en` first, then `fr`).",
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "anyOf": [
+                      {
+                        "required": ["en"]
+                      },
+                      {
+                        "required": ["fr"]
+                      }
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "required": ["id"],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "harnesses": {
+          "description": "Harnesses.",
+          "items": {
+            "properties": {
+              "id": {
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
+                "type": "string"
+              },
+              "name": {
+                "description": "One text, or a text by language (`en` first, then `fr`).",
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "anyOf": [
+                      {
+                        "required": ["en"]
+                      },
+                      {
+                        "required": ["fr"]
+                      }
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "required": ["id"],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "menus": {
+          "description": "Menus.",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "projectTemplates": {
+          "description": "Templates of the project wizard.",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "secrets": {
+          "items": {
+            "properties": {
+              "key": {
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
+                "type": "string"
+              },
+              "title": {
+                "description": "One text, or a text by language (`en` first, then `fr`).",
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "anyOf": [
+                      {
+                        "required": ["en"]
+                      },
+                      {
+                        "required": ["fr"]
+                      }
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "required": ["key", "title"],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "settings": {
+          "items": {
+            "properties": {
+              "key": {
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
+                "type": "string"
+              },
+              "title": {
+                "description": "One text, or a text by language (`en` first, then `fr`).",
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "anyOf": [
+                      {
+                        "required": ["en"]
+                      },
+                      {
+                        "required": ["fr"]
+                      }
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              "type": {
+                "enum": ["string", "number", "boolean", "select"]
+              }
+            },
+            "required": ["key", "type", "title"],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "statusBar": {
+          "description": "Items of the status bar.",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "themes": {
+          "description": "Themes.",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "ticketSources": {
+          "description": "Sources of the Kanban.",
+          "items": {
+            "properties": {
+              "account": {
+                "description": "The id of one of `contributes.accounts`.",
+                "type": "string"
+              },
+              "id": {
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
+                "type": "string"
+              },
+              "name": {
+                "description": "One text, or a text by language (`en` first, then `fr`).",
+                "oneOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "anyOf": [
+                      {
+                        "required": ["en"]
+                      },
+                      {
+                        "required": ["fr"]
+                      }
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "required": ["id"],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "webhooks": {
+          "description": "Webhooks, without code.",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "description": {
+      "description": "One text, or a text by language (`en` first, then `fr`).",
+      "oneOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "anyOf": [
+            {
+              "required": ["en"]
+            },
+            {
+              "required": ["fr"]
+            }
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "escouade": {
+      "description": "The Escouade it was written for: out of it, the plugin is disabled, and the reason shown.",
+      "properties": {
+        "api": {
+          "description": "The major version of the plugins' protocol it speaks (`\"1\"`).",
+          "pattern": "^[1-9][0-9]*$",
+          "type": "string"
+        },
+        "max": {
+          "pattern": "^[0-9]+(\\.[0-9]+){0,2}$",
+          "type": "string"
+        },
+        "min": {
+          "pattern": "^[0-9]+(\\.[0-9]+){0,2}$",
+          "type": "string"
+        }
+      },
+      "required": ["api", "min"],
+      "type": "object"
+    },
+    "icon": {
+      "description": "Its logo: a square PNG of its folder, 256 px a side at least (512 advised), 1 MB at most; no SVG.",
+      "minLength": 1,
+      "pattern": "^(?![/\\\\]|[A-Za-z]:)(?!(.*[/\\\\])?\\.\\.([/\\\\]|$))[^:]*\\.[Pp][Nn][Gg]$",
+      "type": "string"
+    },
+    "id": {
+      "description": "Unique, a reversed domain name (`dev.exemple.slack`); `dev.escouade.*` is kept for Escouade's own plugins.",
+      "maxLength": 100,
+      "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$",
+      "type": "string"
+    },
+    "license": {
+      "description": "An SPDX identifier (`MIT`).",
+      "minLength": 1,
+      "type": "string"
+    },
+    "name": {
+      "description": "One text, or a text by language (`en` first, then `fr`).",
+      "oneOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "anyOf": [
+            {
+              "required": ["en"]
+            },
+            {
+              "required": ["fr"]
+            }
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "permissions": {
+      "description": "What it asks for, shown before it is installed.",
+      "properties": {
+        "commands": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "decide": {
+          "type": "boolean"
+        },
+        "events": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "network": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "secrets": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "repository": {
+      "pattern": "^https?://.",
+      "type": "string"
+    },
+    "run": {
+      "description": "Its program; without one, the plugin is declarative: nothing runs.",
+      "properties": {
+        "args": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "command": {
+          "description": "A path in the plugin's folder: relative, without `..`.",
+          "minLength": 1,
+          "pattern": "^(?![/\\\\]|[A-Za-z]:)(?!(.*[/\\\\])?\\.\\.([/\\\\]|$)).*$",
+          "type": "string"
+        },
+        "linux": {
+          "description": "A path in the plugin's folder: relative, without `..`.",
+          "minLength": 1,
+          "pattern": "^(?![/\\\\]|[A-Za-z]:)(?!(.*[/\\\\])?\\.\\.([/\\\\]|$)).*$",
+          "type": "string"
+        },
+        "macos": {
+          "description": "A path in the plugin's folder: relative, without `..`.",
+          "minLength": 1,
+          "pattern": "^(?![/\\\\]|[A-Za-z]:)(?!(.*[/\\\\])?\\.\\.([/\\\\]|$)).*$",
+          "type": "string"
+        },
+        "windows": {
+          "description": "A path in the plugin's folder: relative, without `..`.",
+          "minLength": 1,
+          "pattern": "^(?![/\\\\]|[A-Za-z]:)(?!(.*[/\\\\])?\\.\\.([/\\\\]|$)).*$",
+          "type": "string"
+        }
+      },
+      "required": ["command"],
+      "type": "object"
+    },
+    "store": {
+      "description": "What store.escouade.dev shows of it.",
+      "properties": {
+        "categories": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "docs": {
+          "description": "A path in the plugin's folder: relative, without `..`.",
+          "minLength": 1,
+          "pattern": "^(?![/\\\\]|[A-Za-z]:)(?!(.*[/\\\\])?\\.\\.([/\\\\]|$)).*$",
+          "type": "string"
+        },
+        "keywords": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "screenshots": {
+          "items": {
+            "description": "A path in the plugin's folder: relative, without `..`.",
+            "minLength": 1,
+            "pattern": "^(?![/\\\\]|[A-Za-z]:)(?!(.*[/\\\\])?\\.\\.([/\\\\]|$)).*$",
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "version": {
+      "description": "Its version (`1.2.0`), the same as its git tag.",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.+-]+)?$",
+      "type": "string"
+    }
+  },
+  "required": ["id", "name", "version", "escouade"],
+  "title": "The manifest of an Escouade plugin (escouade-plugin.json)",
+  "type": "object"
+}

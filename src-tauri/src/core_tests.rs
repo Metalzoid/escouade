@@ -3644,6 +3644,8 @@ async fn searches_the_conversations_of_the_agents_archived_ones_included_when_as
     let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     // Its log is being written by the agent, alive, as it is read.
     h.turn(&id, "Ajoute la pagination à l'événement").await;
+    // Named after that message (ESC-156): the hits say the name it keeps.
+    h.wait("its name", |h| h.agent(&id).named).await;
     let found = h.core.search_conversations("EVENEMENT", Some(&p.id), true);
     // Claude's answer (the fake one repeats the message: "Bonjour, tu as dit : …", cut short
     // before the match), then the message.
@@ -7151,13 +7153,34 @@ async fn an_agent_made_for_a_ticket_has_its_branch_from_a_base_and_the_projects_
         ),
         ("opus", "max", "plan")
     );
+    // Started in Plan: its plan approved, it goes on in its account's mode of new agents
+    // (ESC-277), never in « Demander » by default.
+    h.set_settings(|s| s.accounts[0].default_mode = "bypassPermissions".into());
+    let b = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                mode: Some("plan".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(b.meta.account, h.core.settings.read().accounts[0].id);
+    assert_eq!(b.meta.plan_from.as_deref(), Some("bypassPermissions"));
+    assert_eq!(b.meta.plan_resume(true), "bypassPermissions");
     assert_eq!(
         (
             a.meta.ticket_id.as_deref(),
             a.meta.port_base,
             a.meta.append_prompt.as_deref()
         ),
-        (Some("t1"), Some(4100), Some("Protocole"))
+        (
+            Some("t1"),
+            Some(4100),
+            crate::core::with_memory(crate::i18n::Lang::Fr, Some("Protocole".into())).as_deref()
+        )
     );
     // Made by the board, not by the user: the sidebar keeps its selection.
     assert_ne!(h.core.ui.read().selected_agent.get(&p.id), Some(&a.meta.id));
@@ -7180,7 +7203,10 @@ async fn an_agent_made_for_a_ticket_has_its_branch_from_a_base_and_the_projects_
         .iter()
         .position(|x| x == "--append-system-prompt")
         .unwrap();
-    assert_eq!(argv[i + 1], "Protocole");
+    assert_eq!(
+        Some(argv[i + 1].clone()),
+        crate::core::with_memory(crate::i18n::Lang::Fr, Some("Protocole".into()))
+    );
 }
 
 #[tokio::test]
@@ -8364,9 +8390,14 @@ async fn a_copy_shows_the_conversation_again_and_forks_its_session_leaving_the_o
     h.core.ensure_process(&copy.id).await.unwrap();
     let argv = h.launches(&r).pop().unwrap();
     assert!(pinned(&argv), "{argv:?}");
-    // Nothing to say of its folder: it is the original's.
-    assert!(
-        !argv.contains(&"--append-system-prompt".to_string()),
+    // Nothing to say of its folder: it is the original's. Only the shared memory (ESC-255).
+    let told = argv
+        .iter()
+        .position(|a| a == "--append-system-prompt")
+        .map(|i| argv[i + 1].clone());
+    assert_eq!(
+        told,
+        Some(crate::memory::instruction(crate::i18n::Lang::Fr)),
         "{argv:?}"
     );
     // …and there still, the original having gone on meanwhile, at every start until its first turn.
@@ -8463,6 +8494,8 @@ async fn a_copy_of_a_worktree_agent_has_its_own_from_the_current_commit_set_up_l
         "Cette conversation a été copiée depuis un agent qui travaillait dans {}. Tu travailles maintenant dans {} : ne lis et n'écris que dedans.",
         wt.path, cwt.path
     );
+    // Then what every agent is told of the shared memory (ESC-255).
+    let moved = crate::core::with_memory(crate::i18n::Lang::Fr, Some(moved)).unwrap();
     assert_eq!(copy.append_prompt.as_deref(), Some(moved.as_str()));
     h.core.ensure_process(&copy.id).await.unwrap();
     let argv = h.launches(&cdir).pop().unwrap();
@@ -8506,6 +8539,7 @@ async fn a_copy_is_told_where_it_works_in_the_language_of_the_texts_for_claude()
     let moved = format!(
         "This conversation was copied from an agent that worked in {from}. You now work in {to}: only read and write in it."
     );
+    let moved = crate::core::with_memory(crate::i18n::Lang::En, Some(moved)).unwrap();
     assert_eq!(copy.append_prompt.as_deref(), Some(moved.as_str()));
     // Its Claude reads it as the French one: an ordinary agent, no ticket's.
     h.turn(&copy.id, "Bonjour").await;
@@ -9306,7 +9340,7 @@ fn five_hour_pct(h: &Harness, account: &str) -> Option<f64> {
 }
 
 /// Sends `text` and waits for the turn to be over, however it ends (the usage limit too).
-async fn turn_over(h: &Harness, id: &str, text: &str) {
+pub(crate) async fn turn_over(h: &Harness, id: &str, text: &str) {
     h.core
         .send_message(id, text.to_string(), vec![])
         .await
@@ -10515,7 +10549,7 @@ pub(crate) fn extra_account(h: &Harness, id: &str, name: &str) -> Account {
 }
 
 /// Pro out of quota for good (its folder holds a `fake-limit`), and Équipe, another account.
-fn pro_out_of_quota_and_team(h: &Harness) -> (Account, Account) {
+pub(crate) fn pro_out_of_quota_and_team(h: &Harness) -> (Account, Account) {
     let pro = second_account(h);
     let team = extra_account(h, "equipe", "Équipe");
     std::fs::create_dir_all(&pro.config_dir).unwrap();

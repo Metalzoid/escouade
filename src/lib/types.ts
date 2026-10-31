@@ -82,8 +82,14 @@ export interface Settings {
   remoteControlAll: boolean;
   /** « Nouveaux projets privés »: a project added is private (`Project.private`) from the start. */
   privateProjects: boolean;
+  /** « Index du code sur tous les projets » (ESC-293): the index of every project that made no choice of its own (`Project.codeIndexChoice`) is on. Changed by `set_code_index_all`, not by the settings modal's draft. Absent from the settings of the window's tests made before it. */
+  codeIndexAll?: boolean;
   /** « Thème »: Système (the system's, and its changes), Clair or Sombre; applied at once, the window with it (lib/appearance.ts). */
   theme: ThemeChoice;
+  /** « Couleurs » (PLG-7): the theme of a plugin the window takes, `<plugin id>/<theme id>`; empty or absent, Escouade's (lib/plugin-theme.svelte.ts). */
+  pluginTheme?: string;
+  /** « N'installer que des versions vérifiées » (STORE-9): a version of the store without the seal is refused. */
+  pluginsVerifiedOnly?: boolean;
   /** « Zoom de l’interface », in percent (`ZOOM_LEVELS`): the WebView's zoom, text, spacing and icons together. */
   uiZoom: number;
   /** « Taille du texte des terminaux », in CSS pixels before the zoom. */
@@ -304,6 +310,8 @@ export interface Account {
   defaultModel?: string;
   defaultEffort?: string;
   defaultMode?: string;
+  /** Gemini CLI (ESC-275): it goes by its API key, not by the Google sign-in of its folder. */
+  apiKey?: boolean;
 }
 
 /** What « Ajouter un compte… » says of the machine's account of a harness (its Principal, `accounts::MachineAccount`). */
@@ -316,6 +324,10 @@ export interface MachineAccount {
   connected: boolean;
   /** Its harness signs in to an account of its own (not OpenCode, whose providers are its config's). */
   signsIn: boolean;
+  /** It may be added before it is signed in there, then signed in by its program in a terminal (Antigravity CLI, ESC-271). */
+  signsInLater?: boolean;
+  /** Its sign-in is out of Escouade's reach (Gemini CLI's Google sign-in, in `~/.gemini`): a new account is to add instead (ESC-275). */
+  apart?: boolean;
   /** Who it is signed in as, when the harness says: an email, a GitHub `@login`. */
   email: string | null;
   /** Its folder. */
@@ -582,8 +594,8 @@ export interface IssuePage {
   total: number | null;
 }
 
-/** A harness that runs agents (« Harness » in the interface): Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode. */
-export type EngineId = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode';
+/** A harness that runs agents (« Harness » in the interface): Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode, Mistral Vibe, Antigravity CLI, Gemini CLI. */
+export type EngineId = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode' | 'vibe' | 'agy' | 'gemini';
 
 /** A mode of Escouade a harness takes, and what it means there (null: what Escouade's menu says of it, Claude Code's meaning). */
 export interface ModeCap {
@@ -623,6 +635,11 @@ export interface EngineCaps {
   usagePage: string | null;
   /** Its accounts but the machine's go by an API key, kept in the keychain (Cursor CLI), rather than a sign-in of their own. */
   accountsByKey: boolean;
+  /**
+   * Escouade can keep it from writing a file or running a command, in any mode: a discussion of the Docs tab runs on it
+   * (ESC-261). Not one that writes the files of its folder without going through Escouade.
+   */
+  readOnly: boolean;
 }
 
 /** The versions of a harness Escouade was tested with. */
@@ -748,6 +765,8 @@ export interface Project {
   engine: EngineId | null;
   /** « Projet privé »: the agents of the other projects do not see it through the MCP server, and its own see it alone. */
   private: boolean;
+  /** « Branche des docs » (ESC-256): the branch that holds `.escouade/spec`, `decisions` and `documents`; empty is the branch checked out. */
+  docsBranch?: string;
   /** Its `.escouade.yml`: the keys kept on this machine, the commands trusted, the file as last read. Absent from a project of the window’s tests made before ESC-146. */
   shared?: ProjectShared;
   /**
@@ -755,12 +774,66 @@ export interface Project {
    * when its own reach the usage limit (`accounts::confined`).
    */
   sharedOnLimit: boolean;
+  /** Claude Code's memory of this project was offered to its shared memory (ESC-255): once, taken or not. */
+  claudeMemoryAsked?: boolean;
   /** The corrections of its workflows (ESC-195), ahead of the reading. Absent from a project of the window’s tests made before it. */
   workflowFixes?: WorkflowFix[];
   /** « Relire quand les fichiers changent » (ESC-195): on unless switched off. Absent from a project of the window’s tests made before it. */
   workflowsAutoRead?: boolean;
   /** « Où garder la configuration des workflows » (ESC-195): in the repository (`.escouade/workflows/`, by default) or on this machine. Absent from a project of the window’s tests made before it. */
   workflowsInRepo?: boolean;
+  /** « Index du code » (ESC-251), the project's own choice (ESC-293): absent, it follows « Index du code sur tous les projets » (`codeIndexOn`, lib/codeindex.ts). Set by `set_code_index` (Réglages › Projets, ESC-254). */
+  codeIndexChoice?: boolean;
+}
+
+/** What a project's code index holds (ESC-251). */
+export interface CodeIndexStatus {
+  files: number;
+  symbols: number;
+  links: number;
+  /** Worktrees with a delta. */
+  worktrees: number;
+  /** The database's size on the disk. */
+  bytes: number;
+  /** When the project's folder was last read, in ms; 0 for never. */
+  indexedAt: number;
+}
+
+/** « Index du code » of a project, as its settings read it (ESC-254). */
+export interface CodeIndexInfo {
+  /** On: its own choice, or the app's. */
+  enabled: boolean;
+  /** It made its own choice (ESC-293); else it follows « Index du code sur tous les projets ». */
+  chosen: boolean;
+  /** Being read for « Index du code sur tous les projets », or waiting for its turn. */
+  reading: boolean;
+  waiting: boolean;
+  status: CodeIndexStatus;
+  /** Its own folders its fence leaves out (another project inside it), relative, with `/`. */
+  excluded: string[];
+}
+
+/** The vectors' model of « Recherche par le sens » (ESC-254): one for every project of this machine. */
+export interface VectorsModelInfo {
+  id: string;
+  license: string;
+  size: number;
+  /** What is on the disk toward it (a download cut keeps its part). */
+  have: number;
+  downloaded: boolean;
+  downloading: boolean;
+}
+
+/** What the code index saved over the statistics' period, for a project (ESC-254). */
+export interface IndexSaving {
+  agentId: string;
+  projectId: string;
+  calls: number;
+  filesTokens: number;
+  answerTokens: number;
+  savedTokens: number;
+  /** At the input price of the model each agent ran on, in USD. */
+  savedCost: number;
 }
 
 /** What tells a step added by hand (ESC-195): a command typed, a subagent launched, a file written. */
@@ -982,6 +1055,9 @@ export interface Ticket {
   files: TicketFile[];
   /** Shared with the team (ESC-190): its file `.escouade/tickets/<id>.yml`. Absent or null: this machine's alone. */
   shared?: Shared | null;
+  /** The pages of the spec and the decisions it implements, as « Planifier » made it (ESC-262). */
+  pages?: string[];
+  decisions?: DecisionRef[];
 }
 
 /** Someone of the team, as the shared tickets' files name them (ESC-190). */
@@ -1239,6 +1315,8 @@ export interface Agent {
   model: string;
   effort: string;
   mode: string;
+  /** The mode its work resumes in once a plan is approved (`planResume`, ESC-277): the one before Plan. */
+  planFrom?: string;
   sessionId: string | null;
   /** The latest entry of its session (the uuid of its latest assistant message): where a copy made now forks it. */
   lastEntry: string | null;
@@ -1343,6 +1421,107 @@ export interface Agent {
   terminalId: string | null;
   /** How the last run of that interface ended; null until it ended (the backend puts it back to null when it starts one). */
   tuiExit: TuiExit | null;
+  /** A discussion of the Docs tab (ESC-261): its role, its subject and what it proposes for the spec. Absent for any other agent. */
+  discussion?: Discussion;
+}
+
+/** The role of a discussion of the Docs tab (ESC-261): the spec writer, or the product agent of a brainstorm. */
+export type DiscussionKind = 'discussion' | 'brainstorm';
+
+/** What makes an agent a discussion of the Docs tab (ESC-261). */
+export interface Discussion {
+  kind: DiscussionKind;
+  subject: string;
+  /** The pages it proposes, a change each, not poured yet. */
+  pages: DiscussionPage[];
+  /** The decisions it proposes, not poured yet (no number until poured). */
+  decisions: DocsDecision[];
+  /** What « Verser dans la spec » wrote so far; absent until then. */
+  poured?: DiscussionPoured;
+  /** What « Planifier » made of it (ESC-262); absent until then, and once cancelled. */
+  planned?: DocsPlan;
+}
+
+/** A ticket « Planifier » made (ESC-262). */
+export interface DocsPlanMade {
+  id: string;
+  key: string;
+  title: string;
+}
+
+/** What a « Planifier » did (ESC-262): the tickets made in « À faire », those left out because the board has them. */
+export interface DocsPlan {
+  id: string;
+  /** When (ms). */
+  at: number;
+  /** The discussion it was asked from (its agent); absent: from the Specification. */
+  discussion?: string;
+  pages: string[];
+  decisions: DecisionRef[];
+  made: DocsPlanMade[];
+  /** Proposed again by the planner, left out: `key` is the ticket of the board it repeats. */
+  skipped: { title: string; key: string }[];
+  cancelled: boolean;
+}
+
+/** What the Specification shows of the planning (ESC-262): the changes without tickets, the latest plan. */
+export interface DocsPlanning {
+  pages: string[];
+  decisions: DecisionRef[];
+  last?: DocsPlan;
+  running: boolean;
+}
+
+/** What « Annuler » of a planning did: the tickets removed, and those kept because they started. */
+export interface DocsPlanCancelled {
+  removed: string[];
+  kept: string[];
+}
+
+export interface DiscussionPage {
+  path: string;
+  /** The page's text before its first change; null: a new page. */
+  before: string | null;
+  /** The page as it would be written. */
+  page: DocsPage;
+  added: number;
+  removed: number;
+}
+
+export interface DiscussionPoured {
+  /** When it was last poured (ms). */
+  at: number;
+  pages: string[];
+  /** The decisions proposed in the register (their ids, ESC-303). */
+  decisions: DecisionRef[];
+}
+
+/** A gap of a page (its index) that a discussion settles: gone from the page once its change is poured. */
+export interface DiscussionGap {
+  page: string;
+  index: number;
+}
+
+/** What a gesture of the spec gives « Nouvelle discussion »: its role, its subject, its first message, the gap it settles. */
+export interface DiscussionPreset {
+  kind: DiscussionKind;
+  subject: string;
+  message?: string;
+  gap?: DiscussionGap;
+}
+
+/** What « Nouvelle discussion » asks for. */
+export interface DiscussionStart {
+  kind: DiscussionKind;
+  subject: string;
+  /** The documents joined, already filed in the drive. */
+  documents: string[];
+  /** The first message, when it is not the subject (a gesture of the spec). */
+  message?: string | null;
+  gap?: DiscussionGap | null;
+  engine?: EngineId | null;
+  account?: string | null;
+  model?: string | null;
 }
 
 /** The end of Claude Code's interface (« Vue Claude Code »), as the backend saw it. */
@@ -2199,6 +2378,9 @@ export type UiEvent =
   | { type: 'agent'; agent: Agent }
   | { type: 'agentRemoved'; id: string; projectId: string }
   | { type: 'conv'; agentId: string; ops: ConvOp[] }
+  | { type: 'memory'; projectId: string }
+  | { type: 'codeIndex'; projectId: string }
+  | { type: 'vectorsDownload'; done: number; total: number }
   | { type: 'git'; projectId: string; git: GitInfo }
   | { type: 'usage'; usage: Usage }
   | { type: 'focus'; projectId: string; agentId: string | null }
@@ -2233,6 +2415,12 @@ export type UiEvent =
   | { type: 'mcpDeclared'; declared: McpDeclaration[] }
   /** The dictation: its level, its end, a model's download. */
   | { type: 'voice'; voice: VoiceEvent }
+  /** A link `escouade://` came (STORE-11): taken by `deep_links_take`. */
+  | { type: 'deepLink' }
+  /** What a project's docs have to share (the changes not shared yet), and the conflict a « Partager » stopped on. */
+  | { type: 'docsShare'; projectId: string; pending: number; conflict: DocsConflict | null }
+  /** The pages of a project being compared to the code (ESC-263), told when one starts or ends. */
+  | { type: 'docsCompared'; projectId: string; comparing: string[] }
   /** Lines a step of the setup of an agent's worktree wrote since the last event, `total` counting all it wrote; a step starts with none. */
   | ({ type: 'setupOutput'; agentId: string } & SetupOutput);
 
@@ -2327,6 +2515,8 @@ export interface InitialState {
   setupOutput?: Record<string, SetupOutput>;
   /** The languages of the interface, of the system and of the texts Claude writes. */
   lang?: LangInfo;
+  /** What the page showed when its process last ended (ESC-290): offered again, never reopened by itself. */
+  pageCrash?: { projectId: string | null; agentId: string | null } | null;
 }
 
 /** An update installed: its version and its release notes (markdown). */
@@ -2400,6 +2590,8 @@ export interface StatsView {
   accounts: string[];
   /** Every harness that ever ran a turn (ids), whichever period or harness the view is for. */
   engines: string[];
+  /** What the code index saved over the period, per project (ESC-254); absent from a view of the window's tests made before it. */
+  indexByProject?: IndexSaving[];
 }
 
 /** What a harness ran over the period. */
@@ -2521,6 +2713,78 @@ export interface PullRequest {
    * target: on the remote the agent's branch tracks, or the repository that one was forked from.
    */
   hostRepo?: string;
+  /** Who opened it, when the host says it. */
+  author?: string;
+  /** When it was opened (Unix seconds), when the host says it. */
+  created?: number;
+}
+
+/** A check or a status of a pull request's last commit (`forge::Check`). */
+export interface PrCheck {
+  name: string;
+  state: CheckState;
+  url: string | null;
+  /** What its log is asked by, when the host keeps it. */
+  job: string | null;
+  /** Unix seconds, when the host says them: a pending one that started is running. */
+  started: number | null;
+  finished: number | null;
+  /** Stopped before its end (a failure to the rest of the app). */
+  cancelled: boolean;
+}
+
+export interface PrReview {
+  author: string;
+  state: 'approved' | 'changesRequested' | 'commented';
+  body: string;
+}
+
+/** A comment of a pull request, on one of its lines or not. */
+export interface PrComment {
+  id: string;
+  author: string;
+  body: string;
+  path: string | null;
+  line: number | null;
+  resolved: boolean;
+}
+
+export interface PrDeployment {
+  environment: string;
+  state: string;
+  url: string | null;
+}
+
+/** The « PR et CI » tab's read of the agent's pull request (`prview::PrDetail`). */
+export interface PrDetail {
+  checks: PrCheck[];
+  reviews: PrReview[];
+  comments: PrComment[];
+  deployments: PrDeployment[];
+  can: { checks: boolean; jobLogs: boolean; rerun: boolean; reviews: boolean; deployments: boolean };
+  rateLimit?: { limit: number; remaining: number; reset: number };
+}
+
+/** Why the host's answer is missing (`prview::Failure`). */
+export interface PrFailure {
+  kind: 'refused' | 'rateLimit' | 'unreachable' | 'other' | 'unavailable';
+  message: string;
+  /** When the host's limit starts over (Unix seconds). */
+  reset?: number;
+  /** Réglages › Intégrations settles it. */
+  settings?: boolean;
+}
+
+/** What a read of the tab gave: the data, else why it is missing. */
+export interface PrRead<T> {
+  data?: T;
+  failure?: PrFailure;
+}
+
+/** Why an agent has no « Ouvrir une PR… » (`prview::NoPr`). */
+export interface NoPr {
+  reason: string;
+  settings: boolean;
 }
 
 /** « Ouvrir une PR »: what the model proposes, which the user reads and edits (`agentprs::PrProposal`). */
@@ -2557,3 +2821,263 @@ export interface LeftoverReport {
   removed: number;
   kept: { agentId: string; name: string; reason: string }[];
 }
+
+/** What a memory of the shared memory is about (ESC-255), as Claude Code sorts its own. */
+export type MemoryKind = 'feedback' | 'project' | 'reference' | 'user';
+
+/** A memory of a project's shared memory: `.escouade/memory/<name>.md` of its folder. */
+export interface Memory {
+  name: string;
+  description: string;
+  kind: MemoryKind;
+  body: string;
+}
+
+/** A memory of Claude Code's offered to the project's; `exists`: one of that name is there, which it replaces. */
+export interface OfferedMemory extends Memory {
+  exists: boolean;
+}
+
+/** A page of the spec (`docs::Page`, ESC-256), under `.escouade/spec` of the branch of the docs. */
+export interface DocsPage {
+  /** `subject/page`, without `.md`. */
+  path: string;
+  title: string;
+  subject: string;
+  sources: string[];
+  tickets: string[];
+  decisions: DecisionRef[];
+  /** When it was last compared to the code (ISO 8601); empty: never. */
+  compared: string;
+  /** What the last comparison found the code does otherwise (ESC-258). */
+  gaps: DocsGap[];
+  /** Not settled yet. */
+  draft: boolean;
+  /** Its place in its subject (0: by name). */
+  order: number;
+  body: string;
+}
+
+/** A gap between a page of the spec and the code (ESC-258). */
+export interface DocsGap {
+  text: string;
+  /** The files of the code concerned, relative to the project. */
+  code: string[];
+}
+
+export interface DocsPageInfo {
+  path: string;
+  title: string;
+  compared: string;
+  tickets: string[];
+  decisions: DecisionRef[];
+  /** How many gaps with the code its last comparison found. */
+  gaps: number;
+  draft: boolean;
+}
+
+export interface DocsSubject {
+  /** Its folder under `spec/`. */
+  name: string;
+  /** The name it is shown under. */
+  title: string;
+  pages: DocsPageInfo[];
+}
+
+/** A page as an import of an existing spec would write it (ESC-258). */
+export interface DocsDraft {
+  path: string;
+  subject: string;
+  title: string;
+  source: string;
+  lines: number;
+  /** A page of that path is already there: left alone. */
+  exists: boolean;
+}
+
+export interface DocsImported {
+  written: string[];
+  skipped: string[];
+}
+
+/** A committed change of the spec (« Ce qui a bougé »). */
+export interface DocsMoved {
+  /** Seconds since the epoch. */
+  when: number;
+  author: string;
+  message: string;
+  pages: string[];
+}
+
+/** A spec the project already has (`SPEC.md`, a `docs/` folder…), offered for import. */
+export interface DocsCandidate {
+  path: string;
+  kind: 'file' | 'folder';
+  files: number;
+  bytes: number;
+}
+
+export interface DocsTree {
+  /** The fixed docs branch; empty: the branch checked out. */
+  branch: string;
+  pages: number;
+  subjects: DocsSubject[];
+  /** Only when the spec has no page. */
+  existingSpec: DocsCandidate[];
+  /** The pages being compared to the code now (ESC-263). */
+  comparing?: string[];
+  /** The changes without tickets and the latest plan (ESC-262). */
+  planning?: DocsPlanning | null;
+}
+
+/** What a « Comparer au code » did (ESC-263). */
+export interface DocsCompared {
+  pages: number;
+  gaps: number;
+  failed: number;
+  error?: string;
+}
+
+export interface DocsHit {
+  path: string;
+  title: string;
+  lines: string[];
+}
+
+export type DecisionState = 'proposed' | 'accepted' | 'superseded';
+
+export interface DecisionChange {
+  page: string;
+  added: number;
+  removed: number;
+}
+
+/** How a decision is cited (`docs::Ref`, ESC-303): an accepted one by its number, a proposal by its id (it has no number until accepted). */
+export type DecisionRef = number | string;
+
+/** A decision of the register (`docs::Decision`): an accepted one is never rewritten, a new one replaces it. */
+export interface DocsDecision {
+  /** Given when it is accepted (ESC-303); null for a proposal (but those numbered before). */
+  number: number | null;
+  /** The slug of its title, unique in the register: how a proposal is cited; kept once accepted. */
+  id: string;
+  title: string;
+  date: string;
+  state: DecisionState;
+  origin: string;
+  originRef: string;
+  pages: string[];
+  tickets: string[];
+  documents: string[];
+  supersedes: number[];
+  supersededBy: number | null;
+  changes: DecisionChange[];
+  acceptedAt: string;
+  acceptedBy: string;
+  context: string;
+  decision: string;
+  consequences: string;
+}
+
+export interface DocsFile {
+  /** Under `documents/`. */
+  path: string;
+  name: string;
+  folder: string;
+  size: number;
+  kind: 'text' | 'pdf' | 'word' | 'image' | 'other';
+  /** Escouade reads its text (text, PDF, Word, OpenDocument). */
+  readable: boolean;
+  /** When its file last changed, in milliseconds since the epoch. */
+  modified: number;
+  /** Who added it last, as git says (this machine's user while it is not committed). */
+  author: string;
+  /** Times the agents read it. */
+  reads: number;
+  /** Pages of the spec and decisions that cite it. */
+  cited: number;
+}
+
+/** A folder of the drive (ESC-260). */
+export interface DocsFolder {
+  /** Under `documents/`. */
+  path: string;
+  name: string;
+  /** The files in it and in its folders. */
+  files: number;
+}
+
+export interface DocsDrive {
+  folders: DocsFolder[];
+  files: DocsFile[];
+}
+
+/** Where a file dropped went, and why: chosen (dropped in it), name, sort, meaning, words, or new. */
+export interface DocsPlacement {
+  folder: string;
+  /** The folder was made for it. */
+  new: boolean;
+  by: 'chosen' | 'name' | 'sort' | 'meaning' | 'words' | 'new';
+}
+
+export interface DocsDropped {
+  file: DocsFile;
+  placement: DocsPlacement;
+  /** The repository's LFS rules take it. */
+  lfs: boolean;
+}
+
+/** What the window learns of a file before it drops it. */
+export interface DocsCheck {
+  name: string;
+  size: number;
+  lfs: boolean;
+  /** Over 50 MB and no LFS rule takes it: asked first. */
+  large: boolean;
+}
+
+/** A document found by « Rechercher dans les documents ». */
+export interface DocsDocHit {
+  path: string;
+  name: string;
+  folder: string;
+  kind: string;
+  excerpt: string;
+}
+
+export interface DocsText {
+  path: string;
+  kind: string;
+  /** Null: Escouade does not extract the text of this format (yet). */
+  text: string | null;
+  total: number;
+  from: number;
+  truncated: boolean;
+  /** What is known of a file whose content is not read (an image: its format and size). */
+  meta?: string;
+}
+
+/** A conflict between two versions of a page of the docs, handed to the writer agent (« L'agent résout » / « Annuler »). */
+export interface DocsConflict {
+  /** The pages both sides changed. */
+  files: string[];
+  /** The branch that was being merged in. */
+  target: string;
+  /** The writer agent resolving it, once « L'agent résout » was clicked. */
+  agentId: string | null;
+}
+
+/** The changes of a project's docs not shared yet. */
+export interface DocsPending {
+  files: string[];
+  count: number;
+  /** Commits of code not pushed yet: « Partager » asks to be confirmed (`withCode`) before publishing them. */
+  codeCommits: number;
+  conflict: DocsConflict | null;
+}
+
+/** How a « Partager » ended. */
+export type DocsShared =
+  | { kind: 'nothing' }
+  | { kind: 'done'; committed: number; message: string; pulled: boolean }
+  | { kind: 'conflict'; conflict: DocsConflict };

@@ -1,0 +1,37 @@
+{
+  "about": "session/load dans un autre processus (ESC-273, faux serveur) : l’historique rejoué (contexte de session, messages, outils), avant et après sa réponse, laissé de côté.",
+  "agent": {
+    "cwd": "C:\\tmp\\esc273\\proj2",
+    "engine": "gemini",
+    "mode": "default",
+    "model": "auto"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": null,
+    "sessionId": "e93b98be-8a38-49e3-b150-412b345be625",
+    "status": "error",
+    "tokens": 0,
+    "touchedFiles": []
+  },
+  "flux": "../../gemini/11-load-replay.jsonl",
+  "items": [
+    {
+      "images": 0,
+      "kind": "user",
+      "queued": false,
+      "text": "dis ok"
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "gemini",
+      "error": "Internal error",
+      "interrupted": false,
+      "isError": true,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 0
+    }
+  ]
+}

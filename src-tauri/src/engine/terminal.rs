@@ -52,6 +52,9 @@ pub struct TerminalLaunch<'a> {
     /// The private file of the interface, which the core writes `TerminalArgs::file` to before it
     /// starts (and that stays its, the agent's own, from one start to the next).
     pub private_file: &'a Path,
+    /// The configuration folder of the agent's own (`Engine::agent_home_var`), when its harness
+    /// has one: where its interface keeps its sessions and reads its hooks (Mistral Vibe).
+    pub home: Option<&'a Path>,
     pub hooks: HookServer<'a>,
     /// Escouade's MCP server given to it, or refused.
     pub access: &'a Escouade,
@@ -88,6 +91,12 @@ pub trait TerminalView: Send + Sync {
 
     /// The name of its terminal, as the window lists it (`claude`).
     fn shell(&self) -> &'static str;
+    /// The program of its interface, from its account's (`program`, the one its agents' processes
+    /// run): the same, unless its harness has its interface apart (Mistral Vibe: `vibe` beside
+    /// `vibe-acp`).
+    fn program(&self, program: &Program) -> Program {
+        program.clone()
+    }
     /// The arguments, private file and variables of its interface.
     fn launch(&self, l: &TerminalLaunch) -> TerminalArgs;
     /// The arguments that let it read the folder `dir` without a question.
@@ -182,8 +191,15 @@ pub trait TerminalView: Send + Sync {
 
     // ----- the conversation -----
 
-    /// The log of `session` in the account's config folder `config_dir`.
+    /// The log of `session` in the account's config folder `config_dir` (the agent's own folder,
+    /// when its harness gives it one: `Engine::agent_home_var`).
     fn find_log(&self, config_dir: &Path, session: &str) -> Option<PathBuf>;
+    /// The log of a session goes on in another file while its interface runs (Mistral Vibe: a
+    /// segment of its journal for each turn): `find_log` is asked again once the file read is read
+    /// to its end, and the new file is read from its start.
+    fn log_moves(&self) -> bool {
+        false
+    }
     /// One entry of its log, translated into the agent's conversation.
     fn on_log_entry(&self, rt: &mut AgentRt, entry: &Value, fx: &mut Effects);
 
@@ -221,6 +237,10 @@ pub trait TerminalView: Send + Sync {
     }
     /// The key that ends it for good when sent twice, `quit_gap` apart.
     fn quit_key(&self) -> &'static [u8];
+    /// Its turn was interrupted from the window (`interrupt_key` sent): nothing to do, unless its
+    /// interface tells nothing of a turn it stopped (Gemini CLI: no hook then), whose end is then
+    /// the agent's.
+    fn interrupted(&self, _rt: &mut AgentRt, _fx: &mut Effects) {}
 }
 
 /// A text pasted in a terminal (bracketed paste), the sequence's own escape taken out of it, and

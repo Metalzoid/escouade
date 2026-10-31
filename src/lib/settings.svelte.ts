@@ -31,6 +31,7 @@ export type SettingsTab =
   | 'projects'
   | 'board'
   | 'integrations'
+  | 'plugins'
   | 'mcp'
   | 'terminals'
   | 'network'
@@ -76,6 +77,8 @@ export const SETTINGS_TABS: TabInfo[] = [
   tabInfo('board', 'kanban', 'project'),
   tabInfo('integrations', 'link', 'project'),
   // The one switch is saved at once (it writes into each harness's config).
+  // A link to the view Plugins (choice 213): nothing of it is saved here.
+  tabInfo('plugins', 'puzzle', 'system'),
   tabInfo('mcp', 'plug', 'system'),
   tabInfo('terminals', 'term', 'system'),
   tabInfo('network', 'globe', 'system'),
@@ -143,12 +146,15 @@ type ProjectFields = Pick<
   | 'workflowsInRepo'
   | 'userName'
   | 'shareNew'
+  | 'docsBranch'
 >;
 
 /** Which commands of a project's worktrees: run once one is made, or before one is removed. */
 export type StepKind = 'setup' | 'teardown';
 
 export interface ProjectDraft {
+  /** « Branche des docs » (ESC-258): empty for the current branch. */
+  docsBranch: string;
   name: string;
   color: string;
   /** « Lettres de la tuile » (ESC-167): empty is the initials of the name. */
@@ -231,6 +237,7 @@ function draftOf(p: Project): ProjectDraft {
     workflowsInRepo,
     userName,
     shareNew,
+    docsBranch,
     board,
     integrations,
   } = $state.snapshot(p);
@@ -271,6 +278,8 @@ function draftOf(p: Project): ProjectDraft {
     // Absent from a project of the window's tests made before ESC-190.
     userName: userName ?? '',
     shareNew: !!shareNew,
+    // Absent from a project of the window's tests made before ESC-256.
+    docsBranch: docsBranch ?? '',
     board,
     integrations,
   };
@@ -333,6 +342,7 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     workflowsInRepo: d.workflowsInRepo,
     userName: d.userName.trim(),
     shareNew: d.shareNew,
+    docsBranch: d.docsBranch.trim(),
   };
 }
 

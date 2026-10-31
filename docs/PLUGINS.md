@@ -2,7 +2,7 @@
 
 Demandé par l'utilisateur le 2026-10-25 : « pour la v2.1.0, planifie pour plus tard un système de plugins, permettant à tout le monde d'apporter des fonctionnalités à Escouade, fais une analyse poussée pour voir tout ce qu'on pourrait manipuler via ces plugins, et planifie une documentation étendue sur le sujet ».
 
-Ce document est l'analyse. Il ne change pas l'app. Le découpage en tickets, le plan de la documentation et les questions qui décident sont dans `docs/TODO-2.1.md`, chapitre « Plugins ».
+Ce document est l'analyse. Il ne change pas l'app. Le découpage en tickets, le plan de la documentation et les questions qui décident sont dans `docs/TODO-2.2.md`, chapitre « Plugins ».
 
 - §1 : l'inventaire de ce qu'un plugin pourrait manipuler, point d'extension par point d'extension, depuis le code ;
 - §2 : l'architecture, comparée sur ce que font VS Code, Zed, Obsidian, Raycast, JetBrains, Claude Code, Tauri et MCP, et trois expériences jetables ;
@@ -27,7 +27,7 @@ Ce qui rend un point facile, c'est un **trait ou un registre déjà là**, derri
 
 ### 1.1 Les harness
 
-**Où.** `src-tauri/src/engine/` : les traits `Engine` (sans état : `locate`, `tested`, `caps`, `models`, `efforts`, `spawn`, `message`, `translate`, `one_shot`, `grant_file`, `escouade_launch`, `fence_settings`, `user_config`…) et `EngineProcess` (le process vivant : `send_message`, `interrupt`, `set_model`, `set_mode`, `answer_permission`, `answer_question`, `read_usage`…), dans `engine/mod.rs` ; le registre `engine/registry.rs` (`EngineCaps`, `EngineDecl`, `Tested`, `Version`, `Range`, `EngineState`) ; un dossier par harness (`claude/`, `codex/`, `copilot/`, `cursor/`, `opencode/`, chacun avec `locate.rs`, `process.rs`, `bench.rs`, et `terminal.rs` pour une vue terminal) ; la traduction de leurs frames en conversation, `src-tauri/src/agent/<harness>.rs` ; le banc de conformité `engine/bench/` (scénarios, `replay`), et `engine/minimal/`, un faux moteur qui montre le moins qu'un moteur écrit. Le guide « Ajouter un moteur » de `docs/ENGINES.md` liste une quarantaine de cases.
+**Où.** `src-tauri/src/engine/` : les traits `Engine` (sans état : `locate`, `tested`, `caps`, `models`, `efforts`, `spawn`, `message`, `translate`, `one_shot`, `grant_file`, `escouade_launch`, `fence_settings`, `user_config`…) et `EngineProcess` (le process vivant : `send_message`, `interrupt`, `set_model`, `set_mode`, `answer_permission`, `answer_question`, `read_usage`…), dans `engine/mod.rs` ; le registre `engine/registry.rs` (`EngineCaps`, `EngineDecl`, `Tested`, `Version`, `Range`, `EngineState`) ; un dossier par harness (`claude/`, `codex/`, `copilot/`, `cursor/`, `opencode/`, `vibe/`, `agy/`, `gemini/`, chacun avec `locate.rs`, `process.rs`, `bench.rs`, et `terminal.rs` pour une vue terminal) ; le code propre à un harness hors d'`engine/` (`signin.rs`, `usage.rs`, `pricing.rs`, `codeindex/hint.rs`, `memory.rs::claude_offer`) ; la traduction de leurs frames en conversation, `src-tauri/src/agent/<harness>.rs` ; le banc de conformité `engine/bench/` (scénarios, `replay`), et `engine/minimal/`, un faux moteur qui montre le moins qu'un moteur écrit. Le guide « Ajouter un moteur » de `docs/ENGINES.md` liste une quarantaine de cases.
 
 **Ce qu'un plugin y ferait.** Deux niveaux :
 
@@ -72,7 +72,7 @@ Ce qui rend un point facile, c'est un **trait ou un registre déjà là**, derri
 
 ### 1.5 Les outils du serveur MCP d'Escouade
 
-**Où.** `src-tauri/src/mcp/` : `tools.rs` (la liste et les descriptions des outils : `list_projects`, `get_board`, `create_ticket`, `start_ticket`, `answer_permission`, `create_agent`, `send_message`, `get_usage`… une quarantaine), `read.rs` et `act.rs` (ce qu'ils lisent et font), `resolve.rs` (`Sight`, `may_act_on` : ce qu'un agent voit et sur quoi il agit, les projets privés), `http.rs` (le serveur et son jeton), `install.rs` (la déclaration dans chaque harness), `activity.rs` (le journal des appels, `McpActivity`). Dans la fenêtre : `settings/McpSection.svelte`, `src/lib/mcp.svelte.ts`, les noms en mots des outils dans `src/lib/tools.ts` (`ESCOUADE_TOOLS`).
+**Où.** `src-tauri/src/mcp/` : `tools.rs` (la liste et les descriptions des outils : `list_projects`, `get_board`, `create_ticket`, `start_ticket`, `answer_permission`, `create_agent`, `send_message`, `get_usage`… 58 en tout, par familles : le Kanban et les agents, les `index_*` de l'index du code, la mémoire, la spec, les décisions et les documents), `read.rs` et `act.rs` (ce qu'ils lisent et font), `resolve.rs` (`Sight`, `may_act_on` : ce qu'un agent voit et sur quoi il agit, les projets privés), `http.rs` (le serveur et son jeton), `install.rs` (la déclaration dans chaque harness), `activity.rs` (le journal des appels, `McpActivity`). Dans la fenêtre : `settings/McpSection.svelte`, `src/lib/mcp.svelte.ts`, les noms en mots des outils dans `src/lib/tools.ts` (`ESCOUADE_TOOLS`).
 
 **Ce qu'un plugin y ferait.** Deux sens :
 
@@ -100,6 +100,8 @@ Ce qui rend un point facile, c'est un **trait ou un registre déjà là**, derri
 **Exemple.** « Slack » : « Ticket ESC-170 à tester, 3 critères sur 3 » dans le salon de l'équipe, avec le lien de la PR ; « Commande à la fin du tour » : `say "Claude a fini"` ; un webhook générique vers n8n ou Zapier.
 
 **Valeur 3** (demandé de toutes les formes ; c'est le point d'entrée de la plupart des plugins). **Difficulté 2** : il faut un bus de faits, typé et versionné, appelé aux endroits du cœur qui changent l'état, et non dérivé des `UiEvent` (qui portent trop et changent avec l'interface). **Risque 2** : un fait dit le nom d'un ticket, d'un projet, d'une branche, parfois un extrait de conversation ; ceux d'un projet privé ne vont qu'aux plugins activés pour lui. Un plugin lent ne retarde rien : les faits partent dans une file, sans attendre de réponse.
+
+**Construit (ESC-177, PLG-5).** Le bus est `src-tauri/src/facts.rs` : un `Body` typé par fait (34 en version 1, de `agent.created` à `app.started`, avec ceux des docs, de la mémoire, des décisions, des PR et des comptes), émis là où l’état change (`AgentRt::set_status`, `add_pending`, `Core::apply`, `edit_ticket_with`, la validation, `remove_worktree`, `move_session`, `Space::spec_write`…), les noms remplis par un fil du bus (`Resolve`). `plugins/events.rs` les distribue : `permissions.events`, une seule règle avec Réglages › Plugins (PLG-4) : les `Choices` (`Plugins::reaches` sur `active_in`, un projet privé éteint d’office, un fait sans projet connu gardé comme privé) et les permissions retirées (`granted` : `events:<e>` retiré coupe le fait, ses webhooks et ses commandes), une file de 256 par plugin, `events/fact` au programme, `contributes.webhooks` (vers un hôte de `permissions.network` seulement, écrit en clair, tiré d’un secret ou fait d’une valeur du fait ; `*.d` couvre les sous-domaines de `d`, pas `d` ; la lecture du manifeste refuse un webhook écrit en clair vers un autre hôte, `manifest::host_covered`) et `contributes.commands` (après l’accord, une empreinte rangée dans `Choices.commands_approved`, donné ou retiré dans l’onglet Permissions). La page « Les événements » du site les décrit fait par fait.
 
 ### 1.7 Les autorisations et les questions
 
@@ -147,7 +149,7 @@ Ce qui rend un point facile, c'est un **trait ou un registre déjà là**, derri
 
 ### 1.10 Les thèmes et les langues
 
-**Les thèmes. Où.** `src/app.css` (177 propriétés `--…` : surfaces, texte, filets, états, `@property --p`), `src/lib/theme.ts` (la teinte de la fenêtre par `--p`, la couleur du projet en oklch, `PROJECT_COLORS`, `BRAND`), `src/lib/appearance.ts`, le thème de xterm tiré des jetons (ESC-80, `TerminalView.svelte`), celui de CodeMirror (`src/lib/editor/`), les règles de `DESIGN.md`. **Ce qu'un plugin y ferait** : un jeu de valeurs pour les jetons, clair ou sombre, et une palette de couleurs de projet. **Exemple** : « Solarized », « Contraste élevé ». **Valeur 2**, **difficulté 1** (des données ; mais le renommage des anciens jetons, `--ok`, `--accent`, `--line2`…, encore lus à une trentaine d'endroits, est un préalable, noté dans les restes du redesign : un thème ne doit dépendre que des noms qui restent), **risque 1** (des valeurs CSS filtrées : couleurs, longueurs ; jamais `url()` ni du CSS libre, qui pourrait charger une ressource ou masquer une demande d'autorisation).
+**Les thèmes. Où.** `src/app.css` (177 propriétés `--…` : surfaces, texte, filets, états, `@property --p`), `src/lib/theme.ts` (la teinte de la fenêtre par `--p`, la couleur du projet en oklch, `PROJECT_COLORS`, `BRAND`), `src/lib/appearance.ts`, le thème de xterm tiré des jetons (ESC-80, `TerminalView.svelte`), celui de CodeMirror (`src/lib/editor/`), les règles de `DESIGN.md`. **Ce qu'un plugin y ferait** : un jeu de valeurs pour les jetons, clair ou sombre, et une palette de couleurs de projet. **Exemple** : « Solarized », « Contraste élevé ». **Valeur 2**, **difficulté 1** (des données ; les anciens jetons, `--ok`, `--accent`, `--line2`…, ont été renommés en jetons 2.0 par ESC-172 et leur liste est dans `DESIGN.md` « Les jetons » : un thème ne dépend que de ces noms), **risque 1** (des valeurs CSS filtrées : couleurs, longueurs ; jamais `url()` ni du CSS libre, qui pourrait charger une ressource ou masquer une demande d'autorisation).
 
 **Les langues. Où.** `src/lib/i18n/` : un catalogue par langue et par domaine (`fr/*.ts`, `en/*.ts`, 26 fichiers et près de 3 900 lignes en français), typé (`types.ts`, `type-checks.ts`), avec `GLOSSARY.md`, et un test qui refuse le texte écrit en dur (`hardcoded.test.ts`) ; côté Rust, `src-tauri/src/i18n.rs` (`Lang` : `Fr`, `En`) et des textes écrits dans le code par `match lang` (le protocole d'un ticket, les notifications, les refus). Le site, `website/content/docs/{fr,en}/`. **Ce qu'un plugin y ferait** : une langue de plus, ses catalogues complets. **Exemple** : « Español ». **Valeur 2** (Escouade est en deux langues), **difficulté 3** (`Lang` est fermé, les textes du cœur ne sont pas en catalogue ; une langue partielle doit retomber sur l'anglais clé par clé ; les consignes données aux agents dans une langue doivent rester dans leur budget), **risque 1** (des textes ; mais un texte de consigne traduit est une consigne, à borner comme au §1.8).
 
@@ -205,7 +207,7 @@ Ce qui rend un point facile, c'est un **trait ou un registre déjà là**, derri
 | Langues | 2 | 3 | 1 | 2.3 |
 | Harness en programme, vue terminal | 2 | 3 | 3 | plus tard |
 
-**Révisé par ESC-203** (§4) : les sources du Kanban et les hébergeurs ne sont plus seulement des points ouverts aux tiers en 2.2. Leur contrat est posé dès la 2.1.0 (les sources) et la 2.1.x (les hébergeurs), et les intégrations d'Escouade deviennent des plugins de première main en process, après le transport (PLG-2) et le banc (PLG-3). Les versions sont dans `docs/TODO-2.1.md`, « Tout l'externe en plugins ».
+**Révisé par ESC-203** (§4) : les sources du Kanban et les hébergeurs ne sont plus seulement des points ouverts aux tiers en 2.2. Leur contrat est posé dès la 2.1.0 (les sources) et la 2.1.x (les hébergeurs), et les intégrations d'Escouade deviennent des plugins de première main en process, après le transport (PLG-2) et le banc (PLG-3). Les versions sont dans `docs/TODO-2.2.md`, « Tout l'externe en plugins ».
 
 ## 2. L'architecture
 
@@ -305,7 +307,7 @@ Le bac à sable de WASM tient ce qu'il promet, à un coût d'appel négligeable.
 
 Pourquoi :
 
-1. **C'est ce qu'Escouade sait déjà faire.** Ses cinq harness et son serveur MCP sont des process en JSON-RPC ou proches ; ses tests reposent sur des faux process et un banc de conformité ; ses Job objects tuent un arbre entier. Le socle coûte le moins, et le banc des plugins se calque sur celui des harness.
+1. **C'est ce qu'Escouade sait déjà faire.** Ses huit harness et son serveur MCP sont des process en JSON-RPC ou proches ; ses tests reposent sur des faux process et un banc de conformité ; ses Job objects tuent un arbre entier. Le socle coûte le moins, et le banc des plugins se calque sur celui des harness.
 2. **Les points qui valent le plus ont besoin du système.** Un harness est un process ; un webhook, une source du Kanban, un hébergeur ont besoin du réseau ; une notification ou un environnement de lancement lancent des commandes. En WASM, il faudrait les rouvrir par des fonctions de l'hôte, et le bac à sable n'aurait plus grand-chose à garder.
 3. **Les auteurs écrivent en TypeScript et en Python**, ceux des agents et des serveurs MCP. Un process les accueille sans interpréteur embarqué, avec leur débogueur.
 4. **L'honnêteté plutôt qu'un faux bac à sable** : un plugin en process a les droits de l'utilisateur, comme chez VS Code, Obsidian, JetBrains et Claude Code. Escouade le dit avant l'installation, applique ce qu'il peut (les faits, les secrets, les projets privés, les outils MCP), et réserve le niveau « sans crainte » au déclaratif, puis au WASM.
@@ -329,10 +331,11 @@ Un fichier `escouade-plugin.json` à la racine du dossier du plugin (du JSON, co
   "license": "MIT",
   "repository": "https://github.com/exemple/escouade-slack",
   "escouade": { "api": "1", "min": "2.1.0" },
+  "icon": "assets/icon.png",
   "run": { "command": "bin/escouade-slack", "windows": "bin/escouade-slack.exe" },
-  "activation": ["event:ticket.column", "event:agent.waiting"],
+  "activation": ["event:ticket.column", "event:agent.status"],
   "permissions": {
-    "events": ["ticket.*", "agent.waiting"],
+    "events": ["ticket.*", "agent.status"],
     "network": ["hooks.slack.com"],
     "secrets": ["webhook"]
   },
@@ -345,6 +348,7 @@ Un fichier `escouade-plugin.json` à la racine du dossier du plugin (du JSON, co
 
 - `id` : unique, en nom de domaine inversé (pas de collision entre deux auteurs) ; `name` et `description` dans les deux langues, l'anglais par défaut ;
 - `escouade.api` : la version **majeure** du protocole qu'il parle ; `min` (et `max` facultatif) : les versions d'Escouade où il a été essayé. Un plugin d'une API que l'app ne sert plus est désactivé, et la raison montrée, comme une version trop ancienne d'un harness (`Tested`, `oldest_reason`) ;
+- `icon` : facultatif (PLG-13, ESC-292). Son logo, un chemin relatif dans le dossier du plugin vers un **PNG carré de 256 px de côté au moins** (512 conseillé), **1 Mo au plus**. Ni SVG (il peut porter du script), ni image distante, ni chemin hors du dossier (`..`, absolu, lecteur, adresse). Les deux lecteurs (`src-tauri/src/plugins/manifest.rs` et `schemas/plugin-manifest.mjs`) en lisent l'en-tête sans le décoder, sur le même corpus (`tests/fixtures/plugins/manifests.json` : absent, introuvable, pas carré, trop petit, trop lourd, pas un PNG, SVG, `..`, absolu, distant), et disent chaque refus en français et en anglais (`file`, `png`, `heavy`, `square`, `small`, `path`). Le store le décode (4096 px de côté au plus) et le réencode sans métadonnées en 256 et 64 px (docs/STORE.md §3.3) ; l'app le lit dans le dossier du plugin installé par la commande `plugin_icon`, qui ne prend que l'id du plugin et ne sort jamais de son dossier (un lien qui en sort est refusé). Sans icône, la tuile garde ses deux lettres ;
 - `run` : facultatif. Sans lui, le plugin est **déclaratif** : rien ne s'exécute ;
 - `activation` : ce qui le démarre (un fait, une commande, l'ouverture des réglages) ; sans activation, il ne tourne pas ;
 - `permissions` : ce qu'il demande, montré avant l'installation (§3.4) ;
@@ -363,6 +367,7 @@ Un fichier `escouade-plugin.json` à la racine du dossier du plugin (du JSON, co
 - **Installé** n'est pas **activé**. Un plugin s'active pour toute l'app, ou projet par projet ; par défaut, pour tous les projets **sauf les projets privés**.
 - **Un projet privé** (ESC-140) : un plugin ne l'atteint que s'il y est activé un par un. Ses faits, ses tickets, ses statistiques, ses textes ne vont pas aux autres plugins ; un plugin client du serveur MCP le voit comme un agent d'un autre projet (`Sight`), c'est-à-dire pas du tout. Ce qu'Escouade ne peut pas garantir (un process qui lit le disque), Réglages › Plugins le dit en face du projet privé.
 - **Un projet qui propose un plugin** : `.escouade.yml` gagne une clé `plugins.recommended` (des identifiants et une source), comme les extensions recommandées de VS Code. Escouade le **propose**, n'installe ni n'active rien seul : un dépôt cloné ne doit pas pouvoir lancer un programme. Un plugin déclaratif (ou WASM, plus tard) peut s'activer après un clic ; un plugin avec un programme demande l'accord complet, comme une installation. Ses réglages propres vont sous `plugins.<id>.*` (§1.11), validés par son schéma, jamais un secret.
+- **Fait le 2026-10-30** (PLG-14, ESC-288) : `plugins.recommended` (des identifiants du store, la source est store.escouade.dev) et `plugins.<id>` (des valeurs simples) rejoignent `KEYS` et le schéma comme clés du fichier seul, jamais appliquées au projet ni exportées ; l’ouverture du projet dit combien il en propose, une bande en tête de Réglages › Projets les nomme avec « Voir dans le store » (la page du plugin dans la vue Plugins), « Pas pour ce projet » la fait taire sur ce poste. `settings/get` prend un `project` : les réglages du fichier passent devant ceux de l’utilisateur, seulement les clés de `contributes.settings` d’une valeur de leur type, jamais un secret, et seulement si le plugin est actif dans ce projet (un projet privé ne donne rien à un plugin qui n’y est pas activé).
 
 ### 3.4 Ce que l'utilisateur voit, et ce qu'il retire
 
@@ -390,7 +395,7 @@ Rien de neuf sans accord. Si l'utilisateur a accepté les statistiques d'usage (
 
 Demandé par l'utilisateur le 2026-10-26 : « Faudra prévoir de faire passer toutes les intégrations externes sous forme de plugins (Claude code, copilot CLI, etc, y compris la gestion des tickets externes et la gestion des PR). Ex : un plugin github pourra gérer les tickets ET les PR. »
 
-Les §1 à §3 font des plugins des **ajouts** : ils viennent à côté des intégrations écrites dans le cœur. Ce chapitre va plus loin : **chaque intégration externe devient un plugin**, celles d'aujourd'hui comprises, et **chaque plugin est un process**, ceux d'Escouade comme ceux des tiers (décidé le 2026-10-26, §4.11). Il ne change pas l'app ; le plan, version par version, est dans `docs/TODO-2.1.md`, chapitre « Tout l'externe en plugins ».
+Les §1 à §3 font des plugins des **ajouts** : ils viennent à côté des intégrations écrites dans le cœur. Ce chapitre va plus loin : **chaque intégration externe devient un plugin**, celles d'aujourd'hui comprises, et **chaque plugin est un process**, ceux d'Escouade comme ceux des tiers (décidé le 2026-10-26, §4.11). Il ne change pas l'app ; le plan, version par version, est dans `docs/TODO-2.2.md`, chapitre « Tout l'externe en plugins ».
 
 ### 4.1 La décision
 
@@ -421,7 +426,25 @@ Les §1 à §3 font des plugins des **ajouts** : ils viennent à côté des int�
 
 - **Un binaire, plusieurs plugins.** Le code d'aujourd'hui (`engine/<harness>/`, `agent/<harness>.rs`, `integrations/<service>.rs`, `forge/<hébergeur>.rs`) sort du cœur dans des crates Rust, une par plugin (`plugins/<id>/`), avec les types du protocole dans une crate partagée avec le cœur (`escouade-plugin-protocol`, la crate Rust de PLG-9, avancée). Elles sont réunies dans **un seul exécutable à plusieurs entrées**, `escouade-plugins`, livré à côté de l'app comme `escouade-hook` (`src-tauri/src/bin/`) : `escouade-plugins github`, `escouade-plugins claude`… Un exécutable par plugin coûterait 5 à 10 Mo chacun (tokio, reqwest, serde à chaque fois), une quinzaine en tout ; un seul ne coûte qu'une fois. Chaque plugin reste **un process à lui** : le même exécutable, lancé avec son nom.
 - **Son manifeste** est un `escouade-plugin.json` du même schéma, avec `"run": { "command": "{escouade}/escouade-plugins", "args": ["github"] }`. L'origine (`builtin`) est donnée par l'app, jamais par le manifeste. Les ids `dev.escouade.*` sont réservés : le store (ESC-202) les refuse à la soumission, l'app refuse un dossier qui les prend.
+- **Dans le dépôt de l'app, chacun lisible seul** (décidé par l'utilisateur le 2026-10-29) : pas de dépôt séparé, le protocole et la livraison signée restant ceux de l'app. Mais chaque dossier `plugins/<id>/` se lit comme le dépôt d'un plugin tiers : son `escouade-plugin.json`, un `README.md` (ce qu'il fait, ses permissions en mots, ses comptes, comment le lancer seul contre le faux Escouade de PLG-9) et ses tests. Il sert d'exemple aux auteurs, en plus de ceux de PLG-10. Sa page sur le store pointe vers ce dossier à l'étiquette de la dernière version d'Escouade (`github.com/guillaume-gagnaire/escouade/tree/v<version>/plugins/<id>`), comme le dépôt et le commit d'un plugin tiers. Un test de la CI vérifie que chaque dossier a son manifeste et son README, et que la liste du store (`store/server/utils/builtin.ts`) est celle des dossiers.
 - **Livrés et mis à jour avec l'app.** Leur version est celle d'Escouade ; ils n'ont pas de mise à jour à part. `escouade-plugins` est signé comme l'app (Authenticode sous Windows, la signature et la notarisation de chaque binaire sous macOS, la clé de l'updater de Tauri pour `latest.json`), et l'app vérifie avant de le lancer que c'est bien le sien (son chemin dans le dossier de l'app, et sa signature là où le système la vérifie). Ils ont le badge « Livré avec Escouade », qui vaut « Vérifié par Escouade » (ESC-202). Un correctif vient avec une release ; pas de liste de révocation pour eux.
+- **Leur logo** (décidé par l'utilisateur le 2026-10-29 sur l'aperçu `design/plugin-logos/`, ESC-292) : le logo de la marque quand ses règles publiées permettent de l'afficher pour dire qu'on s'intègre à elle, sans rien demander ; sinon le glyphe de sa catégorie sur la tuile du logo d'Escouade (l'invite pour un harness, la carte pour une source de tickets, la branche pour un hébergeur). Dans le doute, jamais la marque. Les tracés des marques viennent de Simple Icons 16.36 (CC0 pour le tracé) ; le store les dessine dans la page (`store/shared/marks.ts`). Pages relues le 2026-10-29 :
+
+  | Plugin | Page relue | Ce qu'elle dit | Retenu |
+  |---|---|---|---|
+  | GitHub | brand.github.com/foundations/logo | « Use a permitted GitHub logo to inform others that your project integrates with GitHub » ; l'Invertocat en blanc ou en noir, jamais recoloré, déformé ni accolé à autre chose ; pas de partenariat suggéré | Marque, blanche sur sombre, noire sur clair |
+  | OpenCode | github.com/anomalyco/opencode | Dépôt sous MIT, aucune règle de marque | Marque |
+  | Gitea et Forgejo | github.com/go-gitea/gitea (LICENSE MIT) ; codeberg.org/forgejo/meta, branding/README.md | Logo de Gitea dans un dépôt MIT ; celui de Forgejo en CC BY-SA 4.0 (à créditer) | Marque de Gitea, telle quelle |
+  | Copilot CLI | brand.github.com/foundations/logo | Rien sur l'icône de Copilot pour un tiers (« no longer has a standalone logo ») | Catégorie |
+  | GitLab | about.gitlab.com/press/press-kit → règles de marque du handbook | La page des règles ne se lit pas sans compte GitLab | Catégorie |
+  | Jira, Trello, Bitbucket | atlassian.design/foundations/logos | Rien sur l'usage par un tiers ; les logos d'intégration sont réservés aux employés d'Atlassian | Catégorie |
+  | ClickUp | clickup.com/brand | Un logo partenaire « may be approved » : un accord | Catégorie |
+  | Cursor | cursor.com/brand | Des logos à télécharger, aucune règle d'usage | Catégorie |
+  | Claude Code, Mistral Vibe, Linear | claude.ai, mistral.ai, linear.app | Pas de page de règles notée par Simple Icons | Catégorie |
+  | Codex, Azure DevOps | — | Retirés de Simple Icons à la demande d'OpenAI et de Microsoft | Catégorie |
+  | Antigravity CLI, Gemini CLI | about.google/brand-resource-center | Une marque Google demande en général une autorisation | Catégorie |
+
+  Une marque passe de la catégorie à son logo quand sa page le permet : on la relit, on note ici la date, et `shared/marks.ts` gagne son tracé.
 - **Activés partout par défaut**, projets privés compris : ils l'étaient avant d'être des plugins, et leur code est celui d'Escouade. C'est la seule exception au §3.3.
 - **Ce que l'utilisateur voit.** Réglages › Plugins les liste en tête, groupés sous « Livrés avec Escouade », avec la même fiche que les autres (contributions, permissions en mots, comptes, état du process, journal). Les écrans d'aujourd'hui gardent leur place : Réglages › Harness, l'onglet Intégrations et la section des hébergeurs deviennent des **vues par point d'extension** des plugins actifs, de première main ou tiers. On cherche « GitHub » dans les intégrations, pas dans une liste de plugins.
 - **Les désactiver.** Un interrupteur pour l'app, ou par projet, comme les autres. Ils ne se désinstallent pas. Un harness désactivé : ses agents restent, marqués « harness absent », leurs données gardées (comme un harness de plugin désinstallé, PLG-6) ; on ne peut plus en créer. Une source désactivée : les tickets importés restent, la synchro s'arrête et la carte dit pourquoi. Un hébergeur désactivé : les PR ne sont plus suivies, la carte le dit ; rien n'est perdu.
@@ -503,7 +526,7 @@ Ce que le contrat exige de chaque point, vérifié par le banc des harness (`eng
 
 ### 4.6 Tout en process : ce que ça coûte, et comment on le tient
 
-Ce qui existe : environ 41 000 lignes de Rust dans `engine/`, `agent/`, `integrations/` et `forge/`, tests compris ; cinq faux harness (`tests/fixtures/fake-*.mjs`), un faux service de tickets (`fake-trackers.mjs`), un faux `gh` ; le banc des harness ; des essais réels par harness (`real-harnesses.spec.ts`, `real_fence`, `real_*_view`, `real_claude_models`). La décision les garde tous, et les rejoue à chaque migration.
+Ce qui existe : environ 41 000 lignes de Rust dans `engine/`, `agent/`, `integrations/` et `forge/`, tests compris ; huit faux harness (`tests/fixtures/fake-*.mjs`), un faux service de tickets (`fake-trackers.mjs`), un faux `gh` ; le banc des harness ; des essais réels par harness (`real-harnesses.spec.ts`, `real_fence`, `real_*_view`, `real_claude_models`). La décision les garde tous, et les rejoue à chaque migration.
 
 **Ce qui a été comparé** (avant la décision) :
 
@@ -527,7 +550,34 @@ L'utilisateur a retenu **P pour tout** (§4.11). Ce qu'elle coûte, point par po
 - **Par lots.** Le cœur ne fait pas un aller-retour par ligne : il envoie au plugin tout ce qu'une lecture a rendu (jusqu'à 64 Kio, ou 8 ms d'attente au plus), et le plugin rend ses éléments par lots aussi, en fusionnant les morceaux de texte d'un même bloc (les deltas d'un message en cours). Le flux reste continu : aucune frame n'attend la fin d'un tour, seulement la fin de son lot.
 - **La sérialisation.** Une frame est déjà du JSON : elle est passée au plugin comme une chaîne, sans être relue par le cœur (`RawValue`), puis relue une fois par le plugin, comme le cœur la relit aujourd'hui. Le coût en plus est l'échappement d'une chaîne dans une chaîne et une copie par passage. Les grosses frames (un fichier lu en entier, une image) sont les cas à mesurer.
 - **La traduction à séparer de l'état.** C'est le gros du travail : aujourd'hui, `claude_frame` et ses pareils sont des méthodes d'`AgentRt` (`agent/claude.rs` et les autres) qui lisent et écrivent directement l'état de l'agent : 61 membres d'`AgentRt` pour Claude Code, 41 à 50 pour les autres. Chaque plugin garde l'état qui ne sert qu'à traduire (les outils en cours, les blocs ouverts, le plan, les identifiants des demandes) et rend ce que le cœur doit appliquer. Ce qu'un plugin ne peut pas savoir (le mode courant, le modèle choisi, l'agent en pause), le cœur le lui donne à `agent/attach` et à chaque changement.
-- **La mesure, avant et après.** Un banc de flux (INT-0, dans `docs/TODO-2.1.md`) rejoue des flux enregistrés de chaque harness (`tests/fixtures/<harness>/`, et un long tour réel de Claude Code avec des milliers de frames), au rythme réel et au plus vite, et mesure : le délai de la ligne lue à l'événement envoyé à la fenêtre (médiane et 99e centile), le débit maximal, le CPU et la mémoire du cœur et du plugin, le temps d'un rejeu entier. Mesuré **avant** toute migration, puis après celle de chaque harness. Les seuils proposés, à confirmer par la première mesure : au plus 5 ms de plus au 99e centile, un débit au moins dix fois le plus fort flux réel observé, au plus 30 Mo par process de plugin. Un harness qui les dépasse ne passe pas en process tant que ce n'est pas corrigé.
+- **La mesure, avant et après.** Un banc de flux (INT-0, dans `docs/TODO-2.2.md`) rejoue des flux enregistrés de chaque harness (`tests/fixtures/<harness>/`, et un long tour réel de Claude Code avec des milliers de frames), au rythme réel et au plus vite, et mesure : le délai de la ligne lue à l'événement envoyé à la fenêtre (médiane et 99e centile), le débit maximal, le CPU et la mémoire du cœur et du plugin, le temps d'un rejeu entier. Mesuré **avant** toute migration, puis après celle de chaque harness. Les seuils proposés, à confirmer par la première mesure : au plus 5 ms de plus au 99e centile, un débit au moins dix fois le plus fort flux réel observé, au plus 30 Mo par process de plugin. Un harness qui les dépasse ne passe pas en process tant que ce n'est pas corrigé.
+- **Le transport seul, mesuré avec PLG-2 (ESC-174, 2026-10-29).** `round_trips_and_throughput_are_measured` (`src-tauri/src/plugins_runtime_tests.rs`) mesure le runtime des plugins contre le faux plugin en Node, sous Windows 11 : un aller-retour en médiane de 72 µs, 146 µs au 99e centile (2 000 appels ; 43 µs au §2.2, entre un hôte Node et un plugin Node, sans Job ni file) ; 30 Mo/s de frames d'environ 1 Kio passées en chaînes brutes, par lots de 64 (30 000 frames par seconde). Bien sous les seuils proposés ; INT-0 n'existe pas encore : la comparaison au flux réel des harness se fera avec lui.
+- **Le banc des plugins, avec PLG-3 (ESC-175, 2026-10-29).** `src-tauri/src/plugins/bench/` joue neuf scénarios contre le dossier d'un plugin quelconque, par un faux Escouade (`bench/fake.rs`, le pilote JSON-RPC sans l'app) : manifeste, initialisation, version refusée (la 999 offerte), délais (chaque appel mesuré, une méthode inconnue refusée par -32601), un fait reçu (`events/fact`, une notification), une décision (`permissions/decide`), un secret (seulement les siens, jamais écrits), plantage au milieu d'un appel puis relance, fermeture ; un scénario hors des permissions du manifeste n'est pas joué. La CLI `escouade-plugin` (`src/bin/`, livrée à côté de l'app et signée comme elle) en fait `test`, `validate` et `dev` ; `--measure` mesure les allers-retours (58 µs en médiane, 147 µs au 99e centile sur l'exemple Slack). Les exemples de PLG-10 (ESC-182, `plugin-examples/` : Contraste élevé, Webhook Discord, Slack, Règles de l'équipe) passent le banc dans les tests et en CI (`plugin-examples/ci.mjs`) ; les scénarios par point (source, hébergeur, harness) et le rejeu d'INT-0 viendront avec ces points et INT-0.
+- **Les mesures de référence, avec INT-0 (ESC-206, 2026-10-30) : les chiffres « avant ».** `npm run bench:int0 -- --label <nom>` les refait en une commande (`scripts/bench/int0.mjs`, résultats dans `bench-results/`, tableaux en Markdown dans `bench-results/int0-<nom>.md`). Le **banc de flux** (`src-tauri/src/fluxbench.rs`, en release) rejoue par le vrai chemin du cœur (la ligne lue en JSON, `Core::on_frame`, ses effets appliqués, les événements de la fenêtre sérialisés par le canal de Tauri, les deltas par `conv_flusher`) les flux des cas de rejeu de chaque harness (`tests/fixtures/replays/<harness>/`) et un long tour réel de Claude Code 2.1.312 (`tests/fixtures/claude/long-turn.jsonl`, 3 371 frames en 138 s, enregistré par `scripts/bench/record-claude-turn.mjs`) : 20 fois au plus vite, puis une fois à leur rythme enregistré (les flux qui le disent ; un silence de plus de 2 s raccourci à 2 s). Une ligne qui ne fait aucun événement de la fenêtre (gardée par le cœur, réponse à une demande du cœur, message du client enregistré avec le flux) est comptée à part. Le CPU est celui du process, de la première ligne de chaque rejeu à son dernier événement (ce que la ligne déclenche compris : sauvegarde, stats ; le process au calme avant) ; la mémoire, celle du process de test entier (39 Mo au départ, 95 Mo de pic après les 5 700 rejeux, leurs agents gardés). Windows 11, i9-14900KF :
+
+  | Flux, au plus vite | Lignes (×20) | Sans événement | Médiane | 99e centile | Lignes/s | Mo/s | CPU |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | Claude Code (3 cas) | 2 120 | 560 | 12 µs | 463 µs | 28 032 | 14,8 | 188 ms |
+  | Codex (4) | 11 660 | 6 380 | 30 µs | 410 µs | 103 768 | 39,7 | 234 ms |
+  | Copilot CLI (4) | 59 080 | 37 937 | 204 µs | 579 µs | 166 461 | 111,8 | 469 ms |
+  | Cursor CLI (2) | 9 420 | 1 980 | 47 µs | 173 µs | 151 092 | 52,8 | 94 ms |
+  | OpenCode (4) | 102 940 | 24 255 | 145 µs | 658 µs | 301 315 | 104,0 | 531 ms |
+  | Mistral Vibe (6) | 18 040 | 3 325 | 84 µs | 734 µs | 90 079 | 32,2 | 172 ms |
+  | Antigravity CLI (6) | 1 380 | 278 | 21 µs | 499 µs | 14 870 | 5,5 | 141 ms |
+  | Gemini CLI (10) | 2 800 | 1 653 | 33 µs | 617 µs | 17 232 | 6,0 | 1 250 ms |
+  | Le long tour de Claude Code | 67 420 | 1 960 | 4,2 ms | 7,8 ms | 342 948 | 119,8 | 672 ms |
+
+  | Flux, à son rythme | Lignes | Sans événement | Médiane | 99e centile | CPU |
+  | --- | --- | --- | --- | --- | --- |
+  | Codex | 583 | 319 | 8,2 ms | 31,1 ms | 94 ms |
+  | Cursor CLI | 471 | 99 | 21,4 ms | 32,0 ms | 31 ms |
+  | OpenCode | 5 147 | 1 213 | 16,2 ms | 31,5 ms | 203 ms |
+  | Mistral Vibe | 902 | 167 | 22,9 ms | 32,3 ms | 109 ms |
+  | Le long tour de Claude Code | 3 371 | 98 | 24,0 ms | 32,3 ms | 469 ms |
+
+  Ce qu'ils disent : la traduction et l'envoi d'une ligne prennent moins de 0,8 ms au 99e centile pour chaque harness ; le reste est le **regroupement des deltas** (`conv_flusher` les envoie 16 ms après le premier, des milliers de lignes fondues en une cinquantaine d'événements), d'où les 4,2 ms du long tour au plus vite et, au rythme réel, ~32 ms au 99e centile partout : 16 ms que le minuteur de Windows (~15,6 ms) arrondit vers le haut. Le plus fort flux réel enregistré passe 217 lignes en une seconde (le long tour ; 134 pour OpenCode) : le cœur en tient 68 (Antigravity) à 1 580 fois plus. Les seuils proposés plus haut deviennent : au plus 5 ms de plus au 99e centile, à mesurer au plus vite (moins de 0,8 ms aujourd'hui) comme à son rythme (~32 ms) ; un débit d'au moins 2 200 lignes/s par harness (dix fois 217) ; 30 Mo par process de plugin, à mesurer avec INT-9 (rien ne tourne encore en process).
+
+  Le **démarrage** (`tests/e2e/startup-bench.spec.ts`, l'app réelle en build de debug, le faux Claude Code, 10 lancements sur le même dossier ; médiane, min – max) : jusqu'à la fenêtre (première peinture de la page) **621 ms** (459 – 1 251), 553 ms au premier lancement sur un dossier neuf ; **premier agent prêt** (le process du harness lancé → sa réponse à `initialize`, mesuré par le cœur, `ready in` d'app.log) **261 ms** (72 – 1 513, surtout le démarrage de Node du faux CLI) ; du message envoyé à la réponse affichée 236 ms (24 – 2 344 : le clic sur la carte lance parfois le process avant le message). **Une frappe dans une vue terminal** (`terminal-latency.spec.ts` au repos, la « Vue Claude Code » du faux CLI, 40 frappes) : de la touche à l'écho peint **13,4 ms** en médiane, 18,2 ms au 95e centile, 25,2 ms au plus.
 
 **2. Les terminaux et les vues TUI.** Le PTY reste au cœur (§4.2). Le plugin **décide du lancement**, rien de plus.
 
@@ -540,7 +590,7 @@ L'utilisateur a retenu **P pour tout** (§4.11). Ce qu'elle coûte, point par po
 
 - **Rien de lancé avant la fenêtre.** Ce qu'il faut à l'écran d'accueil est **déclaré** dans les manifestes et lu sans process : les harness trouvés (`locate` déclaratif), leurs capacités, les hôtes des hébergeurs (pour reconnaître un remote), les champs des comptes.
 - **Démarrage paresseux** ensuite : une source à sa première synchro, un hébergeur à la première PR à suivre, un harness au premier agent qui reprend ou à la première ouverture du menu des modèles. Les agents qui reprennent au démarrage lancent leur plugin en parallèle, pas l'un après l'autre.
-- **Le coût** : un process `escouade-plugins` démarre en quelques millisecondes (un exécutable Rust, pas un runtime) ; INT-0 mesure le temps jusqu'à la fenêtre et jusqu'au premier agent prêt, avant et après. Seuil proposé : la fenêtre au même temps qu'aujourd'hui, le premier agent prêt à moins de 100 ms de plus.
+- **Le coût** : un process `escouade-plugins` démarre en quelques millisecondes (un exécutable Rust, pas un runtime) ; INT-0 mesure le temps jusqu'à la fenêtre et jusqu'au premier agent prêt, avant et après. Seuil proposé : la fenêtre au même temps qu'aujourd'hui, le premier agent prêt à moins de 100 ms de plus. Avant (INT-0, 2026-10-30, build de debug) : la fenêtre en 621 ms, le premier agent prêt en 261 ms (médianes ; détail au point 1).
 
 **5. Un plugin de première main qui plante.**
 
@@ -556,9 +606,9 @@ L'utilisateur a retenu **P pour tout** (§4.11). Ce qu'elle coûte, point par po
 
 Les énumérations fermées à ouvrir :
 
-- **`EngineId`** (`model.rs`, énumération `Claude`, `Codex`, `Copilot`, `Cursor`, `Opencode`, et `Bench` en test), gardé dans les agents (`AgentMeta::engine`), les tickets, les projets et la colonne `engine` des statistiques. Il devient un id ouvert (une chaîne), **sérialisé à l'identique** (`claude`, `codex`…) : aucune donnée à migrer. Les `match` sur `EngineId` (une trentaine de fichiers hors tests) passent par le registre et les capacités (`EngineCaps`), comme l'interface le fait déjà.
-- **`engine::registry::all()`**, une liste écrite en dur des cinq harness : construite depuis les plugins actifs.
-- **`Service`** (`model.rs` : `Jira`, `Trello`, `Github`, `Linear`), gardé dans `ExternalRef` de chaque ticket importé : un id ouvert, sérialisé à l'identique. Côté fenêtre : le type `Service`, `SERVICE_IDS` et les noms courts (`SHORT`) de `src/lib/integrations.ts`, lus depuis le registre.
+- **`EngineId`** (`model.rs`, énumération `Claude`, `Codex`, `Copilot`, `Cursor`, `Opencode`, `Vibe`, `Agy`, `Gemini`, et `Bench` en test), gardé dans les agents (`AgentMeta::engine`), les tickets, les projets et la colonne `engine` des statistiques. Il devient un id ouvert (une chaîne), **sérialisé à l'identique** (`claude`, `codex`…) : aucune donnée à migrer. Les `match` sur `EngineId` (une trentaine de fichiers hors tests) passent par le registre et les capacités (`EngineCaps`), comme l'interface le fait déjà.
+- **`engine::registry::all()`**, une liste écrite en dur des huit harness : construite depuis les plugins actifs.
+- **`Service`** (`model.rs` : `Jira`, `Trello`, `Github`, `Linear`, `Clickup`, `Gitlab`, `Azure`), gardé dans `ExternalRef` de chaque ticket importé : un id ouvert, sérialisé à l'identique. Côté fenêtre : le type `Service`, `SERVICE_IDS` et les noms courts (`SHORT`) de `src/lib/integrations.ts`, lus depuis le registre.
 - **`integrations::Client`** (`integrations/mod.rs`, une énumération qui distribue chaque appel par `match`) : les traits `TicketSource` et `TicketSourceKind`, et un registre, comme `forge::Registry`. Les champs de `integrations::Account` propres à un service (`site`, `email`, `key`) deviennent des champs déclarés par le genre de compte.
 - **`forge::Registry::standard()`** (`forge/mod.rs`), écrit en dur : construit depuis les plugins. `Provider::kind()` et `scopes()` rendent des `&'static str` : à passer en chaînes possédées ; `CliToken::parse` et `Probe::matches` sont des pointeurs de fonctions : à rendre déclaratifs (une commande et le champ lu ; un chemin et la clé attendue).
 
@@ -575,14 +625,15 @@ Les traits qui deviennent le contrat : `Engine` et `EngineProcess` (`engine/mod.
 Chaque étape est livrable seule, garde ses tests et ses essais réels inchangés, et ne migre qu'une intégration à la fois. L'ordre va du plus simple au plus risqué ; **le transport en process (PLG-2) et le banc (PLG-3) passent avant toute migration de première main**.
 
 0. **Les mesures de référence** (INT-0), avant tout : le flux de chaque harness, le démarrage, la mémoire. Ce sont les chiffres « avant ».
-1. **Les contrats dans le cœur**, sans rien sortir : `TicketSource` et `Service` ouvert (les six sources derrière, sans changer de comportement), `forge::Registry` ouvert, `EngineId` ouvert. Des refactors, livrables en 2.0.x ou avec la 2.1.0.
+1. **Les contrats dans le cœur**, sans rien sortir : `TicketSource` et `Service` ouvert (les sept sources derrière, sans changer de comportement), `forge::Registry` ouvert, `EngineId` ouvert. Des refactors, livrables en 2.0.x ou avec la 2.1.0.
 2. **Le socle** : le manifeste (PLG-1), **le transport en process (PLG-2)** et **le banc (PLG-3)** ; le registre des plugins de première main et l'exécutable `escouade-plugins` empaqueté et signé, d'abord vide ; les adaptateurs en process des sources et des hébergeurs, essayés sur le faux plugin.
 3. **Les comptes partagés** : un genre de compte par plugin ; l'exception de github.com (`Accounts::github`) devient la règle. Migration des comptes enregistrés (`integrations.json`) et des noms au coffre, réversible.
 4. **Les sources du Kanban en process**, une par ticket : Trello, Linear, Jira, ClickUp. Le plus simple : quelques appels HTTP, des types sérialisables. GitHub Issues, GitLab Issues et Azure Boards sortent avec leur hébergeur (étape 5).
-5. **Les hébergeurs en process**, un par ticket : **GitHub d'abord, avec ses Issues** (le plugin « GitHub » complet), puis GitLab avec ses Issues (ESC-56 et ESC-165), Bitbucket, Gitea, et Azure DevOps (ESC-241, avec Azure Boards).
+5. **Les hébergeurs en process**, un par ticket : **GitHub d'abord, avec ses Issues** (le plugin « GitHub » complet), puis GitLab avec ses Issues (ESC-56 et ESC-165), Bitbucket, Gitea, et Azure DevOps avec Azure Boards (INT-8.5, ESC-280, ESC-241 et 242).
 6. **Le contrat des harness en process** : la traduction séparée de l'état, `engine/launch`, les lots, `agent/attach`, la vue terminal ; prouvé sur le faux moteur minimal (`engine/minimal/`) devenu un plugin, mesuré contre INT-0.
-7. **Les harness en process**, un par ticket, du moins utilisé au plus utilisé : Cursor CLI (avec le plugin ACP générique de PLG-6), OpenCode, Copilot CLI, Codex, **Claude Code en dernier**. Chacun mesuré avant et après, banc, e2e et essais réels rejoués.
-8. **Plus tard** : les plugins tiers en WASM (les sources d'abord, 2.2), un harness tiers par `engine/*` documenté (2.3), les services de voix et les environnements de lancement par la même règle.
+7. **Les harness en process**, un par ticket, du moins utilisé au plus utilisé : Cursor CLI (avec le plugin ACP générique de PLG-6), Mistral Vibe (INT-10.6, ESC-281), Gemini CLI (INT-10.7, ESC-282), OpenCode, Copilot CLI, Codex, Antigravity CLI (INT-10.8, ESC-283), **Claude Code en dernier**. Chacun mesuré avant et après, banc, e2e et essais réels rejoués.
+8. **Les services de voix en ligne et les environnements de lancement** (revue du 2026-10-29, §4.12) : le contrat de la voix (INT-12, ESC-284), puis OpenAI, Groq, Mistral, ElevenLabs et Deepgram en plugins (INT-13, ESC-285) ; le point « environnement de lancement », isola en premier plugin (INT-14, ESC-286).
+9. **Plus tard** : les plugins tiers en WASM (les sources d'abord, 2.2) et un harness tiers par `engine/*` documenté (2.3).
 
 ### 4.9 L'effet sur les tickets en cours ou à venir
 
@@ -596,7 +647,7 @@ Chaque étape est livrable seule, garde ses tests et ses essais réels inchangé
 | ESC-59 à 63, 65 à 68, PR, CI, relectures, déploiements, vues | Ce sont des fonctions du cœur qui appellent `Forge`. | **Inchangés** : ils restent au cœur et marchent pour tout plugin d'hébergeur. |
 | ESC-69, 70, docs et essais des hébergeurs | Les pages parlent des plugins. | La page « Hébergeurs » dit qu'ils sont des plugins de première main ; l'essai réel passe aussi par « plugin arrêté puis relancé ». |
 | ESC-53, parcours enregistrés | — | Inchangé. |
-| ESC-172 à 184, PLG | Le socle porte maintenant les intégrations d'Escouade. | Modifiés, ticket par ticket : `docs/TODO-2.1.md`, « Les tickets PLG à modifier ». |
+| ESC-172 à 184, PLG | Le socle porte maintenant les intégrations d'Escouade. | Modifiés, ticket par ticket : `docs/TODO-2.2.md`, « Les tickets PLG à modifier ». |
 | ESC-36, moteur ACP générique | Doublon de PLG-6. | **À fermer**, renvoyé à ESC-178. |
 | ESC-202, place de marché (en cours) | — | Le store refuse les ids `dev.escouade.*` ; l'app montre « Livré avec Escouade » à côté de « Vérifié par Escouade ». |
 
@@ -607,13 +658,13 @@ Avec « tout en process », un plugin tiers et un plugin de première main ont *
 **De plus qu'un plugin de première main :**
 
 - sortir à son rythme : une API de service qui change se corrige sans attendre une release d'Escouade ;
-- servir ce qu'Escouade ne tiendra pas : YouTrack, Asana, Azure Boards, un Jira Data Center derrière un proxy, une forge d'entreprise, un harness ACP de plus ;
+- servir ce qu'Escouade ne tiendra pas : YouTrack, Asana, un Jira Data Center derrière un proxy, une forge d'entreprise, un harness ACP de plus ;
 - s'écrire dans n'importe quel langage (TypeScript avec le SDK, PLG-9).
 
 **De moins :**
 
 - **activé d'office nulle part dans un projet privé** (§3.3), là où un plugin de première main l'est ;
-- **un harness tiers** passe d'abord par l'ACP décrit (PLG-6) ; `engine/*` lui sera ouvert quand il aura été tenu par les cinq harness d'Escouade et documenté (2.3), pas avant ;
+- **un harness tiers** passe d'abord par l'ACP décrit (PLG-6) ; `engine/*` lui sera ouvert quand il aura été tenu par les huit harness d'Escouade et documenté (2.3), pas avant ;
 - **ses secrets seulement**, jamais ceux d'un plugin de première main, même pour le même service ;
 - **ni les ids ni les comptes d'un plugin de première main** ;
 - **pas de lancement sans accord** : sa fenêtre d'installation dit « Lance un programme sur votre ordinateur, avec vos droits » (§3.4) ; celle d'un plugin de première main n'existe pas, il vient avec l'app ;
@@ -630,8 +681,50 @@ Posées par le chef d'escouade, répondues par l'utilisateur le 2026-10-26 :
 5. **Les plugins de première main désactivables, non désinstallables, activés partout par défaut, projets privés compris.** _Retenu._
 6. **Remplacer un plugin de première main par un tiers** : permis, compte par compte, jamais en silence. _Retenu._
 7. **Les tickets en cours** : ESC-201 fini tel quel ; ESC-165 réécrit en plugin « GitLab » ; ESC-56 à 58 écrits dans la crate de leur plugin dès le socle, sinon sortis plus tard ; ESC-36 fermé (§4.9). _Retenu._
+8. **Les plugins de première main restent dans le dépôt de l'app, chacun lisible seul** (2026-10-29, sur la question de l'utilisateur « tu as bien prévu de les passer sur des dépôts séparés ? ») : un dossier `plugins/<id>/` avec son manifeste, son README et ses tests, vers lequel pointe sa page du store ; pas de dépôts séparés, qui demanderaient une PR par dépôt à chaque changement du protocole et une livraison signée à part. Posé dans INT-4 (ESC-210), suivi par chaque sortie (INT-7 à INT-14). _Retenu._
 
 À confirmer avec l'utilisateur, conséquence de la décision 1 : **PLG-6 (ESC-178) sort de la 2.1.0**. L'adaptateur ACP générique s'écrit directement en plugin de première main, sur le contrat des harness (étape 6), plutôt que dans le cœur puis à nouveau dehors.
+
+### 4.12 La revue du 2026-10-29
+
+Demandée par l'utilisateur après la sortie de la 2.1.0 : « revérifie qu'il te manque rien et que tu as bien planifié l'implémentation du site de la marketplace, le lien avec Escouade, et le passage en plugins de toutes les features aujourd'hui intégrées ». Le plan du 2026-10-26 a été confronté au code de la 2.1.0 et aux 46 tickets des plugins, des intégrations et du store. Les décisions du §4.11 tiennent ; voici ce qui manquait, et ce qui est tranché.
+
+**Ce qui manquait au passage en plugins**, construit depuis le plan, ou oublié, a maintenant son ticket :
+
+| Étape | Ce qu'elle sort | Ticket | Après |
+|---|---|---|---|
+| INT-8.5 | Azure DevOps et Azure Boards (ESC-241, 242), ensemble, comme GitLab et GitLab Issues | ESC-280 | INT-5, INT-6, INT-8.4 |
+| INT-10.6 | Mistral Vibe, sur le client ACP générique de PLG-6 | ESC-281 | INT-9, PLG-6, INT-10.1 |
+| INT-10.7 | Gemini CLI, sur le même client ACP | ESC-282 | INT-10.6 |
+| INT-10.8 | Antigravity CLI, sur le contrat des harness (stream-json, pas d'ACP), avant Claude Code | ESC-283 | INT-9, INT-10.4 |
+| INT-12 | Le contrat des services de voix en ligne : dictée, direct, synthèse, catalogue, compte | ESC-284 | INT-0, INT-4, INT-5 |
+| INT-13 | OpenAI, Groq, Mistral, ElevenLabs et Deepgram en plugins | ESC-285 | INT-12, INT-6 |
+| INT-14 | Le point « environnement de lancement » (`up`, `ls`, `down`, `destroy`), isola en premier plugin | ESC-286 | INT-4, INT-5 |
+
+L'ordre des harness devient : Cursor CLI, Mistral Vibe, Gemini CLI, OpenCode, Copilot CLI, Codex, Antigravity CLI, Claude Code.
+
+**Ce qui manquait au store et au lien avec Escouade** :
+- le lien profond `escouade://plugin/<id>` (STORE-11, ESC-287), qui ouvre une page et n'installe jamais rien ;
+- les plugins proposés par un projet, `plugins.recommended` de `.escouade.yml` (PLG-14, ESC-288) ;
+- le reste rejoint les tickets du store : la compatibilité, les limites de débit et la copie de la liste de révocation dans STORE-6 (ESC-233) ; la dernière version compatible, Réglages › Réseau, la télémétrie avec l'accord et le passage d'une installation par git au store dans STORE-9 (ESC-236) ; les pages des plugins de première main, les catégories et les signalements ouverts à tous dans STORE-4 (ESC-231).
+
+**Les décisions de la revue** (le chef d'escouade, à confirmer par l'utilisateur s'il le veut autrement) :
+1. **Wispr Flow (ESC-164) s'écrit en plugin**, sur le contrat de la voix (INT-12), pas dans le cœur : la règle « tout l'externe en plugins » s'applique aux demandes d'avant elle.
+2. **Whisper, Piper et le modèle d'embeddings de l'index restent au cœur** (§4.2) : ils tournent hors ligne, sans compte, et ne parlent à aucun service une fois téléchargés.
+3. **Le client ACP de Cursor devient générique dans PLG-6**, avant toute migration de harness ACP : Vibe et Gemini l'appellent déjà (`engine/vibe/process.rs`, `engine/gemini/mod.rs`), sortir Cursor seul les casserait.
+4. **Le contrat des harness (INT-9) porte aussi** `read_only` (une garantie de sécurité que le cœur vérifie sur la description de lancement, comme la clôture), la réponse aux hooks, la reprise de la mémoire et `accounts_by_key`.
+5. **Les plugins de première main ont une page sur le store**, avec la marque « Escouade » ; ils s'installent avec l'app, et leurs ids `dev.escouade.*` restent réservés.
+6. **« Signaler » est ouvert à tous** sur le store, par un formulaire avec une adresse e-mail (DSA) ; publier demande toujours un compte GitHub.
+7. **L'exemple « harness ACP décrit » de PLG-10 passe à PLG-6**, sur Goose, puisque Gemini CLI est intégré : les exemples et le store n'attendent plus le contrat des harness.
+8. **Le compte Mistral**, partagé par Vibe et la voix, est tranché dans INT-13, avec INT-6.
+
+**Les nouveaux points d'extension que suggère la 2.1.0**, pour après les étapes ci-dessus, sans ticket encore :
+- les **lecteurs de documents** (`docsextract.rs` lit texte, PDF, docx, odt ; un plugin ajouterait l'OCR, pptx, xlsx) : sans réseau, le premier candidat au WASM ;
+- les **langues de l'index du code** (11 aujourd'hui, ni C, C++, Ruby, Kotlin ni Swift), en déclaratif : une grammaire tree-sitter et ses requêtes ;
+- les **sources de documents** (Confluence, Drive, Notion), que `docs/FACTORY.md` renvoie déjà aux plugins ;
+- les **faits** des Docs, de la mémoire, des PR et des comptes sur le bus (ajoutés à PLG-5, ESC-177).
+
+Les docs elles-mêmes (§1.1, §1.5, §4.7, §4.8, §4.10, le tableau des versions de `docs/TODO-2.2.md`, `docs/STORE.md` §5.1) sont remises d'accord avec la 2.1.0 par ESC-279, avant INT-0.
 
 ## 5. Sources
 

@@ -9,6 +9,10 @@ mod agentbranch_tests;
 mod agentprs;
 #[cfg(test)]
 mod agentprs_tests;
+#[cfg(test)]
+mod agy_tests;
+#[cfg(test)]
+mod agy_tui_tests;
 mod attach;
 mod attachfiles;
 #[cfg(test)]
@@ -20,6 +24,13 @@ mod clipboard;
 mod closed;
 #[cfg(test)]
 mod closed_tests;
+mod codeindex;
+#[cfg(test)]
+mod codeindex_links_tests;
+#[cfg(test)]
+mod codeindex_probes_tests;
+#[cfg(test)]
+mod codeindex_tests;
 #[cfg(test)]
 mod codex_tests;
 #[cfg(test)]
@@ -38,10 +49,46 @@ mod core_tests;
 mod cursor_tests;
 #[cfg(test)]
 mod cursor_tui_tests;
+mod deeplink;
+#[cfg(test)]
+mod deeplink_tests;
 mod desktop;
+mod discussion;
+#[cfg(test)]
+mod discussion_tests;
+mod docs;
+#[cfg(test)]
+mod docs_tests;
+mod docsbranch;
+mod docscompare;
+#[cfg(test)]
+mod docscompare_tests;
+mod docsdrive;
+#[cfg(test)]
+mod docsdrive_tests;
+mod docsextract;
+#[cfg(test)]
+mod docsextract_tests;
+#[cfg(test)]
+mod docsfollow_tests;
+mod docsimport;
+#[cfg(test)]
+mod docsimport_tests;
+mod docsplan;
+#[cfg(test)]
+mod docsplan_tests;
+mod docsshare;
+#[cfg(test)]
+mod docsshare_tests;
+mod docsticket;
+#[cfg(test)]
+mod docsticket_tests;
 mod engine;
 #[cfg(test)]
 mod engines_tests;
+mod facts;
+#[cfg(test)]
+mod facts_tests;
 mod fence;
 #[cfg(test)]
 mod fence_tests;
@@ -50,8 +97,12 @@ mod fileorigin;
 mod fileorigin_tests;
 #[cfg(test)]
 mod first_message_tests;
+#[cfg(test)]
+mod fluxbench;
 mod forge;
 mod fsedit;
+#[cfg(test)]
+mod gemini_tui_tests;
 mod git;
 mod handover;
 mod hub;
@@ -62,6 +113,7 @@ mod isola;
 mod job;
 mod leftovers;
 mod mcp;
+mod memory;
 mod menus;
 mod model;
 #[cfg(test)]
@@ -72,6 +124,8 @@ mod navigation;
 mod notify;
 #[cfg(test)]
 mod opencode_tests;
+mod outside;
+mod pagecrash;
 mod paths;
 mod plan;
 #[cfg(test)]
@@ -81,6 +135,19 @@ mod plan_tests;
 mod planfiles;
 #[cfg(test)]
 mod planfiles_tests;
+mod plugins;
+#[cfg(test)]
+mod plugins_bench_tests;
+#[cfg(test)]
+mod plugins_decide_tests;
+#[cfg(test)]
+mod plugins_protocol_tests;
+#[cfg(test)]
+mod plugins_runtime_tests;
+#[cfg(test)]
+mod plugins_store_tests;
+#[cfg(test)]
+mod plugins_tests;
 mod pricing;
 #[cfg(test)]
 mod private_tests;
@@ -91,6 +158,9 @@ mod projectfile;
 #[cfg(test)]
 mod projectfile_tests;
 mod projectlogo;
+mod prview;
+#[cfg(test)]
+mod prview_tests;
 mod pty;
 mod repos;
 #[cfg(test)]
@@ -132,8 +202,16 @@ mod tui;
 mod tui_tests;
 mod updates;
 mod usage;
+mod vectors;
+#[cfg(test)]
+mod vibe_tests;
+#[cfg(test)]
+mod vibe_tui_tests;
 mod voice;
 mod which;
+mod windowthread;
+#[cfg(test)]
+mod windowthread_tests;
 mod workflow;
 #[cfg(test)]
 mod workflow_tests;
@@ -293,7 +371,27 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
     let origins = fileorigin::FileOrigins::default();
     app.manage(origins.clone());
     fileorigin::install(&main, &origins);
+    // A page whose process ends is loaded again, without what it showed (ESC-290).
+    pagecrash::install(&main);
     Ok(())
+}
+
+/// `escouade-plugin` (src/bin): the conformance bench, the manifest's check and the fake Escouade,
+/// for the plugins' authors (PLG-3). Gives the exit code.
+pub fn plugin_cli(args: Vec<String>) -> i32 {
+    plugins::bench::cli::main(args)
+}
+
+/// `codeindex_probes` (examples): the probes bench of the code index against grep (ESC-294,
+/// `docs/CODEINDEX-PROBES.md`). Gives the exit code.
+pub fn codeindex_probes_cli(args: Vec<String>) -> i32 {
+    codeindex::probes::cli(args)
+}
+
+/// `codeindex_agents` (examples): the bench of the real agents, with and without the index (ESC-299,
+/// `docs/CODEINDEX-PROBES.md`). Gives the exit code.
+pub fn codeindex_agents_cli(args: Vec<String>) -> i32 {
+    codeindex::probes::agents::cli(args)
 }
 
 pub fn run() {
@@ -312,6 +410,11 @@ pub fn run() {
         env!("CARGO_PKG_VERSION"),
     );
     let window = updates::AfterUpdate::window(&after_update);
+    // The commands, away from the window's thread; what runs on their lanes, for its watch (ESC-290).
+    let running = Arc::new(windowthread::Running::default());
+    let lanes = windowthread::Lanes::new(running.clone());
+    let watched = running.clone();
+    let focused = running.clone();
     let mut builder = tauri::Builder::default();
     // Sandboxed runs (end-to-end tests, demos) must not hand over to an instance the user
     // already has open.
@@ -320,8 +423,10 @@ pub fn run() {
     // big as the screen allows, whatever window the user last had.
     if paths::sandbox_dir().is_none() {
         builder = builder
-            .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-                notify::show_main(app)
+            // A second launch hands its link over to this one (`escouade://plugin/<id>`, STORE-11).
+            .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+                notify::show_main(app);
+                deeplink::deliver(app, deeplink::links_in(args));
             }))
             .plugin(
                 tauri_plugin_window_state::Builder::default()
@@ -330,6 +435,9 @@ pub fn run() {
             );
     }
     let builder = builder
+        // `escouade://`, registered by the installers (STORE-11); macOS hands a link over by an
+        // Apple event, which this plugin receives.
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
@@ -342,6 +450,7 @@ pub fn run() {
     builder
         .setup(move |app| {
             init_logging();
+            windowthread::watch_app(app.handle().clone(), watched.clone());
             // First: nothing below may find the window missing.
             build_window(app)?;
             for note in paths::take_migration_notes() {
@@ -351,6 +460,7 @@ pub fn run() {
             if let Some(updates::AfterUpdate::Failed(version)) = &after_update {
                 log::warn!("Escouade {version} did not install: the app still runs this version");
             }
+            app.manage(deeplink::Inbox::default());
             let (core, git_rx) = Core::load(
                 app.handle().clone(),
                 paths::DataDir::new(paths::default_data_dir()),
@@ -436,12 +546,14 @@ pub fn run() {
                     updates::Window::Hidden => {}
                 }
             }
+            deeplink::at_start(app.handle());
             Ok(())
         })
-        .on_window_event(|window, event| {
+        .on_window_event(move |window, event| {
             // Back to the window: a harness installed meanwhile (in a terminal) gets Escouade's server.
             if let WindowEvent::Focused(true) = event {
                 if let Some(core) = window.try_state::<Arc<Core>>() {
+                    let _running = focused.enter("window focused");
                     core.declare_on_focus();
                     // A repository added or removed in a project's folder meanwhile (ESC-169).
                     core.refresh_all_repos();
@@ -460,231 +572,306 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![
-            commands::subscribe,
-            commands::set_ui,
-            commands::save_settings,
-            commands::claude_locate,
-            commands::claude_update_status,
-            commands::data_dir,
-            commands::account_sign_in_ended,
-            commands::claude_found,
-            commands::engines,
-            commands::account_shareable,
-            commands::account_create,
-            commands::account_add_machine,
-            commands::account_machine,
-            commands::account_update,
-            commands::account_reorder,
-            commands::engine_order_set,
-            commands::favorite_model_set,
-            commands::account_remove,
-            commands::account_status,
-            commands::account_models_refresh,
-            commands::engines_found_now,
-            commands::account_cursor_key,
-            commands::account_login,
-            commands::set_agent_view,
-            commands::agent_terminal,
-            commands::tui_asks_trust,
-            commands::paste_image,
-            commands::inspect_folder,
-            commands::refresh_repos,
-            commands::get_workflows,
-            commands::get_workflow_tracks,
-            commands::refresh_workflows,
-            commands::workflow_refine_plan,
-            commands::refine_workflows,
-            commands::effective_workflows,
-            commands::remove_workflow_file,
-            commands::agent_merge_check,
-            commands::merge_agent_repos,
-            commands::forget_repo,
-            commands::inspect_setup,
-            commands::first_commit,
-            commands::create_project,
-            commands::update_project,
-            commands::set_project_logo,
-            commands::project_logo,
-            commands::read_logo,
-            commands::shared_trust,
-            commands::shared_write,
-            commands::shared_unkeep,
-            commands::shared_preview,
-            commands::reorder_projects,
-            commands::remove_project,
-            commands::closed_projects,
-            commands::erase_closed_project,
-            commands::create_agent,
-            commands::warm_agent,
-            commands::restart_agent_process,
-            commands::get_conversation,
-            commands::search_conversations,
-            commands::send_message,
-            commands::attach_open,
-            commands::attach_chunk,
-            commands::attach_finish,
-            commands::attach_cancel,
-            commands::attach_discard,
-            commands::attach_origin,
-            fileorigin::file_origin,
-            commands::clipboard_image,
-            commands::interrupt,
-            commands::stop_subagent,
-            commands::stop_bg_task,
-            commands::task_output,
-            commands::subagent_transcript,
-            commands::message_subagent,
-            commands::answer_question,
-            commands::answer_permission,
-            commands::set_agent_options,
-            commands::set_agent_account,
-            commands::resume_on_account,
-            commands::continue_on_engine,
-            commands::back_to_previous_account,
-            commands::rename_agent,
-            commands::duplicate_agent,
-            commands::archive_agent,
-            commands::delete_agent,
-            commands::merge_agent,
-            commands::get_commands,
-            commands::file_suggestions,
-            commands::git_files,
-            commands::git_diff,
-            commands::git_project_diff,
-            commands::git_log,
-            commands::git_show,
-            commands::git_fetch,
-            commands::git_pull,
-            commands::git_push,
-            commands::branch_list,
-            commands::branch_check,
-            commands::branch_switch,
-            commands::branch_create,
-            commands::branch_delete,
-            commands::branches_merged,
-            commands::git_diff_refs,
-            commands::create_agent_on_branch,
-            commands::integrate_base,
-            commands::agent_pr_propose,
-            commands::agent_pr_open,
-            commands::agent_prs_refresh,
-            commands::agent_branch_switch,
-            commands::agent_git_sync,
-            commands::agent_pr_fix,
-            commands::set_remote_control,
-            commands::stats,
-            commands::refresh_usage,
-            commands::cancel_resume,
-            commands::git_discard,
-            commands::commit_preview,
-            commands::commit_propose,
-            commands::commit_direct,
-            commands::fs_tree,
-            commands::fs_read,
-            commands::fs_write,
-            commands::fs_create,
-            commands::fs_rename,
-            commands::fs_delete,
-            commands::fs_reveal,
-            commands::sent_files,
-            commands::sent_file_open,
-            commands::agent_local_image,
-            commands::remote_image,
-            commands::fs_mkdir,
-            commands::fs_base,
-            commands::code_search,
-            commands::term_spawn,
-            commands::run_start,
-            commands::term_write,
-            commands::term_resize,
-            commands::term_kill,
-            commands::term_report,
-            commands::play_chime,
-            commands::quit_app,
-            commands::set_unsaved,
+        .invoke_handler(windowthread::off_the_window(
+            lanes,
+            tauri::generate_handler![
+                commands::subscribe,
             commands::set_held,
-            commands::ticket_create,
-            commands::ticket_update,
-            commands::ticket_delete,
-            commands::clean_worktrees,
-            commands::ticket_images,
-            commands::ticket_prioritize,
-            commands::ticket_share,
-            commands::ticket_hide,
-            commands::shared_resolve,
-            commands::git_user_name,
-            commands::ticket_start,
-            commands::ticket_resume,
-            commands::ticket_approve,
-            commands::ticket_reject,
-            commands::ticket_resolve_conflict,
-            commands::ticket_dismiss,
-            commands::board_set,
-            commands::autopilot_resume,
-            commands::forges,
-            commands::forge_check,
-            commands::forge_connect,
-            commands::forge_disconnect,
-            commands::forge_guess,
-            commands::forge_token_page,
-            commands::integration_connect,
-            commands::integration_disconnect,
-            commands::integration_containers,
-            commands::integration_states,
-            commands::integration_issues,
-            commands::integration_import,
-            commands::integration_resync,
-            commands::git_branches,
-            commands::agent_prepare_launch,
-            commands::test_recipe_approve,
-            commands::test_run_start,
-            commands::http_ready,
-            commands::update_check,
-            commands::update_download,
-            commands::update_restart,
-            commands::update_postpone,
-            commands::update_presence,
-            commands::update_close,
-            commands::isola_config,
-            commands::isola_approve,
-            commands::isola_services,
-            commands::isola_down,
-            commands::suggest_worktree_steps,
-            commands::suggest_run_commands,
-            commands::suggest_worktree_steps_at,
-            commands::suggest_run_commands_at,
-            commands::mcp_status,
-            commands::mcp_activity,
-            commands::mcp_clear_activity,
-            commands::mcp_set_enabled,
-            commands::telemetry_set,
-            commands::mcp_declare_status,
-            commands::mcp_manual_command,
-            commands::voice_info,
-            commands::voice_start,
-            commands::voice_stop,
-            commands::voice_cancel,
-            commands::voice_download,
-            commands::voice_download_cancel,
-            commands::voice_delete_model,
-            commands::voice_online_keys,
-            commands::voice_online_key_set,
-            commands::voice_online_key_delete,
-            commands::voice_online_catalog,
-            commands::speech_info,
-            commands::conversation_start,
-            commands::conversation_listen,
-            commands::conversation_hold,
-            commands::conversation_say,
-            commands::conversation_stop,
-            commands::conversation_send,
-            commands::speech_download,
-            commands::speech_download_cancel,
-            commands::speech_delete,
-            commands::speech_preview,
-            commands::speech_preview_online,
-        ])
+                commands::set_ui,
+                commands::open_url,
+                commands::open_path,
+                commands::save_settings,
+                commands::claude_locate,
+                commands::claude_update_status,
+                commands::data_dir,
+                commands::plugins_list,
+                commands::plugin_inspect_folder,
+                commands::plugin_inspect_git,
+                commands::plugin_inspect_dev,
+                commands::plugin_install,
+                commands::plugin_inspect_store,
+                commands::store_view,
+                commands::deep_links_take,
+                commands::store_refresh,
+                commands::store_suggestions,
+                commands::plugin_discard,
+                commands::plugin_remove,
+                commands::plugin_approve_commands,
+                commands::plugin_set_enabled,
+                commands::plugin_set_project,
+                commands::plugin_set_permission,
+                commands::plugin_set_setting,
+                commands::plugin_secrets,
+                commands::plugin_set_secret,
+                commands::plugin_run,
+                commands::plugin_start,
+                commands::plugins_check_updates,
+                commands::plugin_icon,
+                commands::account_sign_in_ended,
+                commands::claude_found,
+                commands::engines,
+                commands::account_shareable,
+                commands::account_create,
+                commands::account_add_machine,
+                commands::account_machine,
+                commands::account_update,
+                commands::account_reorder,
+                commands::engine_order_set,
+                commands::favorite_model_set,
+                commands::account_remove,
+                commands::account_status,
+                commands::account_models_refresh,
+                commands::engines_found_now,
+                commands::account_key,
+                commands::account_login,
+                commands::set_agent_view,
+                commands::agent_terminal,
+                commands::tui_asks_trust,
+                commands::paste_image,
+                commands::inspect_folder,
+                commands::refresh_repos,
+                commands::docs_spec_tree,
+                commands::docs_compare,
+                commands::docs_detect_spec,
+                commands::docs_spec_page,
+                commands::docs_spec_write,
+                commands::docs_spec_search,
+                commands::docs_decisions,
+                commands::docs_decision_propose,
+                commands::docs_decision_replace,
+                commands::docs_decision_accept,
+                commands::docs_documents,
+                commands::docs_document_text,
+                commands::docs_document_add,
+                commands::docs_drive,
+                commands::docs_document_check,
+                commands::docs_document_move,
+                commands::docs_folder_add,
+                commands::docs_documents_search,
+                commands::docs_pending,
+                commands::docs_share,
+                commands::docs_share_resolve,
+                commands::docs_share_cancel,
+                commands::docs_import_plan,
+                commands::docs_import,
+                commands::docs_recent,
+                commands::discussion_start,
+                commands::discussion_pour,
+                commands::discussion_drop,
+                commands::docs_plan,
+                commands::docs_plan_cancel,
+                commands::get_workflows,
+                commands::get_workflow_tracks,
+                commands::refresh_workflows,
+                commands::workflow_refine_plan,
+                commands::refine_workflows,
+                commands::effective_workflows,
+                commands::remove_workflow_file,
+                commands::agent_merge_check,
+                commands::merge_agent_repos,
+                commands::forget_repo,
+                commands::inspect_setup,
+                commands::first_commit,
+                commands::create_project,
+                commands::update_project,
+                commands::set_project_logo,
+                commands::get_code_index,
+                commands::set_code_index,
+                commands::set_code_index_all,
+                commands::get_index_savings,
+                commands::vectors_model,
+                commands::vectors_model_download,
+                commands::vectors_model_cancel,
+                commands::vectors_model_delete,
+                commands::project_logo,
+                commands::read_logo,
+                commands::shared_trust,
+                commands::memory_list,
+                commands::memory_forget,
+                commands::claude_memory_offer,
+                commands::claude_memory_take,
+                commands::shared_write,
+                commands::shared_unkeep,
+                commands::shared_preview,
+                commands::reorder_projects,
+                commands::remove_project,
+                commands::closed_projects,
+                commands::erase_closed_project,
+                commands::create_agent,
+                commands::warm_agent,
+                commands::restart_agent_process,
+                commands::get_conversation,
+                commands::search_conversations,
+                commands::send_message,
+                commands::attach_open,
+                commands::attach_chunk,
+                commands::attach_finish,
+                commands::attach_cancel,
+                commands::attach_discard,
+                commands::attach_origin,
+                fileorigin::file_origin,
+                commands::clipboard_image,
+                commands::interrupt,
+                commands::stop_subagent,
+                commands::stop_bg_task,
+                commands::task_output,
+                commands::subagent_transcript,
+                commands::message_subagent,
+                commands::answer_question,
+                commands::answer_permission,
+                commands::set_agent_options,
+                commands::set_agent_account,
+                commands::resume_on_account,
+                commands::continue_on_engine,
+                commands::back_to_previous_account,
+                commands::rename_agent,
+                commands::duplicate_agent,
+                commands::archive_agent,
+                commands::delete_agent,
+                commands::merge_agent,
+                commands::get_commands,
+                commands::file_suggestions,
+                commands::git_files,
+                commands::git_diff,
+                commands::git_project_diff,
+                commands::git_log,
+                commands::git_show,
+                commands::git_fetch,
+                commands::git_pull,
+                commands::git_push,
+                commands::branch_list,
+                commands::branch_check,
+                commands::branch_switch,
+                commands::branch_create,
+                commands::branch_delete,
+                commands::branches_merged,
+                commands::git_diff_refs,
+                commands::create_agent_on_branch,
+                commands::integrate_base,
+                commands::agent_pr_propose,
+                commands::agent_pr_open,
+                commands::agent_prs_refresh,
+                commands::agent_branch_switch,
+                commands::agent_git_sync,
+                commands::agent_pr_fix,
+                commands::agent_pr_detail,
+                commands::agent_pr_log,
+                commands::agent_pr_rerun,
+                commands::agent_no_pr,
+                commands::project_prs,
+                commands::set_remote_control,
+                commands::stats,
+                commands::refresh_usage,
+                commands::cancel_resume,
+                commands::git_discard,
+                commands::commit_preview,
+                commands::commit_propose,
+                commands::commit_direct,
+                commands::fs_tree,
+                commands::fs_read,
+                commands::fs_write,
+                commands::fs_create,
+                commands::fs_rename,
+                commands::fs_delete,
+                commands::fs_reveal,
+                commands::sent_files,
+                commands::sent_file_open,
+                commands::agent_local_image,
+                commands::remote_image,
+                commands::fs_mkdir,
+                commands::fs_base,
+                commands::code_search,
+                commands::term_spawn,
+                commands::run_start,
+                commands::term_write,
+                commands::term_resize,
+                commands::term_kill,
+                commands::term_report,
+                commands::play_chime,
+                commands::quit_app,
+                commands::set_unsaved,
+                commands::ticket_create,
+                commands::ticket_update,
+                commands::ticket_delete,
+                commands::clean_worktrees,
+                commands::ticket_images,
+                commands::ticket_prioritize,
+                commands::ticket_share,
+                commands::ticket_hide,
+                commands::shared_resolve,
+                commands::git_user_name,
+                commands::ticket_start,
+                commands::ticket_resume,
+                commands::ticket_approve,
+                commands::ticket_reject,
+                commands::ticket_resolve_conflict,
+                commands::ticket_dismiss,
+                commands::board_set,
+                commands::autopilot_resume,
+                commands::forges,
+                commands::forge_check,
+                commands::forge_connect,
+                commands::forge_disconnect,
+                commands::forge_guess,
+                commands::forge_token_page,
+                commands::integration_connect,
+                commands::integration_disconnect,
+                commands::integration_containers,
+                commands::integration_states,
+                commands::integration_issues,
+                commands::integration_import,
+                commands::integration_resync,
+                commands::git_branches,
+                commands::agent_prepare_launch,
+                commands::test_recipe_approve,
+                commands::test_run_start,
+                commands::http_ready,
+                commands::update_check,
+                commands::update_download,
+                commands::update_restart,
+                commands::update_postpone,
+                commands::update_presence,
+                commands::update_close,
+                commands::isola_config,
+                commands::isola_approve,
+                commands::isola_services,
+                commands::isola_down,
+                commands::suggest_worktree_steps,
+                commands::suggest_run_commands,
+                commands::suggest_worktree_steps_at,
+                commands::suggest_run_commands_at,
+                commands::mcp_status,
+                commands::mcp_activity,
+                commands::mcp_clear_activity,
+                commands::mcp_set_enabled,
+                commands::telemetry_set,
+                commands::mcp_declare_status,
+                commands::mcp_manual_command,
+                commands::voice_info,
+                commands::voice_start,
+                commands::voice_stop,
+                commands::voice_cancel,
+                commands::voice_download,
+                commands::voice_download_cancel,
+                commands::voice_delete_model,
+                commands::voice_online_keys,
+                commands::voice_online_key_set,
+                commands::voice_online_key_delete,
+                commands::voice_online_catalog,
+                commands::speech_info,
+                commands::conversation_start,
+                commands::conversation_listen,
+                commands::conversation_hold,
+                commands::conversation_say,
+                commands::conversation_stop,
+                commands::conversation_send,
+                commands::speech_download,
+                commands::speech_download_cancel,
+                commands::speech_delete,
+                commands::speech_preview,
+                commands::speech_preview_online,
+            ],
+        ))
         .build(tauri::generate_context!())
         .expect("error while building the application")
         .run(|app, event| match event {

@@ -9,6 +9,7 @@
   import ApplicationTab from '../settings/ApplicationTab.svelte';
   import BoardTab from '../settings/BoardTab.svelte';
   import ClosedProjects from '../settings/ClosedProjects.svelte';
+  import CodeIndexAllSection from '../settings/CodeIndexAllSection.svelte';
   import NewProjects from '../settings/NewProjects.svelte';
   import PrivateMark from '../PrivateMark.svelte';
   import IntegrationsTab from '../settings/IntegrationsTab.svelte';
@@ -152,13 +153,24 @@
             <p class="none">{t('settings.modal.noProject')}</p>
           {/if}
           <!-- Also with no project open: that is when a folder's old history is most worth finding. -->
-          {#if current.id === 'projects'}<NewProjects /><ClosedProjects />{/if}
+          {#if current.id === 'projects'}<CodeIndexAllSection /><NewProjects /><ClosedProjects />{/if}
         {:else if current.id === 'app'}
           <ApplicationTab />
         {:else if current.id === 'accounts'}
           <AccountsTab />
         {:else if current.id === 'voice'}
           <VoiceTab />
+        {:else if current.id === 'plugins'}
+          <section class="sg plugins-link">
+            <p><b>{t('plugins.link.title')}</b> {t('plugins.link.body')}</p>
+            <button
+              class="btn primary"
+              onclick={() => {
+                close();
+                app.openPlugins();
+              }}><Icon name="puzzle" size={14} />{t('plugins.link.open')}</button
+            >
+          </section>
         {:else if current.id === 'mcp'}
           <McpSection />
         {:else}
@@ -395,6 +407,23 @@
     padding: 0 28px 28px;
     overflow: auto;
     container: settings / inline-size;
+  }
+  .plugins-link {
+    display: grid;
+    justify-items: start;
+    gap: 12px;
+    padding-top: 6px;
+  }
+  .plugins-link p {
+    margin: 0;
+    max-width: 560px;
+    color: var(--soft);
+    font-size: 12.5px;
+    line-height: 1.55;
+  }
+  .plugins-link b {
+    color: var(--text);
+    font-weight: 600;
   }
   .none {
     margin: 20px 0 0;

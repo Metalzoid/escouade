@@ -9,6 +9,73 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### New
 
 - A message posted while an agent works can still be edited or cancelled before it reaches it: it waits a few seconds, or until the end of the turn with Cursor and OpenCode, and can also go at once.
+- The “PR and CI” tab of the right panel shows the pull request of the agent’s branch: its CI check by check, the log of a failure, “Re-run failed jobs” in one click, its reviews and its deployments. Without an agent it lists the project’s open pull requests, and an agent’s card tells the state of its CI beside “#41 → main”.
+- Plugins have their own view, opened by the icon of the projects’ rail: install from a folder or a git repository after seeing where the plugin comes from, its fingerprint, what it adds and what it will be able to do, the strongest permission first; switch it on for the app or project by project, a private project staying off by default; take a permission back, set its secrets, read its journal, uninstall it.
+- A new version of a plugin is offered, never installed by itself, and asks for your consent again if it asks for more than the installed version.
+- The code index turns on for every project at once, from Settings › Projects: each project follows it until it makes its own choice, and its section says where its state comes from. Projects are read one by one without blocking the window, and turning the switch off asks before erasing their indexes.
+- The code index searches as tokensave does, by the words of the code and without vectors: it gives the code of a task’s entry points, a symbol’s whole body on request and an exact text, and what it says it saved is counted honestly, capped at four times its answer.
+- A plugin can have its logo: a square PNG of 256 px at least, declared in its manifest, which the store shows in place of its two letters and Escouade reads from the installed plugin. The plugins shipped with Escouade show their brand’s logo where the brand allows it, else their category’s.
+- A plugin’s program runs apart, started only when it is needed, and Escouade keeps it in check: a plugin that does not answer in time is no longer waited for, one that crashes restarts (three times, then stops), one that takes too much memory is stopped, and each gets only its own secrets. Its journal keeps what it did and said, and the protocol is described in the plugins’ documentation.
+- Plugin authors get a command that ships with Escouade, `escouade-plugin`: `test` puts a plugin through the conformance bench and says what it lacks, `dev` sends it facts and requests by hand, without the app.
+- A plugin can react to what happens in Escouade: an agent waiting, a turn over, a ticket to test or merged, a launch ready… It receives these events in its program, or sends them to an address (a webhook to Discord, Slack or n8n) or runs a command without a line of code; a private project tells it nothing until it is turned on there.
+- A plugin can be written in TypeScript with `@escouade-dev/plugin`: `npm create escouade-plugin` gives a first plugin with its tests, the SDK brings the protocol’s types and helpers to receive facts and decide permissions, and `escouade-plugin pack` makes its archive. The documentation also tells how to ship it as one executable, for people without Node.
+- A plugin can bring a theme: other colors for the window, the terminals and the editor, light and dark, and its palette of project colors. It is picked in Settings › Application › Colors and applies at once; what it leaves out keeps Escouade’s color, and its values are filtered so it loads nothing and hides nothing.
+- A plugin can decide your agents’ permissions before they reach you: allow a safe command, deny a dangerous one with its reason, and leave you the rest. A denial wins, the card says which plugin answered (“Allowed by Team rules via Escouade”), and without an answer within half a second the request comes to you as before.
+- The store is in the app: the Plugins view reads the catalog of store.escouade.dev, searches it on your machine, suggests plugins for the open project from what it sees there, and installs the last compatible version after checking its archive and its “Verified by Escouade” seal with the app’s keys. A version withdrawn by Escouade is stopped and says so, and “Install verified versions only” refuses the others.
+- Four example plugins, complete and tested, to copy when you write yours: a “High contrast” theme, a Discord webhook with no code, Slack in each project’s channel and a team’s rules in TypeScript. The documentation shows their whole code.
+- “Open in Escouade” on a store page opens the plugin’s page in the app, running or not: a link only shows the plugin, installing it stays your gesture.
+- The documentation says how to publish a plugin on the store and prepare its review, and a new page, “Plugin security”, says what the app checks, what the “Verified by Escouade” seal covers and what the review refuses.
+- A project can propose plugins in its `.escouade.yml`: when it opens, a band of Settings › Projects names those missing, with their store page, installing nothing by itself; “Not for this project” silences it. The file can also set a plugin up for that project, never with a secret.
+
+### Fixes
+
+- Uncommitted files no longer blink at each refresh: “No file changed by this agent” and the list stay shown as long as nothing changes.
+- The code index no longer claims a token saving that isn’t measured: its answers, the agents’ instructions, the statistics (no more dollars) and the website say what it finds well, and the effect measured with real agents (small).
+- Two tickets worked on at once no longer propose a decision under the same number: a proposed decision has no number and gets the register’s next one when it is accepted, and the pages and tickets that cite it follow.
+- Approving a ticket is no longer refused for “uncommitted changes” after the spec was compared to the code: its gaps and date stay on this computer instead of being written in the pages, and the Docs tab still shows them.
+- “Write a first spec from the code”, and every new discussion, closes its window and opens the discussion with its first message even when new agents open in the harness terminal: a discussion always stays in its conversation, where Escouade refuses its writes.
+- The card of the tickets “Plan tickets” made now matches the subjects’ cards in the Docs tab: nothing spills out of it, it says how many tickets have started, “Undo” only shows for those not started yet, and it folds once all have started or closes.
+- A discussion that can’t start no longer leaves an agent behind: the window says why and keeps your choices, to start again or switch accounts.
+- On Linux, Escouade no longer reads every project’s git in a loop while nothing changes, which could keep the window busy and freeze it; a line of several megabytes in a diff is now only partly shown.
+- The interface no longer freezes during a long operation (a big folder, git, a lock): it stays responsive while the command works, and the log notes slow commands and window pauses to diagnose them.
+- When the interface’s page stops dead, Escouade reloads it without reopening the project it showed and offers to reopen it: a project that brings the page down no longer freezes the whole app.
+- The output of a tool that read a binary file is shown cleaned (control characters made visible, terminal colours removed) instead of being lost, and a very long output is shown in parts.
+
+## [2.1.1] — 2026-10-29
+
+### Fixes
+
+- On Linux, opening some projects crashed Escouade’s page, which looked frozen: a flaw of the AppImage’s web engine in laying out some paragraphs, which the app no longer uses on Linux or macOS.
+
+## [2.1.0] — 2026-10-29
+
+### New
+
+- A spec imported into the Docs tab becomes the only one agents follow: they are told the old file is no longer the spec, and nothing touches it.
+- Gemini CLI becomes an eighth harness: its agents converse in Escouade over ACP, with its models, its modes, its plan to approve and its questions, each in its own configuration folder; not yet tried with a real account.
+- Gemini CLI has its accounts, each signed in to Google by gemini in a terminal of the window or by its API key, writes its texts with gemini -p, goes on by itself after its usage limit, and its “Gemini CLI view” opens its interface on the agent’s session.
+- Antigravity CLI, Google’s agent, becomes a seventh harness: its agents converse in Escouade with its models, its efforts and its Plan mode, and what it refuses during a turn is asked of you at the end of the turn, then taken up again.
+- Antigravity CLI has its accounts: the machine’s, added and signed in by agy in a terminal of the window, and others by their Gemini API key; when its quota is spent, the agent waits and goes on by itself, or moves to another account.
+- The “Antigravity CLI view” opens Antigravity’s interface in a terminal, on the agent’s conversation: Escouade follows its messages, tools and turn ends, gives it its MCP server, and going back to the conversation resumes the same conversation.
+- Mistral Vibe becomes a sixth harness: its agents converse, ask their permissions and their questions in Escouade, with its models, its modes and a Plan mode played by Escouade.
+- Mistral Vibe has several accounts, each by its Mistral API key, and shows what each turn costs, in the conversation, the status bar and the statistics; at its rate limit, the agent goes on by itself a minute later.
+- The “Mistral Vibe view” opens Vibe’s interface in a terminal, on the agent’s session: Escouade follows its messages, tools and turn ends, gives it its MCP server, and going back to the conversation resumes the same session.
+- A code index, offered when a project is added and in its settings, lets agents find code faster and for fewer tokens, with nothing leaving the machine; the statistics show what it saved, in tokens and dollars.
+- A project’s agents share a working memory, whatever their harness: they note in it the project’s ways of doing and its pitfalls, and Escouade offers once to bring in what Claude Code had remembered.
+- The project’s documents have their drive in the Docs tab: folders, drag and drop and a search; a file dropped (PDF, Word, Markdown, text) is read on your machine and filed in the right folder by itself, and each one says whether the agents read it and how many times it is cited.
+- A Docs tab joins Agents and Kanban: the product’s specification, by subject on a map that shows where each subject stands against the code, its pages in a tree, to read, edit and share with the team in one click; a spec the project already has is imported, cut by its titles.
+- The decisions on the product have their register, numbered and dated: where each comes from, what it changed in the spec, and “Accept” in one click; an accepted decision is no longer rewritten, a new one replaces it, and the one a ticket’s agent left is accepted when you approve the ticket.
+- “New discussion” in the Docs tab: discuss the spec with a spec writer agent, or brainstorm with a product agent that thinks about uses, GDPR and what other trades do; what they propose shows page by page and is poured into the spec in one click, without them ever touching the code.
+- The spec follows the code: a ticket’s agent updates the pages it touches and leaves a decision, then, once the ticket is approved, an agent compares those pages to the code and shows the gaps on the map of the subjects and at the top of the page, to settle in one click; “Compare to the code” does it again on demand.
+- “Plan tickets” turns the changes of the spec into tickets: a planner reads what changed, the code and the board, then makes the tickets needed in “To do”, without duplicates and without starting them, linked to the pages they implement; “Undo” removes them.
+
+### Fixes
+
+- A new agent of a harness without an Auto mode (Cursor CLI, Mistral Vibe, Antigravity CLI, Gemini CLI, OpenCode) starts in “Ask”, no longer in an Auto it doesn’t have.
+- “Approve the plan” resumes in the mode the agent was in before Plan, Auto for instance, instead of “Ask”, with every harness; the button says which mode.
+- A ticket launched by hand starts even past “Pause above quota”: that threshold now holds back the autopilot alone.
+- A ticket launched by hand that can’t start says so, with the reason, instead of staying in “To do” without a word.
+- Under WSLg, links, files and folders open in Windows, instead of doing nothing.
 
 ## [2.0.5] — 2026-10-27
 

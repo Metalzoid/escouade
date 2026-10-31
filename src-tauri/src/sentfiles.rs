@@ -674,7 +674,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             if reveal {
                 crate::fsedit::reveal(crate::fsedit::Reveal::Select(path))
             } else {
-                tauri_plugin_opener::open_path(&path, None::<&str>).map_err(|e| anyhow::anyhow!(e))
+                crate::outside::open(crate::outside::What::Path(&path))
             }
         })
         .await?

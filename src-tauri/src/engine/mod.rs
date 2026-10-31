@@ -7,10 +7,12 @@
 //! agent's conversation (`Engine::translate`). The rest of the backend speaks to an engine through
 //! these two traits only.
 
+pub(crate) mod agy;
 mod claude;
 pub(crate) mod codex;
 pub(crate) mod copilot;
 pub(crate) mod cursor;
+pub(crate) mod gemini;
 pub mod jsonc;
 pub mod mcp;
 pub mod oneshot;
@@ -19,6 +21,7 @@ mod program;
 pub mod registry;
 pub mod terminal;
 pub mod userconfig;
+pub(crate) mod vibe;
 
 #[cfg(test)]
 pub(crate) mod bench;
@@ -27,6 +30,9 @@ pub(crate) mod minimal;
 #[cfg(test)]
 mod userconfig_tests;
 
+#[cfg(test)]
+pub(crate) use agy::bench::fake_agy;
+pub use agy::AGY;
 pub(crate) use claude::terminal as claude_terminal;
 pub use claude::{
     catalog as claude_catalog, read_models as claude_read_models, told_auto as claude_told_auto,
@@ -55,12 +61,16 @@ pub(crate) use copilot::{
 #[cfg(test)]
 pub(crate) use cursor::fake_cursor;
 pub use cursor::CURSOR;
+pub use gemini::GEMINI;
 pub use mcp::Escouade;
 #[cfg(test)]
 pub(crate) use opencode::fake_opencode;
 pub use opencode::OPENCODE;
 pub use program::{Launch, Located, Program};
 pub use terminal::TerminalView;
+#[cfg(test)]
+pub(crate) use vibe::bench::fake_vibe;
+pub use vibe::VIBE;
 
 #[cfg(test)]
 pub(crate) use claude::{
@@ -99,13 +109,16 @@ pub fn of(meta: &AgentMeta) -> &'static dyn Engine {
     by_id(meta.engine)
 }
 
-/// The engine `id` names: the five harnesses are written.
+/// The engine `id` names: the eight harnesses are written.
 pub fn by_id(id: EngineId) -> &'static dyn Engine {
     match id {
         EngineId::Codex => &CODEX,
         EngineId::Opencode => &OPENCODE,
         EngineId::Copilot => &COPILOT,
         EngineId::Cursor => &CURSOR,
+        EngineId::Vibe => &VIBE,
+        EngineId::Agy => &AGY,
+        EngineId::Gemini => &GEMINI,
         EngineId::Claude => &CLAUDE,
         #[cfg(test)]
         EngineId::Bench => &minimal::MINIMAL,
@@ -134,6 +147,9 @@ pub fn by_name(id: EngineId) -> &'static str {
         EngineId::Copilot => "Copilot CLI",
         EngineId::Cursor => "Cursor CLI",
         EngineId::Opencode => "OpenCode",
+        EngineId::Vibe => "Mistral Vibe",
+        EngineId::Agy => "Antigravity CLI",
+        EngineId::Gemini => "Gemini CLI",
         #[cfg(test)]
         EngineId::Bench => "Minimal",
     }
@@ -208,6 +224,9 @@ pub struct Spawn {
     /// Whether its model takes an effort, as the `claude` of its account told it (ESC-124); None:
     /// its harness's rule (`Engine::supports_effort`).
     pub takes_effort: Option<bool>,
+    /// A discussion of the Docs tab (ESC-261): it changes no file and runs no command, in any mode,
+    /// held by its harness itself (`crate::discussion`).
+    pub read_only: bool,
 }
 
 impl Spawn {
@@ -230,6 +249,7 @@ impl Spawn {
             label: format!("agent {}", meta.id),
             account: meta.account.clone(),
             takes_effort: None,
+            read_only: meta.discussion.is_some(),
         }
     }
 }
@@ -292,8 +312,13 @@ pub struct Message(pub(crate) Value);
 /// The answer to a permission the agent asks (`call` is the tool call it is about).
 #[derive(Debug, Clone, PartialEq)]
 pub enum PermissionAnswer {
-    /// Allowed once, with `input` (the tool's, maybe changed).
-    Allow { call: String, input: Value },
+    /// Allowed once, with `input` (the tool's, maybe changed). A plan approved: its work goes on
+    /// in the mode `resume` (`AgentMeta::plan_resume`, ESC-277), `default` without one.
+    Allow {
+        call: String,
+        input: Value,
+        resume: Option<String>,
+    },
     /// Allowed, and the `rules` the engine suggested kept for the rest of the session.
     Always {
         call: String,

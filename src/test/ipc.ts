@@ -39,7 +39,7 @@ export interface Call {
 }
 
 /** What a command answers when a test gives it no handler: nothing (null), except the lists the window reads on its own. */
-const ANSWERS: Record<string, unknown> = { closed_projects: [] };
+const ANSWERS: Record<string, unknown> = { closed_projects: [], memory_list: [], claude_memory_offer: [] };
 
 export function fakeBackend(handlers: Record<string, (args: any) => unknown> = {}) {
   const calls: Call[] = [];
@@ -364,6 +364,11 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.attention = {};
   app.tickets = Object.fromEntries((over.tickets ?? []).map((t) => [t.id, t]));
   app.board = {};
+  app.docs = {};
+  app.docsSpace = {};
+  app.docsPage = {};
+  app.docsEdit = null;
+  app.docsShare = {};
   app.boardIssues = {};
   app.setupOutput = {};
   app.relaunched = {};
@@ -456,6 +461,7 @@ export const BARE_ENGINE: EngineDecl = {
     sandbox: false,
     usagePage: null,
     accountsByKey: false,
+    readOnly: false,
   },
   install: { windows: 'npm install -g @openai/codex', unix: 'npm install -g @openai/codex' },
   models: [
@@ -472,6 +478,43 @@ export const CURSOR_ENGINE: EngineDecl = {
   id: 'cursor',
   name: 'Cursor CLI',
   caps: { ...BARE_ENGINE.caps, midTurn: 'turnEnd', usagePage: 'https://cursor.com/dashboard?tab=usage', accountsByKey: true },
+};
+
+/** Mistral Vibe as the tests see it (ESC-267): no quota, its cost told, its usage on Mistral's console, its accounts by API key. */
+export const VIBE_ENGINE: EngineDecl = {
+  ...BARE_ENGINE,
+  id: 'vibe',
+  name: 'Mistral Vibe',
+  caps: {
+    ...BARE_ENGINE.caps,
+    cost: 'exact',
+    usagePage: 'https://admin.mistral.ai/organization/usage',
+    accountsByKey: true,
+  },
+};
+
+/** Antigravity CLI as it declares itself (ESC-271): its tokens, neither quota nor cost, its plans' page; another account by its Gemini API key. */
+export const AGY_ENGINE: EngineDecl = {
+  ...BARE_ENGINE,
+  id: 'agy',
+  name: 'Antigravity CLI',
+  caps: {
+    ...BARE_ENGINE.caps,
+    usagePage: 'https://antigravity.google/docs/plans',
+    accountsByKey: true,
+  },
+};
+
+/** Gemini CLI as it declares itself (ESC-275): its tokens, neither quota nor cost, the usage page of its keys; an account by its Google sign-in or its key, as it was added. */
+export const GEMINI_ENGINE: EngineDecl = {
+  ...BARE_ENGINE,
+  id: 'gemini',
+  name: 'Gemini CLI',
+  caps: {
+    ...BARE_ENGINE.caps,
+    usagePage: 'https://aistudio.google.com/usage',
+    accountsByKey: false,
+  },
 };
 
 /** Claude Code's two windows of a reading, the shorthand of the tests: `fiveHour` and `sevenDay`, as before 1.8. */

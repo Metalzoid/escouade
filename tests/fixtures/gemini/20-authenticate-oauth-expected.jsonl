@@ -1,0 +1,6 @@
+{"dir":"c2s","jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{},"clientInfo":{"name":"escouade","version":"x"}}}
+{"dir":"s2c","jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"authMethods":[{"id":"oauth-personal","name":"Log in with Google"},{"id":"gemini-api-key","name":"Gemini API key"},{"id":"vertex-ai","name":"Vertex AI"},{"id":"gateway","name":"AI API Gateway"}],"agentInfo":{"name":"gemini-cli","title":"Gemini CLI","version":"0.66.0"},"agentCapabilities":{"loadSession":true}}}
+{"dir":"c2s","jsonrpc":"2.0","id":2,"method":"authenticate","params":{"methodId":"oauth-personal"}}
+{"dir":"note","text":"D'après acpRpcDispatcher.authenticate : refreshAuth(oauth-personal) ouvre le navigateur (ou lit les jetons du trousseau), puis écrit security.auth.selectedType dans le settings.json de GEMINI_CLI_HOME. À vérifier avec un compte : durée, ce qui s'affiche, et si un client sans navigateur obtient une erreur ou une URL."}
+{"dir":"s2c","jsonrpc":"2.0","id":2,"result":null}
+{"dir":"c2s","jsonrpc":"2.0","id":3,"method":"session/new","params":{"cwd":"C:/tmp/esc273/proj2","mcpServers":[]}}

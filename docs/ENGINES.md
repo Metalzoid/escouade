@@ -1,6 +1,6 @@
 # Moteurs (harness) — l'interface entre Escouade et les CLI qui font tourner ses agents
 
-Un **moteur** fait tourner les agents d'Escouade : Claude Code, Codex, OpenCode, GitHub Copilot CLI et Cursor CLI (ESC-42 : un client ACP qui lui est propre, pas de moteur ACP générique). Ce que chacun fait pour l'utilisateur, sur le même plan (installation, compte, modèles, modes et ce qui protège, coût et quota, vue terminal, serveur MCP, ce qui n'est pas pris en charge), est dans docs/SPEC.md, « Harness » ; leur protocole dans docs/PROTOCOL.md. L'interface de l'app l'appelle **« Harness »**, le mot anglais gardé tel quel en français comme en anglais (décidé le 2026-10-16) ; le code et ce document disent `engine` et « moteur ».
+Un **moteur** fait tourner les agents d'Escouade : Claude Code, Codex, OpenCode, GitHub Copilot CLI, Cursor CLI (ESC-42 : un client ACP qui lui est propre, pas de moteur ACP générique) Mistral Vibe (ESC-266 : un client ACP à lui, dont la traduction met les messages dans la forme de ceux de Cursor et lui passe la main) Antigravity CLI (ESC-270 : `agy -p` en stream-json, ses événements mis dans la forme d’ACP pour la même traduction) et Gemini CLI (ESC-274 : `gemini --acp`, un client ACP à lui, dont la traduction passe aussi la main à celle de Cursor). Ce que chacun fait pour l'utilisateur, sur le même plan (installation, compte, modèles, modes et ce qui protège, coût et quota, vue terminal, serveur MCP, ce qui n'est pas pris en charge), est dans docs/SPEC.md, « Harness » ; leur protocole dans docs/PROTOCOL.md. L'interface de l'app l'appelle **« Harness »**, le mot anglais gardé tel quel en français comme en anglais (décidé le 2026-10-16) ; le code et ce document disent `engine` et « moteur ».
 
 Ce document décrit la forme de l'interface et ses choix. Il a été écrit avec le premier lot de la refonte multi-moteurs (ESC-26) : l'extraction de Claude Code derrière l'interface, sans changement de comportement. « Le banc de conformité » et la liste à cocher « Ajouter un moteur » sont venus avec le lot 10 (ESC-35).
 
@@ -32,7 +32,7 @@ Le reste du backend (cœur, tickets, pilote auto, serveur MCP, stats, comptes) n
 
 ### `Engine` : le moteur
 
-Un objet par moteur, sans état (`static CLAUDE: Claude`). `engine::of(&meta)` donne celui d'un agent, `engine::default()` celui de ce qui n'a pas encore d'agent (une question sur un projet, les options d'un ticket). `engine::of` lit `AgentMeta.engine` (lot 2, ESC-27) par `engine::by_id` : `codex` rend Codex (ESC-37), `opencode` OpenCode (ESC-44), `copilot` Copilot CLI (ESC-39), `cursor` Cursor CLI (ESC-42). `engine::default()` rend Claude Code.
+Un objet par moteur, sans état (`static CLAUDE: Claude`). `engine::of(&meta)` donne celui d'un agent, `engine::default()` celui de ce qui n'a pas encore d'agent (une question sur un projet, les options d'un ticket). `engine::of` lit `AgentMeta.engine` (lot 2, ESC-27) par `engine::by_id` : `codex` rend Codex (ESC-37), `opencode` OpenCode (ESC-44), `copilot` Copilot CLI (ESC-39), `cursor` Cursor CLI (ESC-42), `vibe` Mistral Vibe (ESC-266), `agy` Antigravity CLI (ESC-270), `gemini` Gemini CLI (ESC-274). `engine::default()` rend Claude Code.
 
 | Méthode | Ce qu'elle fait | Claude Code |
 |---|---|---|

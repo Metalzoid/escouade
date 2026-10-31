@@ -1,8 +1,8 @@
 // Model / effort / permission-mode catalogs used by the composer and the settings.
 
 import { t } from './i18n';
-import { claudeToldModels, speakerOf, toldLabel } from './engines';
-import type { ModelInfo } from './types';
+import { claudeToldModels, modelTakes, speakerOf, toldLabel } from './engines';
+import type { Agent, ModelInfo } from './types';
 
 /** The aliases offered: Claude Code runs the latest model of the family it knows. */
 export const MODELS = [
@@ -66,6 +66,21 @@ export function modeTitle(mode: string, engine: string): string {
     default:
       return MODES.find((m) => m.value === mode)?.title ?? '';
   }
+}
+
+/**
+ * The mode the work of `agent` resumes in once its plan is approved (« Approuver le plan », ESC-277), as the backend has it
+ * (`AgentMeta::plan_resume`): the one before Plan, else `auto`; its own when it is not in Plan; never `plan`, and
+ * `default` for `auto` on a model that has no auto mode.
+ */
+export function planResume(agent: Pick<Agent, 'engine' | 'account' | 'model' | 'mode' | 'planFrom'>): string {
+  const mode = agent.mode && agent.mode !== 'plan' ? agent.mode : agent.planFrom && agent.planFrom !== 'plan' ? agent.planFrom : 'auto';
+  return mode === 'auto' && !modelTakes(agent, agent.model, 'auto') ? 'default' : mode;
+}
+
+/** The label of `mode` in the menus (« Auto », « Demander »…), the mode itself when unknown. */
+export function modeLabel(mode: string): string {
+  return MODES.find((m) => m.value === mode)?.label ?? mode;
 }
 
 export const MODES = [

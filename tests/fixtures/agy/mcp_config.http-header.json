@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "esc": {
+      "disabled": false,
+      "headers": {
+        "Authorization": "Bearer ${ESC_TOKEN}",
+        "X-Test": "1"
+      },
+      "serverUrl": "http://127.0.0.1:4101/mcp"
+    }
+  }
+}

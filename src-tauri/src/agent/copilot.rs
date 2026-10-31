@@ -134,8 +134,7 @@ impl AgentRt {
     }
 
     fn cp_set_mode(&mut self, mode: &str, fx: &mut Effects) {
-        if self.meta.mode != mode {
-            self.meta.mode = mode.to_string();
+        if self.meta.set_mode(mode) {
             fx.agent_changed = true;
             fx.save = true;
         }
@@ -569,8 +568,12 @@ impl AgentRt {
     fn cp_safe(&self, r: &Value) -> bool {
         let cwd = &self.meta.cwd;
         let mode = self.meta.mode.as_str();
+        // A discussion (ESC-261) writes nothing: its reads alone go through, the rest comes to
+        // `discussion_answers`, which refuses a write or a command.
+        let discussion = self.meta.discussion.is_some();
         match r["kind"].as_str().unwrap_or_default() {
             "read" => r["path"].as_str().is_some_and(|p| inside(p, cwd)),
+            _ if discussion => false,
             "write" => mode != "plan" && r["fileName"].as_str().is_some_and(|p| inside(p, cwd)),
             "shell" => {
                 let ids: Vec<&str> = r["commands"]
@@ -605,6 +608,7 @@ impl AgentRt {
             let allowed = PermissionAnswer::Allow {
                 call: call.clone(),
                 input: Value::Null,
+                resume: None,
             };
             if self
                 .proc
@@ -636,14 +640,17 @@ impl AgentRt {
         let req = json!({ "description": description, "decision_reason": reason });
         let view = pending_view(&rid, &tool, &req, &input, &self.meta.cwd).always_as(&item);
         self.append(item, fx);
-        self.add_pending(PendingReq {
-            item_id: rid.clone(),
-            tool_use_id: call,
-            input: input.clone(),
-            suggestions: Value::Null,
-            view,
-            since: now_ms(),
-        });
+        self.add_pending(
+            PendingReq {
+                item_id: rid.clone(),
+                tool_use_id: call,
+                input: input.clone(),
+                suggestions: Value::Null,
+                view,
+                since: now_ms(),
+            },
+            fx,
+        );
         self.set_status(AgentStatus::Waiting, fx);
         fx.notify = Some(AgentAlert::new(
             NotifyKind::Question,
@@ -693,14 +700,17 @@ impl AgentRt {
             view.cut |= cut;
             m
         });
-        self.add_pending(PendingReq {
-            item_id: rid,
-            tool_use_id: call,
-            input: input.clone(),
-            suggestions: Value::Null,
-            view,
-            since: now_ms(),
-        });
+        self.add_pending(
+            PendingReq {
+                item_id: rid,
+                tool_use_id: call,
+                input: input.clone(),
+                suggestions: Value::Null,
+                view,
+                since: now_ms(),
+            },
+            fx,
+        );
         self.set_status(AgentStatus::Waiting, fx);
         fx.notify = Some(AgentAlert::new(
             NotifyKind::Question,
@@ -788,14 +798,17 @@ impl AgentRt {
         }
         self.append(item, fx);
         let view = pending_view(&rid, "ExitPlanMode", &Value::Null, &input, &self.meta.cwd);
-        self.add_pending(PendingReq {
-            item_id: rid.clone(),
-            tool_use_id: rid,
-            input: input.clone(),
-            suggestions: Value::Null,
-            view,
-            since: now_ms(),
-        });
+        self.add_pending(
+            PendingReq {
+                item_id: rid.clone(),
+                tool_use_id: rid,
+                input: input.clone(),
+                suggestions: Value::Null,
+                view,
+                since: now_ms(),
+            },
+            fx,
+        );
         self.set_status(AgentStatus::Waiting, fx);
         fx.notify = Some(AgentAlert::new(
             NotifyKind::Question,

@@ -133,7 +133,7 @@ impl AgentRt {
 
     /// What the user typed in the interface (or Escouade pasted there): their message, a turn
     /// starts.
-    fn cursor_typed(&mut self, text: String, fx: &mut Effects) {
+    pub(super) fn cursor_typed(&mut self, text: String, fx: &mut Effects) {
         self.unwritten_session = None;
         let item = json!({
             "kind": "user", "id": new_id(), "text": text, "images": 0, "ts": now_ms(),

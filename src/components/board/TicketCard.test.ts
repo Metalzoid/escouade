@@ -271,18 +271,18 @@ describe('TicketCard', () => {
     const link = screen.getByRole('button', { name: 'PR #12 → main' });
     expect(link.querySelector('[data-icon="pr"]')).not.toBeNull();
     await userEvent.click(link);
-    expect(backend.called('plugin:opener|open_url')[0].args.url).toBe('https://github.com/acme/demo/pull/12');
+    expect(backend.called('open_url')[0].args.url).toBe('https://github.com/acme/demo/pull/12');
   });
 
   it('says so when the link of a finished ticket does not open', async () => {
     const backend = fakeBackend({
-      'plugin:opener|open_url': () => {
+      open_url: () => {
         throw 'Aucun navigateur';
       },
     });
     show(doing({ column: 'done', outcome: '⇡ PR #12 → main', outcomeUrl: 'https://github.com/acme/demo/pull/12' }));
     await userEvent.click(screen.getByRole('button', { name: 'PR #12 → main' }));
-    expect(backend.called('plugin:opener|open_url')).toHaveLength(1);
+    expect(backend.called('open_url')).toHaveLength(1);
     await expect.poll(() => app.toasts.at(-1)).toMatchObject({ kind: 'error', text: expect.stringContaining('Aucun navigateur') });
     expect(app.ui.selectedAgent.p1).toBeUndefined();
   });
@@ -407,7 +407,7 @@ describe('TicketCard', () => {
       app.launches['test:a1:run:0'] = running();
       await rerender({ ticket: doing({ column: 'review' }) });
       await userEvent.click(screen.getByRole('button', { name: 'Ouvrir' }));
-      expect(backend.called('plugin:opener|open_url').at(-1)!.args.url).toBe('http://localhost:4111');
+      expect(backend.called('open_url').at(-1)!.args.url).toBe('http://localhost:4111');
       await userEvent.click(screen.getByRole('button', { name: 'Arrêter' }));
       expect(backend.called('term_kill')[0].args).toEqual({ id: 't1' });
       // Testing did not open the agent.
@@ -617,7 +617,7 @@ describe('TicketCard of an imported ticket', () => {
     expect(screen.getByText('DEM-1')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Synchro/ })).not.toBeInTheDocument();
     await userEvent.click(link);
-    expect(backend.called('plugin:opener|open_url')[0].args.url).toBe('https://atlas.atlassian.net/browse/ATL-1287');
+    expect(backend.called('open_url')[0].args.url).toBe('https://atlas.atlassian.net/browse/ATL-1287');
     // The click opens the ticket there, not the card's form.
     expect(app.modal).toBeNull();
     unmount();

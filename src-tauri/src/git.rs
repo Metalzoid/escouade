@@ -2363,10 +2363,13 @@ pub async fn touched_by(
     Ok(files)
 }
 
+/// What `stage_all` never stages: the agents' shared memory (ESC-255), the team's to commit, never Escouade's.
+const NEVER_STAGED: &str = ":(exclude,glob)**/.escouade/memory/**";
+
 /// Stages every change of `cwd` but the files `keep_out` (copied `.env` files…), even staged
-/// already. True when something is staged.
+/// already, and the shared memory (`NEVER_STAGED`). True when something is staged.
 pub async fn stage_all(cwd: &str, keep_out: &[String]) -> Result<bool> {
-    run(cwd, &["add", "-A"]).await?;
+    run(cwd, &["add", "-A", "--", ".", NEVER_STAGED]).await?;
     for p in keep_out {
         run(
             cwd,
@@ -2631,11 +2634,14 @@ pub async fn has_tracked_changes_but_tickets(repo: &str) -> Result<bool> {
         .any(|l| !l.trim().is_empty() && !is_shared_ticket_line(l)))
 }
 
-/// A line of `git status --porcelain` about a shared ticket's file (or one of its images and files).
+/// A line of `git status --porcelain` about a shared ticket's file (or one of its images and files), or
+/// about the agents' shared memory (ESC-255): Escouade writes both in the project's folder.
 pub fn is_shared_ticket_line(line: &str) -> bool {
     let path = line.get(3..).unwrap_or_default();
     let path = path.rsplit(" -> ").next().unwrap_or(path).trim_matches('"');
-    path.starts_with(".escouade/tickets/") || path.contains("/.escouade/tickets/")
+    [".escouade/tickets/", ".escouade/memory/"]
+        .iter()
+        .any(|d| path.starts_with(d) || path.contains(&format!("/{d}")))
 }
 
 pub async fn merge(repo: &str, branch: &str, squash: bool, message: &str) -> Result<String> {
@@ -3040,7 +3046,7 @@ impl GitService {
         let (tx, pid, f) = (self.tx.clone(), project_id.to_string(), flag.clone());
         let handler = move |res: notify::Result<notify::Event>| {
             let Ok(ev) = res else { return };
-            if !ev.paths.iter().any(|p| is_relevant(p)) {
+            if !is_change(&ev) {
                 return;
             }
             if !f.swap(true, Ordering::AcqRel) {
@@ -3107,6 +3113,62 @@ impl GitService {
             .insert(cwd.to_string(), (Instant::now(), files.clone()));
         files
     }
+}
+
+/// How often the git of a project is read again after a change of its folder: at most every
+/// `CALM` while its folder changes now and then, every `BUSY` once it has been read `BUSY_AFTER`
+/// times in a minute (a folder a sync client or a build keeps writing, ESC-290), which the log
+/// tells once in `BUSY_TOLD_EVERY`.
+#[derive(Default)]
+pub struct Pace {
+    minute: HashMap<String, (Instant, u32)>,
+    told: HashMap<String, Instant>,
+}
+
+pub const CALM: Duration = Duration::from_millis(700);
+pub const BUSY: Duration = Duration::from_secs(3);
+pub const BUSY_AFTER: u32 = 40;
+const BUSY_TOLD_EVERY: Duration = Duration::from_secs(600);
+
+impl Pace {
+    /// The project `pid` is read now: how long until it may be read again, and the line for the
+    /// log when it becomes busy.
+    pub fn read(&mut self, pid: &str, now: Instant) -> (Duration, Option<String>) {
+        let (since, n) = self.minute.entry(pid.to_string()).or_insert((now, 0));
+        if now.duration_since(*since) >= Duration::from_secs(60) {
+            *since = now;
+            *n = 0;
+        }
+        *n += 1;
+        if *n <= BUSY_AFTER {
+            return (CALM, None);
+        }
+        let told = self
+            .told
+            .get(pid)
+            .is_some_and(|t| now.duration_since(*t) < BUSY_TOLD_EVERY);
+        let line = (*n == BUSY_AFTER + 1 && !told).then(|| {
+            self.told.insert(pid.to_string(), now);
+            format!(
+                "git of project {pid}: read {BUSY_AFTER} times in a minute, its folder keeps \
+                 changing (a sync client, a build?); read every {} s from now on",
+                BUSY.as_secs()
+            )
+        });
+        (BUSY, line)
+    }
+}
+
+/// Whether the watcher's event changes what git says. A file opened or closed unwritten is none:
+/// Linux tells them (inotify `IN_OPEN`), and the `git status` of each refresh opens `.git/index`
+/// and `.git/HEAD`, which would ask for the next refresh, forever (ESC-290).
+fn is_change(ev: &notify::Event) -> bool {
+    !is_read(ev) && ev.paths.iter().any(|p| is_relevant(p))
+}
+
+/// A file opened, or closed unwritten: nothing changed in it (`is_change`).
+pub(crate) fn is_read(ev: &notify::Event) -> bool {
+    matches!(ev.kind, notify::EventKind::Access(_))
 }
 
 fn is_relevant(p: &Path) -> bool {
@@ -3440,6 +3502,100 @@ mod tests {
         assert!(is_relevant(Path::new("C:\\p\\.git\\index")));
         assert!(!is_relevant(Path::new("C:\\p\\.git\\objects\\ab\\cd")));
         assert!(!is_relevant(Path::new("C:\\p\\.git\\index.lock")));
+    }
+
+    /// Linux tells a file opened or closed unwritten (inotify `IN_OPEN`): every `git status` opens
+    /// `.git/index` and `.git/HEAD`, and the refresh it was would ask for the next one, every
+    /// 700 ms, forever (ESC-290). Only what changes a file counts.
+    #[test]
+    fn a_file_read_is_no_change() {
+        use notify::event::{AccessKind, AccessMode, CreateKind, DataChange, ModifyKind};
+        use notify::{Event, EventKind};
+        let at = |kind: EventKind, path: &str| Event::new(kind).add_path(PathBuf::from(path));
+        let index = "/p/.git/index";
+        assert!(!is_change(&at(
+            EventKind::Access(AccessKind::Open(AccessMode::Any)),
+            index
+        )));
+        assert!(!is_change(&at(
+            EventKind::Access(AccessKind::Close(AccessMode::Read)),
+            "/p/src/a.ts"
+        )));
+        assert!(is_change(&at(
+            EventKind::Modify(ModifyKind::Data(DataChange::Any)),
+            index
+        )));
+        assert!(is_change(&at(
+            EventKind::Create(CreateKind::File),
+            "/p/src/a.ts"
+        )));
+        assert!(!is_change(&at(
+            EventKind::Create(CreateKind::File),
+            "/p/.git/index.lock"
+        )));
+    }
+
+    #[test]
+    fn a_folder_that_keeps_changing_is_read_less_often_and_told_once() {
+        let mut pace = Pace::default();
+        let t0 = Instant::now();
+        let at = |ms: u64| t0 + Duration::from_millis(ms);
+        for i in 0..BUSY_AFTER as u64 {
+            assert_eq!(pace.read("p", at(i * 700)), (CALM, None));
+        }
+        let (wait, line) = pace.read("p", at(41 * 700));
+        assert_eq!(wait, BUSY);
+        assert!(line.unwrap().starts_with("git of project p: read 40 times"));
+        assert_eq!(pace.read("p", at(42 * 700)), (BUSY, None));
+        // Another project keeps its pace; a calm minute brings this one back to it.
+        assert_eq!(pace.read("q", at(42 * 700)), (CALM, None));
+        assert_eq!(pace.read("p", at(100_000)), (CALM, None));
+        // Busy again within ten minutes: read slower, not told again.
+        for i in 0..BUSY_AFTER as u64 {
+            pace.read("p", at(100_001 + i));
+        }
+        assert_eq!(pace.read("p", at(100_100)), (BUSY, None));
+    }
+
+    /// The same, from inotify itself: a project watched, `git status` run in it as the refresh
+    /// runs it, and nothing asks for another refresh.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn a_git_status_asks_for_no_refresh() {
+        let dir = crate::paths::test_dir("git-status-no-refresh");
+        let root = dir.to_string_lossy().to_string();
+        let git = |args: &[&str]| {
+            let ok = std::process::Command::new("git")
+                .args(["-C", &root, "-c", "user.name=t", "-c", "user.email=t@t"])
+                .args(args)
+                .status()
+                .unwrap()
+                .success();
+            assert!(ok, "git {args:?}");
+        };
+        git(&["init", "-q"]);
+        std::fs::write(dir.join("a.txt"), "a").unwrap();
+        git(&["add", "."]);
+        git(&["commit", "-qm", "a"]);
+        std::fs::write(dir.join("a.txt"), "b").unwrap();
+        let (service, mut rx) = GitService::new();
+        service.watch("p", std::slice::from_ref(&root));
+        // `watch` asks for the first refresh itself.
+        assert_eq!(rx.recv().await.as_deref(), Some("p"));
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        while rx.try_recv().is_ok() {}
+        for _ in 0..3 {
+            service.take_flag("p");
+            status(&root).await.unwrap();
+            log(&root, 20).await.ok();
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            assert!(rx.try_recv().is_err(), "a read asked for a refresh");
+        }
+        // A real change still does.
+        service.take_flag("p");
+        std::fs::write(dir.join("b.txt"), "b").unwrap();
+        let asked = tokio::time::timeout(Duration::from_secs(5), rx.recv()).await;
+        assert_eq!(asked.ok().flatten().as_deref(), Some("p"));
     }
 }
 
@@ -3837,6 +3993,30 @@ mod repo_tests {
         assert_eq!(
             text(&r, &["status", "--porcelain"]).await.unwrap(),
             "?? .env"
+        );
+        // The shared memory is never staged (ESC-255), at the root or in a repository below.
+        for dir in [".escouade/memory", "sub/.escouade/memory"] {
+            std::fs::create_dir_all(root.join(dir)).unwrap();
+            std::fs::write(
+                root.join(dir).join("a.md"),
+                "x
+",
+            )
+            .unwrap();
+        }
+        assert!(!stage_all(&r, &[".env".into()]).await.unwrap());
+        std::fs::write(
+            root.join("b.txt"),
+            "b
+",
+        )
+        .unwrap();
+        assert!(stage_all(&r, &[".env".into()]).await.unwrap());
+        assert_eq!(
+            text(&r, &["diff", "--cached", "--name-only"])
+                .await
+                .unwrap(),
+            "b.txt"
         );
     }
 

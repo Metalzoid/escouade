@@ -1,4 +1,4 @@
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { openUrl } from './opener';
 import { t, tIn } from './i18n';
 import { api } from './ipc';
 import { can } from './engines';

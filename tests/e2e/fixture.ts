@@ -20,6 +20,12 @@ const FAKE_OPENCODE = path.join(ROOT, 'tests', 'fixtures', 'fake-opencode.cmd');
 const FAKE_COPILOT = path.join(ROOT, 'tests', 'fixtures', 'fake-copilot.cmd');
 /** The fake `agent acp` of Cursor CLI (tests/fixtures/fake-cursor.mjs), for a test that runs agents on Cursor CLI. */
 const FAKE_CURSOR = path.join(ROOT, 'tests', 'fixtures', 'fake-cursor.cmd');
+/** The fake `vibe-acp` of Mistral Vibe (tests/fixtures/fake-vibe.mjs), for a test that runs agents on Mistral Vibe. */
+const FAKE_VIBE = path.join(ROOT, 'tests', 'fixtures', 'fake-vibe.cmd');
+/** The fake `agy` of Antigravity CLI (tests/fixtures/fake-agy.mjs), for a test that runs agents on Antigravity CLI. */
+const FAKE_AGY = path.join(ROOT, 'tests', 'fixtures', 'fake-agy.cmd');
+/** The fake `gemini` of Gemini CLI (tests/fixtures/fake-gemini.mjs), for a test that runs agents on Gemini CLI. */
+const FAKE_GEMINI = path.join(ROOT, 'tests', 'fixtures', 'fake-gemini.cmd');
 
 export interface App {
   /** The window of the app: a new one after each `restart()` (read `app.page` again, do not keep the old one). */
@@ -34,6 +40,10 @@ export interface App {
    * on, every start is on it. Its `settings.json` is the test's to write first.
    */
   restartAs: (data: string) => Promise<Page>;
+  /** When the launch the test is on was started (ms since the epoch, just before its process): the startup bench's origin (INT-0). */
+  launchedAt: () => number;
+  /** Attaches Playwright again to the running app's window (after its page's process crashed): gives it, also in `app.page`. */
+  reconnect: () => Promise<Page>;
   /** A git repository with one commit, ready to be added as a project. */
   repo: string;
   data: string;
@@ -110,23 +120,36 @@ function tail(file: string, lines = 40): string {
 /** A launch of the app: its process, why it ended (null while it runs) and, once attached, its WebView2. */
 interface Instance {
   child: ChildProcess;
+  /** When it was started (ms since the epoch). */
+  at: number;
   stopped: string | null;
   browser: Browser | null;
 }
 
-/** Starts the app with `env`; its stderr is appended to `stderr` (a restart keeps what the launch before wrote). */
 /** The sign-in of Cursor CLI the app finds (`ESCOUADE_CURSOR_AUTH`): a file of the test's, with nothing in it. */
+/** The file that stands for Antigravity's Google sign-in on the machine, made unless `signedOut`. */
+function agySignIn(root: string, signedOut: boolean): string {
+  const file = path.join(root, 'agy-signed-in');
+  if (!signedOut && !fs.existsSync(file)) fs.writeFileSync(file, 'signed in');
+  return file;
+}
+
 function cursorAuth(root: string): string {
   const file = path.join(root, 'cursor-auth.json');
   if (!fs.existsSync(file)) fs.writeFileSync(file, '{}');
   return file;
 }
 
-function startApp(env: NodeJS.ProcessEnv, stderr: string): Instance {
+/**
+ * Starts the app with `env` and `args` (a link `escouade://`, as the system gives it); its stderr is appended to `stderr` (a
+ * restart keeps what the launch before wrote).
+ */
+function startApp(env: NodeJS.ProcessEnv, stderr: string, args: string[] = []): Instance {
   const errFd = fs.openSync(stderr, 'a');
-  const child = spawn(EXE, [], { env, stdio: ['ignore', 'ignore', errFd] });
+  const at = Date.now();
+  const child = spawn(EXE, args, { env, stdio: ['ignore', 'ignore', errFd] });
   fs.closeSync(errFd);
-  const instance: Instance = { child, stopped: null, browser: null };
+  const instance: Instance = { child, at, stopped: null, browser: null };
   child.on('exit', (code, signal) => {
     instance.stopped = signal ? `killed by ${signal}` : `exit code ${code} (0x${((code ?? 0) >>> 0).toString(16)})`;
   });
@@ -235,6 +258,8 @@ const LABELS = {
 
 /** The usage endpoint the app asks: a closed port, unless a test gives its own (`appEnv`). */
 const NO_USAGE_API = 'http://127.0.0.1:9/api/oauth/usage';
+/** The store the app reads: a closed port, unless a test starts the fake one (tests/fixtures/store/fake-store.mjs). */
+const NO_STORE = 'http://127.0.0.1:9';
 
 /**
  * The app's window is kept out of sight (off every screen, never focused, no taskbar button): the tests run while the user
@@ -270,6 +295,9 @@ const FAKE_OF: Record<string, string> = {
   opencode: 'ESCOUADE_OPENCODE',
   copilot: 'ESCOUADE_COPILOT',
   cursor: 'ESCOUADE_CURSOR',
+  vibe: 'ESCOUADE_VIBE',
+  agy: 'ESCOUADE_AGY',
+  gemini: 'ESCOUADE_GEMINI',
 };
 
 /**
@@ -288,19 +316,22 @@ function accountsFor(given: Record<string, unknown>, appEnv: Record<string, stri
 export const test = base.extend<{
   app: App;
   appEnv: Record<string, string>;
+  appArgs: string[];
   language: Language;
   preStart: { run: (root: string) => Record<string, unknown> | void };
 }>({
   // Variables for the app on top of the fixture's, which they replace (`test.use({ appEnv: … })`):
   // a fake usage endpoint, Principal's folder with a fake-limit in it.
   appEnv: [{}, { option: true }],
+  // The arguments of the first launch (`test.use({ appArgs: ['escouade://plugin/<id>'] })`, STORE-11): a restart has none.
+  appArgs: [[], { option: true }],
   // The language of the interface the app starts in (`test.use({ language: 'en' })`): French, whatever the machine's.
   language: ['fr', { option: true }],
   // `run` is called before the app starts, with the test's folder (`test.use({ preStart: { run: (root) => … } })`): files it
   // may put there (a second Claude account's folder and sign-in), and the settings to start with, merged into settings.json.
   // (An object: Playwright reads a function given as an option for a fixture.)
   preStart: [{ run: () => ({}) }, { option: true }],
-  app: async ({ appEnv, language, preStart }, use, testInfo) => {
+  app: async ({ appEnv, appArgs, language, preStart }, use, testInfo) => {
     if (!fs.existsSync(EXE)) throw new Error(`build the app first: npx tauri build --debug --no-bundle (missing ${EXE})`);
     // CI runs elevated, where WebView2 ignores WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: the workflow
     // opens a fixed port through the machine policy instead (tests run one at a time).
@@ -371,6 +402,10 @@ export const test = base.extend<{
       DISABLE_UPDATES: undefined,
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: undefined,
       ESCOUADE_USAGE_API: NO_USAGE_API,
+      // Nor store.escouade.dev (STORE-9): a closed port, unless a test starts the fake store and names it.
+      ESCOUADE_STORE_URL: process.env.ESCOUADE_STORE_URL ?? NO_STORE,
+      ESCOUADE_STORE_MIRROR_URL: process.env.ESCOUADE_STORE_MIRROR_URL ?? NO_STORE,
+      ESCOUADE_STORE_TEST_KEY: process.env.ESCOUADE_STORE_TEST_KEY,
       // No Codex but the fake one a test asks for (`appEnv: { ESCOUADE_CODEX: FAKE_CODEX }`), never the machine's.
       ESCOUADE_CODEX: 'none',
       // Codex's Principal is a folder of the test's (its `config.toml`, « Les agents peuvent piloter Escouade »), never the user's ~/.codex.
@@ -396,10 +431,25 @@ export const test = base.extend<{
       // Its folder of the workspaces (`~/.cursor/projects`: transcripts and trust of its interface, « Vue Cursor CLI »), a
       // folder of the test's, never the user's.
       ESCOUADE_CURSOR_PROJECTS: path.join(root, 'cursor-projects'),
+      // The same for Mistral Vibe (`appEnv: { ESCOUADE_VIBE: FAKE_VIBE }`): never the machine's; each agent has its own
+      // VIBE_HOME in the app's data, never the user's ~/.vibe.
+      ESCOUADE_VIBE: 'none',
+      FAKE_VIBE_LOG: path.join(root, 'fake-vibe.jsonl'),
+      // The same for Antigravity CLI (`appEnv: { ESCOUADE_AGY: FAKE_AGY }`): each agent has its own home in the app's data,
+      // never the user's ~/.gemini.
+      ESCOUADE_AGY: 'none',
+      FAKE_AGY_LOG: path.join(root, 'fake-agy.jsonl'),
+      // Its Google sign-in (the keychain's entry `gemini:antigravity`, ESC-271): a file of the test's stands for it, there
+      // unless the test says `agySignedOut`; the fake `agy` writes it when it is signed in in its terminal.
+      ESCOUADE_AGY_SIGNED_IN: agySignIn(root, !!given.agySignedOut),
+      // The same for Gemini CLI (`appEnv: { ESCOUADE_GEMINI: FAKE_GEMINI }`): each agent has its own GEMINI_CLI_HOME in the
+      // app's data, never the user's ~/.gemini.
+      ESCOUADE_GEMINI: 'none',
+      FAKE_GEMINI_LOG: path.join(root, 'fake-gemini.jsonl'),
       ...appEnv,
     };
     // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
-    let instance = startApp(env, stderr);
+    let instance = startApp(env, stderr, appArgs);
     // Attaches Playwright to the WebView2 of a launch.
     const attach = async (launch: Instance): Promise<Page> => {
       try {
@@ -437,6 +487,7 @@ export const test = base.extend<{
         opencodeJson: path.join(root, 'xdg', 'opencode', 'opencode.json'),
         copilotJson: path.join(root, 'copilot', 'mcp-config.json'),
         launches,
+        launchedAt: () => instance.at,
         restart: async () => {
           // The app saves what it shows a moment after a change: not killed in the middle of it.
           await new Promise((r) => setTimeout(r, SAVE_MS));
@@ -445,6 +496,11 @@ export const test = base.extend<{
             throw new Error(`something still listens on port ${port} 30 s after the app was killed: it cannot be started again`);
           }
           instance = startApp(env, stderr);
+          app.page = await attach(instance);
+          return app.page;
+        },
+        reconnect: async () => {
+          await instance.browser?.close().catch(() => {});
           app.page = await attach(instance);
           return app.page;
         },
@@ -551,4 +607,4 @@ export async function send(page: Page, text: string) {
   await box.press('Enter');
 }
 
-export { expect, FAKE, FAKE_CODEX, FAKE_COPILOT, FAKE_CURSOR, FAKE_OPENCODE };
+export { expect, FAKE, FAKE_AGY, FAKE_CODEX, FAKE_COPILOT, FAKE_CURSOR, FAKE_GEMINI, FAKE_OPENCODE, FAKE_VIBE };

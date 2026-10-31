@@ -15,7 +15,7 @@
     quotaTip,
     statusEngine,
   } from '../lib/accounts';
-  import { capsOf, engineName, usagePage } from '../lib/engines';
+  import { dayCostStandsIn, engineName } from '../lib/engines';
   import { fAgo, fBytes, fPct, fUsd } from '../lib/format';
   import { t } from '../lib/i18n';
   import Rich from '../lib/i18n/Rich.svelte';
@@ -32,6 +32,7 @@
   import { branchSummary, isMulti, repoLabel } from '../lib/repos';
   import { menu } from '../lib/menu.svelte';
   import Icon from './Icon.svelte';
+  import DocsShareItem from './docs/DocsShareItem.svelte';
   import QuotaMeter from './QuotaMeter.svelte';
   import { tip } from '../lib/tip';
 
@@ -88,8 +89,9 @@
       tip: string;
       projection: { text: string; level: string } | null;
     } | null = null;
-    // Cursor CLI tells no cost either: nothing stands in for its bars (its usage is on its dashboard, ESC-43).
-    if (capsOf(engine)?.quota === 'none' && !usagePage(engine) && usage) {
+    // Cursor CLI tells no cost either: nothing stands in for its bars (its usage is on its dashboard, ESC-43). Mistral
+    // Vibe tells its cost: its day's stands in (ESC-267).
+    if (dayCostStandsIn(engine) && usage) {
       const cost = usage.todayCost;
       const budget = usage.dailyBudget || null;
       const dayTip = budget
@@ -296,6 +298,16 @@
       t('shell.status.sync.lastFetch', { when: fetched }),
     ].join('\n');
   });
+  /**
+   * The project whose docs the bar tells of (ESC-258): the one on screen, on its Docs tab, or elsewhere while its docs have
+   * changes to share or a conflict.
+   */
+  const docsShown = $derived.by(() => {
+    const p = app.ui.view === 'project' ? app.project : null;
+    if (!p) return null;
+    const d = app.docsShare[p.id];
+    return app.docsOn || d?.pending || d?.conflict ? p.id : null;
+  });
   /** A shortcut as the bar writes it: « Ctrl J ». */
   const kbd = (s: string) => keyLabel(s).split('+').join(' ');
 </script>
@@ -378,6 +390,10 @@
       {/if}
       <span class="it" use:tip={today.estimated ? estimateHint(today) : undefined}>{t('shell.status.today')} <b>{fSpentUsd(today)}</b></span
       >
+      {#if docsShown}
+        <span class="vsep"></span>
+        <span class="it"><DocsShareItem projectId={docsShown} /></span>
+      {/if}
       {#if repo}
         <span class="vsep"></span>
         <button
