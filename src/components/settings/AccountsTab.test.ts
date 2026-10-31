@@ -566,6 +566,19 @@ describe('AccountsTab', () => {
       await waitFor(() => expect(within(row('Pro')).queryByRole('checkbox', { name: 'ancien (fermé)' })).not.toBeInTheDocument());
     });
 
+    it('lights every square while nothing is reserved (all the projects), then only those of the projects reserved', async () => {
+      app.projects = [project({ id: 'p1', name: 'demo' }), project({ id: 'p2', name: 'autre' })];
+      app.settings.accounts = [PRINCIPAL, PRO];
+      backend({ account_update: (a: { account: Account }) => [PRINCIPAL, a.account] });
+      render(SettingsModal, { tab: 'accounts' });
+      const dot = (name: string) => within(row('Pro')).getByRole('checkbox', { name }).closest('label')!.querySelector('i')!;
+      expect(dot('demo')).toHaveClass('lit');
+      expect(dot('autre')).toHaveClass('lit');
+      await userEvent.click(within(row('Pro')).getByRole('checkbox', { name: 'demo' }));
+      await waitFor(() => expect(dot('autre')).not.toHaveClass('lit'));
+      expect(dot('demo')).toHaveClass('lit');
+    });
+
     it('shows the list of an account reserved to a closed project alone, though no project is open', async () => {
       app.projects = [];
       app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['c1'] }];

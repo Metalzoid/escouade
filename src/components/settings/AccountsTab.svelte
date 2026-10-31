@@ -476,13 +476,14 @@
                 <span class="k" use:tip={t('accounts.tab.reservedHint')}>{t('accounts.tab.reserved')}</span>
                 <span class="chips">
                   {#each app.projects as p (p.id)}
+                    <!-- Nothing reserved is every project: all the squares are lit, the boxes stay unticked. -->
                     <label class="chip-t">
                       <input
                         type="checkbox"
                         checked={reserved.includes(p.id)}
                         onchange={(e) => reserve(a, p.id, e.currentTarget.checked)}
                       />
-                      <i class:lit={reserved.includes(p.id)} style:--dot={p.color} aria-hidden="true"></i>{p.name}
+                      <i class:lit={!reserved.length || reserved.includes(p.id)} style:--dot={p.color} aria-hidden="true"></i>{p.name}
                     </label>
                   {/each}
                   <!-- Closed, but their history is kept and so is the reservation: it goes only when they are unticked or erased. -->
