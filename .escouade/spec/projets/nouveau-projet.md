@@ -4,7 +4,8 @@ subject: "Projets"
 sources: ["docs/SPEC.md"]
 tickets: ["ESC-94","ESC-167","ESC-168","ESC-142","ESC-163","ESC-89","ESC-309"]
 decisions: []
-compared: null
+compared: "2026-10-31T10:06:22+01:00"
+gaps: [{"text":"La page dit que la fenêtre fait 840 px de large. Le code ouvre la modale à 900 px (`width={900}`).","code":["src/components/modals/NewProjectModal.svelte"]}]
 ---
 
 ## Ce que c'est

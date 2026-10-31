@@ -4,7 +4,8 @@ subject: "Kanban"
 sources: ["docs/SPEC.md","Retour d'un utilisateur sur le Discord (2026-10-30), ticket ESC-309"]
 tickets: ["ESC-195","ESC-309"]
 decisions: []
-compared: null
+compared: "2026-10-31T10:04:30+01:00"
+gaps: [{"text":"La page dit que rien d'une machine ni aucune empreinte n'entre dans le fichier. Quand un workflow a été affiné, le code écrit dans `workflow.refined` l'empreinte de la lecture d'origine, et cette empreinte est versionnée dans le dépôt.","code":["src-tauri/src/workflowfiles.rs","src-tauri/src/workflow.rs"]}]
 ---
 
 ## Ce que c'est

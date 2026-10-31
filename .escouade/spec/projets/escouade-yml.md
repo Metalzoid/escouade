@@ -4,8 +4,7 @@ subject: "Projets"
 sources: ["docs/SPEC.md","docs/PLUGINS.md","docs/STORE.md"]
 tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309"]
 decisions: []
-compared: "2026-10-30T17:42:22+01:00"
-gaps: [{"text":"La page dit qu'un fichier illisible, comme un fichier d'une version plus récente, n'est pas réécrit et que l'erreur dit « modifie-le à la main ». Le code ne réécrit bien aucun des deux, mais pour un fichier illisible l'erreur reprend seulement « .escouade.yml illisible : <détail> », sans « modifie-le à la main ». Seul le cas de la version plus récente donne cette consigne.","code":["src-tauri/src/projectfile.rs"]}]
+compared: "2026-10-31T10:05:41+01:00"
 ---
 
 ## Ce que c'est
