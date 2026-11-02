@@ -39,6 +39,7 @@ function backend(over: Record<string, (a: any) => unknown> = {}) {
   return fakeBackend({
     fs_tree: () => ({ root: 'C:/code/demo-api', files: ['README.md', 'src/app.ts'], truncated: false }),
     git_files: () => [{ path: 'src/app.ts', status: 'M', add: 1, del: 0, agentId: null, inWorktree: false }],
+    fs_changes: () => [],
     fs_read: (a) => text(a.path === 'README.md' ? '# demo\n' : 'const a = 2;\n'),
     fs_base: () => ({ reference: 'HEAD', text: 'const a = 1;\n' }),
     fs_write: () => 'h2',
@@ -308,6 +309,51 @@ describe('EditorView', () => {
     await app.openEditor({ source: 'a1', path: 'README.md' });
     render(EditorView, { project: project() });
     expect(await screen.findByText('.claude/worktrees/wt-x')).toBeInTheDocument();
+  });
+
+  it('marks in the tree of an agent source what its worktree changed since its base, committed or not', async () => {
+    resetApp({
+      agents: [agent({ worktree: { path: 'C:\\code\\demo-api\\.claude\\worktrees\\wt-x', branch: 'escouade/wt-x', baseBranch: 'main' } })],
+    });
+    const be = backend({
+      // git status of the worktree says nothing: the agent committed all of it.
+      git_files: () => [],
+      fs_changes: () => [
+        { path: 'src/app.ts', status: 'M' },
+        { path: 'src/old.ts', status: 'D' },
+      ],
+    });
+    await app.openEditor({ source: 'a1', path: 'README.md' });
+    render(EditorView, { project: project() });
+    await userEvent.click(await screen.findByRole('treeitem', { name: /src/ }));
+    expect((await screen.findByRole('treeitem', { name: /app\.ts/ })).querySelector('.letter.m')).toHaveTextContent('M');
+    expect(screen.getByRole('treeitem', { name: /old\.ts/ })).toHaveAttribute('data-tip', 'src/old.ts · Supprimé depuis main');
+    expect(screen.getByText('2 · 2 modif.')).toHaveAttribute('data-tip', 'Fichiers modifiés depuis main, commités ou non');
+    expect(be.called('fs_changes')[0].args).toEqual({ projectId: 'p1', agentId: 'a1' });
+  });
+
+  it('keeps the changed files alone with « Modifiés seulement », and says when there are none', async () => {
+    let changes = [{ path: 'src/app.ts', status: 'M' }];
+    resetApp({
+      agents: [agent({ worktree: { path: 'C:\\code\\demo-api\\.claude\\worktrees\\wt-x', branch: 'escouade/wt-x', baseBranch: 'main' } })],
+    });
+    backend({ fs_changes: () => changes });
+    await app.openEditor({ source: 'a1', path: 'README.md' });
+    render(EditorView, { project: project() });
+    await screen.findByRole('treeitem', { name: /README\.md/ });
+    const only = screen.getByRole('button', { name: 'Modifiés seulement' });
+    expect(only).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(only);
+    expect(only).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getAllByRole('treeitem').map((r) => r.getAttribute('data-tip'))).toEqual(['src', 'src/app.ts']);
+    changes = [];
+    app.gitTick++;
+    expect(await screen.findByText('Aucun fichier modifié depuis main.')).toBeInTheDocument();
+    expect(screen.queryByRole('treeitem')).not.toBeInTheDocument();
+    // A new file is named where it goes: the whole tree comes back.
+    await userEvent.click(screen.getByRole('button', { name: 'Nouveau fichier' }));
+    expect(only).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('treeitem', { name: /README\.md/ })).toBeInTheDocument();
   });
 
   it('never says "branche" without a branch name', async () => {

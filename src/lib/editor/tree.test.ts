@@ -32,6 +32,23 @@ describe('treeRows', () => {
   });
 });
 
+describe('treeRows of the changes', () => {
+  it('shows a file deleted from the disk, struck, in its folder', () => {
+    const rows = treeRows(['src/a.ts'], { src: true, gone: true }, { 'src/old.ts': 'D', 'gone/x.ts': 'D', 'src/a.ts': 'M' });
+    expect(shape(rows)).toEqual(['0d gone', '1f x.ts', '0d src', '1f a.ts', '1f old.ts']);
+    expect(rows.find((r) => r.path === 'src/old.ts')).toMatchObject({ status: 'D', deleted: true });
+    expect(rows.find((r) => r.path === 'src/a.ts')).toMatchObject({ status: 'M', deleted: false });
+    // A file marked deleted that is still there (made again since) is a file.
+    expect(treeRows(['a.ts'], {}, { 'a.ts': 'D' })[0]).toMatchObject({ deleted: false });
+  });
+
+  it('keeps only the changed files and their folders, open, when asked', () => {
+    const rows = treeRows(files, {}, { 'src/a/x.ts': 'M', 'README.md': 'A' }, null, [], [], true);
+    expect(shape(rows)).toEqual(['0d src/a', '1f x.ts', '0f README.md']);
+    expect(treeRows(files, {}, {}, null, [], [], true)).toEqual([]);
+  });
+});
+
 describe('treeRows of folders holding a single folder', () => {
   const deep = ['src/lib/editor/a.ts', 'src/lib/editor/b.ts', 'README.md'];
 

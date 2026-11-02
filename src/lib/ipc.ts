@@ -612,6 +612,9 @@ export const api = {
   /** Creates an empty folder, its parents with it; refused when something is already there. */
   fsMkdir: (projectId: string, agentId: string | null, path: string) => invoke<void>('fs_mkdir', { projectId, agentId, path }),
   fsBase: (projectId: string, agentId: string | null, path: string) => invoke<FileBase | null>('fs_base', { projectId, agentId, path }),
+  /** What the agent's worktree changed since it left its base (committed or not, untracked files too): the editor's tree. */
+  fsChanges: (projectId: string, agentId: string) =>
+    invoke<{ path: string; status: 'M' | 'A' | 'D' }[]>('fs_changes', { projectId, agentId }),
   /** The lines of the source's files (the ignored ones and the agents' worktrees left out) that match `query`. */
   codeSearch: (projectId: string, agentId: string | null, query: SearchQuery) =>
     invoke<SearchResult>('code_search', { projectId, agentId, query }),

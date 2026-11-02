@@ -853,6 +853,7 @@ pub fn run() {
                 commands::remote_image,
                 commands::fs_mkdir,
                 commands::fs_base,
+                commands::fs_changes,
                 commands::code_search,
                 commands::term_spawn,
                 commands::run_start,

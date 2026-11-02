@@ -34,6 +34,7 @@ export default defineZone('editor', {
     newFile: 'New file',
     newFolder: 'New folder',
     widthLabel: 'Width of the files column',
+    onlyChanged: 'Changed files only',
   },
 
   menu: {
@@ -111,6 +112,10 @@ export default defineZone('editor', {
 
   tree: {
     ignoredByGit: 'Ignored by git',
+    deleted: 'Deleted since {reference}',
+    noChanges: 'No file changed since {reference}.',
+    changesSince: 'Files changed since {reference}, committed or not',
+    changesUncommitted: 'Files changed since the last commit',
   },
 
   source: {

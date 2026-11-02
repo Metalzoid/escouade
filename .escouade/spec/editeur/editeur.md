@@ -1,7 +1,7 @@
 ---
 title: "Éditeur"
 subject: "Éditeur"
-sources: ["docs/SPEC.md"]
+sources: ["docs/SPEC.md","src-tauri/src/fsedit.rs","src/lib/editor/tree.ts","src/components/editor/FileTree.svelte","src/components/editor/EditorView.svelte"]
 tickets: []
 decisions: []
 compared: "2026-10-30T05:39:53+01:00"
@@ -43,12 +43,15 @@ Le mode éditeur prend la zone principale d'un projet pour lire et modifier le c
 ### Arborescence
 
 - À la manière de l'explorateur de VS Code : les fichiers connus de git (ignorés exclus), dossiers d'abord ; chevrons, guides d'indentation, icône colorée par type de fichier.
-- Un fichier modifié ou ajouté a son nom coloré et sa lettre M ou A ; ses dossiers ont un point coloré.
+- Un fichier changé a sa lettre, M, A ou D ; ses dossiers ont un point coloré. Pour le worktree d'un agent, ce sont tous les fichiers changés depuis sa branche de départ (là où sa branche l'a quittée), commités ou non, les nouveaux compris ; pour la branche du projet, ceux qui ne sont pas commités (la référence de *Voir les changements*). Un renommage compte comme une suppression et un ajout.
+- « Fichiers · 128 · 7 modif. » compte ces fichiers ; son infobulle dit depuis quoi : « Fichiers modifiés depuis main, commités ou non », ou « Fichiers modifiés depuis le dernier commit ». Le sélecteur de source, lui, compte les fichiers non commités.
+- Un fichier supprimé garde sa ligne, barrée et grisée, avec D et l'infobulle « src/old.ts · Supprimé depuis main » : il ne s'ouvre pas, ne se renomme ni ne se supprime, et n'a pas de menu.
 - Un dossier qui ne contient qu'un dossier partage sa ligne (`src/lib/editor`).
 - Le fichier affiché est amené à l'écran.
 - Les fichiers ignorés par git qui correspondent aux « Fichiers copiés dans les worktrees » du projet (voir *Git & fichiers*) sont montrés en grisé, avec l'infobulle « Ignoré par git ». Les motifs sont lus depuis la racine de l'arborescence et, pour un projet dans un sous-dossier de son dépôt, depuis ce dossier. À la racine du projet comme dans un worktree, ces fichiers s'ouvrent, se modifient et se retrouvent avec `Ctrl+P` ; ils restent hors des commits.
 - Aucun autre fichier ignoré n'apparaît. Un dossier entièrement ignoré n'est pas parcouru.
-- En tête : « Nouveau fichier », « Nouveau dossier », « Actualiser », « Tout réduire ».
+- En tête : « Nouveau fichier », « Nouveau dossier », « Actualiser », « Modifiés seulement », « Tout réduire ».
+- « Modifiés seulement », éteint au départ, ne garde que les fichiers changés et leurs dossiers, tous dépliés ; sans changement : « Aucun fichier modifié depuis main. » (« …depuis HEAD. » pour la branche du projet). Le choix vaut pour la vue de l'éditeur, d'une source à l'autre. « Nouveau fichier » et « Nouveau dossier » l'éteignent, pour montrer où le nom se tape.
 - Clavier : ↑ ↓ Début Fin ; → déplie un dossier ou y entre ; ← le replie ou remonte au parent ; Entrée ouvre un fichier ou (dé)plie un dossier ; `F2` renomme la ligne ; `Suppr` (`⌘⌫` sous macOS) la supprime. Avec une touche de modification en plus, ni `F2` ni `Suppr` n'agissent.
 - Clic droit sur une ligne :
   - « Nouveau fichier… », « Nouveau dossier… » ;

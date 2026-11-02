@@ -77,6 +77,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - ClickUp est un plugin livré avec Escouade, comme Trello, Linear et Jira : il se voit dans la vue Plugins, s’arrête pour l’app ou pour un projet, et la synchronisation dit quand il ne répond pas. Ton jeton ClickUp, tes listes liées et les statuts de chaque liste restent tels quels.
 - Après le merge, la carte d’un ticket terminé dit où il tourne (« staging ✓ · production ⏳ »), et la vue « Environnements » du Kanban montre ce qui est déployé où, les tickets qui attendent la production et un déploiement en échec avec son job. Sur une carte « En revue », « Ouvrir l’aperçu » ouvre l’aperçu Vercel, Netlify ou Cloudflare Pages de la PR.
 - `escouade-plugin test`, `validate` et `dev` jouent un plugin comme la version d’Escouade de ton choix (`--escouade 2.2.0`), pour écrire pour une version à venir.
+- Dans l’éditeur, l’arborescence d’un agent en worktree montre tout ce qu’il a changé depuis sa branche de départ, commité ou non, fichiers supprimés compris (barrés). Le bouton « Modifiés seulement » ne garde que ces fichiers, pour voir son travail d’un coup d’œil.
 
 ### Retiré
 

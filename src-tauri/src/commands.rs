@@ -2328,6 +2328,35 @@ pub async fn fs_base(
         .map_err(err)
 }
 
+/// What the agent's worktree changed since it left its base, each repository's from its own (the
+/// editor's tree); nothing for an agent without a worktree.
+#[tauri::command]
+pub async fn fs_changes(
+    core: CoreState<'_>,
+    project_id: String,
+    agent_id: String,
+) -> Res<Vec<fsedit::Change>> {
+    // Refused as the editor's other reads are: an agent of another project, a worktree gone.
+    core.edit_root(&project_id, Some(agent_id.clone()))
+        .await
+        .map_err(err)?;
+    let worktree = core
+        .agent(&agent_id)
+        .map_err(err)?
+        .lock()
+        .meta
+        .worktree
+        .clone();
+    let mut out = Vec::new();
+    for c in worktree.map(|wt| wt.checkouts()).unwrap_or_default() {
+        for mut f in fsedit::changes_since(&c.dir, &c.base).await {
+            f.path = crate::repos::prefixed(&c.repo, &f.path);
+            out.push(f);
+        }
+    }
+    Ok(out)
+}
+
 /// The lines of the source's files matching `query` (the agent's worktree, else the project).
 #[tauri::command]
 pub async fn code_search(

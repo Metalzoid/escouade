@@ -77,6 +77,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - ClickUp is a plugin shipped with Escouade, like Trello, Linear and Jira: it shows in the Plugins view, can be turned off for the app or for a project, and the sync says when it does not answer. Your ClickUp token, your linked lists and each list’s statuses stay as they are.
 - After the merge, a done ticket’s card says where it runs (“staging ✓ · production ⏳”), and the board’s “Environments” view shows what is deployed where, the tickets waiting for production and a failed deployment with its job. On a card “In review”, “Open preview” opens the pull request’s Vercel, Netlify or Cloudflare Pages preview.
 - `escouade-plugin test`, `validate` and `dev` play a plugin as the version of Escouade you choose (`--escouade 2.2.0`), to write for a version to come.
+- In the editor, the file tree of an agent in a worktree shows everything it changed since its starting branch, committed or not, deleted files included (struck through). The “Changed files only” button keeps those files alone, to see its work at a glance.
 
 ### Removed
 

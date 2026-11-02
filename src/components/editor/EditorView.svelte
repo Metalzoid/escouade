@@ -124,7 +124,13 @@
         if (pick) app.toast(String(e), 'error');
         return undefined;
       }),
-      api.gitFiles(pid, sourceAgent(src)).catch(() => []),
+      // An agent's worktree: what it changed since it left its base, committed or not; the project: since HEAD.
+      src === 'project'
+        ? api
+            .gitFiles(pid, null)
+            .then((files) => files.filter((f) => !f.inWorktree))
+            .catch(() => [])
+        : api.fsChanges(pid, src).catch(() => []),
     ]);
     if (!current(pid, src)) return;
     if (pick && loaded) readAliases(pid, src, loaded.files);
@@ -133,9 +139,7 @@
       const held = loaded.files.map((f) => f.toLowerCase());
       madeDirs = madeDirs.filter((d) => !held.some((f) => f.startsWith(d.toLowerCase() + '/')));
     }
-    status = Object.fromEntries(
-      files.filter((f) => (src === 'project' ? !f.inWorktree : f.inWorktree && f.agentId === src)).map((f) => [f.path, f.status]),
-    );
+    status = Object.fromEntries(files.map((f) => [f.path, f.status]));
     await buffers.refreshAll(pid, src);
     if (!pick || !current(pid, src)) return;
     const p = app.editor[pid]?.places[src];
@@ -255,6 +259,8 @@
   function startNew(dir: string, kind: EntryKind = 'file') {
     if (busy) return;
     renaming = null;
+    // The name is typed where the file goes, which « Modifiés seulement » may hide.
+    onlyChanged = false;
     while (dir && !isDir(dir)) dir = parentOf(dir);
     app.expandEditorDir(project.id, source, dir);
     adding = { source, dir, kind };
@@ -517,7 +523,11 @@
     menu.show(e, items);
   }
 
-  const rows = $derived(tree ? treeRows(tree.files, place?.expanded ?? {}, status, addingDir, tree.ignored, madeDirs) : []);
+  /** « Modifiés seulement »: the tree keeps the changed files alone, for every source while the view lives. */
+  let onlyChanged = $state(false);
+  /** What the tree's changes are counted from: the branch an agent's worktree left, else the project's HEAD. */
+  const treeReference = $derived(srcAgent?.worktree?.baseBranch || srcAgent?.worktree?.repos?.[0]?.baseBranch || 'HEAD');
+  const rows = $derived(tree ? treeRows(tree.files, place?.expanded ?? {}, status, addingDir, tree.ignored, madeDirs, onlyChanged) : []);
   const changedCount = $derived(Object.keys(status).length);
   const tabs = $derived(
     (place?.open ?? []).map((p) => ({
@@ -777,7 +787,12 @@
           {:else}
             <b
               >{t('common.files')}
-              {#if tree}<span class="n">{summary}</span>{/if}</b
+              {#if tree}<span
+                  class="n"
+                  use:tip={treeReference === 'HEAD'
+                    ? t('editor.tree.changesUncommitted')
+                    : t('editor.tree.changesSince', { reference: treeReference })}>{summary}</span
+                >{/if}</b
             >
             <div class="actions">
               <button
@@ -807,6 +822,15 @@
                 onclick={() => app.collapseEditorDirs(project.id, source)}><Icon name="collapse" size={14} /></button
               >
             </div>
+            <!-- Seen without hovering, unlike the actions: a tree filtered must say so. -->
+            <button
+              class="act only"
+              aria-pressed={onlyChanged}
+              aria-label={t('editor.side.onlyChanged')}
+              use:tip={t('editor.side.onlyChanged')}
+              disabled={!tree}
+              onclick={() => (onlyChanged = !onlyChanged)}><Icon name="edit" size={14} /></button
+            >
           {/if}
           <div class="views" role="group" aria-label={t('editor.side.viewLabel')}>
             <button
@@ -833,31 +857,36 @@
       </div>
       <div class="view" hidden={search.shown}>
         <div class="scroll">
-          <FileTree
-            bind:this={fileTree}
-            {rows}
-            {repoBranches}
-            active={activePath}
-            ontoggle={(d) => {
-              lastDir = { source, dir: d };
-              app.toggleEditorDir(project.id, source, d);
-            }}
-            onopen={(p) => {
-              lastDir = { source, dir: parentOf(p) };
-              app.openEditor({ projectId: project.id, source, path: p });
-            }}
-            onmenu={treeMenu}
-            check={(name) => newFileError(name, addingDir ?? '', names(), adding?.kind)}
-            oncreate={(name) => create(adding, name)}
-            oncancel={() => (adding = null)}
-            adding={adding?.kind}
-            renaming={renaming?.source === source ? renaming : null}
-            {renameCheck}
-            onrename={(name) => rename(renaming, name)}
-            onrenamecancel={cancelRename}
-            onrenamerow={startRename}
-            ondeleterow={remove}
-          />
+          {#if onlyChanged && tree && !rows.length}
+            <p class="none">{t('editor.tree.noChanges', { reference: treeReference })}</p>
+          {:else}
+            <FileTree
+              bind:this={fileTree}
+              {rows}
+              {repoBranches}
+              reference={treeReference}
+              active={activePath}
+              ontoggle={(d) => {
+                lastDir = { source, dir: d };
+                app.toggleEditorDir(project.id, source, d);
+              }}
+              onopen={(p) => {
+                lastDir = { source, dir: parentOf(p) };
+                app.openEditor({ projectId: project.id, source, path: p });
+              }}
+              onmenu={treeMenu}
+              check={(name) => newFileError(name, addingDir ?? '', names(), adding?.kind)}
+              oncreate={(name) => create(adding, name)}
+              oncancel={() => (adding = null)}
+              adding={adding?.kind}
+              renaming={renaming?.source === source ? renaming : null}
+              {renameCheck}
+              onrename={(name) => rename(renaming, name)}
+              onrenamecancel={cancelRename}
+              onrenamerow={startRename}
+              ondeleterow={remove}
+            />
+          {/if}
         </div>
       </div>
       <div class="view" hidden={!search.shown}>
@@ -1080,10 +1109,11 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  /* The tree's actions come up over its count when the column is hovered or holds the focus, as VS Code's do. */
+  /* The tree's actions come up over its count when the column is hovered or holds the focus, as VS Code's do, left of
+     « Modifiés seulement » and the two views. */
   .actions {
     position: absolute;
-    right: 48px;
+    right: 72px;
     display: flex;
     gap: 2px;
     padding-left: 6px;
@@ -1143,6 +1173,13 @@
   .scroll {
     flex: 1;
     overflow: auto;
+  }
+  /* « Modifiés seulement » with nothing changed: said where the rows would be. */
+  .none {
+    margin: 0;
+    padding: 8px 12px 0;
+    color: var(--muted);
+    font-size: 12px;
   }
   .pane {
     position: relative;
@@ -1235,6 +1272,8 @@
     background: var(--hover);
     color: var(--text);
   }
+  /* « Modifiés seulement » on: lit as « Voir les changements », the tree it filters must be seen as filtered. */
+  .act.only[aria-pressed='true'],
   .changes[aria-pressed='true'] {
     background: color-mix(in oklch, var(--p) 14%, rgba(var(--fg-rgb), 0.03));
     box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 50%, transparent);
