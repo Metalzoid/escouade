@@ -345,6 +345,8 @@ describe('EditorView', () => {
     expect(only).toHaveAttribute('aria-pressed', 'false');
     await userEvent.click(only);
     expect(only).toHaveAttribute('aria-pressed', 'true');
+    // Its button shows on hover alone: the line under the title says it, in place of the folder.
+    expect(document.querySelector('.tree-h .caption')).toHaveTextContent(/^Modifiés seulement$/);
     expect(screen.getAllByRole('treeitem').map((r) => r.getAttribute('data-tip'))).toEqual(['src', 'src/app.ts']);
     changes = [];
     app.gitTick++;
@@ -353,6 +355,7 @@ describe('EditorView', () => {
     // A new file is named where it goes: the whole tree comes back.
     await userEvent.click(screen.getByRole('button', { name: 'Nouveau fichier' }));
     expect(only).toHaveAttribute('aria-pressed', 'false');
+    expect(document.querySelector('.tree-h .caption')).toHaveTextContent('.claude/worktrees/wt-x');
     expect(screen.getByRole('treeitem', { name: /README\.md/ })).toBeInTheDocument();
   });
 

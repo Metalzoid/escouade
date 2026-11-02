@@ -816,21 +816,20 @@
                 onclick={() => refresh(project.id, source, false)}><Icon name="restart" size={14} /></button
               >
               <button
+                class="act only"
+                aria-pressed={onlyChanged}
+                aria-label={t('editor.side.onlyChanged')}
+                use:tip={t('editor.side.onlyChanged')}
+                disabled={!tree}
+                onclick={() => (onlyChanged = !onlyChanged)}><Icon name="edit" size={14} /></button
+              >
+              <button
                 class="act"
                 aria-label={t('common.collapseAll')}
                 use:tip={t('common.collapseAll')}
                 onclick={() => app.collapseEditorDirs(project.id, source)}><Icon name="collapse" size={14} /></button
               >
             </div>
-            <!-- Seen without hovering, unlike the actions: a tree filtered must say so. -->
-            <button
-              class="act only"
-              aria-pressed={onlyChanged}
-              aria-label={t('editor.side.onlyChanged')}
-              use:tip={t('editor.side.onlyChanged')}
-              disabled={!tree}
-              onclick={() => (onlyChanged = !onlyChanged)}><Icon name="edit" size={14} /></button
-            >
           {/if}
           <div class="views" role="group" aria-label={t('editor.side.viewLabel')}>
             <button
@@ -850,8 +849,13 @@
           </div>
         </div>
         {#if !search.shown}
-          <span class="caption mono" use:tip={tree?.root}
-            >{srcAgent?.worktree ? worktreeLabel(project.path, srcAgent.worktree.path) : tildify(project.path)}</span
+          <!-- « Modifiés seulement » on, said where the folder is, the button being shown on hover alone: the title stays whole. -->
+          <span class="caption" class:mono={!onlyChanged} class:filtered={onlyChanged} use:tip={tree?.root}
+            >{onlyChanged
+              ? t('editor.side.onlyChanged')
+              : srcAgent?.worktree
+                ? worktreeLabel(project.path, srcAgent.worktree.path)
+                : tildify(project.path)}</span
           >
         {/if}
       </div>
@@ -1109,11 +1113,14 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  /* The tree's actions come up over its count when the column is hovered or holds the focus, as VS Code's do, left of
-     « Modifiés seulement » and the two views. */
+  .caption.filtered {
+    color: var(--p-ink);
+    font-weight: 600;
+  }
+  /* The tree's actions come up over its count when the column is hovered or holds the focus, as VS Code's do. */
   .actions {
     position: absolute;
-    right: 72px;
+    right: 48px;
     display: flex;
     gap: 2px;
     padding-left: 6px;
