@@ -1,6 +1,9 @@
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { BUILTINS } from '../../server/utils/builtin';
-import { asksOf, catalog, home, hueOf, localized, markOf, permissionsOf, search, type Entry } from '../../server/utils/listing';
+import { BUILTINS, isBuiltinId } from '../../server/utils/builtin';
+import { asksOf, catalog, home, hueOf, localized, markOf, permissionsOf, pluginPage, search, type Entry } from '../../server/utils/listing';
 import { fold, highlight } from '../../shared/search';
 
 // The public pages' catalog without a database: the search made on the server (relevance, accents and case set
@@ -81,12 +84,12 @@ describe('the search', () => {
     const n = search(all, { cat: 'notifications' });
     expect(n.results.map((e) => e.id)).toEqual(['dev.lmartin.slack', 'dev.sroux.ntfy']);
     expect(n.counts.themes).toBe(1);
-    expect(n.counts.harness).toBe(8);
+    expect(n.counts.harness).toBe(9);
     expect(search(all, { cat: 'notifications', verified: true }).results).toEqual([]);
     expect(search(all, { verified: true }).results.every((e) => e.builtin)).toBe(true);
     expect(search(all, { noProgram: true }).results.map((e) => e.id)).toEqual(['io.github.amoreau.nord']);
     expect(search(all, { cat: 'notifications', noSecret: true }).results.map((e) => e.id)).toEqual(['dev.sroux.ntfy']);
-    expect(search(all, { noNetwork: true, cat: 'harness' }).results).toHaveLength(8);
+    expect(search(all, { noNetwork: true, cat: 'harness' }).results).toHaveLength(9);
   });
 
   it('sorts by installations or by the last update when asked', () => {
@@ -150,6 +153,11 @@ describe('the home page and Escouade’s own', () => {
     expect(BUILTINS.every((b) => b.id.startsWith('dev.escouade.'))).toBe(true);
     expect(new Set(BUILTINS.map((b) => b.id)).size).toBe(BUILTINS.length);
     expect(new Set(BUILTINS.flatMap((b) => b.categories))).toEqual(new Set(['harness', 'ticket-sources', 'forges']));
+    // What the app gives, not every dev.escouade.*: those of plugins/<id>/ are published on the store (ESC-314), and
+    // listed as its plugins. A source here is the folder of a plugin the app gives (below).
+    expect(isBuiltinId('dev.escouade.github')).toBe(true);
+    expect(isBuiltinId('dev.escouade.discord')).toBe(false);
+    expect(BUILTINS.filter((b) => b.source).every((b) => /^plugins\/[a-z-]+$/.test(b.source!))).toBe(true);
   });
 });
 
@@ -167,5 +175,32 @@ describe('the logos of Escouade’s own (PLG-13)', () => {
     }
     const own = (await catalog(null)).filter((e) => e.builtin);
     expect(own.every((e) => e.logo && !e.icon)).toBe(true);
+  });
+});
+
+describe('the plugins of the app in their folder', () => {
+  // INT-4's rule (docs/PLUGINS.md §4.3): a plugin the app gives that left the core is a folder of the repository,
+  // readable alone, and its page links to it. The demonstration is not on the store.
+  const root = fileURLToPath(new URL('../../../plugins/', import.meta.url));
+  // The plugins the store lists that have a folder there, by their id, which their manifest gives: a folder has a short
+  // name (docs/PLUGINS.md §8.6.1). Isola has no page yet, the demonstration is a fixture.
+  const folders = new Map(
+    readdirSync(root)
+      .filter((d) => existsSync(join(root, d, 'escouade-plugin.json')))
+      .map((d): [string, string] => [JSON.parse(readFileSync(join(root, d, 'escouade-plugin.json'), 'utf8')).id, d])
+      .filter(([id]) => isBuiltinId(id)),
+  );
+
+  it('links each listed folder as its source, and each source is a folder with its manifest and its README', async () => {
+    const sourced = BUILTINS.filter((b) => b.source).map((b) => b.id);
+    expect(sourced.sort()).toEqual([...folders.keys()].sort());
+    expect(folders.get('dev.escouade.claude-code')).toBe('claude');
+    for (const b of BUILTINS.filter((x) => x.source)) {
+      const folder = folders.get(b.id)!;
+      expect(b.source).toBe(`plugins/${folder}`);
+      expect(existsSync(join(root, folder, 'README.md'))).toBe(true);
+      const page = await pluginPage(null, '', b.id);
+      expect(page?.builtin?.source).toBe(`https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/${folder}`);
+    }
   });
 });

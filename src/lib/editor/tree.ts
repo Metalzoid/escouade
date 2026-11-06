@@ -19,6 +19,8 @@ export interface TreeRow {
   inside: FileStatus | null;
   /** A file git ignores that the tree shows nonetheless: one the project copies into its worktrees. */
   ignored: boolean;
+  /** A file deleted since the reference, no longer on the disk: shown struck, not opened. */
+  deleted: boolean;
 }
 
 interface Node {
@@ -34,7 +36,8 @@ const STRENGTH: FileStatus[] = ['M', 'A', 'D'];
 /**
  * The rows shown, `adding` the folder getting a new file ('' for the root), its field first among what it holds.
  * `ignored` lists the files git ignores, which the tree draws apart; `dirs` folders to show even without any file (git
- * lists none of those).
+ * lists none of those). A file `status` says deleted that `files` no longer has gets a row of its own. `onlyChanged` keeps
+ * the changed files alone, with their folders, all open.
  */
 export function treeRows(
   files: string[],
@@ -43,8 +46,11 @@ export function treeRows(
   adding: string | null = null,
   ignored: readonly string[] = [],
   dirs: readonly string[] = [],
+  onlyChanged = false,
 ): TreeRow[] {
   const ignoredSet = new Set(ignored);
+  const there = new Set(files);
+  const gone = new Set(Object.keys(status).filter((p) => status[p] === 'D' && !there.has(p)));
   const root: Node = { dirs: new Map(), files: [] };
   /** The node of the folder `parts`, made with those above it when missing. */
   const folder = (parts: string[]) => {
@@ -56,8 +62,10 @@ export function treeRows(
     }
     return n;
   };
-  for (const f of files) folder(f.split('/').slice(0, -1)).files.push(f);
-  for (const d of dirs) folder(d.split('/'));
+  for (const f of [...files, ...gone]) {
+    if (!onlyChanged || Object.hasOwn(status, f)) folder(f.split('/').slice(0, -1)).files.push(f);
+  }
+  if (!onlyChanged) for (const d of dirs) folder(d.split('/'));
   // The strongest change under each folder, in one pass over the changes.
   const held = new Map<string, FileStatus>();
   for (const [p, s] of Object.entries(status)) {
@@ -67,7 +75,7 @@ export function treeRows(
     }
   }
   const inside = (dir: string) => held.get(dir) ?? null;
-  const isOpen = (path: string) => Object.hasOwn(expanded, path) && !!expanded[path];
+  const isOpen = (path: string) => onlyChanged || (Object.hasOwn(expanded, path) && !!expanded[path]);
   const field = (path: string, depth: number): TreeRow => ({
     kind: 'new',
     path,
@@ -77,6 +85,7 @@ export function treeRows(
     status: null,
     inside: null,
     ignored: false,
+    deleted: false,
   });
   const rows: TreeRow[] = [];
   const walk = (n: Node, depth: number, prefix: string) => {
@@ -92,7 +101,7 @@ export function treeRows(
         node = next;
       }
       const open = isOpen(path);
-      rows.push({ kind: 'dir', path, name, depth, open, status: null, inside: inside(path), ignored: false });
+      rows.push({ kind: 'dir', path, name, depth, open, status: null, inside: inside(path), ignored: false, deleted: false });
       if (!open) continue;
       if (path === adding) rows.push(field(path, depth + 1));
       walk(node, depth + 1, path + '/');
@@ -107,6 +116,7 @@ export function treeRows(
         status: Object.hasOwn(status, path) ? status[path] : null,
         inside: null,
         ignored: ignoredSet.has(path),
+        deleted: gone.has(path),
       });
     }
   };

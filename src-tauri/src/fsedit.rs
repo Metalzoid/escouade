@@ -1051,6 +1051,57 @@ pub async fn base(root: &str, base_branch: Option<&str>, rel: &str) -> Result<Op
     Ok(Some(Base { reference, text }))
 }
 
+/// A file a worktree's branch changed since it left its base.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct Change {
+    /// From the editor's root (the repository's folder within a project of several).
+    pub path: String,
+    /// 'M', 'A' or 'D' (a rename is a removal and an addition).
+    pub status: char,
+}
+
+/// What the checkout at `root` changed since its branch left `base` (`merge-base HEAD base`, else
+/// HEAD): committed or not, staged or not, and the files git does not know yet (not the ignored
+/// ones), with paths from `root`, as `fs_tree` lists them. Nothing outside a repository.
+pub async fn changes_since(root: &str, base: &str) -> Vec<Change> {
+    let rev = match git::text(root, &["merge-base", "HEAD", base]).await {
+        Ok(sha) if !sha.is_empty() => sha,
+        _ => "HEAD".to_string(),
+    };
+    let lossy = |b: Vec<u8>| String::from_utf8_lossy(&b).into_owned();
+    let mut out = Vec::new();
+    let diff = [
+        "diff",
+        "--name-status",
+        "--no-renames",
+        "--relative",
+        "-z",
+        rev.as_str(),
+    ];
+    if let Ok(t) = git::run(root, &diff).await.map(lossy) {
+        let mut parts = t.split('\0');
+        while let (Some(s), Some(path)) = (parts.next(), parts.next()) {
+            let status = match s {
+                "A" => 'A',
+                "D" => 'D',
+                _ => 'M',
+            };
+            out.push(Change {
+                path: path.to_string(),
+                status,
+            });
+        }
+    }
+    let others = ["ls-files", "--others", "--exclude-standard", "-z"];
+    if let Ok(t) = git::run(root, &others).await.map(lossy) {
+        out.extend(t.split('\0').filter(|p| !p.is_empty()).map(|p| Change {
+            path: p.to_string(),
+            status: 'A',
+        }));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2251,6 +2302,53 @@ mod tests {
             base(&plain.to_string_lossy(), None, "a.txt").await.unwrap(),
             None
         );
+    }
+
+    #[tokio::test]
+    async fn lists_what_a_branch_changed_since_it_left_its_base() {
+        let r = repo("fsedit-changes");
+        let root = r.to_string_lossy().to_string();
+        std::fs::write(r.join("old.ts"), "gone\n").unwrap();
+        git(&r, &["add", "-A"]);
+        git(&r, &["commit", "-qm", "old"]);
+        git(&r, &["checkout", "-qb", "feature"]);
+        // Committed: a change and a removal.
+        std::fs::write(r.join("src/app.ts"), "const a = 2;\n").unwrap();
+        git(&r, &["rm", "-q", "old.ts"]);
+        git(&r, &["commit", "-qam", "work"]);
+        // Not committed: a change, a new file, an ignored one.
+        std::fs::write(r.join(".gitignore"), "dist/\n*.log\n").unwrap();
+        std::fs::write(r.join("src/new.ts"), "new\n").unwrap();
+        std::fs::write(r.join("debug.log"), "x\n").unwrap();
+        // main moves on after the branch left it: its files are not the branch's work.
+        git(&r, &["checkout", "-q", "main"]);
+        std::fs::write(r.join("main.ts"), "main\n").unwrap();
+        git(&r, &["add", "main.ts"]);
+        git(&r, &["commit", "-qm", "main"]);
+        git(&r, &["checkout", "-q", "feature"]);
+        let mut got = changes_since(&root, "main").await;
+        got.sort_by(|a, b| a.path.cmp(&b.path));
+        let got: Vec<(&str, char)> = got.iter().map(|c| (c.path.as_str(), c.status)).collect();
+        assert_eq!(
+            got,
+            [
+                (".gitignore", 'M'),
+                ("old.ts", 'D'),
+                ("src/app.ts", 'M'),
+                ("src/new.ts", 'A')
+            ]
+        );
+        // A base gone: against HEAD, the work not committed only.
+        let mut head = changes_since(&root, "nope").await;
+        head.sort_by(|a, b| a.path.cmp(&b.path));
+        let head: Vec<&str> = head.iter().map(|c| c.path.as_str()).collect();
+        assert_eq!(head, [".gitignore", "src/new.ts"]);
+        // Paths from the folder asked, as the tree lists them.
+        let sub = r.join("src").to_string_lossy().to_string();
+        let mut inner = changes_since(&sub, "main").await;
+        inner.sort_by(|a, b| a.path.cmp(&b.path));
+        let inner: Vec<&str> = inner.iter().map(|c| c.path.as_str()).collect();
+        assert_eq!(inner, ["app.ts", "new.ts"]);
     }
 
     #[tokio::test]

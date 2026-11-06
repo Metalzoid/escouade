@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { and, eq, isNull, lt, sql } from 'drizzle-orm';
 import { accounts, installsDaily, plugins, reports, versions } from '../db/schema';
-import { BUILTINS, isBuiltinId, type Builtin } from './builtin';
+import { BUILTINS, isBuiltinId, sourceUrl, type Builtin } from './builtin';
 import { textOf, type Lang, type Text } from './checks';
 import type { Db } from './db';
 import { renderDocs, type Docs } from './readme';
@@ -37,7 +37,7 @@ export const CATEGORY_NAMES: Record<Category, Text> = {
 };
 
 /** What a plugin asks for, in one line of a list: the strongest first (docs/PLUGINS.md §3.4). */
-export type Ask = { kind: 'run' | 'decide' | 'events' | 'secret' | 'none' } | { kind: 'net'; host: string };
+export type Ask = { kind: 'run' | 'wasm' | 'decide' | 'events' | 'secret' | 'none' } | { kind: 'net'; host: string };
 
 /** Where a plugin's version stands with the review: Escouade's own, verified (signed, STORE-8), asked, or not. */
 export type Trust = 'builtin' | 'verified' | 'review' | 'unverified';
@@ -91,7 +91,8 @@ export function localized(v: unknown): Text {
 /** What a manifest asks for, in one line. */
 export function asksOf(m: Record<string, unknown>): Ask[] {
   const p = obj(m.permissions);
-  const asks: Ask[] = [m.run ? { kind: 'run' } : { kind: 'none' }];
+  // A run.js plugin runs in Escouade, in WASM, the module compiled by the store (ESC-323): no program of its own.
+  const asks: Ask[] = [obj(m.run).js || obj(m.run).wasm ? { kind: 'wasm' } : m.run ? { kind: 'run' } : { kind: 'none' }];
   if (p.decide === true) asks.push({ kind: 'decide' });
   for (const host of list(p.network)) asks.push({ kind: 'net', host });
   if (list(p.secrets).length) asks.push({ kind: 'secret' });
@@ -103,7 +104,15 @@ export function permissionsOf(m: Record<string, unknown>, binaries: Record<strin
   const p = obj(m.permissions);
   const run = obj(m.run);
   const out: Permission[] = [];
-  if (m.run) {
+  if (typeof run.js === 'string' || typeof run.wasm === 'string')
+    out.push({
+      icon: 'run',
+      tone: '',
+      text: t('Tourne dans Escouade, isolé', 'Runs inside Escouade, sandboxed'),
+      mono: (run.js ?? run.wasm) as string,
+      detail: t('compilé en WASM par le store', 'compiled to WASM by the store'),
+    });
+  else if (m.run) {
     const attested = Object.values(binaries ?? {}).some((b) => obj(b).attested === true);
     out.push({
       icon: 'run',
@@ -124,7 +133,17 @@ export function permissionsOf(m: Record<string, unknown>, binaries: Record<strin
     out.push({ icon: 'tool', tone: '', text: t('Lance ces commandes', 'Runs these commands'), mono: list(p.commands).join(' · ') });
   if (list(p.events).length)
     out.push({ icon: 'bolt', tone: '', text: t('Reçoit ces événements', 'Gets these events'), mono: list(p.events).join(' · ') });
-  for (const host of list(p.network)) out.push({ icon: 'net', tone: '', text: t('Se connecte à', 'Connects to'), mono: host });
+  for (const host of list(p.network)) {
+    if (host === '{account}')
+      out.push({ icon: 'net', tone: '', text: t('Se connecte aux instances que tu lui donnes', 'Connects to the instances you give it') });
+    else if (host === 'local:shared')
+      out.push({
+        icon: 'net',
+        tone: '',
+        text: t('Parle au serveur local du harness, lancé par Escouade', 'Talks to the harness’s local server, started by Escouade'),
+      });
+    else out.push({ icon: 'net', tone: '', text: t('Se connecte à', 'Connects to'), mono: host });
+  }
   const titles = new Map(
     (Array.isArray(obj(m.contributes).secrets) ? (obj(m.contributes).secrets as unknown[]) : []).map((s) => [
       obj(s).key,
@@ -414,7 +433,7 @@ export async function docsOf(db: Db, dir: string, v: typeof versions.$inferSelec
   if (!v.archiveSha256) return null;
   try {
     const gz = await readFile(join(dir, 'sha256', v.archiveSha256.slice(0, 2), `${v.archiveSha256}.tar.gz`));
-    const docs = await renderDocs(readArchive(gz), { repo: v.repoFullName, commit: v.commit, keep: keepImage(dir) });
+    const docs = await renderDocs(readArchive(gz), { repo: v.repoFullName, commit: v.commit, path: v.path, keep: keepImage(dir) });
     await db.update(versions).set({ docs }).where(eq(versions.id, v.id));
     return docs;
   } catch (e) {
@@ -429,7 +448,7 @@ export async function pluginPage(db: Db | null, dir: string, id: string) {
   if (b)
     return {
       entry: builtinEntry(b),
-      builtin: { docs: b.docs },
+      builtin: { docs: b.docs, source: b.source ? sourceUrl(b.source) : null },
       permissions: builtinPermissions(b),
       versions: [],
       latest: null,
@@ -473,9 +492,12 @@ export async function pluginPage(db: Db | null, dir: string, id: string) {
       deletedAt: plugin.deletedAt?.toISOString() ?? null,
       transferredAt: plugin.transferredAt?.toISOString() ?? null,
       transferredFrom: plugin.transferredFrom,
+      sourceChangedAt: plugin.sourceChangedAt?.toISOString() ?? null,
+      sourceFrom: plugin.sourceFrom,
     },
     latest: {
       repository: v.repoFullName,
+      path: v.path,
       tag: v.tag,
       commit: v.commit,
       sha256: v.versionSha256,

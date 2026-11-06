@@ -1,7 +1,7 @@
 ---
 title: "Voir les changements"
 subject: "Éditeur"
-sources: ["docs/SPEC.md"]
+sources: ["docs/SPEC.md","src-tauri/src/fsedit.rs","src/components/editor/EditorView.svelte"]
 tickets: []
 decisions: []
 compared: null
@@ -18,6 +18,7 @@ L'éditeur (voir *Éditeur*) montre ce qu'un fichier a changé par rapport à sa
 
 - Pour la branche du projet, la référence est HEAD ; pour un worktree, la branche de départ.
 - Les lignes modifiées par rapport à elle sont marquées, et le fil d'Ariane les compte : « N lignes modifiées vs main ».
+- L'arborescence marque les fichiers changés par rapport à la même référence, commits de l'agent compris (voir *Éditeur*).
 
 ### « Voir les changements »
 

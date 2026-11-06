@@ -218,6 +218,23 @@ describe('SettingsModal', () => {
     expect(app.settings.terminalView).toBe(true);
   });
 
+  it('saves the delay before a message sent during a turn', async () => {
+    const backend = backendSaving();
+    render(SettingsModal);
+    const delay = group('Tous les harness').getByRole('group', { name: 'Délai avant l’envoi pendant un tour' });
+    expect(screen.getByText(/tu peux le modifier ou l’annuler d’ici là/)).toHaveTextContent(/Cursor et OpenCode/);
+    expect(
+      within(delay)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Désactivé', '5 s', '10 s', '20 s', '30 s']);
+    await userEvent.click(within(delay).getByRole('button', { name: '20 s' }));
+    expect(within(delay).getByRole('button', { name: '20 s' })).toHaveAttribute('aria-pressed', 'true');
+    await save();
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ midTurnDelaySecs: 20 });
+    expect(app.settings.midTurnDelaySecs).toBe(20);
+  });
+
   it('lets the agents keep a task list, from the group of the processes, on by default', async () => {
     const backend = backendSaving();
     render(SettingsModal);
@@ -437,7 +454,12 @@ describe('SettingsModal', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Rebase' }));
     expect(screen.queryByRole('switch', { name: 'PR en brouillon' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('radio', { name: /Ouvrir une pull request/ }));
-    expect(screen.queryByRole('button', { name: 'Rebase' })).not.toBeInTheDocument();
+    // The merge strategy goes; « Mise à jour de la branche » (ESC-61) has a Rebase of its own.
+    expect(screen.queryByRole('group', { name: 'Stratégie' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'Mise à jour de la branche' })).getByRole('button', { name: 'Merge' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     await userEvent.click(screen.getByRole('switch', { name: 'PR en brouillon' }));
     expect(backend.called('board_set')).toHaveLength(0);
     await save();
@@ -642,6 +664,18 @@ describe('SettingsModal', () => {
     await save();
     expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', commitMode: 'direct' });
     expect(app.projects[0].commitMode).toBe('direct');
+  });
+
+  it('chooses where the launches’ pages open, in the agent by default (ESC-311)', async () => {
+    const backend = backendSaving();
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const choice = screen.getByRole('group', { name: 'Ouvrir les pages des lancements' });
+    expect(within(choice).getByRole('button', { name: 'Dans l’agent' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(choice).getByRole('button', { name: 'Dans une fenêtre à part' })).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(within(choice).getByRole('button', { name: 'Dans le navigateur du système' }));
+    await save();
+    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', pagesOpen: 'system' });
+    expect(app.projects[0].pagesOpen).toBe('system');
   });
 
   it('offers no preferred account with a single account', () => {
@@ -1448,7 +1482,6 @@ describe('SettingsModal in English', () => {
       'Worktrees',
       'Launch',
       '.escouade.yml',
-      'Code index',
       'Shared memory',
       'Shared Kanban',
       'Danger zone',

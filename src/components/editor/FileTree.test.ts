@@ -44,6 +44,29 @@ describe('FileTree', () => {
   });
 });
 
+describe('FileTree deleted files', () => {
+  const rows = treeRows(['src/app.ts'], { src: true }, { 'src/old.ts': 'D' });
+
+  it('strikes a file deleted since the reference, says so, and opens, renames or deletes nothing', async () => {
+    const onopen = vi.fn();
+    const onmenu = vi.fn();
+    const onrenamerow = vi.fn();
+    const ondeleterow = vi.fn();
+    render(FileTree, { ...base, rows, reference: 'main', onopen, onmenu, onrenamerow, ondeleterow });
+    const old = screen.getByRole('treeitem', { name: /old\.ts/ });
+    expect(old).toHaveClass('deleted');
+    expect(old).toHaveAttribute('aria-disabled', 'true');
+    expect(old).toHaveAttribute('data-tip', 'src/old.ts · Supprimé depuis main');
+    expect(old.querySelector('.letter.d')).toHaveTextContent('D');
+    await userEvent.click(old);
+    await fireEvent.contextMenu(old);
+    await fireEvent.keyDown(old, { key: 'F2' });
+    await fireEvent.keyDown(old, { key: 'Delete' });
+    expect([onopen, onmenu, onrenamerow, ondeleterow].map((f) => f.mock.calls.length)).toEqual([0, 0, 0, 0]);
+    expect(screen.getByRole('treeitem', { name: /app\.ts/ })).not.toHaveAttribute('aria-disabled');
+  });
+});
+
 describe('FileTree ignored files', () => {
   const rows = treeRows(['.env', 'README.md'], {}, {}, null, ['.env']);
 

@@ -21,27 +21,18 @@
 use crate::accounts;
 use crate::agent::{AgentAlert, AgentHandle, NotifyKind};
 use crate::core::Core;
+pub(crate) use crate::engine::claude::signin::can_go_on;
 use crate::i18n::{self, Lang};
 use crate::model::*;
 use crate::usage::{self, Credentials, Stored};
+#[cfg(test)]
+pub(crate) use escouade_plugin_claude::translate::lost;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 use tauri::Runtime;
-
-/// What Claude Code says of a sign-in its process could not refresh: refused (`OAuthRefreshDeadError`),
-/// or held by another process past its wait (`OAuthRefreshLockTimeoutError`).
-const LOST: [&str; 2] = [
-    "OAuth session expired and could not be refreshed",
-    "Failed to refresh OAuth token: another Claude Code process is refreshing it",
-];
-
-/// Whether `text`, the error of a turn, is a sign-in Claude Code could not refresh.
-pub(crate) fn lost(text: &str) -> bool {
-    LOST.iter().any(|l| text.contains(l))
-}
 
 /// The restarts of the process for one stopped turn.
 pub(crate) const RETRIES: u8 = 2;
@@ -64,18 +55,6 @@ fn delay_of(base: Option<u64>, done: u8) -> Duration {
         (Some(ms), _) => Duration::from_millis(ms * 3),
         (None, 0) => Duration::from_secs(3),
         (None, _) => Duration::from_secs(10),
-    }
-}
-
-/// Whether the process can go on with the sign-in read now (`now`), having started with `launch`:
-/// a token in date, or another sign-in than its own (another process refreshed it, or the user
-/// signed in again). Unreadable, gone (Claude Code empties it when its refresh token is refused),
-/// or the same out of date, it cannot.
-pub(crate) fn can_go_on(now: Option<&Stored>, launch: Option<&str>) -> bool {
-    match now.map(|s| (&s.credentials, s.stamp.as_deref())) {
-        Some((Credentials::Token(_), _)) => true,
-        Some((Credentials::Expired, stamp)) => stamp != launch,
-        _ => false,
     }
 }
 
@@ -200,7 +179,7 @@ impl<R: Runtime> Core<R> {
     /// Before a process of Claude Code starts on `account`: its turn, when its token is out of
     /// date (`GATE`). Returns its sign-in then (`Stored::stamp`), None for another harness.
     pub(crate) async fn before_claude(&self, account: &Account) -> Option<String> {
-        if account.engine != EngineId::Claude {
+        if !crate::engine::by_id(account.engine).oauth_sign_in() {
             return None;
         }
         let settings = self.settings.read().clone();

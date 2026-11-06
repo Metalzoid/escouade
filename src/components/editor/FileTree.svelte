@@ -24,9 +24,12 @@
     onrenamerow,
     ondeleterow,
     repoBranches = {},
+    reference = 'HEAD',
   }: {
     /** Of a project of several repositories (ESC-169): the branch of each repository's folder, shown after its name. */
     repoBranches?: Record<string, string>;
+    /** What the changes are counted from, said by a deleted file's tooltip. */
+    reference?: string;
     rows: TreeRow[];
     active: string | null;
     ontoggle: (dir: string) => void;
@@ -89,7 +92,8 @@
     if (!r) return;
     // F2 alone, as Delete: with a modifier, it is another shortcut.
     const f2 = e.key === 'F2' && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey;
-    if (r.kind !== 'new' && (f2 || isDeleteKey(e))) {
+    // A file deleted is gone from the disk: nothing to rename or delete.
+    if (r.kind !== 'new' && !r.deleted && (f2 || isDeleteKey(e))) {
       e.preventDefault();
       return f2 ? onrenamerow?.(r) : ondeleterow?.(r);
     }
@@ -177,19 +181,22 @@
         class="row"
         class:on={r.kind === 'file' && r.path === active}
         class:ignored={r.ignored}
+        class:deleted={r.deleted}
         role="treeitem"
         aria-level={r.depth + 1}
         aria-expanded={r.kind === 'dir' ? r.open : undefined}
         aria-selected={r.kind === 'file' && r.path === active}
+        aria-disabled={r.deleted || undefined}
         tabindex={keyOf(r) === stop ? 0 : -1}
-        use:tip={r.ignored ? t('editor.tree.ignoredByGit') : r.path}
+        use:tip={r.ignored ? t('editor.tree.ignoredByGit') : r.deleted ? `${r.path} · ${t('editor.tree.deleted', { reference })}` : r.path}
         data-index={i}
         style:padding-left="{pad(r.depth)}px"
         onfocus={() => (focused = keyOf(r))}
-        onclick={() => (r.kind === 'dir' ? ontoggle(r.path) : onopen(r.path))}
+        onclick={() => (r.kind === 'dir' ? ontoggle(r.path) : !r.deleted && onopen(r.path))}
         oncontextmenu={(e) => {
           e.stopPropagation();
-          onmenu?.(e, r);
+          if (r.deleted) e.preventDefault();
+          else onmenu?.(e, r);
         }}
       >
         <span class="fd"
@@ -244,6 +251,14 @@
   /* A file git ignores, shown because the project copies it into its worktrees: faded as in VS Code's explorer. */
   .row.ignored {
     color: var(--dim);
+  }
+  /* A file deleted since the reference: struck and faded, it opens nothing. */
+  .row.deleted {
+    color: var(--dim);
+    cursor: default;
+  }
+  .row.deleted .name {
+    text-decoration: line-through;
   }
   .row.on {
     background: color-mix(in oklch, var(--p) 14%, rgba(var(--fg-rgb), 0.03));

@@ -809,7 +809,7 @@ impl AgentRt {
         // Cursor's refusals are its texts: none for Mistral Vibe nor Antigravity CLI, whose errors
         // are told apart.
         let refused = crate::engine::cursor::refusal(&self.turn_text)
-            .filter(|_| !interrupted && self.meta.engine == crate::model::EngineId::Cursor);
+            .filter(|_| !interrupted && self.meta.engine == crate::model::EngineId::CURSOR);
         let mut error = std::mem::take(&mut self.cursor.error).filter(|_| !interrupted);
         let mut limited = false;
         // Mistral Vibe's rate limit: « limité », its resume planned.
@@ -819,7 +819,7 @@ impl AgentRt {
         }
         if let (Some(refusal), None) = (refused, &error) {
             let by_key =
-                self.meta.account != crate::accounts::principal_id(crate::model::EngineId::Cursor);
+                self.meta.account != crate::accounts::principal_id(crate::model::EngineId::CURSOR);
             limited = crate::engine::cursor::at_limit(refusal);
             error = Some(crate::engine::cursor::refusal_error(
                 i18n::ui(),
@@ -1043,45 +1043,10 @@ pub(super) fn tool_of(u: &Value, cwd: &str) -> (String, Value) {
     (name.to_string(), input)
 }
 
-/// The lines changed between `old` and `new`, as Claude Code's `structuredPatch` gives them: one
-/// hunk around what changed (its first and last lines that differ), with three lines of context.
+/// The lines changed between `old` and `new`, as Claude Code's `structuredPatch` gives them: the
+/// ACP client's (`escouade_acp`, PLG-6).
 pub(crate) fn line_hunks(old: &str, new: &str) -> Value {
-    let a: Vec<&str> = old.lines().collect();
-    let b: Vec<&str> = new.lines().collect();
-    if a == b {
-        return json!([]);
-    }
-    let head = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
-    let tail = a[head..]
-        .iter()
-        .rev()
-        .zip(b[head..].iter().rev())
-        .take_while(|(x, y)| x == y)
-        .count();
-    let context = 3;
-    let from = head.saturating_sub(context);
-    let mut lines: Vec<Value> = a[from..head]
-        .iter()
-        .map(|l| json!(format!(" {l}")))
-        .collect();
-    lines.extend(
-        a[head..a.len() - tail]
-            .iter()
-            .map(|l| json!(format!("-{l}"))),
-    );
-    lines.extend(
-        b[head..b.len() - tail]
-            .iter()
-            .map(|l| json!(format!("+{l}"))),
-    );
-    let after = (a.len() - tail + context).min(a.len());
-    lines.extend(
-        a[a.len() - tail..after]
-            .iter()
-            .map(|l| json!(format!(" {l}"))),
-    );
-    let start = |n: usize| if n == 0 { 0 } else { from + 1 };
-    json!([{ "oldStart": start(a.len()), "newStart": start(b.len()), "lines": lines }])
+    escouade_acp::line_hunks(old, new)
 }
 
 #[cfg(test)]

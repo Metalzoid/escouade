@@ -135,6 +135,9 @@ async function agentAtWork(repo: string, write: ReturnType<typeof previewsProjec
   write(wt, 'src/routes/users.ts', USERS_AFTER);
   write(wt, 'src/db/paginate.ts', 'export async function paginate() {}\n');
   write(wt, 'tests/users.test.ts', "import { it } from 'vitest';\nit('pages', () => {});\n");
+  // Part of it committed: the tree marks it all the same, counted from where the branch left main.
+  git(wt, 'add', 'src/db/paginate.ts', 'tests/users.test.ts');
+  git(wt, 'commit', '-qm', 'Paginate');
   return wt;
 }
 

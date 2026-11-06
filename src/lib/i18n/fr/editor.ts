@@ -37,6 +37,7 @@ export default {
     newFile: 'Nouveau fichier',
     newFolder: 'Nouveau dossier',
     widthLabel: 'Largeur de la colonne des fichiers',
+    onlyChanged: 'Modifiés seulement',
   },
 
   /** The right-click menu of the tree. */
@@ -129,6 +130,13 @@ export default {
 
   tree: {
     ignoredByGit: 'Ignoré par git',
+    /** A file deleted since the reference (the agent's base, or HEAD for the project): its row, struck, opens nothing. */
+    deleted: 'Supprimé depuis {reference}',
+    /** The tree filtered on the changed files, none of them. */
+    noChanges: 'Aucun fichier modifié depuis {reference}.',
+    /** The count of the changed files, after « Fichiers ». */
+    changesSince: 'Fichiers modifiés depuis {reference}, commités ou non',
+    changesUncommitted: 'Fichiers modifiés depuis le dernier commit',
   },
 
   /** The source of the editor: the project's branch, or the worktree of an agent. */

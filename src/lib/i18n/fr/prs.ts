@@ -10,6 +10,10 @@ export default {
   openHint: 'Pousse la branche {branch} et ouvre sa {word}, titre et description proposés.',
   /** The item of the menus once one is open. */
   see: 'Voir la {word} #{number}',
+  /** On the card when the plugin that serves its code host does not answer (switched off, stopped): its pull requests
+   * read last stay. The tooltip says why. */
+  down: 'Hébergeur arrêté : {word} plus suivies',
+  downHint: '{why}. Les {word} lues en dernier restent ; Réglages › Plugins le rallume.',
 
   modal: {
     title: 'Ouvrir une {word} sur {host}',
@@ -62,4 +66,129 @@ export default {
   fixReviews: 'L’agent corrige les retours',
   fixReviewsHint: 'Envoie à {agent} les demandes de changement et les fils non résolus de la {word} #{number}.',
   fixSent: 'Envoyé à {agent}.',
+  /** Beside the number on the card: where it goes. */
+  to: '→ {base}',
+  seeCi: 'Voir la CI de la {word} #{number} dans le panneau',
+
+  /**
+   * The project's « Pull requests » view (ESC-65), beside the Kanban: its open pull requests, three filters, and an agent
+   * launched on one. Read only.
+   */
+  list: {
+    /** The sidebar's button, its word: « PR », « MR » on GitLab. */
+    tab: '{word}',
+    tabHint: 'Les {word} ouvertes du projet',
+    title: 'Pull requests',
+    titleMr: 'Merge requests',
+    open: { one: '{count} ouverte', other: '{count} ouvertes' },
+    filterLabel: 'Quelles {word}',
+    filter: {
+      mine: 'Les miennes',
+      review: 'Relecture demandée',
+      all: 'Toutes',
+    },
+    readAt: 'Lu à {time}',
+    refresh: 'Rafraîchir',
+    empty: {
+      all: 'Aucune {word} ouverte.',
+      mine: 'Aucune {word} ouverte par toi.',
+      review: 'Personne ne t’a demandé de relecture.',
+    },
+    emptyHint: 'Les {word} ouvertes du dépôt, par toi ou par d’autres, s’affichent ici.',
+    showAll: 'Toutes les {word}',
+    /** The host did not say whose account it read them with. */
+    noMe: 'L’hébergeur ne dit pas ton identifiant : « Les miennes » et « Relecture demandée » restent vides.',
+    draft: 'Brouillon',
+    fork: 'fork {owner}',
+    forkHint: 'Depuis le fork {repo}, branche {branch}',
+    agentHint: 'L’agent {agent} y travaille',
+    conflict: 'Conflit',
+    changesRequested: 'Changements demandés',
+    yourReview: 'Ta relecture',
+    noCi: 'Pas de CI',
+    /** A row, for a screen reader. */
+    row: '{word} #{number} · {title}',
+    launch: 'Lancer un agent',
+    launchHint: 'Lancer un agent sur cette {word} : un worktree sur sa branche {branch} (Entrée)',
+    launching: 'Lancement…',
+    openAgent: 'Ouvrir l’agent',
+    openAgentHint: 'Ouvrir {agent}, qui travaille sur cette {word}',
+  },
+
+  /** The side panel's « PR et CI » tab (ESC-305): read only, but « Relancer les échecs » on a click. */
+  view: {
+    loading: 'Lecture de la {word}…',
+    retry: 'Réessayer',
+    openInBrowser: 'Ouvrir dans le navigateur',
+    /** Under its title: who opened it, and when (« il y a 2 h »). */
+    opened: 'créée {ago}',
+    by: 'par {author}',
+    conflict: 'Conflit avec {base}',
+    others: 'Ses autres {word}',
+    ci: {
+      title: 'CI',
+      failed: { one: '{count} échec sur {total}', other: '{count} échecs sur {total}' },
+      running: { one: '{count} en cours sur {total}', other: '{count} en cours sur {total}' },
+      passed: { one: '{count} vérification réussie', other: '{count} vérifications réussies' },
+      cancelled: { one: '{count} annulée', other: '{count} annulées' },
+      none: 'Aucune vérification sur le dernier commit.',
+      phase: {
+        queued: 'en attente',
+        running: 'en cours',
+        success: 'réussie',
+        failure: 'échouée',
+        cancelled: 'annulée',
+        skipped: 'ignorée',
+      },
+      rerun: 'Relancer les échecs',
+      rerunHint: 'Relance sur l’hébergeur les jobs en échec du dernier commit.',
+      rerunning: 'Relance…',
+      rerunDone: { one: '{count} exécution relancée.', other: '{count} exécutions relancées.' },
+      rerunNone: 'Aucun job à relancer : l’hébergeur ne relance que ses propres jobs.',
+      log: 'Journal de {name}',
+      logShow: 'Voir le journal',
+      logLoading: 'Lecture du journal…',
+      logNone: 'L’hébergeur ne garde pas le journal de cette vérification.',
+      logTail: 'La fin du journal',
+      onHost: 'Voir sur l’hébergeur',
+    },
+    reviews: {
+      title: 'Revues et commentaires',
+      none: 'Aucune revue ni commentaire.',
+      approved: 'a approuvé',
+      changesRequested: 'demande des changements',
+      commented: 'a commenté',
+      resolved: 'résolu',
+      readOnly: 'En lecture : Escouade ne publie rien en ton nom.',
+    },
+    deployments: {
+      title: 'Déploiements',
+      open: 'Ouvrir {url}',
+      state: {
+        success: 'déployé',
+        failure: 'échoué',
+        error: 'en erreur',
+        pending: 'en attente',
+        queued: 'en file',
+        inProgress: 'en cours',
+        inactive: 'remplacé',
+      },
+    },
+    noPr: {
+      title: 'Pas de {word} sur cette branche',
+      settings: 'Réglages › Intégrations',
+    },
+    project: {
+      title: '{word} ouvertes du projet',
+      none: 'Aucune {word} ouverte.',
+      loading: 'Lecture des {word} ouvertes du projet…',
+      ofAgent: 'Ouvrir l’agent {agent}',
+    },
+    failure: {
+      refused: 'Jeton refusé par l’hébergeur : reconnecte son compte.',
+      rateLimit: 'Limite d’API de l’hébergeur atteinte.',
+      rateLimitUntil: 'Limite d’API de l’hébergeur atteinte, jusqu’à {time}.',
+      unreachable: 'Hébergeur injoignable.',
+    },
+  },
 } as const satisfies Tree;

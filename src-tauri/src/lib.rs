@@ -1,5 +1,7 @@
 // First: its macros (`tr!`, `tr_in!`) are then in scope in every module below.
 #[macro_use]
+extern crate escouade_plugin_cli;
+#[macro_use]
 mod i18n;
 mod accounts;
 mod agent;
@@ -18,19 +20,14 @@ mod attachfiles;
 #[cfg(test)]
 mod attachfiles_tests;
 mod board;
+mod branchci;
 #[cfg(test)]
 mod branches_tests;
 mod clipboard;
 mod closed;
 #[cfg(test)]
 mod closed_tests;
-mod codeindex;
-#[cfg(test)]
-mod codeindex_links_tests;
-#[cfg(test)]
-mod codeindex_probes_tests;
-#[cfg(test)]
-mod codeindex_tests;
+mod codesearch;
 #[cfg(test)]
 mod codex_tests;
 #[cfg(test)]
@@ -52,7 +49,12 @@ mod cursor_tui_tests;
 mod deeplink;
 #[cfg(test)]
 mod deeplink_tests;
+mod deploys;
 mod desktop;
+mod devpage;
+mod devpage_probe;
+#[cfg(test)]
+mod devpage_tests;
 mod discussion;
 #[cfg(test)]
 mod discussion_tests;
@@ -97,6 +99,8 @@ mod fileorigin;
 mod fileorigin_tests;
 #[cfg(test)]
 mod first_message_tests;
+#[cfg(test)]
+mod fluxbench;
 mod forge;
 mod fsedit;
 #[cfg(test)]
@@ -109,6 +113,7 @@ mod integrations;
 mod integrations_tests;
 mod isola;
 mod job;
+mod launchenv;
 mod leftovers;
 mod mcp;
 mod memory;
@@ -123,6 +128,7 @@ mod notify;
 #[cfg(test)]
 mod opencode_tests;
 mod outside;
+mod pace;
 mod pagecrash;
 mod paths;
 mod plan;
@@ -135,17 +141,62 @@ mod planfiles;
 mod planfiles_tests;
 mod plugins;
 #[cfg(test)]
+mod plugins_accounts_tests;
+#[cfg(test)]
+mod plugins_acp_tests;
+#[cfg(test)]
+mod plugins_adapters_tests;
+#[cfg(test)]
 mod plugins_bench_tests;
+#[cfg(test)]
+mod plugins_bench_wasm_tests;
+#[cfg(test)]
+mod plugins_builtin_tests;
+#[cfg(test)]
+mod plugins_claude_acp_parity_tests;
+#[cfg(test)]
+mod plugins_clickup_tests;
 #[cfg(test)]
 mod plugins_decide_tests;
 #[cfg(test)]
+mod plugins_harness_parity_tests;
+#[cfg(test)]
+mod plugins_harness_tests;
+#[cfg(test)]
+mod plugins_isola_tests;
+#[cfg(test)]
+mod plugins_jira_tests;
+#[cfg(test)]
+mod plugins_linear_tests;
+#[cfg(test)]
+mod plugins_net_tests;
+#[cfg(test)]
 mod plugins_protocol_tests;
 #[cfg(test)]
+mod plugins_reactor_tests;
+#[cfg(test)]
+mod plugins_reader_tests;
+#[cfg(test)]
 mod plugins_runtime_tests;
+#[cfg(test)]
+mod plugins_rust_build_tests;
+#[cfg(test)]
+mod plugins_seed_tests;
 #[cfg(test)]
 mod plugins_store_tests;
 #[cfg(test)]
 mod plugins_tests;
+#[cfg(test)]
+mod plugins_trello_tests;
+#[cfg(test)]
+mod plugins_wasm_hosts_parity_tests;
+#[cfg(test)]
+mod plugins_wasm_parity_tests;
+#[cfg(test)]
+mod plugins_wasm_tests;
+mod pragent;
+#[cfg(test)]
+mod pragent_tests;
 mod pricing;
 #[cfg(test)]
 mod private_tests;
@@ -156,6 +207,9 @@ mod projectfile;
 #[cfg(test)]
 mod projectfile_tests;
 mod projectlogo;
+mod prview;
+#[cfg(test)]
+mod prview_tests;
 mod pty;
 mod repos;
 #[cfg(test)]
@@ -189,6 +243,7 @@ mod testlaunch;
 mod text;
 mod ticketfiles;
 mod ticketimages;
+mod ticketprs;
 mod tickets;
 #[cfg(test)]
 mod tickets_tests;
@@ -347,6 +402,9 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
     // that would take it from the user's app, the window still hidden.
     let mut window = window.clone();
     window.focus &= !paths::hidden_window();
+    // Built with Tauri’s `devtools` for the launches’ pages (ESC-311): the window’s own stay a
+    // debug build’s.
+    window.devtools = Some(cfg!(debug_assertions));
     // Only the dev server's address is the app's besides its own.
     let dev = if tauri::is_dev() {
         config.build.dev_url.clone()
@@ -377,10 +435,15 @@ pub fn plugin_cli(args: Vec<String>) -> i32 {
     plugins::bench::cli::main(args)
 }
 
-/// `codeindex_probes` (examples): the probes bench of the code index against grep (ESC-294,
-/// `docs/CODEINDEX-PROBES.md`). Gives the exit code.
-pub fn codeindex_probes_cli(args: Vec<String>) -> i32 {
-    codeindex::probes::cli(args)
+/// The app's context (its config and its pages), made once: the window's and the probes'.
+fn context() -> tauri::Context {
+    tauri::generate_context!()
+}
+
+/// `devpage_probe` (examples): a launch's page in a real webview of this system (ESC-311), what it
+/// could reach of Escouade, its storage, its devtools and its widths. Gives the exit code.
+pub fn devpage_probe_cli(args: Vec<String>) -> i32 {
+    devpage_probe::cli(args, context())
 }
 
 pub fn run() {
@@ -450,6 +513,8 @@ pub fn run() {
                 log::warn!("Escouade {version} did not install: the app still runs this version");
             }
             app.manage(deeplink::Inbox::default());
+            // The pages of the launches (ESC-311).
+            app.manage(Arc::new(devpage::Pages::default()));
             let (core, git_rx) = Core::load(
                 app.handle().clone(),
                 paths::DataDir::new(paths::default_data_dir()),
@@ -547,6 +612,13 @@ pub fn run() {
                     // A repository added or removed in a project's folder meanwhile (ESC-169).
                     core.refresh_all_repos();
                     core.refresh_all_workflows();
+                    // The pull requests of the tickets « En revue », read again at once (ESC-59).
+                    core.window_front(true);
+                }
+            }
+            if let WindowEvent::Focused(false) = event {
+                if let Some(core) = window.try_state::<Arc<Core>>() {
+                    core.window_front(false);
                 }
             }
             if let WindowEvent::CloseRequested { api, .. } = event {
@@ -565,8 +637,18 @@ pub fn run() {
             lanes,
             tauri::generate_handler![
                 commands::subscribe,
+                commands::set_held,
                 commands::set_ui,
                 commands::open_url,
+                commands::devpage_open,
+                commands::devpage_place,
+                commands::devpage_go,
+                commands::devpage_devtools,
+                commands::devpage_detach,
+                commands::devpage_mode,
+                commands::devpage_show,
+                commands::devpage_close,
+                commands::devpage_list,
                 commands::open_path,
                 commands::save_settings,
                 commands::claude_locate,
@@ -578,6 +660,8 @@ pub fn run() {
                 commands::plugin_inspect_dev,
                 commands::plugin_install,
                 commands::plugin_inspect_store,
+                commands::plugin_inspect_seed,
+                commands::plugin_seed_offers,
                 commands::store_view,
                 commands::deep_links_take,
                 commands::store_refresh,
@@ -610,6 +694,7 @@ pub fn run() {
                 commands::account_status,
                 commands::account_models_refresh,
                 commands::engines_found_now,
+                commands::engines_declared,
                 commands::account_key,
                 commands::account_login,
                 commands::set_agent_view,
@@ -655,6 +740,7 @@ pub fn run() {
                 commands::refine_workflows,
                 commands::effective_workflows,
                 commands::remove_workflow_file,
+                commands::set_workflow_removed,
                 commands::agent_merge_check,
                 commands::merge_agent_repos,
                 commands::forget_repo,
@@ -663,10 +749,6 @@ pub fn run() {
                 commands::create_project,
                 commands::update_project,
                 commands::set_project_logo,
-                commands::get_code_index,
-                commands::set_code_index,
-                commands::set_code_index_all,
-                commands::get_index_savings,
                 commands::vectors_model,
                 commands::vectors_model_download,
                 commands::vectors_model_cancel,
@@ -742,6 +824,14 @@ pub fn run() {
                 commands::agent_branch_switch,
                 commands::agent_git_sync,
                 commands::agent_pr_fix,
+                commands::agent_pr_detail,
+                commands::agent_pr_log,
+                commands::agent_pr_rerun,
+                commands::agent_no_pr,
+                commands::project_prs,
+                commands::project_environments,
+                commands::project_environments_read,
+                commands::create_agent_on_pr,
                 commands::set_remote_control,
                 commands::stats,
                 commands::refresh_usage,
@@ -763,6 +853,7 @@ pub fn run() {
                 commands::remote_image,
                 commands::fs_mkdir,
                 commands::fs_base,
+                commands::fs_changes,
                 commands::code_search,
                 commands::term_spawn,
                 commands::run_start,
@@ -789,6 +880,20 @@ pub fn run() {
                 commands::ticket_reject,
                 commands::ticket_resolve_conflict,
                 commands::ticket_dismiss,
+                commands::ticket_prs_refresh,
+                commands::target_cis,
+                commands::ci_refresh,
+                commands::ci_detail,
+                commands::ci_job_log,
+                commands::ci_rerun,
+                commands::ci_log_to_agent,
+                commands::ticket_finish_anyway,
+                commands::ticket_pr_merge,
+                commands::ticket_pr_stop_waiting,
+                commands::ticket_pr_back_to_todo,
+                commands::ticket_pr_fix_ci,
+                commands::ticket_pr_fix_reviews,
+                commands::ticket_pr_update_branch,
                 commands::board_set,
                 commands::autopilot_resume,
                 commands::forges,
@@ -838,6 +943,7 @@ pub fn run() {
                 commands::voice_download_cancel,
                 commands::voice_delete_model,
                 commands::voice_online_keys,
+                commands::voice_mistral_key,
                 commands::voice_online_key_set,
                 commands::voice_online_key_delete,
                 commands::voice_online_catalog,
@@ -855,7 +961,7 @@ pub fn run() {
                 commands::speech_preview_online,
             ],
         ))
-        .build(tauri::generate_context!())
+        .build(context())
         .expect("error while building the application")
         .run(|app, event| match event {
             tauri::RunEvent::Exit => {

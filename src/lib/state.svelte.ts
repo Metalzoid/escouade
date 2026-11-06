@@ -23,6 +23,7 @@ import type { IconName } from './icons';
 import type { SettingsTab } from './settings.svelte';
 import type { FormFile } from './ticket-files';
 import type { FormImage } from './ticket-images';
+import { setSources } from './integrations';
 import { applyTheme } from './theme';
 import { workflows } from './workflows.svelte';
 import type {
@@ -30,6 +31,8 @@ import type {
   Agent,
   AgentStatus,
   AutopilotPause,
+  BranchCi,
+  CiOf,
   DiscussionPreset,
   DocsConflict,
   FileTree,
@@ -41,7 +44,9 @@ import type {
   ToldModel,
   EngineDecl,
   EngineId,
+  PageEvent,
   Project,
+  ProjectEnvironments,
   Resources,
   Settings,
   SetupOutput,
@@ -151,6 +156,8 @@ export type Modal =
   | { kind: 'commit'; projectId: string; agentId: string | null; resume?: CommitDraft }
   /** « Ouvrir une PR » on an ordinary agent's branch (ESC-64): its title and description proposed, then read and edited. */
   | { kind: 'pullRequest'; agentId: string }
+  /** The jobs of a CI (ESC-63): a project's target, a ticket's pushed branch or pull request; their logs, their re-run. */
+  | { kind: 'ci'; of: CiOf; projectId: string }
   /** « Merger… » of an agent of several repositories (ESC-169): each repository checked, all or nothing. */
   | { kind: 'mergeRepos'; agentId: string }
   /**
@@ -224,6 +231,9 @@ export interface ToastAction {
 
 /** Statuses that call for the user: a question, the end of a turn, an error. */
 const ALERT: ReadonlySet<AgentStatus> = new Set(['waiting', 'done', 'error']);
+
+/** Its turn is under way: working, or waiting for an answer. */
+export const atWork = (a: Pick<Agent, 'status'>) => a.status === 'running' || a.status === 'waiting';
 
 /** How many of the last lines of the step running a worktree's setup the window keeps (as the backend does). */
 const SETUP_LINES = 500;
@@ -305,6 +315,8 @@ class AppState {
   panelTab = $state<'files' | 'history' | 'workflow' | 'hosts'>('files');
   /** A text to put in an agent's composer without sending it (a door of the Workflow tab): taken by its composer, which then clears it. */
   composerPut = $state<{ agentId: string; text: string } | null>(null);
+  /** How many messages went back to each agent's draft (`giveBack`): its composer reads the draft again. */
+  draftReturned = $state<Record<string, number>>({});
   /** Side-by-side diffs (else unified), shared by the diff dialog and the split layout. */
   diffSplit = $state(readPref('diffSplit') === '1');
   showArchived = $state(false);
@@ -342,8 +354,6 @@ class AppState {
   gitTick = $state(0);
   /** Each project's shared memory changed this many times (ESC-255): its settings' list reads it again. */
   memoryTicks = $state<Record<string, number>>({});
-  /** A project's « Index du code » changed (ESC-293): read, erased, waiting for its reading. */
-  codeIndexTicks = $state<Record<string, number>>({});
   /** The download of the vectors' model under way (ESC-254): bytes so far, of `total`; null when none is. */
   vectorsProgress = $state<{ done: number; total: number } | null>(null);
   update = $state<UpdateInfo | null>(null);
@@ -373,6 +383,10 @@ class AppState {
   board = $state<Record<string, boolean>>({});
   /** Projects whose Docs tab (ESC-258) fills the main area, in place of the agents and the board (not saved). */
   docs = $state<Record<string, boolean>>({});
+  /** Projects whose « Pull requests » view (ESC-65) fills the main area, in place of the agents (not saved). */
+  prs = $state<Record<string, boolean>>({});
+  /** The word of each project's code host for a pull request (« PR », « MR » on GitLab), once read (ESC-65). */
+  prWords = $state<Record<string, string>>({});
   /** The space of the Docs tab each project shows: the spec, the decisions or the documents. */
   docsSpace = $state<Record<string, DocsSpaceId>>({});
   /** The page of the spec each project shows; none: the map of the subjects. */
@@ -383,6 +397,12 @@ class AppState {
   docsEdit = $state<string | null>(null);
   /** Why no ticket of a project's board starts (its target branch has no commit yet, or is gone), by project. */
   boardIssues = $state<Record<string, string>>({});
+  /** The environments of each project's host as last read (ESC-67), by project id. */
+  environments = $state<Record<string, ProjectEnvironments>>({});
+  /** The board of a project shows its view « Environnements » in place of its tickets (ESC-67), by project id. */
+  envView = $state<Record<string, boolean>>({});
+  /** The CI of each project's target branch as last read (ESC-63): the pill of its board's header. */
+  targetCi = $state<Record<string, BranchCi>>({});
   /** What each project's docs have to share (ESC-257), by project id: the status bar says « N changements à partager ». */
   docsShare = $state<Record<string, { pending: number; conflict: DocsConflict | null }>>({});
   /** The pages of each project being compared to the code (ESC-263). */
@@ -402,6 +422,14 @@ class AppState {
   boardOn = $derived(this.ui.view === 'project' && !!this.project && !!this.board[this.project.id]);
   /** The Docs tab of the project on screen is shown (ESC-258). */
   docsOn = $derived(this.ui.view === 'project' && !!this.project && !!this.docs[this.project.id] && !this.board[this.project.id]);
+  /** The « Pull requests » view of the project on screen is shown (ESC-65). */
+  prsOn = $derived(
+    this.ui.view === 'project' &&
+      !!this.project &&
+      !!this.prs[this.project.id] &&
+      !this.board[this.project.id] &&
+      !this.docs[this.project.id],
+  );
   /** The editor of the project on screen is open, and on screen: the statistics hide it. */
   editorOn = $derived(this.ui.view === 'project' && !!(this.project && this.editor[this.project.id]?.on));
   split = $derived(this.ui.layout === 'split');
@@ -455,7 +483,7 @@ class AppState {
 
   /** The agent whose conversation is on screen: its project's view, without the board, the editor, a run or a terminal over it. */
   agentShown = $derived(
-    this.ui.view === 'project' && !this.term && !this.runCommand && !this.editorOn && !this.boardOn ? this.agent : null,
+    this.ui.view === 'project' && !this.term && !this.runCommand && !this.editorOn && !this.boardOn && !this.prsOn ? this.agent : null,
   );
 
   /** What else goes when the backend removes an agent: what other modules (the launches' logs) hold of it. */
@@ -464,8 +492,11 @@ class AppState {
   private recipeHooks = new Set<(agentId: string) => void>();
   /** What is over when an agent's ticket goes "Terminé": its test launches. */
   private ticketDoneHooks = new Set<(agentId: string) => void>();
+  /** What follows a launch's page (ESC-311): its loads, its links opened outside. */
+  private devPageHooks = new Set<(e: PageEvent) => void>();
   /** What must be written before the app restarts by itself for an update (the composers' drafts). */
   private restartHooks = new Set<() => void>();
+  private turnEndHooks = new Set<(agentId: string) => void>();
 
   /** `f` runs when the backend removes an agent, before the state forgets it. Returns what unregisters it. */
   onAgentRemoved(f: (agentId: string) => void) {
@@ -473,10 +504,22 @@ class AppState {
     return () => void this.removalHooks.delete(f);
   }
 
+  /** `f` runs when an agent's turn ends, after the state has its new self. Returns what unregisters it. */
+  onTurnEnded(f: (agentId: string) => void) {
+    this.turnEndHooks.add(f);
+    return () => void this.turnEndHooks.delete(f);
+  }
+
   /** `f` runs when an agent the window knows gets another launch recipe. Returns what unregisters it. */
   onRecipeChanged(f: (agentId: string) => void) {
     this.recipeHooks.add(f);
     return () => void this.recipeHooks.delete(f);
+  }
+
+  /** `f` runs at each event of a launch's page (ESC-311). Returns what unregisters it. */
+  onDevPage(f: (e: PageEvent) => void) {
+    this.devPageHooks.add(f);
+    return () => void this.devPageHooks.delete(f);
   }
 
   /** `f` runs, with its agent, when a ticket goes "Terminé". Returns what unregisters it. */
@@ -587,6 +630,11 @@ class AppState {
     this.agents = Object.fromEntries(s.agents.map((a) => [a.id, a]));
     this.tickets = Object.fromEntries((s.tickets ?? []).map((t) => [t.id, t]));
     this.boardIssues = { ...s.boardIssues };
+    // Read by the loop of the pull requests a little after the start: what it read already, those the events bring after.
+    api
+      .targetCis()
+      .then((m) => (this.targetCi = { ...m, ...this.targetCi }))
+      .catch(() => {});
     this.setupOutput = { ...s.setupOutput };
     this.autopilotPause = s.autopilotPause ?? null;
     this.projectPauses = s.projectPauses ?? {};
@@ -610,6 +658,7 @@ class AppState {
     this.engineModels = s.engineModels ?? {};
     this.accountModels = s.accountModels ?? {};
     this.enginesFound = s.enginesFound ?? (s.claudeFound ? ['claude'] : []);
+    if (s.sources) setSources(s.sources);
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
     if (s.pageCrash) this.tellPageCrash(s.pageCrash);
@@ -649,7 +698,7 @@ class AppState {
    */
   private atWork(id: string): boolean {
     const a = this.agents[id];
-    return !!a && (a.status === 'running' || a.status === 'waiting');
+    return !!a && atWork(a);
   }
 
   private onEvent(e: UiEvent) {
@@ -663,6 +712,7 @@ class AppState {
         if (shown && !bgRow(e.agent.plan, shown)) this.closeTask(e.agent.id);
         this.noteAttention(prev, e.agent);
         if (newRecipe) this.runHooks(this.recipeHooks, e.agent.id);
+        if (prev && atWork(prev) && !atWork(e.agent)) this.runHooks(this.turnEndHooks, e.agent.id);
         // Its setup is over: what it wrote is in its log (and its failure in the conversation).
         if (!e.agent.setup) this.dropSetupOutput(e.agent.id);
         break;
@@ -690,6 +740,9 @@ class AppState {
         break;
       case 'project':
         this.replaceProject(e.project);
+        break;
+      case 'devPage':
+        for (const f of this.devPageHooks) f(e.page);
         break;
       case 'openUrl':
         // The page a pull request needs (a compare page to finish it): a failure is told, not lost.
@@ -725,9 +778,16 @@ class AppState {
       case 'docsCompared':
         this.docsComparing[e.projectId] = e.comparing;
         break;
+      case 'environments':
+        this.environments[e.environments.projectId] = e.environments;
+        break;
       case 'boardIssue':
         if (e.issue) this.boardIssues[e.projectId] = e.issue;
         else delete this.boardIssues[e.projectId];
+        break;
+      case 'targetCi':
+        if (e.ci) this.targetCi[e.projectId] = e.ci;
+        else delete this.targetCi[e.projectId];
         break;
       case 'autopilotPause':
         this.autopilotPause = e.pause;
@@ -741,9 +801,6 @@ class AppState {
         break;
       case 'memory':
         this.memoryTicks[e.projectId] = (this.memoryTicks[e.projectId] ?? 0) + 1;
-        break;
-      case 'codeIndex':
-        this.codeIndexTicks[e.projectId] = (this.codeIndexTicks[e.projectId] ?? 0) + 1;
         break;
       case 'vectorsDownload':
         this.vectorsProgress = { done: e.done, total: e.total };
@@ -874,6 +931,9 @@ class AppState {
    * without a restart. The window back in front, the menu « Harness » opened. Nothing said when it fails: what was found stays.
    */
   async refreshEngines(): Promise<void> {
+    // The harnesses a plugin describes (PLG-6): one installed, removed or turned off since.
+    const declared = await api.enginesDeclared().catch(() => null);
+    if (declared && declared.map((e) => e.id).join() !== this.engines.map((e) => e.id).join()) this.engines = declared;
     const found = await api.enginesFoundNow().catch(() => null);
     if (found && found.join() !== this.enginesFound.join()) this.enginesFound = found;
   }
@@ -1044,6 +1104,7 @@ class AppState {
     this.selectedLaunch[a.projectId] = null;
     this.board[a.projectId] = false;
     this.docs[a.projectId] = false;
+    this.prs[a.projectId] = false;
     const ed = this.editor[a.projectId];
     if (ed?.on) {
       ed.source = a.worktree ? a.id : 'project';
@@ -1062,6 +1123,7 @@ class AppState {
       this.selectedLaunch[p.id] = null;
       this.board[p.id] = false;
       this.docs[p.id] = false;
+      this.prs[p.id] = false;
       this.closeEditor(p.id);
     }
   }
@@ -1074,6 +1136,7 @@ class AppState {
       this.selectedTerm[p.id] = null;
       this.board[p.id] = false;
       this.docs[p.id] = false;
+      this.prs[p.id] = false;
       this.closeEditor(p.id);
     }
   }
@@ -1085,6 +1148,7 @@ class AppState {
     this.ui.view = 'project';
     this.board[projectId] = true;
     this.docs[projectId] = false;
+    this.prs[projectId] = false;
     this.selectedTerm[projectId] = null;
     this.selectedLaunch[projectId] = null;
     this.closeEditor(projectId);
@@ -1105,6 +1169,7 @@ class AppState {
     this.ui.view = 'project';
     this.board[projectId] = false;
     this.docs[projectId] = true;
+    this.prs[projectId] = false;
     if (space) this.docsSpace[projectId] = space;
     if (page !== undefined) this.docsPage[projectId] = page;
     // A space chosen: the discussion open leaves the main area.
@@ -1129,6 +1194,27 @@ class AppState {
 
   closeDocs(projectId = this.ui.activeProject) {
     if (projectId) this.docs[projectId] = false;
+  }
+
+  /**
+   * Shows the « Pull requests » view of a project (ESC-65): its open pull requests, in place of the agents, the board, the
+   * Docs tab, a terminal, a launch log and the editor.
+   */
+  openPrs(projectId = this.ui.activeProject) {
+    if (!projectId) return;
+    this.ui.activeProject = projectId;
+    this.ui.view = 'project';
+    this.board[projectId] = false;
+    this.docs[projectId] = false;
+    this.prs[projectId] = true;
+    this.selectedTerm[projectId] = null;
+    this.selectedLaunch[projectId] = null;
+    this.closeEditor(projectId);
+    this.persistUi();
+  }
+
+  closePrs(projectId = this.ui.activeProject) {
+    if (projectId) this.prs[projectId] = false;
   }
 
   /** A project as the backend now has it (its board settings, mostly). */
@@ -1179,6 +1265,7 @@ class AppState {
     this.ui.view = 'project';
     this.board[projectId] = false;
     this.docs[projectId] = false;
+    this.prs[projectId] = false;
     this.selectedTerm[projectId] = null;
     this.selectedLaunch[projectId] = null;
     // Always work through the stored `$state` proxies, not the raw objects the `??=` expressions return:
@@ -1319,6 +1406,7 @@ class AppState {
     delete this.editor[id];
     delete this.board[id];
     delete this.docs[id];
+    delete this.prs[id];
     delete this.boardIssues[id];
     buffers.closeProject(id);
     trees.closeProject(id);
@@ -1428,6 +1516,7 @@ class AppState {
     if (this.ui.view !== 'project' || this.ui.activeProject !== next.projectId) this.selectProject(next.projectId);
     this.board[next.projectId] = false;
     this.docs[next.projectId] = false;
+    this.prs[next.projectId] = false;
     this.cardFocus = { id: next.id, n: this.cardFocus.n + 1 };
   }
 
