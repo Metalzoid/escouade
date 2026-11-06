@@ -172,6 +172,9 @@ struct ColumnCounts {
     todo: usize,
     doing: usize,
     review: usize,
+    /// « En revue » (ESC-59).
+    #[serde(rename = "inReview")]
+    in_review: usize,
     done: usize,
 }
 
@@ -181,6 +184,7 @@ impl ColumnCounts {
             Column::Todo => self.todo += 1,
             Column::Doing => self.doing += 1,
             Column::Review => self.review += 1,
+            Column::Pr => self.in_review += 1,
             Column::Done => self.done += 1,
         }
     }
@@ -484,7 +488,7 @@ fn kanban_order(list: &mut [&Ticket]) {
         a.column.cmp(&b.column).then_with(|| match a.column {
             Column::Todo => (a.rank, a.created_at).cmp(&(b.rank, b.created_at)),
             Column::Doing => a.started_at.unwrap_or(0).cmp(&b.started_at.unwrap_or(0)),
-            Column::Review => a.review_at.unwrap_or(0).cmp(&b.review_at.unwrap_or(0)),
+            Column::Review | Column::Pr => a.review_at.unwrap_or(0).cmp(&b.review_at.unwrap_or(0)),
             Column::Done => b.done_at.unwrap_or(0).cmp(&a.done_at.unwrap_or(0)),
         })
     });
@@ -817,10 +821,11 @@ struct AccountUsage {
     engine: EngineId,
     /// New agents of its harness go to it now.
     current: bool,
-    /// Its quota's meters as last read (`QuotaMeter`): windows by their length, the month's
-    /// credits; none for a harness without a quota.
+    /// Its quota's meters as last read (`QuotaMeter`): windows by their length, a model's own with
+    /// its scope (`model`, ESC-312), the month's credits; none for a harness without a quota.
     meters: Vec<QuotaMeter>,
-    /// Claude Code's two windows, as before 1.8.
+    /// Claude Code's two windows of every model, as before 1.8: `five_hour` none for a plan
+    /// without one.
     five_hour: Option<RateWindow>,
     seven_day: Option<RateWindow>,
 }
@@ -839,8 +844,8 @@ struct Pause {
 pub(super) fn usage<R: Runtime>(core: &Core<R>) -> Result<String, ToolError> {
     let list = core.settings.read().accounts.clone();
     // Each account's windows as last read, and the account new agents go to as the status bar
-    // and the autopilot have it (`UsageSnapshot::settle`: the first active one under the
-    // threshold, else the first active one).
+    // and the autopilot have it (`UsageSnapshot::settle`: the first good one, `pace`, else the
+    // first whose only fault is its pace, else the first active one).
     let usage = core.usage.lock().clone();
     let rows = list
         .into_iter()
