@@ -2,7 +2,7 @@
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.jira",
   "name": "Jira",
-  "version": "2.2.0",
+  "version": "2.2.3",
   "description": {
     "fr": "Les tickets d'un projet Jira Cloud dans le Kanban, ses statuts comme colonnes.",
     "en": "A Jira Cloud project's issues in the Kanban, its statuses as columns."
@@ -17,6 +17,7 @@
     "network": ["*.atlassian.net", "{account}"],
     "secrets": ["account:jira"]
   },
+  "limits": { "fetchSeconds": 15, "fetchBytes": 8388608 },
   "contributes": {
     "accounts": [
       {
@@ -43,5 +44,6 @@
       }
     ],
     "ticketSources": [{ "id": "jira", "name": "Jira", "account": "jira" }]
-  }
+  },
+  "store": { "categories": ["ticket-sources"], "docs": "docs" }
 }

@@ -1245,9 +1245,10 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
   - « Faire relire par un agent » (ci-dessous).
   - Fait : liste dense, filtres « Les miennes » (le login du compte), « Relecture demandée » (relectures demandées et pas encore rendues : `reviewers` de chaque plugin), « Toutes » ; lancement par `Provider::pull_fetch` (`refs/pull/<n>/head` GitHub et Gitea, `refs/merge-requests/<n>/head` GitLab, second parent de `refs/pull/<n>/merge` Azure DevOps, la branche du fork lui-même sur Bitbucket Cloud) dans `pr-<n>` / `mr-<n>`.
   - Reste : essai réel sur GitHub (compte de l'utilisateur) ; GitLab, Bitbucket Cloud, Gitea/Forgejo et Azure DevOps d'après leur documentation, à essayer en vrai plus tard. La carte d'un agent sur une PR de fork ne montre pas cette PR (sa branche `pr-<n>` n'est pas celle du fork).
-- [ ] **Relecture par un agent** : un agent lit le diff d'une PR et rédige une relecture, avec des commentaires par fichier et par ligne.
-  - L'utilisateur les garde, les corrige ou les écarte un par un dans Escouade, puis publie : review de GitHub et de Gitea, discussions de GitLab, commentaires de ligne de Bitbucket.
+- [x] **Relecture par un agent** : un agent lit le diff d'une PR et rédige une relecture, avec des commentaires par fichier et par ligne. *Fait (ESC-66) : `prreview.rs`, vue `PrReviewView.svelte`, page *Relecture d'une PR par un agent* de la spec.*
+  - L'utilisateur les garde, les corrige ou les écarte un par un dans Escouade, puis publie : review de GitHub et de Gitea, discussions de GitLab, commentaires de ligne de Bitbucket, fils d'Azure DevOps.
   - Rien ne part sans lui.
+  - [ ] **À essayer en vrai** (avec l'utilisateur ; essayé sur le faux GitHub seulement) : une vraie relecture publiée sur GitHub, puis sur GitLab, Bitbucket Cloud, Gitea / Forgejo et Azure DevOps ; un échec au milieu d'une publication sur ces derniers, qui posent leurs commentaires un par un (certains ont pu partir).
 
 ### La CI
 - [x] **La branche cible** : une pastille dans l'en-tête du projet (« main ✗ depuis 2 h »). Réglage du pilote auto « Pause quand la CI de la cible est rouge », désactivé par défaut. *Fait (ESC-63) : pastille dans l'en-tête du Kanban, lue dans la boucle des PR des tickets (`branchci.rs`), `forge/branchChecks` servi par les 5 plugins.*
@@ -1266,9 +1267,10 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
 - [ ] **Les déploiements, à essayer en vrai** (fait le 2026-11-02 par ESC-67 contre les faux serveurs seulement, sans rien écrire sur un vrai dépôt) : sur GitHub avec le compte de l'utilisateur (ESC-53, ESC-70), un dépôt avec un environnement staging et production déployés par Actions, un aperçu Vercel ou Netlify sur une PR, un déploiement qui échoue ; vérifier `mergeCommit` d'une PR squashée, `transient_environment` des aperçus de Vercel, `environment_url` posé sur le statut de succès. GitLab (`/deployments` du projet, `external_url`, review apps `review/*`) et Bitbucket Cloud (ordre des `/deployments`, dates `state.started_on`, `merge_commit.hash` court) d'après leur documentation, à essayer plus tard. La CI de la cible chez Gitea et Forgejo n'a pas encore de vue.
 
 ### Notifications, vue d'ensemble, serveur MCP
-- [ ] **Notifications**, réglables une à une comme les autres : CI en échec, changements demandés, PR approuvée, PR mergée, conflit, relecture demandée à l'utilisateur, déploiement en production réussi ou en échec.
-- [ ] **Vue d'ensemble** : un groupe « Pull requests » (à merger, à corriger, relectures demandées).
-- [ ] **Serveur MCP** : `list_pull_requests` et `get_pull_request` (état, CI, relectures, fils ouverts, déploiements), et la PR du ticket dans `get_ticket`. L'agent d'un ticket peut y relire les retours lui-même. Commenter ou merger par le MCP : pas en 1.8.
+- [x] **Notifications** (ESC-68, 2026-11-07), réglables une à une comme les autres : CI en échec, changements demandés, PR approuvée, PR mergée, conflit, relecture demandée à l'utilisateur, déploiement en production réussi ou en échec. Aucune lecture de plus : elles naissent de l'écart entre deux lectures déjà faites. Une PR de ticket se suit donc en arrière-plan ; celle d'un agent ordinaire seulement quand il est affiché, et une relecture demandée seulement quand la liste du projet est lue (vue « Pull requests », vue d'ensemble ouverte).
+- [x] **Vue d'ensemble** (ESC-68) : un groupe « Pull requests » (à corriger, à merger, relectures demandées).
+- [x] **Serveur MCP** (ESC-68) : `list_pull_requests` et `get_pull_request` (état, CI, relectures, fils ouverts, déploiements), et la PR du ticket dans `get_ticket`. L'agent d'un ticket peut y relire les retours lui-même. Le texte de l'hébergeur est marqué comme donnée d'un tiers. Commenter ou merger par le MCP : pas en 1.8.
+- [ ] **Ces trois-là, à essayer en vrai** (fait le 2026-11-07 contre le faux GitHub seulement) : sur GitHub avec le compte de l'utilisateur (ESC-53, ESC-70) ; GitLab, Bitbucket Cloud, Gitea/Forgejo et Azure DevOps d'après leur documentation, à essayer plus tard.
 
 ### Rafraîchissement et limites des API
 - [x] **Pas de webhook** : l'app n'a pas d'adresse publique. Escouade interroge les hébergeurs, et seulement sur ce qu'elle suit : les PR des tickets en revue et des agents, la CI de la cible, les déploiements récents.
@@ -1301,10 +1303,10 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
 - [ ] **Avant la release**, un essai réel par hébergeur, sur les dépôts de test.
 
 ### Docs
-- [ ] SPEC (section « Hébergeurs de code »), README, CHANGELOG.
-- [ ] Site, en français et en anglais : pages de doc des intégrations et du Kanban, captures.
-- [ ] Statistiques d'usage : les nouveaux événements (PR ouverte, PR mergée, correction de CI, relecture par un agent), sans nom ni adresse. Les ajouter à la page Confidentialité du site, qui liste chaque événement.
-- [ ] Rien ne part vers les serveurs d'Escouade : les jetons restent sur le poste, et les appels vont de l'app à l'hébergeur. Le dire dans la page Confidentialité.
+- [x] SPEC (la spec d'Escouade, *Hébergeurs de code*), README, CHANGELOG (ESC-69).
+- [x] Site, en français et en anglais : page `code-hosts`, colonne « En revue » du Kanban, intégrations, captures (ESC-69).
+- [x] Statistiques d'usage : `pr_opened`, `pr_merged`, `ci_fix_started`, `pr_review_started`, sans nom ni adresse, listés sur la page Confidentialité du site (ESC-69).
+- [x] Rien ne part vers les serveurs d'Escouade : les jetons restent sur le poste, et les appels vont de l'app à l'hébergeur. Dit dans la page Confidentialité (ESC-69).
 
 ### Décisions à prendre
 - [x] **Colonne « En revue »** (décidé le 2026-10-14) : une colonne entre « À tester » et « Terminé », plutôt qu'un ticket « Terminé » avec l'état de sa PR. Elle répare au passage « Après » : aujourd'hui, un ticket part avant que le code qu'il attend soit mergé.

@@ -16,10 +16,10 @@ mod prompt;
 #[cfg(test)]
 mod schema_tests;
 pub(crate) mod terminal;
+mod words;
 
 #[cfg(test)]
 pub(crate) use bench::fake_copilot;
-use escouade_plugin_copilot::words;
 #[cfg(test)]
 pub(crate) use words::{
     agent_mode, call_nano, form_content, limit_answer, next_month, permission_mode, prices,
@@ -503,6 +503,10 @@ impl Engine for Copilot {
     /// `copilot -p`, the question read from its input, without tools for a short text (`prompt`).
     fn one_shot<'a>(&'a self, ask: OneShot<'a>) -> BoxFuture<'a, Result<String>> {
         Box::pin(prompt::one_shot(ask))
+    }
+
+    fn answers_without_tools(&self) -> bool {
+        true
     }
 
     fn writer(&self, _weight: Weight) -> &'static str {

@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.2.3
+
+- Its messages, README and documentation send to the settings pages of Escouade 2.2: Connected services and Advanced › Network (ESC-387).
+
+## 2.2.2
+
+- Its page has its documentation, in French and in English: install, use, permissions, troubleshooting and develop.
+
+## 2.2.1
+
+- Its page says what is true today: a plugin of the store, with its own version, that can be uninstalled.
+
 ## 2.2.0
 
 - A WASM module (`run.wasm`), run in Escouade's host: no process of its own any more. It answers as it did. It has its own version, is

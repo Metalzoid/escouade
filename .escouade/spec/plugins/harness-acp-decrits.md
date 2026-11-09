@@ -1,8 +1,8 @@
 ---
 title: "Les harness ACP décrits"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §1.1, §4.4, §4.12, §8.27","docs/TODO-2.2.md, PLG-6","Essai réel de Goose 1.57.0 sur Ollama, 2026-11-01 (ESC-178)"]
-tickets: ["ESC-178","ESC-222","ESC-281","ESC-282","ESC-347"]
+sources: ["docs/PLUGINS.md §1.1, §4.4, §4.12, §8.27, §8.31","docs/TODO-2.2.md, PLG-6","Essai réel de Goose 1.57.0 sur Ollama, 2026-11-01 (ESC-178)"]
+tickets: ["ESC-178","ESC-222","ESC-281","ESC-282","ESC-347","ESC-361","ESC-362"]
 decisions: []
 compared: null
 ---
@@ -61,3 +61,19 @@ Le plugin `dev.escouade.goose` (`plugins/goose/`) décrit Goose : `goose acp`, m
 - **La clôture** est appliquée par l'hôte sur ces fichiers, liens suivis, quel que soit le code du plugin.
 - Une carte de permission juge un chemin par son texte, d'après la forme du chemin et non le système de la cible : `C:\Prive` et `c:\prive` sont le même chemin sous Windows, y compris dans un module.
 - Le diff d'un `write` de Goose lit le fichier par le même chemin : hors de ces dossiers, il se montre comme un fichier nouveau.
+
+## La confiance d'un harness décrit (ESC-361)
+
+Un harness décrit est servi par `dev.escouade.acp`, mais c'est son auteur qui est jugé. Est de première main un plugin dont l'id commence par `dev.escouade.` : le manifeste refuse cet id à un tiers, et il ne s'installe que signé. Goose l'est, sans être livré avec l'app.
+
+- **`fenceOnPermissions`** n'est cru que de la première main. Celui d'un manifeste tiers est effacé : en `"fs": false`, le harness ne démarre pas dans un projet privé, et le dit. Un tiers en `"fs": true` y entre : la clôture y est tenue par le client sur les fichiers qui passent par lui, et ce que l'agent lit ou écrit seul est dit une fois dans la conversation.
+- **Les variables** d'un plugin qui n'est pas de première main sont jugées comme `proc/*` les juge : ni `ESCOUADE_*`, ni `LD_*`, ni `DYLD_*`, ni `PATH`, `PATHEXT`, `COMSPEC`, `NODE_OPTIONS`, `BASH_ENV`, `ENV`, `IFS`, quelle que soit la casse. Cela vaut pour `acp.env`, pour `accountVar` et `keyVar` que le cœur pose, et pour un harness tiers à module. L'agent ne démarre pas, et la variable refusée est nommée.
+- **Le programme** d'un tiers se cherche par des noms nus : un nom de `locate.names` qui porte un chemin est écarté.
+- **L'installation montre tout ce qui tournera** : une ligne `harness:` par nom du programme, ses variables devant (`VAR=valeur programme arguments`), et une ligne de plus pour `versionArgs` quand ce n'est pas `--version`.
+- **`versionArgs`** ne tourne qu'une fois le plugin installé et allumé avec `dev.escouade.acp` : ni un aperçu, ni un plugin coupé ne lancent rien. Il tourne ensuite à chaque liste des harness, sans agent ni geste.
+
+## Ajouts d'ESC-362
+
+- **La clôture et la lecture seule** reviennent par `agent/attach`, sur un agent créé comme sur un agent déjà là : elles tiennent à travers un redémarrage du plugin, sur les permissions comme sur `fs/*`, et le cœur l'emporte, une clôture retirée se retire. Voir *Le contrat des harness en process*.
+- **Une écriture dans `.git`** a sa carte, même en « Édits auto » et, pour Gemini et Vibe, en « Demander » : elle n'est plus prise pour une écriture dans le dossier de l'agent. Seul « Bypass » la laisse passer.
+- **Un agent recréé garde sa session.** Seul un lancement ouvre une session, et le harness tourne encore : le plugin reprend du cœur la session, le tour en cours et les permissions en attente. Ses messages repartent sur cette session, ce que dit le harness est lu, et la clôture tient sur le reste du tour pour Cursor, Gemini et Mistral Vibe, qui n'ont qu'elle (`fenceOnPermissions`). Le tour en cours finit par sa réponse, que le plugin reconnaît à son `stopReason` ou à son erreur. Une permission en attente se répond par son id, avec les options par défaut d'ACP : ce qu'elle proposait est perdu. Un plan ou une question tenus par le client ne se reprennent pas.

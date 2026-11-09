@@ -10,11 +10,7 @@
 //!
 //! What it does as Escouade drives it comes from the real runs of OpenCode 1.19.3 with local models (ESC-25), whose
 //! streams are in `tests/fixtures/opencode/` and whose schema is `tests/fixtures/engines/opencode-1.19.3.openapi.json`.
-//!
-//! The core still links this crate as a library, for its « Vue OpenCode » and its accounts (`rules`, `translate`), until
-//! P8 (docs/PLUGINS.md §8.2): hence the `rlib` beside the `cdylib`.
 
-mod host;
 pub mod rules;
 mod server;
 mod session;
@@ -23,6 +19,7 @@ pub mod translate;
 pub use rules::{catalog, listed, no_model, split_model};
 pub use translate::{absolute, patch_file, Translator};
 
+use escouade_plugin_kit::host::Host;
 use escouade_plugin_protocol::engine::{
     method, AgentRef, AnswerPermission, AnswerQuestion, Attach, Close, Compact, Compacted, Control,
     EnvVar, Frames, Interrupt, Items, Launch, LaunchParams, Open, SendMessage, SetValue,
@@ -31,7 +28,6 @@ use escouade_plugin_protocol::engine::{
 use escouade_plugin_protocol::{
     answer, code, greeted, initialized, method as handshake, Refusal, Request,
 };
-use host::Host;
 use parking_lot::Mutex;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -279,11 +275,6 @@ impl Plugin {
                     self.agent(&v.agent)?.set_effort(&v.value);
                     no_writes()
                 }
-                method::SET_MODE => {
-                    let v: SetValue = read(params.clone())?;
-                    self.agent(&v.agent)?.set_mode(&v.value);
-                    no_writes()
-                }
                 method::ANSWER_PERMISSION => {
                     let a: AnswerPermission = read(params.clone())?;
                     self.agent(&a.agent)?
@@ -319,6 +310,7 @@ impl Plugin {
         let reply = match m {
             method::OPEN
             | method::INTERRUPT
+            | method::SET_MODE
             | method::LET_GO
             | method::RENAME
             | method::CONTROL => reply.clone(),
@@ -343,6 +335,14 @@ impl Plugin {
                 let a: Interrupt = read(params)?;
                 self.agent(&a.agent)?
                     .interrupt(a.cancel_queued)
+                    .await
+                    .map_err(failed)?;
+                no_writes()
+            }
+            method::SET_MODE => {
+                let v: SetValue = read(params)?;
+                self.agent(&v.agent)?
+                    .set_mode(&v.value)
                     .await
                     .map_err(failed)?;
                 no_writes()

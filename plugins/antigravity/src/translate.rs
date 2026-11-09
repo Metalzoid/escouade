@@ -10,7 +10,7 @@
 //! - its tokens are its steps' (`usage`), told with the end of the turn; it tells no cost.
 //!
 //! A recorded stream (`tests/fixtures/agy/`, the events as `agy` wrote them) is read as it came (`recorded`): its `init`
-//! opens the session, its `user_input` the turn, its `result` ends it. The core reads them so, as a library.
+//! opens the session, its `user_input` the turn, its `result` ends it. The tests of the core read them so (a note `frame` of `view/translate`).
 
 use crate::words::{self, Usage};
 use escouade_acp::limits::limit_of;
@@ -38,6 +38,11 @@ fn decl() -> HarnessDecl {
     }
 }
 
+/// The mode the ACP client is kept in: it answers no permission by itself (its `acceptEdits` would let a write in
+/// `.husky` through), the client of `agy` judges them all (`words::judge`) before a card. Its own refusals hold (a text
+/// naming the fence, a discussion).
+const JUDGED: &str = "default";
+
 /// The time (ms since the epoch).
 fn now_ms() -> i64 {
     std::time::SystemTime::now()
@@ -46,26 +51,7 @@ fn now_ms() -> i64 {
         .unwrap_or_default()
 }
 
-/// What a call of `kind` said, in Cursor's form: a command's output and code (`Command exited with code 0.\n\nCommand
-/// output:\n…`), its refusal on its error.
-pub fn output(kind: &Value, said: &str, failed: bool) -> Value {
-    if kind != "execute" {
-        return json!({ "content": said });
-    }
-    if failed {
-        return json!({ "stderr": said, "content": said });
-    }
-    // In its interface's transcript, after the times it ran (`Created At: …`).
-    let code = said
-        .split_once("Command exited with code ")
-        .and_then(|(_, r)| r.split(['.', ' ']).next())
-        .and_then(|c| c.parse::<i64>().ok());
-    let text = said
-        .split_once("Command output:\n")
-        .map_or(said, |(_, o)| o)
-        .trim_end();
-    json!({ "stdout": text, "content": text, "exitCode": code })
-}
+pub use escouade_acp::view::output;
 
 /// The translation of one agent.
 pub struct Translator {
@@ -80,8 +66,10 @@ pub struct Translator {
 
 impl Translator {
     pub fn new(a: &Attach) -> Self {
+        let mut acp = Agent::new(a, &decl(), env!("CARGO_PKG_VERSION"));
+        let _ = acp.set_mode(JUDGED);
         Translator {
-            acp: Agent::new(a, &decl(), env!("CARGO_PKG_VERSION")),
+            acp,
             lang: a.lang.clone(),
             session: a.session.clone(),
             told: HashSet::new(),
@@ -94,11 +82,11 @@ impl Translator {
         self.lang = p.lang.clone();
         // Its lines are the harness's, which speaks no ACP.
         let _ = self.acp.launch(p);
+        let _ = self.acp.set_mode(JUDGED);
     }
 
-    pub fn set_mode(&mut self, mode: &str) {
-        let _ = self.acp.set_mode(mode);
-    }
+    /// The mode is the client's to judge by (`words::judge`): the ACP client keeps `JUDGED`.
+    pub fn set_mode(&mut self, _mode: &str) {}
 
     pub fn set_model(&mut self, model: &str) {
         let _ = self.acp.set_model(model);

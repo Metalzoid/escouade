@@ -86,6 +86,8 @@ pub struct InitialState {
     engines: Vec<crate::engine::registry::EngineDecl>,
     /// The harnesses whose program is found: the only ones the interface offers.
     engines_found: Vec<crate::model::EngineId>,
+    /// The harnesses whose plugin is off or not installed (ESC-391): not offered, though their program is found.
+    engines_off: Vec<crate::model::EngineId>,
     sources: Vec<crate::integrations::source::SourceDecl>,
     /// Why no ticket of a project's board starts, by project.
     board_issues: HashMap<String, String>,
@@ -169,6 +171,7 @@ pub fn subscribe(
         account_models,
         engines: crate::engine::registry::declared(),
         engines_found: core.engines_found(),
+        engines_off: core.engines_unplugged(),
         sources: crate::integrations::source::declared(),
         board_issues,
         autopilot_pause,
@@ -266,13 +269,21 @@ pub fn engines_found_now(core: CoreState) -> Vec<crate::model::EngineId> {
     now
 }
 
+/// The harnesses whose plugin is off or not installed now (ESC-391), after a plugin changed: the menus « Harness » do
+/// not offer them.
+#[tauri::command(async)]
+pub fn engines_off_now(core: CoreState) -> Vec<crate::model::EngineId> {
+    core.sync_harnesses();
+    core.engines_unplugged()
+}
+
 /// What stopped the sign-in of an account before it was signed in, when it is known (ESC-133).
 #[tauri::command(async)]
 pub fn account_sign_in_ended(core: CoreState, id: String) -> Option<String> {
     core.sign_in_ended(&id)
 }
 
-/// Where Escouade's update of Claude Code stands (ESC-133), for « Réglages › Harness ».
+/// Where Escouade's update of Claude Code stands (ESC-133), for « Réglages › Comptes et harness ».
 #[tauri::command(async)]
 pub fn claude_update_status(core: CoreState) -> crate::selfupdate::Status {
     crate::selfupdate::status(&core.settings.read())
@@ -400,6 +411,22 @@ pub fn plugin_inspect_seed(
     id: String,
 ) -> Result<crate::plugins::Preview, crate::plugins::Refusal> {
     core.plugins.inspect_seed(&id, crate::i18n::ui())
+}
+
+/// « Ajouter un compte… » on `engine` (ESC-373): its plugin from the seed when it is not installed, with no network.
+#[tauri::command(async)]
+pub fn plugin_need_engine(core: CoreState, engine: EngineId) {
+    core.need_engine_plugin(engine);
+}
+
+/// « Installer » of a plugin the seed proposes (ESC-373): installed at once from the seed, with no network, as the gesture
+/// that needs it would; its view, or why the seed refuses it.
+#[tauri::command(async)]
+pub fn plugin_install_seed(
+    core: CoreState,
+    id: String,
+) -> Result<Option<crate::plugins::PluginView>, crate::plugins::Refusal> {
+    core.install_seed_plugin(&id)
 }
 
 /// What the app's seed holds that is not installed: what the user uninstalled, what it refused to install.
@@ -1887,6 +1914,68 @@ pub async fn create_agent_on_branch(
     Ok(agent)
 }
 
+/// The reviews written by an agent of a project (ESC-66).
+#[tauri::command]
+pub fn pr_reviews(core: CoreState<'_>, project_id: String) -> Vec<crate::prreview::PrReview> {
+    core.pr_reviews_of(&project_id)
+}
+
+/// « Faire relire par un agent » (ESC-66): the review starts; nothing leaves for the host.
+#[tauri::command]
+pub async fn pr_review_start(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+) -> Res<crate::prreview::PrReview> {
+    core.pr_review_start(&project_id, number).await.map_err(err)
+}
+
+/// A comment of a review kept, edited or dropped.
+#[tauri::command]
+pub fn pr_review_note(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    id: u32,
+    choice: crate::prreview::NoteChoice,
+    body: Option<String>,
+) -> Res<crate::prreview::PrReview> {
+    core.pr_review_note(&project_id, number, id, choice, body)
+        .map_err(err)
+}
+
+/// The text of a review, edited.
+#[tauri::command]
+pub fn pr_review_summary(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    summary: String,
+) -> Res<crate::prreview::PrReview> {
+    core.pr_review_summary(&project_id, number, summary)
+        .map_err(err)
+}
+
+/// « Publier la relecture »: the only way a review reaches the host, on the user's click.
+#[tauri::command]
+pub async fn pr_review_publish(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    verdict: crate::forge::ReviewState,
+    accept_moved: bool,
+) -> Res<crate::prreview::Published> {
+    core.pr_review_publish(&project_id, number, verdict, accept_moved)
+        .await
+        .map_err(err)
+}
+
+/// A review dropped.
+#[tauri::command]
+pub fn pr_review_discard(core: CoreState<'_>, project_id: String, number: u64) {
+    core.pr_review_discard(&project_id, number);
+}
+
 /// « Lancer un agent sur cette PR » (ESC-65): an agent in a worktree on the branch of the project's
 /// open pull request `number`, a fork's too.
 #[tauri::command]
@@ -2022,6 +2111,12 @@ pub async fn project_prs(
     project_id: String,
 ) -> Res<crate::prview::Read<crate::prview::ProjectPrs>> {
     Ok(core.project_prs(&project_id).await)
+}
+
+/// The open pull requests of every project, as recently read, for the overview (ESC-68).
+#[tauri::command]
+pub async fn overview_prs(core: CoreState<'_>) -> Res<Vec<crate::prview::OverviewPrs>> {
+    Ok(core.overview_prs().await)
 }
 
 /// The environments of the project's host as last read (ESC-67): the view « Environnements »
@@ -3099,6 +3194,8 @@ pub async fn forge_connect(
     // An account there: the CI of the targets and the pull requests read at once (ESC-63).
     if r.is_ok() {
         core.wake_ticket_prs();
+        // A host known by its account only (a GitLab of its own) is a project's code host now (ESC-390).
+        core.hub.emit(crate::model::UiEvent::CodeHosts);
     }
     r
 }
@@ -3108,7 +3205,18 @@ pub async fn forge_disconnect(
     core: CoreState<'_>,
     host: String,
 ) -> Res<crate::forge::connect::ForgesView> {
-    core.forge_disconnect(&host).await.map_err(err)
+    let r = core.forge_disconnect(&host).await.map_err(err);
+    core.hub.emit(crate::model::UiEvent::CodeHosts);
+    r
+}
+
+/// The project's code host (ESC-390): none without a remote on a host whose plugin is on.
+#[tauri::command]
+pub async fn project_code_host(
+    core: CoreState<'_>,
+    project_id: String,
+) -> Res<Option<crate::forge::connect::CodeHost>> {
+    Ok(core.project_code_host(&project_id).await)
 }
 
 #[tauri::command]
@@ -3388,6 +3496,8 @@ pub fn voice_mistral_key(core: CoreState) -> crate::voice::online::MistralKey {
 /// keychain that refuses it (or none, on Linux) leaves it unsaved, and says so.
 #[tauri::command(async)]
 pub fn voice_online_key_set(core: CoreState, service: String, key: String) -> Res<()> {
+    // A key given to a service of the first hand: its plugin from the seed if it is not installed (ESC-373).
+    core.need_voice_plugin(&service);
     crate::voice::online::save_key(&*core.secrets, &service, &key)
 }
 

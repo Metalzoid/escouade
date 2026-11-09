@@ -304,6 +304,23 @@ pub const BUILTIN_HARNESSES: &[BuiltinHarness] = &[
     },
 ];
 
+/// The plugin of the app that a harness of the core goes through (INT-10), None for one a plugin describes (it is in the
+/// registry only while its plugin is on).
+pub fn plugin_of_engine(engine: EngineId) -> Option<&'static str> {
+    use super::builtin as b;
+    Some(match engine {
+        EngineId::CLAUDE => b::CLAUDE,
+        EngineId::CODEX => b::CODEX,
+        EngineId::COPILOT => b::COPILOT,
+        EngineId::CURSOR => b::CURSOR,
+        EngineId::OPENCODE => b::OPENCODE,
+        EngineId::VIBE => b::MISTRAL,
+        EngineId::AGY => b::ANTIGRAVITY,
+        EngineId::GEMINI => b::GEMINI,
+        _ => return None,
+    })
+}
+
 /// The harnesses of the plugins the app gives that are on, by their plugin, each made once for each runtime (by its
 /// address: a test makes several).
 /// The plugins of the core's harnesses the user uninstalled (`Plugins::uninstalled`): an agent of theirs says so, and that the
@@ -394,6 +411,8 @@ pub struct ProcessEngine {
     owner: String,
     /// It is described (`acp`), served by the generic ACP plugin: the description goes with each agent.
     described: bool,
+    /// Its manifest is of Escouade's own hand (`builtin::first_hand`): its variables are not judged.
+    first_hand: bool,
     install: Install,
     update_command: &'static str,
     writer: &'static str,
@@ -479,6 +498,7 @@ impl ProcessEngine {
             plugin: plugin.to_string(),
             owner: plugin.to_string(),
             described: false,
+            first_hand: super::builtin::first_hand(plugin),
             install: Install {
                 windows: leak(&install.windows),
                 unix: leak(&install.unix),
@@ -513,20 +533,27 @@ impl ProcessEngine {
     /// The harness `decl` the plugin `owner` describes (`acp`, PLG-6), served by the generic ACP plugin: its id is
     /// `plugin:<owner>:<harness>` (the bare one for a plugin of Escouade's own, whose harness keeps the id it had in
     /// the core), and its program is looked for by its names alone unless its plugin is Escouade's (a declarative
-    /// plugin names no path to run).
+    /// plugin names no path to run). The core judges the generic ACP plugin, which is the app's: what a manifest says it
+    /// holds itself is taken of the first hand alone, here (`fenceOnPermissions`). The fence the client holds on the
+    /// files that pass through it (`fs`) stays: that is the app's own code, for a harness of anyone's.
     pub fn described(
         rt: Arc<Runtime>,
         owner: &str,
         mut decl: proto::HarnessDecl,
         escouade_dir: &Path,
     ) -> Self {
-        let first = owner.starts_with("dev.escouade.");
+        let first = super::builtin::first_hand(owner);
         if !first {
             decl.locate.program = None;
+            decl.locate.names.retain(|n| bare_name(n));
+            if let Some(acp) = &mut decl.acp {
+                acp.fence_on_permissions = false;
+            }
         }
         let id = described_id(owner, &decl.id);
         let mut e = Self::new(rt, super::builtin::ACP, decl, escouade_dir);
         e.owner = owner.to_string();
+        e.first_hand = first;
         e.described = true;
         e.id = id;
         e
@@ -573,6 +600,11 @@ impl ProcessEngine {
         serde_json::from_value(v).map_err(|e| anyhow!("{}: {method}: {e}", self.name))
     }
 
+    /// An instance of its module for its views (`plugins/view.rs`).
+    pub fn view_instance(&self) -> Result<super::wasm::Instance> {
+        self.rt.view_instance(&self.plugin).map_err(|e| anyhow!(e))
+    }
+
     /// The launch of its interface in a terminal (`terminal/launch`), checked as an agent's launch is.
     pub async fn terminal_launch(&self, params: proto::TerminalParams) -> Result<proto::Launch> {
         let launch: proto::Launch = self.call(method::TERMINAL_LAUNCH, &params).await?;
@@ -586,6 +618,7 @@ impl ProcessEngine {
             &launch,
         )
         .map_err(|e| anyhow!(e))?;
+        check_env(self.name, self.first_hand, &launch.env).map_err(|e| anyhow!(e))?;
         Ok(launch)
     }
 
@@ -621,11 +654,45 @@ impl ProcessEngine {
 
 /// The id of the harness `harness` the plugin `owner` describes.
 pub fn described_id(owner: &str, harness: &str) -> EngineId {
-    if owner.starts_with("dev.escouade.") {
+    if super::builtin::first_hand(owner) {
         EngineId::new(harness)
     } else {
         EngineId::new(&format!("plugin:{owner}:{harness}"))
     }
+}
+
+/// Whether `name` names a program and no path: it is joined to each folder of the PATH, where an absolute path or `..`
+/// would leave that folder.
+fn bare_name(name: &str) -> bool {
+    !name.is_empty() && !name.contains(['/', '\\', ':']) && name != "." && name != ".."
+}
+
+/// What the harness `decl` describes runs, a line each, as the installation shows it (`plugins::asks`): for each name of its
+/// program, its variables and its arguments, and what asks its version, unless that is the usual `--version`. Nothing for
+/// a harness that is not described.
+pub fn described_lines(decl: &proto::HarnessDecl) -> Vec<String> {
+    let Some(acp) = &decl.acp else {
+        return Vec::new();
+    };
+    let names = if decl.locate.names.is_empty() {
+        std::slice::from_ref(&decl.id)
+    } else {
+        decl.locate.names.as_slice()
+    };
+    let usual = decl.version_args == ["--version"];
+    let mut out = Vec::new();
+    for name in names {
+        let vars = acp.env.iter().map(|(k, v)| format!("{k}={v}"));
+        let run: Vec<String> = vars
+            .chain(std::iter::once(name.clone()))
+            .chain(acp.args.iter().cloned())
+            .collect();
+        out.push(run.join(" "));
+        if !usual {
+            out.push(format!("{name} {}", decl.version_args.join(" ")));
+        }
+    }
+    out
 }
 
 /// `path`, or under Windows the same with `.exe` (or `.cmd`, the launcher npm leaves) when that is a file.
@@ -656,7 +723,8 @@ fn down(name: &str, e: CallError) -> anyhow::Error {
 
 /// The checks of a launch's description (`engine/launch`, `terminal/launch`): what the core guarantees whatever the
 /// plugin. Answers why it is refused. `builtin`: the plugin is one the app gives, the only one whose word that it holds
-/// the fence itself (`fence_by_client`, the generic ACP plugin) is taken; any other's launch must spell the fence.
+/// the fence itself (`fence_by_client`, the generic ACP plugin) is taken; any other's launch must spell the fence. It is
+/// the plugin that serves the harness: what a third party's manifest would have it hold is left out by `described`.
 #[allow(clippy::too_many_arguments)]
 pub fn check_launch(
     name: &str,
@@ -706,6 +774,30 @@ pub fn check_launch(
         check_file(name, home, &f.path)?;
     }
     Ok(())
+}
+
+/// The variables a launch sets, judged as `proc/*` judges those a plugin names (`procs::forbidden_var`), unless its
+/// manifest is of Escouade's own hand. Answers why it is refused.
+fn check_env(
+    name: &str,
+    first_hand: bool,
+    env: &[proto::EnvVar],
+) -> std::result::Result<(), String> {
+    match env
+        .iter()
+        .find(|v| !first_hand && super::procs::forbidden_var(&v.name))
+    {
+        Some(v) => Err(refused_var(name, &v.name)),
+        None => Ok(()),
+    }
+}
+
+/// Why the variable `var` a plugin names is refused.
+fn refused_var(name: &str, var: &str) -> String {
+    tr!(
+        "Le plugin de {name} veut poser la variable {var}, qu’Escouade refuse à un plugin parce qu’elle changerait ce que lance le harness ou toucherait à Escouade : l’agent ne démarre pas.",
+        "The plugin of {name} wants to set the variable {var}, which Escouade refuses a plugin because it would change what the harness runs or touch Escouade: the agent doesn’t start."
+    )
 }
 
 /// A file a plugin wants written: in the agent's own folder alone.
@@ -908,6 +1000,12 @@ impl Engine for ProcessEngine {
     }
 
     fn spawn(&self, spawn: Spawn, on_frame: OnFrame, on_exit: OnExit) -> Result<Process> {
+        // Those the core sets itself, on its manifest's word.
+        let mut named = self.decl.account_var.iter().chain(&self.decl.key_var);
+        let refused = |v: &&String| !self.first_hand && super::procs::forbidden_var(v);
+        if let Some(var) = named.find(refused) {
+            bail!(refused_var(self.name, var));
+        }
         let key = format!("{}-{}", self.id, uuid::Uuid::new_v4().simple());
         let session = match &spawn.start {
             Start::Resume { session } => Some(session.clone()),
@@ -947,6 +1045,7 @@ impl Engine for ProcessEngine {
             native: self.native,
             prepare: self.prepare,
             plugin: self.plugin.clone(),
+            first_hand: self.first_hand,
             name: self.name,
             account_var: self.account_var,
             key,
@@ -1003,7 +1102,9 @@ impl Engine for ProcessEngine {
             let cwd = ask.cwd.to_string_lossy().into_owned();
             let params = proto::OneShotParams {
                 weight: match ask.weight {
-                    Weight::Light => "light",
+                    // A plugin's harness does not say `answers_without_tools`: `Given` stops at
+                    // `oneshot::ask`, and would go as the only weight the protocol says has no tool.
+                    Weight::Light | Weight::Given => "light",
                     Weight::Reading => "reading",
                 }
                 .into(),
@@ -1013,6 +1114,7 @@ impl Engine for ProcessEngine {
                 model: ask.model.clone(),
             };
             let launch: proto::OneShotLaunch = self.call(method::ONE_SHOT, &params).await?;
+            check_env(self.name, self.first_hand, &launch.env).map_err(|e| anyhow!(e))?;
             let env = merged(&ask.env, &launch.env);
             let mut cmd = command_of(&ask.program, &cwd, &launch.args, &env, &launch.remove_env)?;
             if launch.input.is_none() {
@@ -1121,6 +1223,8 @@ pub struct ProcessEngineProcess {
     /// What the core writes in the agent's folder before the launch (`ProcessEngine::with_prepare`).
     prepare: Option<Prepare>,
     plugin: String,
+    /// Its manifest is of Escouade's own hand (`ProcessEngine::first_hand`).
+    first_hand: bool,
     name: &'static str,
     /// The variable that gives the agent its own folder (`HarnessDecl::account_var`): where its launch may write.
     account_var: &'static str,
@@ -1561,6 +1665,7 @@ impl ProcessEngineProcess {
             &launch,
         )
         .map_err(|e| anyhow!(e))?;
+        check_env(self.name, self.first_hand, &launch.env).map_err(|e| anyhow!(e))?;
         {
             let mut a = self.attach.lock();
             a.home = home.clone();
@@ -1643,6 +1748,7 @@ impl ProcessEngineProcess {
             launch,
         )
         .map_err(|e| anyhow!(e))?;
+        check_env(self.name, self.first_hand, &launch.env).map_err(|e| anyhow!(e))?;
         write_files(launch)?;
         self.start_program(spawn, launch, &[])
     }

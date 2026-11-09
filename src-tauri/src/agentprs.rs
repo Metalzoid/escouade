@@ -16,6 +16,7 @@ use crate::forge::{
 use crate::git;
 use crate::i18n::Lang;
 use crate::model::{AgentMeta, FoundWorktree, Project};
+use crate::telemetry::Event;
 use crate::text::truncate;
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
@@ -207,7 +208,7 @@ pub fn settled(prs: &[PullRequest]) -> bool {
 }
 
 /// "pull request" or "merge request", as the host says it.
-fn long_word(word: &str) -> &'static str {
+pub(crate) fn long_word(word: &str) -> &'static str {
     if word == "MR" {
         "merge request"
     } else {
@@ -674,8 +675,8 @@ impl<R: Runtime> Core<R> {
             .and_then(|k| self.forges.read().get(k))
             .ok_or_else(|| {
                 anyhow!(tr!(
-                    "Hébergeur inconnu pour {host} : connecte-le dans Réglages › Intégrations.",
-                    "Unknown code host for {host}: connect it in Settings › Integrations."
+                    "Hébergeur inconnu pour {host} : connecte-le dans Réglages › Services connectés.",
+                    "Unknown code host for {host}: connect it in Settings › Connected services."
                 ))
             })?;
         if !provider.capabilities().pull_requests {
@@ -846,6 +847,10 @@ impl<R: Runtime> Core<R> {
         };
         self.link_work_item(&t.meta, &t.provider.kind(), &mut draft);
         let pr = t.client.create_pr(&t.remote.repo, &draft).await?;
+        self.telemetry.track(Event::PrOpened {
+            from: "agent",
+            forge: crate::telemetry::forge(&t.provider.kind()),
+        });
         let word = t.provider.request_word().to_string();
         let h = self.agent(id)?;
         {
@@ -1000,16 +1005,17 @@ impl<R: Runtime> Core<R> {
         if self.watched(&now_meta).await.as_ref() != Some(&w) {
             return Ok(());
         }
-        let changed = {
+        let (changed, before) = {
             let mut rt = h.lock();
             let changed = rt.meta.prs != prs || rt.meta.branch_ci != branch_ci;
-            rt.meta.prs = prs;
+            let before = std::mem::replace(&mut rt.meta.prs, prs.clone());
             rt.meta.branch_ci = branch_ci;
-            changed
+            (changed, before)
         };
         if changed {
             self.emit_agent(&h);
             self.request_save();
+            self.tell_agent_prs(&now_meta, &before, &prs);
         }
         Ok(())
     }
@@ -1113,6 +1119,10 @@ impl<R: Runtime> Core<R> {
             None => client.pull_request(&repo, number).await?,
         };
         let lang = self.lang().claude;
+        let event = matches!(fix, PrFix::Checks).then_some(Event::CiFixStarted {
+            from: "agent",
+            autopilot: false,
+        });
         let message = match fix {
             PrFix::Checks => {
                 let checks = client.checks(&repo, number).await?;
@@ -1151,7 +1161,11 @@ impl<R: Runtime> Core<R> {
                 reviews_message(lang, &word, &pr, &branch, &reviews, &comments)
             }
         };
-        self.send_message(id, message, Vec::new()).await
+        self.send_message(id, message, Vec::new()).await?;
+        if let Some(event) = event {
+            self.telemetry.track(event);
+        }
+        Ok(())
     }
 }
 
@@ -1211,8 +1225,8 @@ impl<R: Runtime> Core<R> {
                 .and_then(|k| self.forges.read().get(k))
                 .ok_or_else(|| {
                     anyhow!(tr!(
-                        "Hébergeur inconnu pour {host} : connecte-le dans Réglages › Intégrations.",
-                        "Unknown code host for {host}: connect it in Settings › Integrations."
+                        "Hébergeur inconnu pour {host} : connecte-le dans Réglages › Services connectés.",
+                        "Unknown code host for {host}: connect it in Settings › Connected services."
                     ))
                 })?;
             if !provider.capabilities().pull_requests {
@@ -1366,6 +1380,10 @@ impl<R: Runtime> Core<R> {
             };
             match step.await {
                 Ok(mut pr) => {
+                    self.telemetry.track(Event::PrOpened {
+                        from: "agent",
+                        forge: crate::telemetry::forge(&t.provider.kind()),
+                    });
                     pr.repo = repo.clone();
                     opened.push(pr);
                 }
@@ -1399,7 +1417,11 @@ impl<R: Runtime> Core<R> {
     }
 
     /// `agent_prs_refresh` of an agent of several repositories: each repository's.
-    async fn prs_refresh_multi(&self, id: &str, targets: Vec<(String, Target)>) -> Result<()> {
+    async fn prs_refresh_multi(
+        self: &Arc<Self>,
+        id: &str,
+        targets: Vec<(String, Target)>,
+    ) -> Result<()> {
         let word = targets[0].1.provider.request_word().to_string();
         let mut prs = Vec::new();
         for (repo, t) in &targets {
@@ -1414,16 +1436,17 @@ impl<R: Runtime> Core<R> {
         }
         sort_prs(&mut prs);
         let h = self.agent(id)?;
-        let changed = {
+        let (changed, before, meta) = {
             let mut rt = h.lock();
             let changed = rt.meta.prs != prs || rt.meta.pr_word.as_deref() != Some(&word);
-            rt.meta.prs = prs;
+            let before = std::mem::replace(&mut rt.meta.prs, prs.clone());
             rt.meta.pr_word = Some(word);
-            changed
+            (changed, before, rt.meta.clone())
         };
         if changed {
             self.emit_agent(&h);
             self.request_save();
+            self.tell_agent_prs(&meta, &before, &prs);
         }
         Ok(())
     }

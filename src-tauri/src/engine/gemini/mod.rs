@@ -656,7 +656,7 @@ async fn read_models(
 fn writer_model(weight: Weight) -> &'static str {
     match weight {
         Weight::Light => "flash-lite",
-        Weight::Reading => "flash",
+        Weight::Reading | Weight::Given => "flash",
     }
 }
 
@@ -803,8 +803,8 @@ impl Engine for Gemini {
         let signed = own_dir(account).is_some_and(|d| sign_in_file(Path::new(d)).is_file());
         if !signed {
             return Some(Err(anyhow::anyhow!(tr!(
-                "Le compte Gemini « {name} » n’est pas connecté à Google : connecte-le dans Réglages › Comptes, « Se connecter… ».",
-                "The Gemini account “{name}” isn’t signed in to Google: sign it in in Settings › Accounts, “Sign in…”.",
+                "Le compte Gemini « {name} » n’est pas connecté à Google : connecte-le dans Réglages › Comptes et harness, « Se connecter… ».",
+                "The Gemini account “{name}” isn’t signed in to Google: sign it in in Settings › Accounts and harnesses, “Sign in…”.",
                 name = account.name
             ))));
         }
@@ -813,8 +813,8 @@ impl Engine for Gemini {
 
     fn key_missing(&self, name: &str) -> String {
         tr!(
-            "Le compte Gemini « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes, « Changer la clé… ».",
-            "The Gemini account “{name}” has no API key: give it in Settings › Accounts, “Change the key…”."
+            "Le compte Gemini « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes et harness, « Changer la clé… ».",
+            "The Gemini account “{name}” has no API key: give it in Settings › Accounts and harnesses, “Change the key…”."
         )
     }
 
@@ -1022,6 +1022,11 @@ impl Engine for Gemini {
 
     fn one_shot<'a>(&'a self, ask: OneShot<'a>) -> BoxFuture<'a, Result<String>> {
         Box::pin(one_shot(ask))
+    }
+
+    /// Its rules refuse every tool, whatever the weight (`NO_TOOLS`).
+    fn answers_without_tools(&self) -> bool {
+        true
     }
 
     fn writer(&self, _weight: Weight) -> &'static str {

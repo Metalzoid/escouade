@@ -13,10 +13,12 @@
 mod bench;
 mod exec;
 mod locate;
+pub(crate) mod prices;
 mod process;
 #[cfg(test)]
 mod schema_tests;
 pub(crate) mod terminal;
+mod words;
 
 #[cfg(test)]
 pub(crate) use bench::fake_codex;
@@ -41,7 +43,6 @@ use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL};
 use crate::i18n::{self, Lang};
 use crate::model::{EngineId, QuotaMeter};
 use anyhow::{bail, Result};
-use escouade_plugin_codex::words;
 use serde_json::{json, Value};
 use std::path::Path;
 
@@ -506,6 +507,10 @@ impl Engine for Codex {
     /// `codex exec`, ephemeral, in a read-only sandbox (`exec`).
     fn one_shot<'a>(&'a self, ask: OneShot<'a>) -> BoxFuture<'a, Result<String>> {
         Box::pin(exec::one_shot(ask))
+    }
+
+    fn answers_without_tools(&self) -> bool {
+        true
     }
 
     fn writer(&self, _weight: Weight) -> &'static str {

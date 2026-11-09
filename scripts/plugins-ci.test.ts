@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AWAITING_PUBLICATION, listPlugins, parseArgs, problemsOf, readCargo, readPlugin, touchedBy } from '../plugins/ci-lib.mjs';
+import { listPlugins, parseArgs, problemsOf, readCargo, readPlugin, touchedBy } from '../plugins/ci-lib.mjs';
 
 const made: string[] = [];
 const folder = (files: Record<string, string>) => {
@@ -106,7 +106,7 @@ describe('touchedBy', () => {
   const names = (files: string[]) => touchedBy(files, plugins).map((p: { name: string }) => p.name);
 
   it('runs only the folders touched, not a folder whose name starts the same', () => {
-    expect(names(['plugins/github/src/lib.rs', 'plugins/slack/README.md'])).toEqual(['github', 'slack']);
+    expect(names(['plugins/github/src/lib.rs', 'plugins/slack/README.en.md'])).toEqual(['github', 'slack']);
     expect(names(['plugins/github-old/x', 'plugins/README.md', 'src/App.svelte'])).toEqual([]);
   });
 
@@ -151,19 +151,14 @@ describe('the workspace of the modules', () => {
   it('gives each of them a form the store can compile, its folder alone', () => {
     for (const { name } of ported) {
       const toml = readFileSync(`plugins/${name}/Cargo.toml`, 'utf8');
-      // An `rlib` too for what the core still links (Claude Code, Codex, Copilot, OpenCode, Antigravity, until P8): docs/PLUGINS.md §8.2.
-      expect(toml, name).toMatch(/^crate-type = \["cdylib"(, "rlib")?\]$/m);
+      expect(toml, name).toMatch(/^crate-type = \["cdylib"\]$/m);
       expect(toml, name).not.toMatch(/^workspace\s*=/m);
       expect(toml, name).not.toMatch(/path\s*=/);
     }
   });
 
-  it('has a Cargo.lock for each, but those a crate of crates.io holds back, which are out of the list once it is there', () => {
-    for (const { name } of ported) {
-      const waiting = name in AWAITING_PUBLICATION;
-      expect(existsSync(`plugins/${name}/Cargo.lock`), `${name}: AWAITING_PUBLICATION of plugins/ci-lib.mjs`).toBe(!waiting);
-    }
-    for (const name of Object.keys(AWAITING_PUBLICATION)) expect(ported.map((p) => p.name)).toContain(name);
+  it('has a Cargo.lock for each', () => {
+    for (const { name } of ported) expect(existsSync(`plugins/${name}/Cargo.lock`), name).toBe(true);
   });
 
   it('pins the toolchain of the app', () => {

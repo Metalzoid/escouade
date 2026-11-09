@@ -18,6 +18,7 @@
 pub(crate) mod bench;
 mod locate;
 pub(crate) mod terminal;
+mod words;
 
 use super::registry::{
     CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
@@ -32,9 +33,9 @@ use crate::core::Attachment;
 use crate::i18n::{self, Lang};
 use crate::model::EngineId;
 use anyhow::{anyhow, bail, Result};
-pub(crate) use escouade_plugin_agy::words::*;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
+pub(crate) use words::*;
 
 /// Antigravity CLI.
 pub struct Agy;
@@ -67,7 +68,7 @@ pub(crate) use escouade_acp::limits::{CAPACITY_RESUME_MS, QUOTA_RESUME_MS};
 /// What the card of a turn stopped by its limit says (`said`: `agy`'s own words).
 #[cfg(test)]
 pub(crate) fn limited_error(lang: Lang, said: &str) -> String {
-    escouade_plugin_agy::words::limited_error(lang.tag(), said)
+    words::limited_error(lang.tag(), said)
 }
 
 /// The modes Escouade gives Antigravity, in the menu's order (its `auto` is not offered: « not
@@ -83,18 +84,18 @@ fn meaning(lang: Lang, mode: &str) -> String {
         ),
         "acceptEdits" => tr_in!(
             lang,
-            "Son mode accept-edits : ses écritures dans le dossier passent sans demander ; ses commandes (sauf git add et git commit), ses écritures ailleurs et les outils MCP demandent. Pas de bac à sable.",
-            "Its accept-edits mode: its writes in the folder go through without asking; its commands (but git add and git commit), its writes elsewhere and MCP tools ask. No sandbox."
+            "Ses écritures d’un fichier à extension dans le dossier de l’agent (hors .git, .husky, .githooks, .agents et .gemini) sont acceptées par Escouade à la fin du tour, puis il les refait ; ses commandes, git add et git commit compris, ses autres écritures et les outils MCP demandent. Ce qu’Escouade accepte vaut pour le tour suivant. Pas de bac à sable.",
+            "Its writes of a file with an extension in the agent’s folder (but .git, .husky, .githooks, .agents and .gemini) are accepted by Escouade at the end of the turn, then it does them again; its commands, git add and git commit included, its other writes and MCP tools ask. What Escouade accepts holds for the next turn. No sandbox."
         ),
         "bypassPermissions" => tr_in!(
             lang,
-            "Escouade lui permet tout par ses règles : commandes, fichiers, outils MCP et adresses, sans rien demander. Les chemins d’un projet privé restent refusés. Pas de bac à sable.",
-            "Escouade allows it everything by its rules: commands, files, MCP tools and addresses, without asking. A private project’s paths stay refused. No sandbox."
+            "Escouade lui permet tout par ses règles : commandes, fichiers, outils MCP et adresses, sans rien demander. Pour un projet privé, chaque appel est jugé par Escouade à la fin du tour : ce qui nomme ses chemins est refusé, et ses commandes demandent. Pas de bac à sable.",
+            "Escouade allows it everything by its rules: commands, files, MCP tools and addresses, without asking. For a private project, each call is judged by Escouade at the end of the turn: what names its paths is refused, and its commands ask. No sandbox."
         ),
         _ => tr_in!(
             lang,
-            "Ses écritures dans le dossier de l’agent passent ; ses commandes, ses écritures ailleurs et les outils MCP demandent, une fois son tour fini (Antigravity ne demande rien en cours de tour), puis il les refait. Il lit sans demander. Pas de bac à sable.",
-            "Its writes in the agent’s folder go through; its commands, its writes elsewhere and MCP tools ask, once its turn is over (Antigravity asks nothing during a turn), then it does them again. It reads without asking. No sandbox."
+            "Ses écritures d’un fichier à extension dans le dossier de l’agent (hors .git, .husky, .githooks, .agents et .gemini) sont acceptées par Escouade ; ses commandes, ses autres écritures et les outils MCP demandent. Tout cela une fois son tour fini (Antigravity ne demande rien en cours de tour), puis il les refait ; ce qu’Escouade accepte vaut pour le tour suivant. Il lit sans demander. Pas de bac à sable.",
+            "Its writes of a file with an extension in the agent’s folder (but .git, .husky, .githooks, .agents and .gemini) are accepted by Escouade; its commands, its other writes and MCP tools ask. All of it once its turn is over (Antigravity asks nothing during a turn), then it does them again; what Escouade accepts holds for the next turn. It reads without asking. No sandbox."
         ),
     }
 }
@@ -340,6 +341,14 @@ fn result_of(out: &[u8]) -> Result<String> {
         .to_string())
 }
 
+/// The model of a text of `weight`: every tool is refused whatever it is (`write_no_tools`).
+pub(crate) fn text_model(weight: Weight) -> String {
+    match weight {
+        Weight::Light => format!("{DEFAULT}-low"),
+        Weight::Reading | Weight::Given => format!("{DEFAULT}-medium"),
+    }
+}
+
 /// One question to `agy -p`, in a home of its own removed once answered, on its fastest Gemini,
 /// every tool refused (ESC-271); its time bounded by `oneshot::LIMIT`.
 async fn one_shot(ask: OneShot<'_>) -> Result<String> {
@@ -349,10 +358,7 @@ async fn one_shot(ask: OneShot<'_>) -> Result<String> {
         bail!("agy: its tools not refused for a text: {e:#}");
     }
     let env = home_env(&ask.env, &home);
-    let model = match ask.weight {
-        Weight::Light => format!("{DEFAULT}-low"),
-        Weight::Reading => format!("{DEFAULT}-medium"),
-    };
+    let model = text_model(ask.weight);
     let mut args = launch_args(&Settings::default(), None);
     args.extend(["--model".to_string(), model]);
     let question = if ask.system.trim().is_empty() {
@@ -452,8 +458,8 @@ impl Engine for Agy {
 
     fn key_missing(&self, name: &str) -> String {
         tr!(
-            "Le compte Antigravity « {name} » n’a pas de clé d’API Gemini : donne-la dans Réglages › Comptes, « Changer la clé… ».",
-            "The Antigravity account “{name}” has no Gemini API key: give it in Settings › Accounts, “Change the key…”."
+            "Le compte Antigravity « {name} » n’a pas de clé d’API Gemini : donne-la dans Réglages › Comptes et harness, « Changer la clé… ».",
+            "The Antigravity account “{name}” has no Gemini API key: give it in Settings › Accounts and harnesses, “Change the key…”."
         )
     }
 
@@ -663,6 +669,10 @@ impl Engine for Agy {
         Box::pin(one_shot(ask))
     }
 
+    fn answers_without_tools(&self) -> bool {
+        true
+    }
+
     fn writer(&self, _weight: Weight) -> &'static str {
         "Gemini 3.8 Flash"
     }
@@ -685,10 +695,11 @@ impl Engine for Agy {
 }
 
 /// What the core does in the agent's home before its launch: the hooks of its interface (« Vue Antigravity ») would run here
-/// too, for nothing.
+/// too, for nothing; what the 2.2.0 kept of « Toujours » is erased (ESC-376), as its plugin no longer reads it.
 pub(crate) fn prepare(p: &crate::plugins::harness::Preparing) -> Result<Vec<String>> {
     if let Some(home) = p.home {
         terminal::forget_hooks(home);
+        let _ = std::fs::remove_file(always_file(home));
     }
     Ok(Vec::new())
 }

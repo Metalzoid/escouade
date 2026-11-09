@@ -11,11 +11,11 @@
 //! (`blocking_discussions_resolved`), a fork's path is read once, and the client slows down as the limit comes near
 //! (`RateLimit-*`), and waits what a 429 asks (`Retry-After`) before trying once more.
 
-use crate::redirect::{self, Reply};
 use anyhow::{anyhow, Result};
 use escouade_plugin_kit::errors::HttpError;
 use escouade_plugin_kit::forge::*;
 use escouade_plugin_kit::http::encode;
+use escouade_plugin_kit::http::redirect::{self, Reply};
 use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::tr;
 use parking_lot::Mutex;
@@ -405,9 +405,10 @@ impl Gitlab {
         for _ in 0..MAX_PAGES {
             let reply = self.send(Method::GET, &url, None).await?;
             out.extend(Self::json(&reply)?.as_array().cloned().unwrap_or_default());
+            // On the API only: the token goes with this address, and `send` keeps it from a redirection, not from it.
             match header(&reply.headers, "link").and_then(next_link) {
-                Some(n) => url = n,
-                None => break,
+                Some(n) if n.starts_with(&format!("{}/", self.base)) => url = n,
+                _ => break,
             }
         }
         Ok(out)

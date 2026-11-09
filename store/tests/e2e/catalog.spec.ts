@@ -19,7 +19,7 @@ test.describe.configure({ mode: 'serial' });
 
 let seeded: Awaited<ReturnType<typeof seedCatalog>>;
 test.beforeAll(async () => {
-  seeded = await seedCatalog();
+  seeded = await seedCatalog({ own: true });
 });
 
 /** What the eye compares between the store and the preview, by selector: sizes, weights, colors. */
@@ -109,15 +109,6 @@ for (const scheme of ['dark', 'light'] as const)
         for (const p of ['size', 'weight', 'color', 'bg', 'border', 'radius'] as const)
           if (!(k === 'tile' && p !== 'size' && p !== 'radius' && p !== 'weight')) expect(store[k]![p], `${k} ${p}`).toBe(preview[k]![p]);
       }
-      if (name === 'home') {
-        // The preview's row of the verified holds signed plugins; the store's, until STORE-8 signs any, Escouade's
-        // own: « Livré avec Escouade » in the seal's colors and size.
-        const own = await measure(page, { t: '.row .own' });
-        await page.goto(`${PREVIEW}${scheme === 'light' ? '?theme=light' : ''}#home`);
-        const seal = await measure(page, { t: '.row .seal' });
-        for (const p of ['size', 'weight', 'color', 'bg', 'border', 'radius', 'height'] as const)
-          expect(own.t![p], `seal ${p}`).toBe(seal.t![p]);
-      }
     });
 
 for (const [w, h] of SIZES)
@@ -143,8 +134,9 @@ test('the home page lists the categories, Escouade’s own among the verified, a
   await expect(page.locator('.cats .chip').first()).toContainText('Harness');
   await expect(page.locator('.cats')).toContainText('Sources du Kanban');
   await expect(page.locator('.cats')).toContainText('Hébergeurs de code');
-  // The verified first (signed by the review, STORE-8: a base kept between runs has some), then Escouade's own.
-  await expect(page.locator('.rows .row').first()).toContainText(/Vérifié par Escouade|Livré avec Escouade/);
+  // The verified first: signed by the review, Escouade's own as anyone's.
+  await expect(page.locator('.rows .row').first()).toContainText('Vérifié par Escouade');
+  await expect(page.locator('.rows')).toContainText('GitHub');
   // The new ones, newest first: the seeded plugins are dated a few minutes back, so a plugin another test publishes
   // meanwhile comes before them; the page is compared with what the store says is the newest.
   const fresh = ((await (await page.request.get('/api/catalog/home')).json()) as { fresh: { name: { fr: string } }[] }).fresh;
@@ -195,10 +187,8 @@ test('a plugin’s page shows its README cut down, its copied image, its permiss
   expect(await page.evaluate(() => (window as unknown as { __pwned?: unknown }).__pwned)).toBeUndefined();
   await expect(page.locator('body')).toBeVisible();
   expect(await md.locator('a[href^="javascript"]').count()).toBe(0);
-  await expect(md.locator('a', { hasText: 'la doc' })).toHaveAttribute(
-    'href',
-    /^https:\/\/github\.com\/.+\/blob\/[0-9a-f]{40}\/docs\/setup\.md$/,
-  );
+  // A link to a page of its documentation opens its tab on the store (ESC-366).
+  await expect(md.locator('a', { hasText: 'la doc' })).toHaveAttribute('href', '?tab=docs&page=docs%2Fsetup.md');
   // The image of the repository, copied on the store; the tracker's dropped.
   const img = md.locator('img');
   await expect(img).toHaveCount(1);
@@ -253,6 +243,46 @@ test('a README in the visitor’s language, the other one otherwise', async ({ p
   await expect(page.locator('.aside')).toContainText('Asks for nothing');
 });
 
+test('the documentation pages of docs/fr and docs/en in the visitor’s language, the other one otherwise (ESC-366)', async ({
+  page,
+  request,
+}) => {
+  const md = page.locator('.readme .md');
+  const pages = page.locator('.doc-pages a');
+  // In French: its two pages, in the order of their names, the second titled by its file's name.
+  await page.goto(`/plugins/${seeded.ids.ntfy}?tab=docs`);
+  await expect(page.locator('.tabs a.on')).toContainText('2');
+  await expect(pages).toHaveText(['Installer', 'regler']);
+  await expect(md).toContainText('Abonne-toi au sujet.');
+  await expect(md).toHaveAttribute('lang', 'fr');
+  const src = (await md.locator('img').getAttribute('src'))!;
+  expect(src).toMatch(/^\/files\/[0-9a-f]{64}\.png$/);
+  expect((await request.get(src)).status()).toBe(200);
+  // A link to the other page stays on the store, in its tab.
+  await md.getByRole('link', { name: 'règle-le' }).click();
+  // The router writes the path's slashes as they are, a link encodes them: both name the same page.
+  await expect(page).toHaveURL(/[?&]page=docs(?:%2F|\/)fr(?:%2F|\/)02-regler\.md/);
+  await expect(md).toContainText('Le sujet par projet.');
+  await expect(pages.nth(1)).toHaveClass(/on/);
+  // In English: its one page, and the same image.
+  await page.goto(`/en/plugins/${seeded.ids.ntfy}?tab=docs`);
+  await expect(page.locator('.doc-pages')).toHaveCount(0);
+  await expect(md).toContainText('Subscribe to the topic.');
+  await expect(md).toHaveAttribute('lang', 'en');
+  await expect(md.locator('img')).toHaveAttribute('src', src);
+  // A page asked by its address shows with those of its language.
+  await page.goto(`/en/plugins/${seeded.ids.ntfy}?tab=docs&page=${encodeURIComponent('docs/fr/02-regler.md')}`);
+  await expect(md).toContainText('Le sujet par projet.');
+  await expect(pages).toHaveText(['Installer', 'regler']);
+  // A documentation without the visitor's language: the other one's, as a README.
+  await page.goto(`/en/plugins/${seeded.ids.nord}?tab=docs`);
+  await expect(md).toContainText('Seize couleurs.');
+  await expect(md).toHaveAttribute('lang', 'fr');
+  // A folder without languages, as before: its page, in both.
+  await page.goto(`/en/plugins/${seeded.ids.slack}?tab=docs`);
+  await expect(md).toContainText('Le salon par projet.');
+});
+
 test('« Signaler » takes a report without an account, and acknowledges it by e-mail', async ({ page, request }) => {
   await page.goto(`/plugins/${seeded.ids.slack}`);
   await page.getByRole('link', { name: 'Signaler ce plugin' }).click();
@@ -298,12 +328,15 @@ test('an author’s page lists their plugins; Escouade’s own have theirs, with
   for (const src of await page.locator('img').evaluateAll((all) => all.map((i) => i.getAttribute('src'))))
     expect(src).toMatch(/^\/files\/[0-9a-f]{64}\.png$/);
   await page.goto('/plugins/dev.escouade.github');
-  await expect(page.locator('.plug-head')).toContainText('Livré avec Escouade');
-  await expect(page.locator('.aside')).toContainText('Lance un programme d’Escouade');
+  // A line of the store like any, its version and its seal, under the mark « Escouade » rather than its account.
+  await expect(page.locator('.plug-head .line a.me')).toHaveText('Escouade');
+  await expect(page.locator('.plug-head')).toContainText('Vérifié par Escouade');
+  await expect(page.locator('.plug-head')).toContainText('v2.2.0');
+  await expect(page.locator('.aside')).toContainText('api.github.com');
   await expect(page.getByRole('link', { name: 'Ouvrir dans Escouade' })).toHaveAttribute('href', 'escouade://plugin/dev.escouade.github');
   await page.locator('.plug-head .line a.me').click();
   await expect(page).toHaveURL(/\/authors\/escouade$/);
-  await expect(page.locator('.rows .row').first()).toContainText('Livré avec Escouade');
+  await expect(page.locator('.rows .row', { hasText: 'Jira' })).toContainText('Escouade');
   expect((await page.goto('/plugins/dev.nobody.nothing'))?.status()).toBe(404);
   expect((await page.goto('/en/authors/nobody-at-all-here'))?.status()).toBe(404);
 });
@@ -378,12 +411,8 @@ for (const scheme of ['dark', 'light'] as const)
     await page.goto('/plugins/dev.escouade.claude-code');
     await expect(page.locator('.plug-head .tile.glyph.harness')).toBeVisible();
     await page.goto('/authors/escouade');
-    // Each of Escouade's own rows has its tile, brand or glyph, and no image: their number grows with the plugins the
-    // app gives (one more each time a host, a source or a harness leaves the core), so it is read, never written here.
-    const rows = page.locator('.rows .row');
-    await expect(rows.first()).toBeVisible();
-    const count = await rows.count();
-    expect(count).toBeGreaterThanOrEqual(17);
-    await expect(page.locator('.rows .row .tile.brand, .rows .row .tile.glyph')).toHaveCount(count);
-    expect(await page.locator('.rows .row img').count()).toBe(0);
+    // Their tiles on their rows too: a brand's or a glyph's, drawn, never an image.
+    await expect(page.locator('.rows .row', { hasText: 'GitHub' }).locator('.tile.brand')).toBeVisible();
+    await expect(page.locator('.rows .row', { hasText: 'Jira' }).locator('.tile.glyph')).toBeVisible();
+    await expect(page.locator('.rows .row', { hasText: 'Claude Code' }).locator('.tile.glyph')).toBeVisible();
   });

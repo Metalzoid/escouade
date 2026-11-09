@@ -59,6 +59,7 @@ Le protocole de base (`schemas/plugin-protocol-1.json`, version 1, délai par d�
 | `net/fetch` | vers Escouade | 10 s | Une requête https vers `permissions.network` (WASM seulement) |
 | `fs/read`, `fs/write`, `fs/stat`, `fs/list`, `fs/canon` | vers Escouade | 5 s | Les fichiers de `permissions.files` (WASM seulement, §8.4.6) |
 | `fs/gitProtected` | vers Escouade | 1 s pour git | Si git ne peut rien lancer de l'agent dans son dossier, pour un harness en WASM (`run.wasm`, §8.26) |
+| `fs/fileOnly` | vers Escouade | 1 s pour git | Si l'écriture d'un chemin du dossier d'un agent n'atteint qu'un fichier : un fichier qui est là, ou rien et aucun sous-module de l'index de git dessous ; un booléen, sans racine (Antigravity, ESC-389) |
 | `proc/spawn`, `proc/write`, `proc/kill` | vers Escouade | 5 s | Les programmes de `permissions.commands` (WASM seulement, §8.4.7) |
 | `proc/out`, `proc/exit` | vers le plugin, notification | — | Ce qu'un programme écrit, et sa fin |
 | `log` | vers Escouade, notification | — | Une ligne de son journal |
@@ -1091,7 +1092,7 @@ Les e2e, et donc la vue Plugins, le store dans l'app, les thèmes et les sceaux 
 
 Décidé par l'utilisateur le 2026-11-04 : « je veux que tous les plugins, même les builtins, passent par le même système : on livre un plugin, il est compilé pour qu'il soit utilisable sur tous les systèmes, et il fait ce qu'il a besoin de faire », puis « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté ». Le même jour, l'état de fin : « A la fin, je veux que tous les plugins builtins soient dans /plugins/* (exemple plugins/claude), tous publiés sur le store, vérifiés et signés. »
 
-Ce chapitre est l'étude, faite avant le portage. **A1 à A8, A9, P3b, P1, P2, P3 (Codex, Copilot CLI, Cursor, Gemini), P4, P5, P6, P7 et D1 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-341, §8.16 ; ESC-335, §8.17 ; ESC-336, §8.18 ; ESC-344, §8.19 ; ESC-351, §8.22 ; ESC-349, §8.23 ; ESC-348, §8.24 ; ESC-345, §8.25 ; ESC-346, §8.26 ; ESC-350, §8.28 ; ESC-337, §8.20 ; ESC-342, §8.21 ; ESC-347, §8.27) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
+Ce chapitre est l'étude, faite avant le portage. **A1 à A8, A9, P3b, P1, P2, P3 (Codex, Copilot CLI, Cursor, Gemini), P4, P5, P6, P7 et D1 sont faits** (ESC-331, §8.11 ; ESC-332, §8.12 ; ESC-334, §8.13 ; ESC-338, §8.14 ; ESC-333, §8.15 ; ESC-341, §8.16 ; ESC-335, §8.17 ; ESC-336, §8.18 ; ESC-344, §8.19 ; ESC-351, §8.22 ; ESC-349, §8.23 ; ESC-348, §8.24 ; ESC-345, §8.25 ; ESC-346, §8.26 ; ESC-350, §8.28 ; ESC-337, §8.20 ; ESC-342, §8.21 ; ESC-347, §8.27 ; ESC-354, Z2, §8.32) ; le reste du plan ne l'est pas. Le prototype, ses tests et ses mesures sont dans `prototypes/wasm-all/` (son README dit comment tout refaire). Il revoit le §5.7 (« le `run` natif, tranché ») et le §5.6 (« un `run.wasm` n'est pas ouvert ») : ces deux passages tiennent jusqu'à l'acceptation des décisions proposées par ESC-330. Sans numéro tant qu'elles ne sont pas acceptées, elles se citent par leur identifiant : `run-wasm-le-rust-des-plugins-compile-par`, `les-capacites-de-l-hote-ce-qu-un-plugin`, `la-premiere-main-dans-plugins-id-court-p`, `plus-aucun-run-command-le-store-le-refus`.
 
 **En bref.**
 
@@ -1127,7 +1128,7 @@ Relevé sur `main` au 2026-11-04, et sur `ticket/esc-226` (c291625b) pour Claude
 | `dev.escouade.trello` | `api.trello.com` | rien | `plugins/trello/src/lib.rs` |
 | `dev.escouade.jira` | `*.atlassian.net` | rien ; le site est tapé par l'utilisateur | `plugins/jira/src/lib.rs` |
 | `dev.escouade.clickup` | `api.clickup.com` | une attente de limite d'appels, l'heure | `src/lib.rs:84`, `:692` |
-| `dev.escouade.github` | `api.github.com`, `*.ghe.com`, `api.*.ghe.com` ; toute instance Server | une pause par limite d'appels, l'heure | `src/pulls.rs:160`, `:107` |
+| `dev.escouade.github` | `api.github.com`, `*.ghe.com` ; toute instance Server | une pause par limite d'appels, l'heure | `src/pulls.rs:160`, `:107` |
 | `dev.escouade.gitlab` | `gitlab.com` ; toute instance | une pause, l'heure | `src/merges.rs:317`, `:62` |
 | `dev.escouade.bitbucket` | `api.bitbucket.org` | une pause, l'heure | `src/pulls.rs:172`, `:93` |
 | `dev.escouade.gitea` | `codeberg.org`, `gitea.com` ; toute instance | rien | `src/pulls.rs` |
@@ -1188,7 +1189,7 @@ Le jeton de la CLI (`gh auth token`, `glab auth status --show-token`, `az accoun
 - le jugement de la clôture des projets privés sur les fichiers, que `escouade-acp` tient aujourd'hui lui-même (`paths.rs`) : avec `fs/*`, c'est l'hôte qui le tient (§8.4.6). C'est plus sûr qu'aujourd'hui.
 - le tunnel de proxy et le TLS du WebSocket, aujourd'hui dans `voice/live.rs` : l'hôte les fait pour tous (§8.4.4).
 
-**Ce qui doit sortir du cœur.** Le cœur lie aujourd'hui des crates de plugins **en bibliothèque** : 8 usages d'`escouade_plugin_opencode`, 7 de `_codex`, 5 de `_copilot`, 5 de `_agy` et 19 d'`escouade_acp` hors tests, pour ses « Vue X » et ses comptes (`src-tauri/src/agent/*.rs`, `engine/*/mod.rs`). Un correctif publié au store ne corrigerait donc pas la vue, qui resterait à la version de l'app. **Retenu** : une méthode du contrat (`view/translate`), le cœur lisant le fichier de la session et le plugin le traduisant. Le cœur ne lie plus que `escouade-plugin-protocol`. C'est le ticket P8 du plan ; il peut attendre après la 2.2 sans rien casser, le code restant commun.
+**Ce qui est sorti du cœur.** Le cœur liait des crates de plugins **en bibliothèque**, pour ses « Vue X » et ses comptes : un correctif publié au store n'aurait pas corrigé la vue, restée à la version de l'app. C'est fini (P8, §8.30) : les vues passent par `view/translate`, le cœur lisant le fichier de la session et le plugin le traduisant, et `src-tauri/Cargo.toml` ne dépend plus d'aucun dossier de `plugins/`. Le cœur garde les crates de `crates/` (le protocole, le kit, `escouade-acp`, `escouade-voice`), qui ne sont pas des plugins.
 
 ### 8.3 Le modèle d'exécution
 
@@ -1196,7 +1197,7 @@ Le jeton de la CLI (`gh auth token`, `glab auth status --show-token`, `az accoun
 
 - **Le module est un réacteur** : `crate-type = ["cdylib"]`, pas de `_start`, et l'export `escouade-turn`, le même nom que pour `run.js`. Il garde son état entre deux tours. Vu en le branchant (ESC-331) : rustc 1.98 n'exporte pas `_initialize` d'un cdylib `wasm32-wasip1`, ni dans le prototype ni dans le module de test ; l'hôte l'appelle s'il est là, sinon il passe au premier tour.
 - **Le fil attend sur un seul canal** ce qui peut arriver : une ligne du cœur, la fin d'un `net/fetch`, un morceau de flux, un message de WebSocket, la sortie d'un programme, un minuteur. Il écrit tout ce qui est arrivé sur l'entrée du module, puis lance **un** tour, puis sert ce que le module a écrit. Plusieurs événements font un seul tour.
-- **Rien n'attend dans un tour.** Une demande à l'hôte est une ligne ; sa réponse arrive au tour suivant. Une tâche Rust qui attend rend la main (`Poll::Pending`) ; `escouade-plugin-kit` a un exécuteur d'une centaine de lignes, sans tokio, qui sonde ses tâches à chaque tour (`crates/escouade-plugin-kit/src/serve/reactor.rs`). Un harness, machine à états sans attente, garde son `Plugin::handle` tel quel (`crates/escouade-plugin-protocol/src/turn.rs`).
+- **Rien n'attend dans un tour.** Une demande à l'hôte est une ligne ; sa réponse arrive au tour suivant. Une tâche Rust qui attend rend la main (`Poll::Pending`) ; `escouade-plugin-kit` a un exécuteur d'une centaine de lignes, sans tokio, qui sonde ses tâches à chaque tour, puis celles qu'un réveil a relancées (`crates/escouade-plugin-kit/src/serve/tasks.rs`, §8.29). Un harness, machine à états sans attente, garde son `Plugin::handle` tel quel (`crates/escouade-plugin-protocol/src/turn.rs`).
 - **Deux portes vers l'hôte :**
   - **les lignes JSON-RPC**, pour tout ce qui dure : c'est la voie normale, la même qu'en `run.js`, le même journal ;
   - **un appel synchrone** (`escouade.call`, un import du module, requête et réponse en JSON), pour ce qu'une machine à états doit avoir avant de répondre, sans changer sa forme : les fichiers (§8.4.6). Il est servi sur le fil du plugin et compte dans le temps du tour.
@@ -1427,13 +1428,27 @@ Chacun passe **comme un tiers** :
 1. l'étiquette `plugins/<id-court>/vX.Y.Z`, posée par le chef ;
 2. la soumission en dossier, par le MCP du store (`submit_version`) ;
 3. les contrôles, dont la compilation en WASM par le store ;
-4. la revue locale, qui recompile et compare ; le rapport ;
-5. la signature par le chef (`npm run plugin-review -- sign`, sa clé sans mot de passe : mémoire `first-party-plugin-signing`) ;
-6. la publication.
+4. la publication, non vérifiée, en demandant la revue (`publish_version`) : le store ne relit et ne signe qu'une version publiée (`docs/STORE.md` §4.3), et l'app ne prend aucun `dev.escouade.*` sans signature ;
+5. la revue locale, qui recompile et compare ; le rapport ;
+6. la signature par le chef (`npm run plugin-review -- sign`, sa clé sans mot de passe : mémoire `first-party-plugin-signing`) : la version porte le sceau.
 
-**La liste `BUILTINS` de `store/server/utils/builtin.ts`** se vide : chacun devient une vraie ligne de plugin, à sa place dans le catalogue, avec la marque « Escouade » et ses versions. Le préfixe `dev.escouade.*` reste réservé au dépôt de l'app (`STORE_FIRST_PARTY_REPO`, décision 25) et l'app ne l'installe que signé.
+**La liste `BUILTINS` de `store/server/utils/builtin.ts`** est vide (ESC-353) : chacun est une vraie ligne de plugin, à sa place dans le catalogue, avec la marque « Escouade » (le préfixe la donne, et sa tuile : marque ou glyphe de sa catégorie) et ses versions. Il n'y a plus rien sur le store pour un plugin tant qu'il n'est pas publié. Le préfixe `dev.escouade.*` reste réservé au dépôt de l'app (`STORE_FIRST_PARTY_REPO`, décision 25) et l'app ne l'installe que signé.
 
-Pour 23 plugins, ces gestes doivent tenir en une commande du chef : `npm run plugins:publish -- --changed` pose les étiquettes des dossiers qui ont bougé, soumet, attend, revoit, signe et publie, et s'arrête au premier verdict qui n'est pas « Vérifier ». La lecture humaine reste celle des diffs.
+Pour 23 plugins, ces gestes tiennent en une commande du chef (ESC-353, `store/scripts/plugins-publish/`) ; un agent de ticket ne la lance jamais :
+
+```sh
+npm run plugins:publish -- --changed        # tout dossier dont la version n'est pas encore signée au store
+npm run plugins:publish -- claude trello    # ceux-là
+```
+
+- **Qui passe** : les dossiers de `plugins/` dont le manifeste porte un `dev.escouade.*`, un par un, dans l'ordre des noms. `--changed` laisse de côté une version `0.0.0` (pas encore portée), et nommer un tel dossier est refusé.
+- **Avant tout** : l'arbre propre et le commit sur `origin/main`, sinon rien n'est fait (code 2).
+- **Pour chaque plugin** : l'étiquette sur ce commit, poussée ; `submit_version` ; `get_version` jusqu'à la fin des contrôles ; `publish_version` avec `request_review`, et pour une première version les `store.categories` de son manifeste (Cursor CLI, Gemini CLI et Mistral : celles de l'outil, voir plus bas) ; `plugin-review <id>@<version>` ; puis, sur le seul verdict du rapport, `plugin-review report`, `plugin-review sign`, et la lecture du catalogue qui doit la dire vérifiée.
+- **Il s'arrête** (code 1, avec la raison et ce qu'il reste à faire) au premier contrôle rouge, à une version retenue, à la limite de 20 soumissions par heure, à un rapport sans la ligne `**Verdict final : Vérifier**`, ou à un autre verdict : rien n'est déposé ni signé. L'outil n'écrit jamais ce verdict. C'est la lecture du chef (`/review-plugin`) qui le pose ; la lecture humaine reste celle des diffs.
+- **Il reprend là** : il ne garde rien à lui. Ce qui est au catalogue, signé ou non, n'est ni étiqueté ni soumis de nouveau ; un rapport présent n'est pas récrit ; une version signée n'est pas refaite.
+- **Un manifeste ne change pas pour ça** quand il entre dans le module : Cursor CLI, Gemini CLI et Mistral lisent le leur (`include_str!`, `harnesses_of`), et une clé `store` y change l'empreinte (+64 octets, mesuré). Leurs catégories restent donc dans l'outil (`EMBEDDED_CATEGORIES`), jusqu'à leur prochaine version. Les 21 autres modules les disent au manifeste, sans effet sur leur empreinte, et `goose` aussi. Un test tient cette règle.
+- **Ce qui est déjà au store ne repart pas** : une version signée ou retirée au catalogue n'est pas touchée (`discord`, `high-contrast`, `slack`, `team-rules`, tant que leur version ne bouge pas) ; une version publiée non signée va à sa revue, sans nouvelle soumission. Seule la version compte : un dossier changé sans version nouvelle ne repart pas.
+- **Il ne lit jamais la clé** : `sign` est `npm run plugin-review -- sign`, son propre process. Seul le jeton d'administration lui sert, celui du trousseau ou d'`ESCOUADE_STORE_TOKEN`, sur `/mcp`, limité à ces trois outils (`docs/STORE.md` §2.5). Aucun secret dans son journal.
 
 #### 8.6.3 Le kit sort sur crates.io
 
@@ -1475,8 +1490,19 @@ Les tests de l'app (`forge/*_tests`, `plugins_harness_tests`, le banc de flux) l
 **Retenu : les deux.** Une **amorce** dans l'app, puis le store.
 
 - **L'amorce.** L'installeur embarque un dossier `plugins/` (les ressources de Tauri) : pour chaque plugin de première main, **ce que le store a publié pour sa dernière version** : `version.json`, `version.json.minisig`, l'archive du dossier et `plugin.wasm`. Rien de construit à part : les mêmes octets, la même signature.
-- **Au premier lancement**, ou après une mise à jour de l'app, Escouade **installe l'amorce par le chemin d'une installation du store**, sans réseau : mêmes vérifications, mêmes dossiers, origine `store`, une marque `seed`. La précompilation (50 à 93 ms par module, soit deux secondes environ pour tous sur un cœur) se fait à la première activation de chacun, hors du fil de la fenêtre, pas au démarrage.
-- **Ensuite, le store.** Les plugins de première main se mettent à jour par lui, sans attendre une release de l'app, comme tout plugin : la mise à jour est proposée, jamais faite seule (voir plus bas). L'amorce n'installe que ce qui n'est pas installé. Une version de l'amorce plus récente que celle installée est proposée comme une mise à jour du store. On ne redescend jamais de version.
+- **Au premier lancement**, ou après une mise à jour de l'app, Escouade **installe de l'amorce ce que la configuration de l'utilisateur utilise**, par le chemin d'une installation du store, sans réseau : mêmes vérifications, mêmes dossiers, origine `store`, une marque `seed`. La précompilation (50 à 93 ms par module, soit deux secondes environ pour tous sur un cœur) se fait à la première activation de chacun, hors du fil de la fenêtre, pas au démarrage.
+- **Le tri** (décidé par l'utilisateur le 2026-11-07, « je veux un tri », ESC-373). Il se lit dans les réglages, les projets, les agents et les comptes, jamais sur le réseau (`plugins/sort.rs`) :
+  - **un harness** (Claude Code, Codex, Copilot CLI, Cursor CLI, Gemini CLI, Antigravity CLI, OpenCode, Mistral Vibe, Goose ; `dev.escouade.acp` pour un harness décrit) : un compte de ce harness dans Réglages › Comptes, un agent sur lui, le harness par défaut d'un projet ou celui des textes rédigés ;
+  - **une source de tickets ou un hébergeur** (Trello, ClickUp, Linear, Jira, GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) : un projet qui l'a pour source, un projet dont un remote est chez lui (lu dans `.git/config`, par le nom de l'hôte ou par le compte connecté pour cette instance), un compte de ce service déjà enregistré (sauf s'il est servi par le plugin d'un autre auteur) ;
+  - **un service de voix** (Deepgram, ElevenLabs, OpenAI, Groq, Mistral) : choisi « En ligne » pour la dictée ou pour la voix, ou dont une clé est gardée (sa présence, jamais sa valeur) ;
+  - **isola** : un projet (ou l'un de ses dépôts) avec un `.isola.toml` ;
+  - **Discord, Slack, Contraste élevé, Règles de l'équipe** : ce qui est installé le reste ; sinon, proposés.
+  - **Ce qui ne se lit pas sûrement s'installe** : un fichier de réglages, d'état ou de comptes qui ne se lit pas installe toute l'amorce ; un projet hors d'atteinte (disque non monté) ou dont la configuration git ne se lit pas veut tous les hébergeurs et isola ; un identifiant de l'amorce que la règle ne connaît pas s'installe. Le tri ne fait jamais perdre une fonction de la 2.1.
+- **Une mise à jour depuis la 2.1.** Une entrée `builtin` que le tri désigne prend la version de l'amorce, ses choix gardés ; une que le tri ne désigne pas est retirée proprement, ses choix gardés comme « Garder ses réglages » les garde, ses secrets laissés au trousseau, et proposée. Elle n'est pas notée « désinstallée » : l'utilisateur ne l'a pas retirée.
+- **Une première installation** n'installe rien d'office. L'accueil propose les harness ; « Ajouter un compte… » sur l'un d'eux installe son plugin depuis l'amorce, sans réseau, puis ajoute le compte.
+- **Le geste qui demande un plugin absent** l'installe depuis l'amorce, sans réseau, et le dit dans une ligne (« Plugin Codex installé ») : ajouter un compte d'un harness, choisir une source de tickets ou un harness par défaut pour un projet, ajouter un projet (l'hébergeur de ses remotes, isola), connecter un compte d'une source ou d'un hébergeur, choisir un service de voix « En ligne » ou lui donner sa clé, préparer ou lancer le test d'un worktree avec un `.isola.toml`. Le geste vaut accord : pas de fenêtre de plus. C'est `Core::need_plugin`. Un plugin désinstallé par l'utilisateur n'est remis que sur un tel geste, jamais au lancement.
+- **Les listes de choix** (harness d'un compte, source de tickets, hébergeur, service de voix) gardent tous les choix de l'amorce, installés ou non : leurs registres sont ceux du cœur. La vue Plugins montre ceux de l'amorce non installés (« Proposés par Escouade », « Dans l'app, sans téléchargement »), installables d'un clic.
+- **Ensuite, le store.** Les plugins de première main se mettent à jour par lui, sans attendre une release de l'app, comme tout plugin : la mise à jour est proposée, jamais faite seule (voir plus bas). L'amorce n'installe que ce qui n'est pas installé, et que le tri désigne. Une version de l'amorce plus récente que celle installée est proposée comme une mise à jour du store. On ne redescend jamais de version.
 - **Sans réseau**, rien ne change : l'amorce, ou ce qui a été téléchargé, tourne. Le catalogue n'est lu que pour proposer. **Sans store** (panne, entreprise fermée), tout marche à la version de l'amorce.
 
 **Le mode de mise à jour : celui de tout plugin.** Décidé par l'utilisateur le 2026-11-04 : « pas d'auto update, faut vraiment considérer les plugins portés depuis les builtins comme des plugins à part entière ». La règle du §3.2 (« jamais en silence ») vaut donc pour la première main comme pour les tiers : une nouvelle version est proposée dans la vue Plugins, et elle s'installe au clic de l'utilisateur, avec la même fenêtre quand ses permissions grandissent. Un agent en cours garde sa version jusqu'à son prochain lancement : un plugin de harness ne change pas sous un tour.
@@ -1493,13 +1519,13 @@ Le précompilé reste local, jamais reçu : `Module::deserialize` fait confiance
 
 **Une révocation qui frappe l'amorce** : un `dev.escouade.*` révoqué sans remplaçant laisse le plugin coupé, et sa raison dite. C'est le prix d'avoir une seule règle ; un correctif publié par le store, qui ne demande pas de release, est la parade.
 
-**Ce que devient `dev.escouade.*`.** Il reste réservé. L'origine `builtin`, son `{escouade}/…`, `check_program`, `builtin:<version>` et la règle « l'identifiant de l'app l'emporte » disparaissent. Le registre de `plugins/builtin.rs` devient la seule liste des identifiants de l'amorce. Plugins à part entière (décision du 2026-11-04 plus haut), ceux de la première main **se coupent et se désinstallent** comme les autres. L'amorce ne réinstalle pas un plugin que l'utilisateur a désinstallé : elle le note, et la vue Plugins le propose à nouveau. L'app dit ce qui manque quand un harness ou une source n'a plus son plugin. Un plugin d'un autre auteur peut toujours prendre la place d'un service de voix, à son identifiant à lui.
+**Ce que devient `dev.escouade.*`.** Il reste réservé. L'origine `builtin`, son `{escouade}/…`, `check_program`, `builtin:<version>` et la règle « l'identifiant de l'app l'emporte » disparaissent. Le registre de `plugins/builtin.rs` devient la seule liste des identifiants de l'amorce. Plugins à part entière (décision du 2026-11-04 plus haut), ceux de la première main **se coupent et se désinstallent** comme les autres. L'amorce ne réinstalle pas au lancement un plugin que l'utilisateur a désinstallé : elle le note, la vue Plugins le propose à nouveau, et le geste qui le demande le remet. L'app dit ce qui manque quand un harness ou une source n'a plus son plugin. Un plugin d'un autre auteur peut toujours prendre la place d'un service de voix, à son identifiant à lui.
 
 **Les fichiers.** La liste est embarquée à la compilation (`plugins/seed.json`) ; les octets sont dans `src-tauri/seed/`, que Tauri copie dans les ressources (`<ressources>/seed/<id>/`). Rien de ce dossier n'est commité sauf son `README.md`.
 
 **L'ordre de la release.** L'amorce fige des versions publiées : **le chef publie d'abord, la release ensuite**. `release.yml` télécharge l'amorce nommée par `plugins/seed.json` (un fichier commité : `id`, `version`, empreinte de `version.json`), vérifie chaque signature, et échoue sinon. Un build de développement n'a pas de signature : `debug_assertions` accepte l'amorce de `scripts/seed-dev.sh`, comme il accepte aujourd'hui un programme non signé.
 
-**Le poids.** `escouade-plugins.exe` pèse **34,5 Mo** aujourd'hui (34 479 104 o, release de `ticket/esc-226`) et disparaît. L'amorce pèse à peu près 23 × 0,5 Mo, soit **11 à 14 Mo** en clair d'après les deux modules mesurés, moins dans l'installeur compressé (165 Ko et 223 Ko en gzip pour les deux mesurés). Les plugins qui ne servent pas ne se précompilent pas. Le précompilé, 1,5 à 2 Mo par module actif, va dans le cache.
+**Le poids.** `escouade-plugins.exe` pèse **34,5 Mo** aujourd'hui (34 479 104 o, release de `ticket/esc-226`) et disparaît. L'amorce pèse à peu près 23 × 0,5 Mo, soit **11 à 14 Mo** en clair d'après les deux modules mesurés, moins dans l'installeur compressé (165 Ko et 223 Ko en gzip pour les deux mesurés). Les plugins qui ne servent pas ne se précompilent pas. Le précompilé, 1,5 à 2 Mo par module actif, va dans le cache. **Mesuré par Z2** (§8.32) : 26 plugins, 17,4 Mo en clair, **2,5 Mo de plus dans l'installeur** ; la précompilation de Claude Code à sa première activation, une centaine de millisecondes en release.
 
 ### 8.8 Les binaires natifs des tiers
 
@@ -1588,14 +1614,14 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 | **P5** (fait, §8.23) | OpenCode | SSE, `local:shared`, ses trois tâches ; le plus risqué des harness |
 | **P6** (fait, §8.28) | OpenAI, Groq, Mistral, ElevenLabs, Deepgram | sortir `voice/online*`, `live.rs`, `wire.rs` du crate de l'app dans une crate commune ; WebSocket ; INT-13 rejoué |
 | **P7** (fait, §8.22) | isola | `proc/*` |
-| **P8** | les « Vue X » | `view/translate` ; le cœur ne lie plus aucun plugin ; peut suivre la 2.2 |
+| **P8** (fait, §8.30) | les « Vue X » | `view/translate` ; le cœur ne lie plus aucun plugin |
 
 **Z. La fin, dans cet ordre :**
 
 | Ticket | Ce qu'il fait |
 | --- |--- |
-| **Z1. Les contrôles et la première publication** | le chef publie chaque plugin (§8.6.2), revue et signature une par une la première fois |
-| **Z2. L'amorce réelle** | `plugins/seed.json` rempli, un essai d'installation hors ligne |
+| **Z1. Les contrôles et la première publication** | `npm run plugins:publish` (fait, §8.6.2, ESC-353) ; le chef publie chaque plugin, revue et signature une par une la première fois |
+| **Z2. L'amorce réelle** (fait, §8.32) | `plugins/seed.json` rempli, un essai d'installation hors ligne |
 | **Z3. Le retrait** | `escouade-plugins`, `run.command`, le transport par process, `check_program`, l'origine `builtin`, `BUILTINS`, les attestations ; `npm run bench:int0` complet |
 
 **L'ordre demandé par l'utilisateur** se lit ainsi : **le déménagement** (M0), **la CI de `plugins/`** (M1), **les contrôles du store pour un `run.wasm`** (A6, A7), **la publication de chacun** (Z1).
@@ -1655,9 +1681,9 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 
 ### 8.14 Ce qu'A8 a construit (ESC-338)
 
-- **`plugins/seed.json`** : `{ "format": 1, "plugins": [{ "id", "version", "sha256" }] }`, `sha256` étant celui de `version.json`. Il est **vide jusqu'à Z2** : aucune version de la première main n'est publiée. Avec une liste vide, rien ne change pour l'utilisateur.
+- **`plugins/seed.json`** : `{ "format": 1, "plugins": [{ "id", "version", "sha256" }] }`, `sha256` étant celui de `version.json`. Il était **vide jusqu'à Z2** : aucune version de la première main n'était publiée. Avec une liste vide, rien ne change pour l'utilisateur. Z2 l'a rempli (§8.32).
 - **`plugins/seed.rs`.** `Seed::take` lit une version dans `<ressources>/seed/<id>/` et rend un `Fetched`, comme `Store::fetch`. Les contrôles sont les mêmes fonctions, sorties de `fetch` : `check_version_json` (l'empreinte embarquée, le dossier, l'id, la version), `check_seal`, `check_archive`, `check_module`. Le reste est `inspect_store` puis `install`, l'unique chemin d'une installation du store.
-- **Le premier lancement.** `Plugins::sync_seed`, dans `core`, après `apply_store` et avant le démarrage de tout plugin : installe ce que l'amorce a et qui n'est pas installé, sauf ce que l'utilisateur a désinstallé. Le premier lancement et celui d'après une mise à jour de l'app sont le même code : seul compte ce qui est installé. L'origine est `Store { seed: true, .. }`.
+- **Le premier lancement.** `Plugins::sync_seed`, dans `core`, après `apply_store` et avant le démarrage de tout plugin : installe ce que l'amorce a, qui n'est pas installé et que le tri désigne (`sort::sort`, ESC-373, §8.7), sauf ce que l'utilisateur a désinstallé. Le premier lancement et celui d'après une mise à jour de l'app sont le même code : seul compte ce qui est installé. L'origine est `Store { seed: true, .. }`.
 - **Ce qu'une version refusée laisse.** Rien d'installé, et sa raison dans la vue (« Proposés par Escouade ») : signature fausse, fichier changé, `escouade.min`, `escouade.max`, sceau retiré par la liste (`unverify`). **Une version retirée par `disable` s'installe**, coupée, sa raison dite : c'est la règle du §8.7, et le plugin reste visible dans « Ajoutés » avec le bandeau rouge. Sur un clic, en revanche, elle est refusée, comme une version retirée du store.
 - **La liste de révocation.** `<ressources>/seed/revocations.json` et son `.minisig`, vérifiés avec les clés de l'app. `Store::with_seed_list` la prend si son numéro dépasse celui de la liste gardée ; la liste du store la remplace dès qu'elle est plus récente. Elle n'est pas recopiée dans les données : l'amorce reste où elle est. `ListView.from` vaut alors `seed`.
 - **Les mises à jour.** `store_update` rend la plus récente de l'offre du store et de la version de l'amorce, jamais plus ancienne que l'installée, jamais une version de l'amorce révoquée. `Update.seed` dit d'où elle s'installe : `plugin_inspect_seed`, sans réseau, puis la fenêtre habituelle. Rien ne s'installe seul. `inspect_seed` refuse de redescendre.
@@ -1668,6 +1694,7 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 - **La release.** `store/scripts/seed.ts fetch`, à côté de `copy-revocations.ts` et sur les mêmes fonctions : il télécharge, vérifie la signature (clés de `store/keys/`), le commentaire, les empreintes et le module, et échoue sur une version absente, retirée, révoquée, non signée, hors de `escouade.min`/`max`, ou sans liste de révocation. Avec une liste vide il ne demande rien au store : une release avant Z2 passe. **Chaque job de construction le lance**, avant Tauri.
 - **Un build de développement.** `Seed.unsigned` vaut `cfg!(debug_assertions)`. `sh scripts/seed-dev.sh` construit les modules des plugins en Rust de `plugins/` (ou des dossiers donnés), et écrit `src-tauri/seed/` non signé avec son propre `seed.json`, que seul un build de développement lit (`ESCOUADE_SEED_DIR` en donne le chemin). Une signature fausse reste refusée partout : seule son absence est tolérée.
 - **Les preuves.** `plugins_seed_tests.rs` (15 tests), sur les octets et les signatures du faux store (`POST /_fake/seed`), `store/tests/unit/seed.test.ts` pour la release, `tests/e2e/plugins-seed.spec.ts` pour la vue.
+- **Le tri (ESC-373).** `plugins/sort.rs` lit la règle du §8.7 dans `Settings` (`accounts`, `voice`, `writer_engine`), les projets (`integrations.links`, `engine`, `repos`, leur `.git/config`, `.isola.toml`), les harness des agents, `integrations::Accounts` (`jira`… `clickup`, `forges`, leur `plugin`) et les clés de voix gardées (`voice::online::usable_keys`). `sort::reads` dit si `settings.json`, `state.json` et `integrations.json` se lisent ; sinon tout est voulu. `sync_seed(lang, wants)` prend la règle ; `dev.escouade.acp` est voulu aussi quand un plugin installé décrit un harness par ACP (`contributes.harnesses[].acp`). Une entrée `builtin` non voulue sort par `retire_builtin` (ses choix dans `.kept/`). Le geste passe par `Plugins::need`, puis `Core::need_plugin` (harness et services de voix resynchronisés, `UiEvent::PluginSeeded`, une ligne dans la fenêtre, la vue relue) ; « Installer » de la vue est `plugin_install_seed`, sans fenêtre de permissions, comme le geste. Preuves : `plugins_sort_tests.rs` et `tests/e2e/plugins-sort.spec.ts`.
 - **Pas fait ici** : Z2 remplit la liste et fait l'essai hors ligne réel ; le temps du premier lancement avec les 23 plugins n'est pas mesuré (`sync_seed` tourne au chargement du cœur, et n'écrit rien aux lancements suivants).
 
 ### 8.15 Ce qu'A3 a construit (ESC-333)
@@ -1767,14 +1794,14 @@ Lu en `Hand::Builtin`, son `escouade.min` devient la version de l'app, comme sa 
 
 **Une seule correction de fond, pour le banc.** Sans site, Jira disait une erreur non typée (`not a URL`) ; il répond maintenant comme à un jeton refusé (`-32401`), ce qui se répare. Le banc n'avait jamais joué Jira, qui n'avait pas de banc tant qu'il était un process.
 
-**Les empreintes** (compilées depuis crates.io, kit et protocole `0.1.0`, `escouade-plugin build`, deux fois sous Windows, deux dossiers sous Linux, `rust:1.98.0-bookworm`, Podman) :
+**Les empreintes** (compilées depuis crates.io, refaites sur le kit `0.1.1`, §8.29, `escouade-plugin build`, deux fois sous Windows, deux dossiers sous Linux, `rust:1.98.0-bookworm`, Podman) :
 
 | Plugin | SHA-256 | Taille |
 | --- | --- | --- |
-| Linear | `3b848d1b83fe2d77339ae4ddf64811528d1851b22354d1d727480a87e09bd571` | 471 278 o |
-| Trello | `3b740bf171e8bfb28e5e88a398b1f44101a776291eaee92454787451d920a7c1` | 452 665 o |
-| Jira | `da402a2aa6ae1216626d2603c4176f1f976bc2576a0cb9281e913b4b8cdb6782` | 497 928 o |
-| ClickUp | `96ada120dacfbefcba23b934841846cfc9b74d8185ac6121e0992724b5d69896` | 542 884 o |
+| Linear | `9f6d4c20d128deeafb8ca4e97ffa9bd078b5f327d2489e5b73922d19e53ce513` | 495 974 o |
+| Trello | `42b0d2029c45c1d94ae057b381110b7793d306788d11cbbe26720dd8d8d371b7` | 480 578 o |
+| Jira | `8e8c4a1c8d50dad22815baded6cda09e97856f2304eecb1ba01a6d75f876466d` | 524 404 o |
+| ClickUp | `3a52c75b2d94d1945e5ff8cf72452fb9cbb1f73a77d2176dbd1a866392fa0192` | 569 666 o |
 
 Les quatre sont identiques sous Windows et sous Linux, dans deux dossiers (`sh scripts/plugin-build-linux.sh plugins/<id-court> --first-party`), `canon` `4d3e106a…`. Le §8.17 avait mesuré `00f840b4…` pour Linear, le kit copié dans son dossier : avec le kit publié le module change, et c'est celui-ci que le store publiera. macOS n'a pas été essayé.
 
@@ -1809,7 +1836,7 @@ isola est en `run.wasm`, en `2.2.0`, `escouade.min` `2.2.0`, sorti d'`escouade-p
 
 **Un projet privé n'a isola qu'une fois activé.** `Launch::decls` passait `private = false` : en process, isola touchait tout projet. Il suit maintenant le §3.3 et le §8.4.7 (`Runtime::reaches`). Sans activation, un worktree de ce projet n'est à personne, et le ticket part comme sans isola. **C'est le seul changement de comportement du portage**, et la décision proposée au ticket le dit.
 
-**Ce que le kit `0.1.0` ne fait pas pour `proc/*`, et ce que le plugin fait à sa place.** Le kit n'a pas d'API de programmes : `proc/out` et `proc/exit` arrivent à `Plugin::call` comme des notifications, sans `id`, et le plugin garde lui-même ce qu'il reçoit, `proc/out` pouvant précéder la réponse à `proc/spawn`. Surtout, le réacteur (`Reactor::turn`) polle les tâches dans l'ordre : l'appel qui attend avant la notification qui le réveille. Rien ne suivrait `proc/exit`, et l'appel resterait endormi. Le plugin demande donc un minuteur vide après `proc/exit` : sa réponse est la ligne qui fait le tour suivant. **Changer le kit n'aurait rien réglé** : le `Cargo.lock` du plugin fixe le `0.1.0` publié, les tests du dépôt auraient passé sur `crates/` et le module du store serait resté bloqué. Une prochaine version du kit pourra poller les nouvelles tâches d'abord ; le minuteur vide sera alors inutile, sans gêner.
+**Ce que le kit `0.1.0` ne fait pas pour `proc/*`, et ce que le plugin fait à sa place.** Le kit n'a pas d'API de programmes : `proc/out` et `proc/exit` arrivent à `Plugin::call` comme des notifications, sans `id`, et le plugin garde lui-même ce qu'il reçoit, `proc/out` pouvant précéder la réponse à `proc/spawn`. Surtout, le réacteur (`Reactor::turn`) polle les tâches dans l'ordre : l'appel qui attend avant la notification qui le réveille. Rien ne suivrait `proc/exit`, et l'appel resterait endormi. Le plugin demande donc un minuteur vide après `proc/exit` : sa réponse est la ligne qui fait le tour suivant. **Changer le kit n'aurait rien réglé** : le `Cargo.lock` du plugin fixe le `0.1.0` publié, les tests du dépôt auraient passé sur `crates/` et le module du store serait resté bloqué. **Le kit `0.1.1` règle cela** (§8.29) : le minuteur vide est retiré.
 
 **Rien d'autre ne se lance.** `isola_runs_what_its_manifest_names_and_nothing_else` (`plugins/procs.rs`) lit le manifeste réel et joue treize refus : un autre programme, `sh -c`, `cmd /c`, `isola up`, un argument de plus, un chemin, une casse, un mot pour deux. Rien n'a tourné, les treize sont au journal, et `isola ls --json` passe.
 
@@ -1819,11 +1846,11 @@ isola est en `run.wasm`, en `2.2.0`, `escouade.min` `2.2.0`, sorti d'`escouade-p
 
 **Le banc** `escouade-plugin test isola --first-party --escouade 2.2.0` : 6 réussis, 0 échoué, 5 sans objet. Il ne lance aucun `isola` : `launch/*` demande un worktree que seul le cœur prête.
 
-**L'empreinte** (compilée depuis crates.io, kit et protocole `0.1.0`, deux fois sous Windows, deux dossiers sous Linux, `canon` `4d3e106a…`) :
+**L'empreinte** (compilée depuis crates.io, refaite sur le kit `0.1.1`, §8.29, deux fois sous Windows, deux dossiers sous Linux, `canon` `4d3e106a…`) :
 
 | Plugin | SHA-256 | Taille |
 | --- | --- | --- |
-| isola | `cc2d1f3531872479bc14364332935c78012c8abc7eeab1a7a4c8c3a54447fe67` | 234 541 o |
+| isola | `67c8b84a58aaedfc9ad35987e24f35b8d408a5a2d63dc561cf739ff1ef630573` | 239 368 o |
 
 macOS n'a pas été essayé.
 
@@ -1835,7 +1862,7 @@ macOS n'a pas été essayé.
 
 OpenCode est un module : `2.2.0`, `escouade.min` `2.2.0`, `"run": { "wasm": "Cargo.toml" }`, retiré d'`escouade-plugins` et du workspace de `src-tauri`, membre de celui de `plugins/`. Ses trois tâches tokio sont devenues des événements de l'hôte : il n'y a plus ni `tokio` ni `reqwest` dans la crate, sur aucune cible.
 
-**Pourquoi pas le réacteur du kit.** Celui de `crates/escouade-plugin-kit` crée une tâche par appel du cœur, et rien d'autre : la lecture du flux, qu'aucun appel ne commence, n'y a pas de place. Il n'a pas non plus de client de `net/stream`. Et le kit `0.1.0` est publié : y ajouter `spawn` aurait demandé une publication avant de pouvoir compiler le module du store. `src/host.rs` est donc un réacteur d'environ 300 lignes, sur `escouade-plugin-protocol` seul : `spawn`, `request`, `fetch`, `stream`, `sleep`, `timeout`. Les `async fn` du client gardent leur forme : un `tokio::spawn` devient `host.spawn`, `reqwest` devient `net/fetch`. **Le kit n'a pas changé, ni l'hôte**, à une méthode de test près (`Runtime::crash_instance`). P6, s'il lui faut des flux, reprendra ce code ou le fera monter dans le kit, avec une publication.
+**Pourquoi pas le réacteur du kit.** Celui de `crates/escouade-plugin-kit` crée une tâche par appel du cœur, et rien d'autre : la lecture du flux, qu'aucun appel ne commence, n'y a pas de place. Il n'a pas non plus de client de `net/stream`. Et le kit `0.1.0` est publié : y ajouter `spawn` aurait demandé une publication avant de pouvoir compiler le module du store. `src/host.rs` est donc un réacteur d'environ 300 lignes, sur `escouade-plugin-protocol` seul : `spawn`, `request`, `fetch`, `stream`, `sleep`, `timeout`. Les `async fn` du client gardent leur forme : un `tokio::spawn` devient `host.spawn`, `reqwest` devient `net/fetch`. **Le kit n'a pas changé, ni l'hôte**, à une méthode de test près (`Runtime::crash_instance`). P6 a repris ce code, et le kit `0.1.1` l'a fait monter : `plugins/opencode/src/host.rs` n'existe plus (§8.29).
 
 **Le tour.** `Reactor::turn(lignes) -> lignes` est du code ordinaire : `cargo test` le joue sans module, ligne à ligne (`src/tests.rs`, `src/host.rs`). Chaque tour sonde toutes les tâches ; comme rien d'autre qu'un tour ne les réveille, un changement qu'une autre tâche attend dans le même tour (le flux qui s'ouvre, le catalogue lu) passe par `stir`, qui refait un passage. Le crédit de `net/stream` est rendu une fois par tour et par flux, pas une fois par morceau.
 
@@ -1867,11 +1894,11 @@ OpenCode est un module : `2.2.0`, `escouade.min` `2.2.0`, `"run": { "wasm": "Car
 
 Deux mesures, les fourchettes vont de l'une à l'autre. **Le seuil de latence est tenu** : le 99e centile n'a pris que 0,02 ms de plus sur la mesure la plus calme. **Le JSON de `net/stream` se voit au débit** : le module lit 6 à 7 fois moins vite que le natif, et reste à 8 fois le seuil de 2 200 lignes/s. Le test vérifie que chaque élément est bien celui de son événement, et échoue sous le seuil.
 
-**L'empreinte** (compilée depuis crates.io, protocole `0.1.0`, `escouade-plugin build`) :
+**L'empreinte** (compilée depuis crates.io, refaite sur le kit `0.1.1`, §8.29, `escouade-plugin build`) :
 
 | Plugin | SHA-256 | Taille |
 | --- | --- | --- |
-| OpenCode | `ab5dc9775647899a651c33930c00147448ee520acba72aaf8a1d23016401d23e` | 702 190 o |
+| OpenCode | `eb47097b3696d6d40fa01c46ad175f85e5cd21c7f4925ef1af3fb39878277bdf` | 756 021 o |
 
 Identique sous Windows, compilé deux fois, et sous Linux, dans deux dossiers (`sh scripts/plugin-build-linux.sh plugins/opencode --first-party`, `rust:1.98.0-bookworm`, Podman), `canon` `4d3e106a…`. macOS n'a pas été essayé. Le banc `--first-party --escouade 2.2.0` passe sur ce module : 6 réussis, 0 échoué, 5 sans objet.
 
@@ -1904,7 +1931,7 @@ Antigravity CLI est le premier harness porté de bout en bout, en `2.2.0`, `esco
 
 **Une limite.** Si l'instance plante pendant l'attente, ce qu'elle gardait est perdu, y compris un `result` : `agent/frames` a déjà répondu, et le cœur ne le redonne pas. Le tour reste alors ouvert jusqu'au message suivant ou à l'arrêt. Il faut un plantage dans une fenêtre de 600 ms ; ce n'est pas traité.
 
-**L'empreinte** (compilée depuis crates.io, protocole et `escouade-acp` `0.1.0`, `escouade-plugin build`, deux fois sous Windows, deux dossiers sous Linux, `rust:1.98.0-bookworm`, Podman, `canon` `4d3e106a…`) : `4461acb22d187a4fedf4d3f6677787f65661df35371a18308b5610e346045282`, 862 118 o, la même partout. C'est celle du module que le store publiera. macOS n'a pas été essayé.
+**L'empreinte** (compilée depuis crates.io, refaite sur `escouade-acp` `0.1.2`, §8.30, `escouade-plugin build`, deux fois sous Windows, deux dossiers sous Linux, `rust:1.98.0-bookworm`, Podman, `canon` `4d3e106a…`) : `c215c7e1cb36a45bcef5144eb146289479c9edeb862ee513fa609b1368aea531`, 981 294 o, la même partout. C'est celle du module que le store publiera. macOS n'a pas été essayé.
 
 **INT-0.** `ESCOUADE_BENCH_ONLY=agy npm run bench:int0 -- --flux-only`, 20 passes au plus vite sur les six flux d'`agy`, en release, sous Windows, d'autres worktrees compilant : **médiane 104 µs, 99e centile 1 058 µs, 6 231 lignes/s**, 280 lignes sans événement sur 1 380 comme avant. Le process du §4 donnait 161 µs, 1 015 µs et 4 739 lignes/s, le cœur 36 µs, 1 010 µs et 9 462 lignes/s. Le seuil (5 ms de plus au 99e centile) est tenu : +48 µs sur le cœur. Le flux enregistré n'a pas de dossier d'agent, il ne mesure donc pas la lecture du transcript, dont le coût ne compte que par ligne qui le lit.
 
@@ -1919,7 +1946,7 @@ Antigravity CLI est le premier harness porté de bout en bout, en `2.2.0`, `esco
 
 GitHub, GitLab, Bitbucket, Gitea et Azure DevOps suivent la marche à suivre du §8.19 : `2.2.0`, `escouade.min` `2.2.0`, `"run": { "wasm": "Cargo.toml" }`, hors d'`escouade-plugins` et du workspace de `src-tauri`, dans celui de `plugins/`, un `Cargo.lock` à chacun. L'hôte n'a pas changé, le kit non plus. **Aucun ajout à `rust_native.json`.** Ce que P1 ne pouvait pas voir :
 
-**Les redirections.** L'hôte rend les 3xx au plugin (`Policy::none`), pour juger chaque adresse. La façade `http::reqwest` du kit ne les suit pas, là où reqwest le faisait sans rien dire : un dépôt renommé (301, 307), une instance passée en https ou un journal de GitHub Actions (302) auraient fini en erreur. Le kit publié ne bouge pas sans une publication, chaque hébergeur a donc `src/redirect.rs`, la règle de reqwest à une différence près : dix sauts, un GET sans corps après 301, 302 et 303, le même appel après 307 et 308. Les identifiants restent sur le même hôte, port compris, et jamais de https vers http. **Un corps ne quitte pas le service** : si un saut sort de cet hôte, ou passe de https à http, et que l'appel a encore son corps, quel que soit le 3xx, `follow` s'arrête, rend ce 3xx comme dernière réponse et n'envoie rien à l'autre hôte ; `success` en fait une erreur qui dit le statut. reqwest renvoyait le corps : `*.blob.core.windows.net` est ouvert à tout compte Azure, et un commentaire ou un merge n'a rien à y faire. Un appel sans corps, ou dont un 301, 302 ou 303 sur le service a retiré le corps, suit toujours, sans les identifiants. Les redirections de lecture ne changent pas. **À remonter dans le kit à sa prochaine publication**, suivie d'un `plugin-lock.sh` par plugin.
+**Les redirections.** L'hôte rend les 3xx au plugin (`Policy::none`), pour juger chaque adresse. La façade `http::reqwest` du kit ne les suit pas, là où reqwest le faisait sans rien dire : un dépôt renommé (301, 307), une instance passée en https ou un journal de GitHub Actions (302) auraient fini en erreur. Le kit publié ne bouge pas sans une publication, chaque hébergeur a donc `src/redirect.rs`, la règle de reqwest à une différence près : dix sauts, un GET sans corps après 301, 302 et 303, le même appel après 307 et 308. Les identifiants restent sur le même hôte, port compris, et jamais de https vers http. **Un corps ne quitte pas le service** : si un saut sort de cet hôte, ou passe de https à http, et que l'appel a encore son corps, quel que soit le 3xx, `follow` s'arrête, rend ce 3xx comme dernière réponse et n'envoie rien à l'autre hôte ; `success` en fait une erreur qui dit le statut. reqwest renvoyait le corps : `*.blob.core.windows.net` est ouvert à tout compte Azure, et un commentaire ou un merge n'a rien à y faire. Un appel sans corps, ou dont un 301, 302 ou 303 sur le service a retiré le corps, suit toujours, sans les identifiants. Les redirections de lecture ne changent pas. **Monté dans le kit `0.1.1`** (§8.29) : `src/redirect.rs` n'existe plus.
 
 **Ce que joint un saut.** Il est jugé comme tout `net/fetch`. GitHub déclare donc où il range ses journaux : `*.actions.githubusercontent.com` et `*.blob.core.windows.net`, joints sans le jeton. C'est une permission large, mais elle ne porte aucun droit : le jeton n'y va pas, et rien de ce qu'on y lit ne sort ailleurs que dans le journal affiché. **Limite connue** : une Enterprise Server qui garde ses journaux sur un autre hôte qu'elle-même n'y arrive pas, puisqu'un hôte d'instance ne vient que du compte. Le refus se dit, le reste marche. Azure DevOps ne suit pas sa page de connexion (`_signin`, `login.microsoftonline.com`), hors de ses hôtes : la redirection se lit comme un jeton refusé, et c'est ce que le natif finissait par dire.
 
@@ -1937,15 +1964,15 @@ GitHub, GitLab, Bitbucket, Gitea et Azure DevOps suivent la marche à suivre du 
 
 **La parité.** `plugins_wasm_hosts_parity_tests.rs` joue, sur le module et sur le programme de `6dbd1223`, tout `forge/*` sur les fixtures de `tests/fixtures/forges/` (ESC-56, 57, 58, 217 à 220, 280), puis une lecture redirigée, une écriture redirigée, 404, 401 et 429, et neuf appels de GitHub Issues, GitLab Issues et Azure Boards : huit transcriptions dans `tests/fixtures/plugins/parity/<nom>-host.json` et `<nom>-source.json`. Mêmes réponses et mêmes requêtes, méthode, cible, en-têtes et corps, à deux différences près, que le test écarte : reqwest ajoutait un `Referer` en suivant, et Bitbucket compte un saut dans son budget de l'heure, ce qui est plus juste. Certains pas restent des 404 ou des refus : ils ne prouvent que l'égalité des deux côtés, pas le nominal, que les suites ci-dessus couvrent.
 
-**Les empreintes** (compilées depuis crates.io, kit et protocole `0.1.0`, `escouade-plugin build --first-party`) :
+**Les empreintes** (compilées depuis crates.io, refaites sur le kit `0.1.1`, §8.29, `escouade-plugin build --first-party`) :
 
 | Plugin | SHA-256 | Taille |
 | --- | --- | --- |
-| GitHub | `d21ce07aea2b649b9704bf3a834c2e857a03a21944a115ec988d9ea38c7bdb75` | 611 873 o |
-| GitLab | `4906536d56bea8d8591d7fb741655673e13fd0e0b1a16e709a8b393a31f77651` | 596 635 o |
-| Bitbucket | `2b2794d4df2b4ae4e471ef8e22fb5c93d8931f483f83e831de39b4912c05effb` | 559 561 o |
-| Gitea | `750e3204223d60b4a58a9ab3a49b534f8daeacf596dec06843ccba2f44be59f7` | 535 569 o |
-| Azure DevOps | `b82bf40e6a3da404176531b26a8a46b953d35b98e6b0191d2b304999aa09827d` | 716 949 o |
+| GitHub | `6d2101591831738033c4df6f02318760d4dfdd4644c91892c89a53a53ed50ef0` | 622 270 o |
+| GitLab | `a984ce48ed7551b75b1e2666cd5707c6f5732162f82173e511666d5fd032eb7f` | 607 201 o |
+| Bitbucket | `e0584248908e12e72b5a0c130fc2a9257c061cb05e8d3e9f5714dd00dddbd5d1` | 569 705 o |
+| Gitea | `8e97c0d31ce96844d9d6adb4cfa3b87cf6bbd72533d6f4cae87d38408ec86572` | 545 132 o |
+| Azure DevOps | `edc70b1076ff077ddd53af11ffeaf373f9bc9e1730c8e195e054dd8dd467156e` | 725 849 o |
 
 Les cinq sont identiques sous Windows et sous Linux, dans deux dossiers (`sh scripts/plugin-build-linux.sh plugins/<id-court> --first-party`, `rust:1.98.0-bookworm`, Podman), `canon` `4d3e106a…`. macOS n'a pas été essayé.
 
@@ -1957,7 +1984,7 @@ Codex, Copilot CLI, Cursor CLI et Gemini CLI sont des modules, en `2.2.0`, `esco
 
 **Ce qui a dû changer, en dehors des cinq endroits du prototype.**
 
-- **`escouade-acp` passe à `0.1.1`, à publier.** Tous les quatre en dépendent : la version change avant de pouvoir écrire leurs `Cargo.lock` (plus bas). P3b (ESC-347) a sa part dans la même publication.
+- **`escouade-acp` passe à `0.1.1`.** Tous les quatre en dépendent : la version change avant de pouvoir écrire leurs `Cargo.lock` (plus bas). P3b (ESC-347) a sa part dans la même publication.
 - **Le service ACP entre dans la crate** (`escouade_acp::plugin`). Cursor, Gemini et Mistral dépendaient de `plugins/acp` par un chemin, qu'un dossier seul ne compile pas. `plugins/acp` n'est plus qu'une façade, jusqu'à P3b. La version d'Escouade se lit dans `greeting()` à l'arrivée d'un agent : à la création du service, `initialize` n'est pas passé en module.
 - **`turn::read_file` ne suffit pas.** Il n'envoie pas d'agent, et l'hôte refuse un chemin d'agent sans lui. `escouade_acp::plugin::agent_file(agent, path)` l'envoie : Codex y lit `config.toml`, Gemini son plan. Le protocole ne change pas, il n'y a rien à publier de ce côté.
 - **`fs/gitProtected`, une nouvelle méthode de l'hôte.** La garde qui laisse passer `git add` et `git commit` sans carte lit `.git` et lance `git rev-parse`, ce qu'un module ne peut pas. Le prototype ne l'avait pas vu : ses flux enregistrés ne passent pas par cette garde, et le module aurait posé la question à chaque commit, sans erreur. `git::accepts` demande à l'hôte en module, par `escouade.call`, à chaque demande de permission comme avant. Elle prend le dossier d'un agent de ce plugin, demande la racine `agentRepo`, et ne rend qu'un booléen. Refusée ou trop lente (1 s, un tour en a 2), la réponse est non : la carte s'affiche. Une entrée de `proc/*` n'allait pas : c'est asynchrone, et il aurait fallu `git *` en commande déclarée (§8.4.7).
@@ -2001,7 +2028,7 @@ Codex, Copilot CLI, Cursor CLI et Gemini CLI sont des modules, en `2.2.0`, `esco
 - **Au plus vite**, Copilot et Gemini restent au-dessus de 5 ms de plus, et Codex deux fois sur trois, même sur la passe calme. Leur médiane ne bouge pas : ce sont quelques lignes. Ce rythme n'arrive pas en vrai, et 32 ms au moins séparent déjà deux envois de la conversation, mais **l'écart n'est pas expliqué**.
 - Gemini n'a pas de flux à son rythme au banc.
 
-**Second passage, après la publication d'`escouade-acp` `0.1.1`.** Le chef la publie depuis `main`, une fois ESC-346 et ESC-347 fusionnés : une version publiée ne se retire pas, et les deux branches portent chacune une part de la crate. D'ici là, les quatre plugins n'ont ni `Cargo.lock` ni empreinte : `plugin-lock.sh` ne trouve pas cette version, et `escouade-plugin build` lit ce lock. `AWAITING_PUBLICATION`, la liste qu'ESC-347 pose aussi, dans `plugins/ci-lib.mjs`, les écarte de `validate` et de `build` de `ci.mjs`, sans quoi `main` serait rouge. Il les joue au banc sur le module du dépôt quand il est là (`--first-party --escouade 2.2.0 --wasm`), et un test exige un `Cargo.lock` des autres et refuse celui d'un plugin de la liste. Le second passage lance `sh scripts/plugin-lock.sh codex copilot cursor gemini`, note les empreintes Windows et Linux ici, et vide cette liste.
+**Second passage.** `escouade-acp` `0.1.1` publiée, les quatre plugins ont leur `Cargo.lock` et leur empreinte : §8.29.
 
 **Les harness réels.** Cursor CLI 2026.10.22 (`real_cursor`) et Copilot CLI 1.0.98 (`real_copilot_through_its_plugin`) ont tourné, par leur module, sur les comptes du poste. **Pas rejoués** : Codex, le poste n'a que la 0.144.5, refusée (0.163 au moins) ; Gemini, pas de compte ; `real-harnesses.spec.ts` pour Copilot, qui réécrit `~/.copilot/config.json`. Aucun jeton pris, aucun fichier de connexion touché.
 
@@ -2050,25 +2077,17 @@ Dans les seuils : +0,3 ms au 99e centile, plus de 2 200 lignes/s. Le module coû
 
 **L'essai réel.** `real-harnesses` a rejoué le vrai Claude Code 2.1.318 sur le module : un ticket jusqu'à sa fusion, et sa vue terminal. Goose n'est pas installé sur ce poste : `real_goose` n'a pas tourné. Il tourne sur le module par `acp-harness.spec.ts` et `plugins_acp_tests`, sur un faux agent.
 
-**L'empreinte de Claude Code**, compilée depuis crates.io, kit `0.1.0`, `escouade-plugin build` sous Windows : `b3fd405448a7b0b3ddcdfeaf9ee2a439a7c388a2b54304d36a00da66feaa6b36`, 500 919 o. La même sous Linux n'a pas pu être vérifiée : WSL, donc Podman, ne répond pas sur ce poste.
+**L'empreinte de Claude Code**, compilée depuis crates.io, `escouade-plugin build` : `013dba0ea81041981d2b572bf589ac26552d1f8322e81ee407a2e5653a96540b`, 528 940 o. La même sous Linux a été vérifiée au §8.30.
 
 **Le piège de `Reactor::turn`** (P7) ne les touche pas : ni ACP ni Claude Code n'utilisent le kit. Une machine à états répond dans le tour, par `turn::run`.
 
-**Ce qui attend `escouade-acp 0.1.1`** (le chef la publie après la fusion d'ESC-346 et d'ESC-347 : une version ne se retire pas, et chacune porte une part de la crate). Tant qu'elle n'est pas sur crates.io :
-
-- `plugins/acp` n'a pas de `Cargo.lock` : `sh scripts/plugin-lock.sh acp` échoue, cargo ne trouve pas la version ;
-- `escouade-plugin validate acp` refuse (« pas de Cargo.lock »), `escouade-plugin build acp` et `fetch` aussi, donc le store ne peut pas le compiler ;
-- l'empreinte d'ACP n'existe pas, sous Windows comme sous Linux.
-
-`plugins/ci.mjs` l'écarte de façon explicite pour que `main` reste verte : `AWAITING_PUBLICATION` de `plugins/ci-lib.mjs` nomme le plugin et ce qu'il attend. Pour lui, `ci.mjs` saute `validate` et `build`, et joue au banc le module de `scripts/plugins-wasm.sh`, compilé contre `crates/`, en le disant dans son journal. `cargo test` et les contrôles du dossier tournent comme pour les autres. `scripts/plugins-ci.test.ts` refuse qu'un plugin de cette liste ait un `Cargo.lock` : un lock posé sans retirer l'écart fait échouer la CI.
-
-**Le second passage**, une fois la version publiée : `sh scripts/plugin-lock.sh acp`, retirer `acp` d'`AWAITING_PUBLICATION`, `escouade-plugin build acp --first-party` sous Windows et Linux, noter les empreintes ici, puis le banc `--first-party --escouade 2.2.0` sur ce module. Rien d'autre ne change.
+**Second passage.** `escouade-acp` `0.1.1` publiée, ACP a son `Cargo.lock` et son empreinte : §8.29.
 
 ### 8.28 Ce que P6 a construit (ESC-350)
 
 OpenAI, Groq, Mistral, ElevenLabs et Deepgram sont des modules, en `2.2.0`, `escouade.min` `2.2.0`, `"run": { "wasm": "Cargo.toml" }`, sortis d'`escouade-plugins`. Mistral porte sa voix et Vibe dans la même instance. L'app ne garde de la voix que ce qui est du cœur : la capture, Whisper, Piper, le trousseau, le choix du service dans les réglages et le client de `voice/*` (`plugin_host.rs`).
 
-**La crate `crates/escouade-voice` (`0.1.0`, MIT, à publier).** Elle tient `voice/online*`, `live.rs` et `wire.rs`, sans tokio ni reqwest :
+**La crate `crates/escouade-voice` (`0.1.0`, MIT).** Elle tient `voice/online*`, `live.rs` et `wire.rs`, sans tokio ni reqwest :
 
 - `online`, `speech`, `catalog` : ce que chaque service demande et ce que ses réponses veulent dire, en code pur. Une requête est une valeur (`Call`), un flux des trames (`Frame`).
 - `wire` : le protocole `voice/*`, que l'app lit aussi.
@@ -2117,6 +2136,164 @@ La colonne « avant » vient de sept passes du même test sur un autre build, et
 
 **L'essai réel** (`int13_real_elevenlabs_through_the_plugin`, la clé d'ElevenLabs du poste, donnée à ce seul process), par le module : la dictée d'une phrase en 2,1 s, la mauvaise clé refusée, quatre textes partiels et le final 188 ms après la fin de la phrase, une phrase lue (premier son en 1,3 s, 41 morceaux), 9 modèles et 31 voix listés. **Pas rejoués** : OpenAI, Groq, Deepgram et Mistral, faute de clé sur ce poste, comme Vibe réel.
 
-**Second passage, après la publication.** Le store compile le dossier d'un plugin seul, et `rust::check` n'accepte que crates.io, dans le `Cargo.toml` comme dans le `Cargo.lock`, ni chemin, ni git, ni `[patch]`. Il ne trouvera donc `escouade-voice` que publiée. Or `escouade-voice` `0.1.0` et `escouade-acp` `0.1.1` ne sont pas sur crates.io : les cinq plugins n'ont ni `Cargo.lock` ni empreinte. Ils sont dans `AWAITING_PUBLICATION` (`plugins/ci-lib.mjs`), et le banc les joue sur le module du dépôt. Le second passage lance `sh scripts/plugin-lock.sh openai groq mistral elevenlabs deepgram`, note les empreintes Windows et Linux ici et les retire de la liste. Rien n'a été publié. `cargo publish --dry-run -p escouade-voice` passe : la crate compile contre le kit `0.1.0` de crates.io, et son paquet compile aussi pour `wasm32-wasip1`. Elle ne demande donc aucune nouvelle version du kit. **Aucun ajout à `rust_native.json`** à prévoir : la crate ne tire ni macro ni `build.rs` de plus que P5, ce que `plugin-lock.sh` confirmera.
+**Second passage.** `escouade-voice` `0.1.0` publiée, les cinq plugins ont leur `Cargo.lock` et leur empreinte : §8.29. **Aucun ajout à `rust_native.json`.**
 
-**Pas fait ici.** Ni étiquette ni soumission (Z1). `host.rs` reste en deux copies (OpenCode, voix) jusqu'à ESC-358. Le kit n'a pas changé.
+**Pas fait ici.** Ni étiquette ni soumission (Z1). Le kit n'a pas changé.
+
+### 8.29 Le kit 0.1.1 (K1, ESC-358)
+
+Ce que les portages avaient contourné chacun de leur côté remonte dans `escouade-plugin-kit` `0.1.1`. Le protocole ne change pas. **Tout est un ajout** : un plugin qui dit `"0.1.0"` compile tel quel, et rien ne bouge pour lui tant que son `Cargo.lock` fixe le `0.1.0`.
+
+**Le réacteur (`serve/tasks.rs`).** Un tour sonde chaque tâche une fois, comme avant, parce que la plupart attendent ce que le tour vient de poser (une réponse, un minuteur) et qu'un `poll_fn` sans waker doit continuer de marcher. Il sonde ensuite celles qui ont été réveillées entre-temps : un vrai `Waker`, par tâche. Une tâche qui attend ce qu'une plus récente pose repart dans le même tour, sans autre ligne : c'est le cas de l'appel d'isola qui attend `proc/exit`, que le `sleep(Duration::ZERO)` du §8.22 contournait. `a_task_woken_by_a_later_one_goes_on_in_the_same_turn` échoue sur le code du `0.1.0`, identique à la source publiée, et passe sur le `0.1.1`.
+
+**Pas de boucle sans fin.** Un tour fait 128 passages au plus. Passé cela, ce qui est encore réveillé est une tâche qui se réveille elle-même, ou deux qui se répondent. Le tour rend la main et demande un minuteur vide (`timer/set`, `ms` 0, sans `id`) : la sonnerie fait le tour suivant. Le module n'est pas tué par sa limite de temps par tour, les autres lignes passent, et rien ne reste endormi sans raison.
+
+**Les redirections (`http::redirect`, `http/fetch.rs`).** `redirect.rs` des cinq hébergeurs entre dans le kit tel quel, en public : `follow`, `reply`, `success`, `send_named`, pour un client qui a son mot à dire à chaque saut (ses identifiants, son budget, son allure). Et la façade les suit maintenant toute seule : dans un module, `send()` fait ce que fait reqwest en process, aux mêmes règles (dix sauts, un GET après 301, 302 et 303, le même appel après 307 et 308, un corps qui ne quitte pas le service, jamais de https vers http). `http::send_named`, `call` et `call_page` en profitent, donc Jira, Linear, Trello et ClickUp. Hors du service, seuls `Accept`, `Accept-Language` et `User-Agent` restent : n'importe quel autre en-tête peut porter une clé, `PRIVATE-TOKEN` par exemple, ce que le nom seul ne dit pas. `RequestBuilder::once` envoie un seul appel, et `redirect::reply` passe par lui : un hébergeur garde la main sur chaque saut. En process, `reply` reste `send`, donc les redirections y restent celles de reqwest.
+
+**`Host` (`crate::host`).** Les deux copies de `host.rs` (OpenCode, voix) en deviennent une, avec tout ce qu'elles avaient à elles : `net/stream`, `ws/*`, l'appel abandonné qui referme ce qu'il ouvrait, `spawn`, `stir`. C'est la voie d'un plugin qui lit un flux, garde un socket ou lance une tâche qu'aucun appel n'a commencée. Elle tourne sur les mêmes `Tasks` que le réacteur, donc avec les mêmes wakers et la même borne ; `stir` reste pour ce qui attend sans waker. Un minuteur refusé va au journal (`log`) et non plus sur stderr. `escouade-voice` s'en sert et demande donc le kit `0.1.1`.
+
+**La façade lit `bodyBase64`.** Un corps qui n'est pas de l'UTF-8 arrivait vide ; il arrive avec ses caractères de remplacement, comme `Host::fetch`.
+
+**Ce qui ne monte pas.**
+
+- **Une API `proc/*`** : seul isola lance un programme. Le réacteur réglé, son code est le code naturel, et l'exemple de la doc (`sdk/doc-examples/rust/src/procs.rs`) reçoit les notifications dans `Plugin::call` : les retenir dans le kit casserait ce contrat au sein de `^0.1`.
+- **`Cx::spawn` et un flux dans `Cx`** : `Host` les donne à qui en a besoin, et aucun plugin sur `serve::run` n'en demande.
+- **`agent_file`** (`escouade_acp::plugin` et `plugins/antigravity/src/host.rs`) : huit lignes, et sa place serait `turn` dans le protocole, à republier pour si peu.
+- **`src/joined.rs` d'Azure DevOps** : un seul plugin.
+
+**La publication.** L'utilisateur a publié le 2026-11-06, depuis `ebc130a5`, `escouade-plugin-kit` `0.1.1`, `escouade-acp` `0.1.1` et `escouade-voice` `0.1.0`. Le protocole reste en `0.1.0`.
+
+**Le second temps.** Les cinq `redirect.rs`, le `sleep(Duration::ZERO)` d'isola et `plugins/opencode/src/host.rs` sont retirés. Les hébergeurs prennent `http::redirect`, OpenCode prend `host::Host` du kit. Les plugins du kit, OpenCode, le modèle `create-escouade-plugin` et les exemples de la doc disent `0.1.1`. `sh scripts/plugin-lock.sh` a refait le `Cargo.lock` des 23 plugins en `run.wasm`, et `AWAITING_PUBLICATION` n'existe plus, ni dans `plugins/ci-lib.mjs`, ni dans `ci.mjs`, ni dans les tests.
+
+**Les empreintes**, compilées depuis crates.io par `escouade-plugin build --first-party`, deux fois sous Windows, deux dossiers sous Linux (`rust:1.98.0-bookworm`, Podman, `canon` `4d3e106a…`), sans aucun écart. macOS n'a pas été essayé. Celle de Claude Code ne bouge pas : il n'utilise pas le kit. C'est sa première vérification sous Linux.
+
+| Plugin | SHA-256 | Taille |
+| --- | --- | --- |
+| ACP | `a4c1c4faa5e9f9c559e27fc90a53647e55d8c8bf4d4005ce61eeb6dc90409149` | 758 256 o |
+| Antigravity CLI | `c215c7e1cb36a45bcef5144eb146289479c9edeb862ee513fa609b1368aea531` | 981 294 o |
+| Azure DevOps | `edc70b1076ff077ddd53af11ffeaf373f9bc9e1730c8e195e054dd8dd467156e` | 725 849 o |
+| Bitbucket | `e0584248908e12e72b5a0c130fc2a9257c061cb05e8d3e9f5714dd00dddbd5d1` | 569 705 o |
+| Claude Code | `013dba0ea81041981d2b572bf589ac26552d1f8322e81ee407a2e5653a96540b` | 528 940 o |
+| ClickUp | `3a52c75b2d94d1945e5ff8cf72452fb9cbb1f73a77d2176dbd1a866392fa0192` | 569 666 o |
+| Codex | `2af09ad1c2a5305236b0f12bb7f6e9959294ec71fe4684c534c9bf7fe6ad0d6e` | 673 553 o |
+| Copilot CLI | `08b46076ddc4bb438592f2b368372a61ab042fd70e26e9953b0406f06b59e6d1` | 752 915 o |
+| Cursor CLI | `09ee107c99ca7ffa0c7064911733b15599bbed2dc66b217e49e183edc19ae07c` | 853 575 o |
+| Deepgram | `5ea971014abbe346b90aca6f14e921d811f50e20eea52166cfa509c62ce18b9e` | 531 268 o |
+| ElevenLabs | `ec5e71af06044e9167b26770eede85f350b3985e8124a46e06a5299777ac97ce` | 531 268 o |
+| Gemini CLI | `4dfa2efb4b7d97a9ccc09c27bfb5ad27ae673545e4819cee4cd167a59651705f` | 853 575 o |
+| Gitea | `8e97c0d31ce96844d9d6adb4cfa3b87cf6bbd72533d6f4cae87d38408ec86572` | 545 132 o |
+| GitHub | `6d2101591831738033c4df6f02318760d4dfdd4644c91892c89a53a53ed50ef0` | 622 270 o |
+| GitLab | `a984ce48ed7551b75b1e2666cd5707c6f5732162f82173e511666d5fd032eb7f` | 607 201 o |
+| Groq | `e10f0d8a012f4f178fb3cdbc27e83d655c7b7af6c5b1b1969192e087241de76d` | 531 268 o |
+| isola | `67c8b84a58aaedfc9ad35987e24f35b8d408a5a2d63dc561cf739ff1ef630573` | 239 368 o |
+| Jira | `8e8c4a1c8d50dad22815baded6cda09e97856f2304eecb1ba01a6d75f876466d` | 524 404 o |
+| Linear | `9f6d4c20d128deeafb8ca4e97ffa9bd078b5f327d2489e5b73922d19e53ce513` | 495 974 o |
+| Mistral | `21e0d78f6121728796d350b9599ecea74cb14532600e273a7b7436214c82fd25` | 1 200 832 o |
+| OpenAI | `e0f11f6bac475a86d3ce7cc5404075ff1789f423019883ac8902e8202630f28c` | 531 268 o |
+| OpenCode | `eb47097b3696d6d40fa01c46ad175f85e5cd21c7f4925ef1af3fb39878277bdf` | 756 021 o |
+| Trello | `42b0d2029c45c1d94ae057b381110b7793d306788d11cbbe26720dd8d8d371b7` | 480 578 o |
+
+Huit lignes de ce tableau sont celles de P8 (§8.30) : Antigravity CLI, Claude Code, Codex, Copilot CLI, Cursor CLI, Gemini CLI, Mistral et OpenCode.
+
+**Le banc** `escouade-plugin validate`, puis `test <court> --first-party --escouade 2.2.0 --wasm`, sur ces modules-là : 23 sur 23, aucun échec.
+
+**Rien n'a été réenregistré.** Les parités rejouent les transcriptions d'avant le portage, et aucune fixture n'a changé. Ce ticket n'ajoute ni calcul flottant ni `cfg` de système : le kit et la voix n'ont que `target_family = "wasm"`.
+
+**Pas fait ici.** Ni étiquette, ni soumission, ni signature (Z1, Z2).
+
+### 8.30 Ce que P8 a construit (ESC-352)
+
+**Le cœur ne lie plus aucun plugin.** `src-tauri/Cargo.toml` ne dépend d'aucun dossier de `plugins/`. Claude Code, Codex, Copilot, Antigravity et OpenCode redeviennent des `cdylib` seules. `escouade-plugins` reste pour le plugin de démonstration, jusqu'à Z3.
+
+**`view/translate`.** Le cœur garde le PTY, le fichier que l'interface écrit, ses hooks et l'état de l'agent ; le plugin dit ce que les lignes veulent dire. Le cœur lui passe les lignes (`ViewParams`, `schemas/plugin-protocol-1.json`), avec ce qu'il sait de l'agent, et lit des éléments : ceux d'`agent/frames`, plus ceux d'une vue (`typed`, `spoke`, `wrote`, `waits`, `waitsOn`, `asks`, `runs`, `goes`, `viewTurn`, `viewEnd`, `viewUsage`, `viewError`, `row`, `bridged`, `linked`). Ce que seul le cœur sait part comme une **note**, une ligne `{"escouade": …}` : `end` (la fin d'un tour, avec le coût que le cœur calcule pour Claude Code), `hook` (Gemini CLI n'a que ses hooks ; le `permissionRequest` de Copilot), `frame` (un flux enregistré, pour les tests).
+
+**Pourquoi synchrone, ligne à ligne.** Les vues du cœur lisaient chaque ligne sous le verrou de l'agent, chacune voyant ce que la précédente avait fait (le statut, le tour), et une fin de tour se fait sous ce verrou, depuis partout (`end_tui_turn`). Passer par le runtime aurait demandé un appel asynchrone sous verrou, ou tout le code des vues à refaire, et le fil du module sert aussi `fs/*`, qui peut vouloir ce verrou. **Retenu** : une **instance à part** par plugin (`plugins/view.rs`), du même module, sans `escouade.call`, sur un fil à elle (WASI bloque sur un runtime à lui, ce qu'un fil de tokio ne peut pas), appelée en attendant sa réponse, par le même tour que le reste (`Instance::turn`), bornée par le temps d'un tour du plugin. Une vue ne demande rien à la machine. Une instance en faute est remplacée à l'appel suivant : la vue repart avec une nouvelle clé, le cœur lui disant ce que la conversation contient (`known`). Un plugin arrêté perd son instance de vues.
+
+**Chaque vue.**
+
+| Vue | Où | Ce qui change |
+| --- | --- | --- |
+| Claude Code | `plugins/claude/src/view.rs` | les entrées du transcript, les commandes locales, le lien à claude.ai ; le coût reste calculé par le cœur |
+| Codex | `plugins/codex/src/view.rs` | les `event_msg` du rollout, en notifications de l'app-server |
+| Copilot CLI | `plugins/copilot/src/view.rs` | les événements du journal ; `permissionRequest` traduit par le plugin (`asks`) |
+| Antigravity CLI | `plugins/antigravity/src/view.rs` | les étapes du transcript, en forme ACP |
+| Cursor CLI, Mistral Vibe, Gemini CLI | `crates/escouade-acp/src/view.rs` | le client ACP (`Speaker`) à la place de `agent/cursor.rs` du cœur, retiré |
+| OpenCode | rien à faire | `opencode attach` n'a pas de fichier à lire : ses événements passent déjà par le plugin |
+
+**Une différence de comportement, voulue.** Plugin coupé ou désinstallé, le terminal marche, mais la conversation ne le suit plus et le dit une fois. Avant, la vue marchait plugin coupé, sa traduction étant liée.
+
+**Un module qui ne répond plus.** Chaque essai peut durer tout le temps d'un tour, 10 s pour la plupart des harness, sous le verrou de l'agent. Le premier échec a donc droit à deux essais, l'instance étant refaite entre les deux, puis la conversation le dit, une fois, dans la langue de l'app : « Le plugin de Claude Code n'a pas lu ce que sa vue a écrit (il est coupé ou n'est pas installé). ». Les lignes passent ensuite sans lui pendant 30 s (`VIEW_PAUSE`), puis un seul essai, et ainsi de suite ; elles ne sont pas relues. Une fin de tour que le plugin ne peut pas lire se fait quand même, par le cœur, sans son coût. `agent/view_tests.rs` le joue sur un module qui boucle et sur un plugin coupé puis rallumé.
+
+**Un écart corrigé en passant.** La fin d'un tour de « Vue Gemini » que le cœur fait à la fermeture de l'interface passait par la branche de Claude Code de `end_tui_turn`. Elle passe maintenant par son plugin.
+
+**La parité.** `plugins_view_parity_tests` joue les 16 enregistrements des tests des vues, par les entrées et les hooks que reçoit le cœur, contre `tests/fixtures/plugins/parity/view.json`, écrit par la traduction liée avant son retrait (3931b674, `ESCOUADE_VIEW_PARITY=record`). À chaque étape : statut, messages, fin de tour, alerte, sortie du hook, lignes de stats, quota ; à la fin : la conversation entière, l'agent. Seuls les ids faits par le cœur et les heures sont normalisés. **Aucun écart.** Retirer un module fait échouer le test : il passe bien par lui.
+
+**Les tests du cœur** n'ont pas changé d'assertion sur les vues : `codex_rollout`, `copilot_log`, `on_transcript`… passent par le module, et les flux enregistrés par la note `frame`. Les tests qui ne regardaient qu'une fonction pure du plugin sont partis avec elle (`tool_of`, `rollout_item`, `same_dir`, `safe`, `absolute`, les appels de Gemini). `agent/cursor_tests.rs` part avec `agent/cursor.rs` : le client ACP a ses propres tests et sa parité (§8.27). `Through`, qui jouait OpenCode dans le process, passe par `agent/frames` du module.
+
+**Ce que le cœur garde de copié.** `terminal/launch` n'est toujours pas servi : le cœur lance encore lui-même les interfaces, et lit le quota et les modèles d'un compte. Il garde donc sa copie de ce qu'il lui faut, dans `engine/<harness>/{words,prices,client,rules}.rs` et `agent/{words,localcmd}.rs`. Une règle de lancement corrigée au store ne corrige donc pas encore celle de l'interface. Ce que seuls les tests du cœur lisent de ces copies est sous `cfg(test)` : à retirer quand ces tests iront dans les crates.
+
+**La publication.** Le contrat a grandi, et une version ne se retire pas : l'utilisateur a publié `escouade-plugin-protocol` 0.1.1 et `escouade-acp` 0.1.2, `view.rs` n'étant pas dans la 0.1.1 sortie pendant ce ticket. Antigravity, Claude Code, Codex, Copilot CLI, Cursor CLI, Gemini CLI et Mistral ont leur `Cargo.lock` sur ces versions, et `AWAITING_PUBLICATION` a disparu pour de bon. ACP et les plugins sans vue restent sur le protocole 0.1.0 : un plugin ne suit une crate que s'il en a besoin.
+
+**Les empreintes**, compilées depuis crates.io par `escouade-plugin build --first-party`, sont au tableau du §8.29. Les 23 plugins : deux dossiers sous Linux (`rust:1.98.0-bookworm`, Podman, `canon` `4d3e106a…`) et une passe sous Windows, sans aucun écart. Les 8 qui ont changé : deux passes de plus sous Windows, dans un dossier de données neuf, sans cache. macOS n'a pas été essayé. **15 plugins n'ont pas bougé.** Aux 7 du protocole s'ajoute **OpenCode**, qui ne s'en sert pas : retirer `rlib` de sa crate fait passer son module de 743 065 à 756 021 o, et le commentaire retiré de `lib.rs` décale les lignes que ses panics citent, si bien que `rlib` remis seul rend la taille, pas l'empreinte (essayé sous Linux). Il reste sur le protocole 0.1.0, et son `Cargo.lock` n'a pas changé.
+
+**Le banc** `escouade-plugin validate`, puis `test <court> --first-party --escouade 2.2.0 --wasm`, sur les modules de ces empreintes : 23 sur 23, aucun échec. La parité reste sans écart avec `ESCOUADE_PARITY=1`.
+
+**INT-0.** `int0_view_bench` (`plugins_view_parity_tests.rs`, ignoré) lit chaque enregistrement ligne à ligne, 200 fois, ce qu'une ligne prend de son entrée à ses effets sur l'agent. En release sans LTO, poste chargé, le même test sur 3931b674 pour la traduction liée :
+
+| Vue | Liée : 50e / 99e centile | Module : 50e / 99e centile | Lignes/s, liée puis module |
+| --- | --- | --- | --- |
+| Claude Code (transcript) | 0,4 / 451 µs | 39 / 438 µs | 30 408 → 13 830 |
+| Codex | 0,1 / 405 µs | 64 / 462 µs | 33 919 → 10 101 |
+| Copilot CLI | 0,4 / 416 µs | 46 / 461 µs | 39 834 → 11 916 |
+| Cursor CLI (transcript) | 56 / 693 µs | 183 / 1 400 µs | 4 706 → 2 337 |
+| Mistral Vibe (outil) | 0,4 / 387 µs | 64 / 542 µs | 17 912 → 6 952 |
+| Antigravity CLI (commande) | 20 / 523 µs | 131 / 976 µs | 7 361 → 3 720 |
+| Gemini CLI | 18 / 702 µs | 105 / 811 µs | 9 243 → 5 221 |
+
+**Le seuil de latence est tenu** : au plus 0,7 ms de plus au 99e centile, pour 5 ms permises. Le débit compte le départ de l'agent et de sa vue à chaque rejeu, qui pèse sur les enregistrements de 2 à 7 lignes : le seuil de 2 200 lignes/s est manqué par deux d'entre eux (`cursor-subagent` 2 009, `vibe-interrupted` 1 215, liée 2 187). Sur les enregistrements longs, le module tient de 6 000 à 13 800 lignes/s, de 2 à 4 fois moins que la traduction liée. Une vue se lit par à-coups, très en dessous.
+
+**L'essai réel.** `real-harnesses.spec.ts` a rejoué le vrai Claude Code 2.1.318, Copilot CLI 1.0.98 et Mistral Vibe 3.0.3 : un ticket jusqu'à sa fusion, puis sa vue terminal, un message tapé là et revu dans la conversation d'Escouade. **Pas rejouées ici, à refaire par l'utilisateur** : Codex (0.144.5 sur ce poste, il faut 0.163 ou plus), Antigravity (`agy.exe` absent), Cursor CLI (absent du PATH), Gemini CLI (pas de clé d'API). Leurs vues passent les tests sur leurs faux harness et la parité sur leurs enregistrements. OpenCode n'a pas changé de vue.
+
+### 8.31 La confiance d'un harness décrit (ESC-361)
+
+Un harness décrit tourne sur `dev.escouade.acp` : le cœur jugeait donc le plugin qui le sert, pas l'auteur de son manifeste. Ce qui sépare les deux est maintenant `ProcessEngine::described` et un seul test de première main, `builtin::first_hand` : un id `dev.escouade.*`, que le manifeste refuse à un tiers (`Hand::Third`) et qui ne s'installe que signé.
+
+- **La clôture.** `described` efface `fenceOnPermissions` d'un manifeste tiers avant que la description parte au client. Un tiers en `"fs": false` retrouve le sort de tout `"fs": false` : le client refuse le lancement dans un projet privé, et le dit. `check_launch` continue de juger le plugin qui sert (`is_builtin(plugin)`) et non l'auteur : `fenceByClient` y est la parole du client ACP, qui tient vraiment les `fs/*`, y compris pour un tiers en `"fs": true`. Juger `owner` à cet endroit fermerait ces harness-là aux projets privés. La première main garde sa parole, Goose compris, qui n'est dans aucun registre : la règle ne peut pas être `is_builtin(owner)`.
+- **Les variables.** `check_env` juge chaque variable d'un lancement (`engine/launch`, `terminal/launch`, `engine/oneShot`, la relance) par `procs::forbidden_var`, la liste de `proc/*`, pour tout plugin qui n'est pas de première main, harness à module compris. `spawn` juge de même `accountVar` et `keyVar`, que le cœur pose sur la parole du manifeste. L'agent ne démarre pas, et la variable est nommée.
+- **Le programme.** `locate.names` était joint à chaque dossier du PATH : un chemin absolu ou un `..` y remplaçait le dossier, malgré « un plugin tiers ne donne jamais de chemin ». `described` ne garde pour un tiers que des noms nus (`bare_name`).
+- **Ce que l'utilisateur voit.** `asks` donne une ligne `harness:` par nom du programme, avec les variables (`VAR=valeur programme arguments`), et une ligne de plus pour `versionArgs` quand ce n'est pas `--version`. Une mise à jour qui change l'une d'elles redemande donc l'accord, comme pour `permissions.commands`.
+- **`versionArgs`.** Il ne tourne que pour les harness du registre (`registry::all`, par `Core::engines`, `check` et `selfupdate`), et un harness décrit n'y entre qu'installé et allumé, `dev.escouade.acp` allumé (`sync_described`) : ni un aperçu, ni un plugin coupé ne lancent rien. Une fois accordé, il tourne sans agent ni geste, à chaque liste des harness.
+
+**Comparé à `permissions.commands`.** Les deux sont dits mot pour mot à l'installation et sont décidés par le plugin. `proc/*` tient de plus : pas de `.cmd` ni de `.bat`, les `ESCOUADE_*` de l'app retirés, le journal, 4 programmes à la fois. Un harness décrit reste lancé comme un harness : un lanceur npm (`.cmd`) y est permis parce que les CLI s'installent ainsi, et `registry::version` hérite de l'environnement de l'app et ne passe pas par le journal du plugin. La lecture de version n'a pas `acp.env`.
+
+**Ce qui reste.** `forbidden_var` est une liste courte : `PYTHONPATH`, `RUBYOPT` ou `JAVA_TOOL_OPTIONS` passent, chez `proc/*` comme ici. Le refus d'une variable tombe au lancement : `crates/escouade-plugin-cli` ne le dit pas encore à `escouade-plugin check` ni au store. `readOnlyMode` reste cru d'un tiers en `"fs": false` : le client refuse les écritures qu'il voit, pas celles que l'agent fait seul.
+
+### 8.32 Ce que Z2 a rempli (ESC-354)
+
+- **`plugins/seed.json`** nomme **26 versions**, la dernière signée de chaque plugin de première main au catalogue du store du 2026-11-07 (`id`, `version`, empreinte de `version.json`) : les 2.2.2 des harness (Claude Code, Codex, Copilot CLI, Cursor CLI, Gemini CLI, OpenCode), de `dev.escouade.acp`, des sources et des hébergeurs (Trello, Linear, Jira, ClickUp, GitHub, GitLab, Bitbucket, Azure DevOps), de la voix (OpenAI, Groq, Mistral, ElevenLabs, Deepgram) ; Gitea 2.2.1 ; Goose 1.0.1 ; Discord 1.1.1, Contraste élevé 1.1.1, Slack 2.0.1, Règles de l'équipe 2.0.1. **Pas dedans** : Antigravity CLI (2.2.1 non signée, la 2.2.2 d'ESC-376 pas publiée) et isola (pas au store). Ils restent donnés par l'app, origine `builtin`, jusqu'à leur signature : une ligne de `seed.json` chacun.
+- **`builtin::seeds`** prend aussi les plugins de première main que l'app n'a jamais donnés, et que le tri connaît déjà (`sort::seeds_beyond_the_registry`) : Goose et ceux sur demande. La vue les nomme sans leur manifeste (`sort::name_on_request`, Goose compris).
+- **Un build de développement sans les fichiers de l'amorce** (ni `seed-dev.sh`, ni `seed.ts fetch`) : `Seed::of_app` écarte les entrées de la liste embarquée dont le dossier manque, et le plugin tourne du registre comme avant (`scripts/plugins-wasm.sh`). Sans cela, la liste remplie retirait à `npm run tauri dev` et aux e2e tous leurs harness. Une release les garde, et la vue dit ce qui manque.
+- **Les temps dans le journal** : `installed from the seed in N ms` (au lancement et pour un geste), et `plugin <id>: <comment son module est venu> in N ms` à chaque activation.
+
+**La release, essayée en local** contre le vrai store, en lecture seule (aucun Release lancé). `npx tsx store/scripts/seed.ts fetch`, le script du workflow, **échoue** : le store n'a pas encore de liste de révocation (404 sur `/api/v1/revocations.json` et sur la copie d'escouade.dev), et l'amorce ne part pas sans elle. **Il reste à l'utilisateur de signer et publier la liste nº 1** (vide), avant la première release de la 2.2. Le reste a été joué par les mêmes fonctions (`fetchSeed`), la liste seule venant du faux store : les 26 signatures tiennent avec les clés de `store/keys/` (`store.pub`, `backup.pub`), ainsi que les commentaires, les empreintes et les modules, en 3,2 s. Avec la version 2.1.4 de `main`, le script refuse aussitôt (`asks for Escouade 2.2.0`) : la release de la 2.2 passe la version avant.
+
+**L'essai hors ligne.** Une build release (`npx tauri build`, la version passée à 2.2.0 le temps de l'essai, l'amorce réelle dans `src-tauri/seed/`), jouée par `tests/e2e/real-seed.spec.ts` (`ESCOUADE_E2E_REAL_SEED=1`, `ESCOUADE_E2E_EXE` vers cette build), sur des dossiers de données neufs, toutes les requêtes de l'app vers un port fermé (Réglages › Réseau et `HTTPS_PROXY`). Le store n'a jamais été atteint (pas de `store/catalog.json`) ; seule la vérification de mise à jour de l'app contourne un proxy en échec, comme prévu (`updates.rs`).
+
+| | Ce qui a tourné | Temps |
+| --- | --- | --- |
+| Dossier vierge | rien d'installé ; « Ajouter un compte… » sur Claude Code à l'accueil installe `dev.escouade.claude-code` 2.2.2 depuis l'amorce (origine `store`, `seed`, `verified`) | 249 et 270 ms pour l'installation, 372 et 393 ms jusqu'à la ligne « Plugin Claude Code installé » |
+| Une 2.1 configurée (comptes Claude Code et Codex, un compte Trello ; pas de `plugins.json`) | Claude Code, Codex et Trello installés au lancement, rien d'autre ; isola et Antigravity CLI restent `builtin` | 161 à 299 ms par plugin |
+| Un agent Claude Code | il répond, sans téléchargement ; son module se précompile à la première activation | 102 et 116 ms de précompilation |
+| La vue Plugins | les trois dans « Ajoutés », désinstallables ; Copilot CLI, GitHub, Linear, Deepgram, Discord, Goose… sous « Proposés par Escouade », « Dans l'app, sans téléchargement » ; Trello désinstallé n'est pas remis au lancement suivant | |
+
+Les deux dossiers sont de l'essai : celui « d'une 2.1 » a les fichiers qu'une 2.1 garde (`settings.json`, `integrations.json`, pas de `plugins.json`), pas les données de l'utilisateur, pour qu'aucun de ses projets ne s'ouvre sous une build d'essai.
+
+**Le poids**, mesuré sur ces deux builds (l'installeur NSIS, `createUpdaterArtifacts` coupé faute de clé ; la seule différence est `src-tauri/seed/`) :
+
+| | En clair | Dans l'installeur |
+| --- | --- | --- |
+| L'amorce (26 plugins, dont 16,3 Mo de modules) | 17 414 737 o | **+2 491 942 o** : 34 799 184 o sans, 37 291 126 o avec (2,45 Mo en xz, 7,0 Mo en gzip) |
+| `escouade-plugins` en 2.2 avant le WASM (§8.7) | 34 479 104 o | — |
+| `escouade-plugins` aujourd'hui (la démonstration seule, jusqu'à Z3) | 1 012 224 o | 0,30 Mo en xz |
+
+L'amorce pèse donc la moitié de l'`escouade-plugins` prévu en clair, et 2,5 Mo dans l'installeur : les modules partagent leur code (le kit, la bibliothèque standard), que LZMA compresse ensemble. L'installeur de la 2.1.4 publié pèse 22 301 192 o ; celui-ci, sans l'amorce, 34 799 184 o. L'écart ne vient pas de l'amorce : `escouade-plugin.exe` (l'outil `escouade-plugin build`, 39 759 872 o en clair, 9,3 Mo en xz) est maintenant dans l'installeur, et `escouade.exe` porte wasmtime (97 942 016 o, 24,4 Mo en xz).

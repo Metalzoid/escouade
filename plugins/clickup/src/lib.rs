@@ -22,7 +22,7 @@ use std::time::Duration;
 pub const ID: &str = "clickup";
 const S: &str = "ClickUp";
 
-/// Where the API is when the core does not say (`ESCOUADE_CLICKUP_API` for a fake one).
+/// Where the API is, unless its account says otherwise.
 const API: &str = "https://api.clickup.com/api/v2";
 /// The prefix of a status's chip in the import.
 const STATUS: &str = "status:";
@@ -219,8 +219,8 @@ impl Clickup {
         HttpError {
             status: 404,
             message: tr!(
-                "La liste {S} {list} n'existe plus ou n'est plus accessible : choisis-en une autre dans Réglages › Intégrations",
-                "The {S} list {list} no longer exists or can’t be reached any more: choose another one in Settings › Integrations"
+                "La liste {S} {list} n'existe plus ou n'est plus accessible : choisis-en une autre dans Réglages › Projets › Tickets importés",
+                "The {S} list {list} no longer exists or can’t be reached any more: choose another one in Settings › Projects › Imported tickets"
             ),
         }
         .into()
@@ -400,8 +400,8 @@ impl Clickup {
         else {
             let (status, key) = (&state.name, &r.key);
             return Err(Refused(tr!(
-                "La liste « {list} » de ClickUp n'a pas le statut « {status} » : {key} reste où il est ; choisis un autre statut dans Réglages › Intégrations",
-                "The ClickUp list “{list}” has no “{status}” status: {key} stays where it is; choose another status in Settings › Integrations"
+                "La liste « {list} » de ClickUp n'a pas le statut « {status} » : {key} reste où il est ; choisis un autre statut dans Réglages › Projets › Tickets importés",
+                "The ClickUp list “{list}” has no “{status}” status: {key} stays where it is; choose another status in Settings › Projects › Imported tickets"
             ))
             .into());
         };

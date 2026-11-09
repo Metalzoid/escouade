@@ -7,9 +7,9 @@
 //! the limit, the answer kept from before is served), and it slows down as the limit comes near
 //! (`X-RateLimit-*`).
 
-use crate::redirect::{self, Reply};
 use anyhow::{anyhow, Result};
 use escouade_plugin_kit::forge::*;
+use escouade_plugin_kit::http::redirect::{self, Reply};
 use escouade_plugin_kit::http::reqwest;
 use escouade_plugin_kit::tr;
 use parking_lot::Mutex;
@@ -330,9 +330,10 @@ impl Github {
                 None => &page,
             };
             out.extend(items.as_array().cloned().unwrap_or_default());
+            // On the API only: the token goes with this address, and `go` keeps it from a redirection, not from it.
             match next {
-                Some(n) => url = n,
-                None => break,
+                Some(n) if n.starts_with(&format!("{}/", self.base)) => url = n,
+                _ => break,
             }
         }
         Ok(out)

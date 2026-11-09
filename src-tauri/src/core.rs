@@ -877,6 +877,8 @@ pub struct Core<R: Runtime = Wry> {
     /// The ids of the histories whose file could not be removed once the state held the truth
     /// (`PersistedState::leftover_histories`).
     pub(crate) leftover_histories: Mutex<Vec<String>>,
+    /// The reviews written by an agent (ESC-66), one per pull request.
+    pub(crate) pr_reviews: RwLock<Vec<crate::prreview::PrReview>>,
     /// Serializes agent creation so that concurrent creations get distinct names.
     create_lock: tokio::sync::Mutex<()>,
     conv_buffer: Mutex<HashMap<String, Vec<ConvOp>>>,
@@ -948,6 +950,10 @@ pub struct Core<R: Runtime = Wry> {
     /// What each project's docs have to share, as last told to the window, and the conflict a
     /// « Partager » stopped on (`docsshare`).
     pub(crate) docs_shares: Mutex<HashMap<String, crate::docsshare::Memo>>,
+    /// The decision numbers given by the validations under way, per project, each with the key of
+    /// its ticket (ESC-377): held from the reading of the registers to the end of the validation,
+    /// so that two at once never give the same number before either is merged.
+    pub(crate) decision_numbers: Mutex<HashMap<String, crate::docsbranch::Given>>,
     /// One validation's merge at a time per repository (`merge_lock`).
     pub(crate) merge_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     /// One change of the Claude accounts' settings at a time (the accounts' tab, the window's
@@ -999,6 +1005,14 @@ pub struct Core<R: Runtime = Wry> {
     /// app's start) starts at once: `REMOTE_STARTS`. A message or a window opening starts its own
     /// at once, with no permit.
     pub(crate) remote_starts: tokio::sync::Semaphore,
+    /// Held by `apply_remote` from its reading of the settings to what it decides on the agent:
+    /// an application that started on settings older than another's never undoes it.
+    remote_decisions: tokio::sync::Mutex<()>,
+    /// Stops the next `apply_remote` once it has read the settings, until the second `Notify` is
+    /// told; the first says it got there (tests only).
+    #[cfg(test)]
+    pub(crate) remote_read_pause:
+        Mutex<Option<(Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>)>>,
     /// Times the files of an agent's plan were read, not counting the looks that found them as
     /// before (tests only).
     #[cfg(test)]
@@ -1029,6 +1043,10 @@ pub struct Core<R: Runtime = Wry> {
     /// minute, else every 5), and what wakes their reading at once (a push, the window's return).
     pub(crate) window_in_front: AtomicBool,
     pub(crate) ticket_prs_wake: tokio::sync::Notify,
+    /// The lists of the projects' open pull requests as last read (ESC-68), by project id.
+    pub(crate) pr_lists: Mutex<HashMap<String, crate::prnews::PrList>>,
+    /// The pull requests the tools read whole (ESC-68): an agent that asks again gets the same.
+    pub(crate) pr_wholes: Mutex<HashMap<String, (Instant, crate::prview::PrWhole)>>,
     /// The environments of the projects' hosts as last read (ESC-67), by project id; when the
     /// view « Environnements » of a project was last open; and whether a commit (the merge of a
     /// ticket) is in another (what runs in an environment), as git said it.
@@ -1734,7 +1752,7 @@ impl<R: Runtime> Core<R> {
         crate::voice::plugin_host::sync_builtin(&self.plugin_runtime, &self.plugins);
     }
 
-    /// Reads the store's catalogue and revocation list again (through Réglages › Réseau), and
+    /// Reads the store's catalogue and revocation list again (through Réglages › Avancé › Réseau), and
     /// hands them to the plugins: a version withdrawn stops, the updates of the store are offered.
     pub async fn refresh_store(&self) {
         let settings = self.settings.read().clone();
@@ -1771,6 +1789,7 @@ impl<R: Runtime> Core<R> {
         // The histories whose file could not be removed at the last run are not read: removed, if
         // they can be now.
         let mut leftover = std::mem::take(&mut state.leftover_histories);
+        let pr_reviews = std::mem::take(&mut state.pr_reviews);
         closed::retry_leftovers(&data, &mut leftover);
         // The folder of the closed projects is read here, once: the index (`closed_index`) keeps
         // what the app needs of it from now on.
@@ -1806,6 +1825,8 @@ impl<R: Runtime> Core<R> {
                 t.conflict = false;
             }
         }
+        // The harnesses of the agents, for the sort of the seed (ESC-373) once the accounts are read.
+        let agent_engines: Vec<EngineId> = state.agents.iter().map(|m| m.engine).collect();
         let conv_dir = data.conversations();
         let agents = state
             .agents
@@ -1881,8 +1902,26 @@ impl<R: Runtime> Core<R> {
         );
         // What was cached applies from the start: a version withdrawn stays stopped offline.
         plugins.apply_store(store.revocations(), store.offers());
-        // What the seed holds and is not installed goes in now, with no network, before any plugin starts.
-        plugins.sync_seed(crate::i18n::ui());
+        // What the seed holds, is not installed and the configuration uses goes in now, with no network, before any plugin
+        // starts (ESC-373): the rest stays in the seed, proposed, until a gesture needs it.
+        let sorted = {
+            let voice_keys = crate::voice::online::usable_keys(&settings, &*secrets);
+            crate::plugins::sort::sort(&crate::plugins::sort::Config {
+                settings: &settings,
+                projects: &state.projects,
+                agents: &agent_engines,
+                accounts: &accounts,
+                voice_keys: &voice_keys,
+                readable: [
+                    data.settings_file(),
+                    data.state_file(),
+                    data.integrations_file(),
+                ]
+                .iter()
+                .all(|f| crate::plugins::sort::reads(f)),
+            })
+        };
+        plugins.sync_seed(crate::i18n::ui(), &|id| sorted.wants(id));
         let plugin_runtime = crate::plugins::runtime::Runtime::new(
             plugins.clone(),
             secrets.clone(),
@@ -1947,6 +1986,7 @@ impl<R: Runtime> Core<R> {
             closing: Mutex::default(),
             closed_index: Mutex::new(closed_index),
             leftover_histories: Mutex::new(leftover),
+            pr_reviews: RwLock::new(pr_reviews),
             create_lock: tokio::sync::Mutex::new(()),
             conv_buffer: Mutex::default(),
             conv_flush: tokio::sync::Notify::new(),
@@ -1981,6 +2021,7 @@ impl<R: Runtime> Core<R> {
             switch_told: Mutex::default(),
             ports_reserved: Mutex::default(),
             docs_shares: Mutex::default(),
+            decision_numbers: Mutex::default(),
             merge_locks: Mutex::default(),
             claude_accounts_lock: Mutex::default(),
             accounts: RwLock::new(accounts),
@@ -2002,6 +2043,9 @@ impl<R: Runtime> Core<R> {
             file_origins,
             origin_files: Default::default(),
             remote_starts: tokio::sync::Semaphore::new(REMOTE_STARTS),
+            remote_decisions: Default::default(),
+            #[cfg(test)]
+            remote_read_pause: Default::default(),
             #[cfg(test)]
             plan_reads: AtomicUsize::new(0),
             #[cfg(test)]
@@ -2018,6 +2062,8 @@ impl<R: Runtime> Core<R> {
             names_dropped: AtomicU64::new(0),
             window_in_front: AtomicBool::new(true),
             ticket_prs_wake: tokio::sync::Notify::new(),
+            pr_lists: Mutex::default(),
+            pr_wholes: Mutex::default(),
             deploys: Mutex::default(),
             deploys_viewed: Mutex::default(),
             deploys_contains: Mutex::default(),
@@ -2058,7 +2104,7 @@ impl<R: Runtime> Core<R> {
             .set_accounts(std::sync::Arc::new(move |plugin| {
                 weak.upgrade().map_or(Vec::new(), |c| {
                     let mut hosts = crate::plugins::accounts::hosts_of(&c.accounts.read(), plugin);
-                    hosts.extend(c.plugin_runtime.lent_host(plugin));
+                    hosts.extend(c.plugin_runtime.lent_hosts(plugin));
                     hosts
                 })
             }));
@@ -2067,7 +2113,7 @@ impl<R: Runtime> Core<R> {
             .set_routes(crate::integrations::Bases::from_env().faked());
         // The harnesses the plugins describe (PLG-6), before the window asks for the registry.
         core.sync_harnesses();
-        // The pinned Javy of the run.js plugins downloads through Réglages › Réseau (ESC-320); their modules are
+        // The pinned Javy of the run.js plugins downloads through Réglages › Avancé › Réseau (ESC-320); their modules are
         // made ready in the cache, precompiled again for this version of the app when it changed.
         {
             let weak = Arc::downgrade(&core);
@@ -2105,6 +2151,119 @@ impl<R: Runtime> Core<R> {
     pub(crate) fn plugin_changed(&self, id: &str) {
         self.plugin_runtime.forget(id);
         crate::plugins::decide::warm_one(&self.plugins, &self.plugin_runtime, id);
+        self.hub.emit(UiEvent::CodeHosts);
+    }
+
+    /// The plugin `id` of the seed, installed now if it is not, with no network, for a gesture that needs it (ESC-373): an
+    /// account of its harness, a source or a code host chosen, a voice service, a worktree with an `.isola.toml`. The
+    /// gesture is the user's consent: no window more, a line that says it. Its harnesses and its voice services follow.
+    /// Nothing when it is installed, or the seed does not hold it; a refusal is in the log and in the view.
+    pub(crate) fn need_plugin(&self, id: &str) -> Option<crate::plugins::PluginView> {
+        match self.install_seed_plugin(id) {
+            Ok(v) => v,
+            Err(r) => {
+                self.hub.emit(UiEvent::Toast {
+                    text: tr!(
+                        "Le plugin {id} ne s'installe pas depuis l'amorce : {}",
+                        "The plugin {id} does not install from the seed: {}",
+                        r.message
+                    ),
+                });
+                None
+            }
+        }
+    }
+
+    /// `need_plugin`, its refusal given back (« Installer » of the view Plugins).
+    pub(crate) fn install_seed_plugin(
+        &self,
+        id: &str,
+    ) -> Result<Option<crate::plugins::PluginView>, crate::plugins::Refusal> {
+        let asked = std::time::Instant::now();
+        let Some(view) = self.plugins.need(id, crate::i18n::ui())? else {
+            return Ok(None);
+        };
+        log::info!(
+            "plugin {} v{}: installed from the seed for a gesture in {} ms",
+            view.id,
+            view.version,
+            asked.elapsed().as_millis()
+        );
+        self.plugin_changed(&view.id);
+        self.plugin_runtime.prepare(&view.id);
+        self.sync_harnesses();
+        self.sync_voice_plugins();
+        self.telemetry
+            .track(crate::telemetry::Event::PluginInstalled { from_store: true });
+        self.hub.emit(UiEvent::PluginSeeded {
+            id: view.id.clone(),
+            text: tr!("Plugin {} installé", "Plugin {} installed", view.name),
+        });
+        Ok(Some(view))
+    }
+
+    /// What a save of the settings chose that needs a plugin of the seed (ESC-373): a voice service put on line for the
+    /// dictation or the voice, a harness of an account the save adds. What was there before asks nothing: a plugin the
+    /// user uninstalled comes back on a gesture only.
+    pub(crate) fn need_settings_plugins(&self, before: &Settings) {
+        let now = self.settings.read().clone();
+        let online = |mode: &str, service: &str| (mode == "online").then(|| service.to_string());
+        let chosen = [
+            (
+                online(&now.voice.transcription, &now.voice.online_service),
+                online(&before.voice.transcription, &before.voice.online_service),
+            ),
+            (
+                online(&now.voice.speech.engine, &now.voice.speech.online_service),
+                online(
+                    &before.voice.speech.engine,
+                    &before.voice.speech.online_service,
+                ),
+            ),
+        ];
+        for (now, was) in chosen {
+            if let Some(id) = now.filter(|n| Some(n) != was.as_ref()) {
+                self.need_voice_plugin(&id);
+            }
+        }
+        for a in &now.accounts {
+            if !before.accounts.iter().any(|b| b.engine == a.engine) {
+                self.need_engine_plugin(a.engine);
+            }
+        }
+    }
+
+    /// A launch of the folder `dir`: isola from the seed if it has an `.isola.toml` and isola is not installed (ESC-373).
+    pub(crate) fn need_isola(&self, dir: &str) {
+        if Path::new(dir).join(".isola.toml").is_file() {
+            self.need_plugin(crate::plugins::sort::ISOLA);
+        }
+    }
+
+    /// `need_plugin` for the voice service `id`.
+    pub(crate) fn need_voice_plugin(&self, id: &str) {
+        if let Some(p) = crate::plugins::sort::of_voice(id) {
+            self.need_plugin(&p);
+        }
+    }
+
+    /// What a project added needs of the seed (ESC-373): the plugin of the code host its remotes are on, isola for an
+    /// `.isola.toml`, those of its sources and of its harness by default (a project opened again keeps them).
+    pub(crate) fn need_project_plugins(&self, project: &Project) {
+        let accounts = self.accounts.read().clone();
+        for id in crate::plugins::sort::of_project(project, &accounts) {
+            self.need_plugin(id);
+        }
+        if let Some(e) = project.engine {
+            self.need_engine_plugin(e);
+        }
+    }
+
+    /// `need_plugin` for every plugin of the seed the harness `engine` runs on.
+    pub(crate) fn need_engine_plugin(&self, engine: EngineId) {
+        for id in crate::plugins::sort::of_engine(engine.as_str()) {
+            self.need_plugin(id);
+        }
     }
 
     /// Installs what the inspection `token` set aside. A plugin of that id stops first: under Windows its running
@@ -2304,6 +2463,9 @@ impl<R: Runtime> Core<R> {
         let hold = self.hold.lock().clone();
         let pause = self.usage.lock().saved(hold);
         let leftover_histories = self.leftover_histories.lock().clone();
+        let pr_reviews = crate::prreview::kept_reviews(&self.pr_reviews.read(), |id| {
+            projects.iter().any(|p| p.id == id)
+        });
         PersistedState {
             projects,
             agents,
@@ -2314,6 +2476,7 @@ impl<R: Runtime> Core<R> {
             tickets,
             pause,
             leftover_histories,
+            pr_reviews,
         }
     }
 
@@ -2413,6 +2576,7 @@ impl<R: Runtime> Core<R> {
         let self_update = s.claude_self_update;
         let before_settings = std::mem::replace(&mut *self.settings.write(), s);
         let mcp_was_enabled = before_settings.mcp_enabled;
+        self.need_settings_plugins(&before_settings);
         if self_update && !before_settings.claude_self_update {
             // « Mettre à jour Claude Code automatiquement » turned on: run when due, at once.
             crate::selfupdate::poke();
@@ -2489,7 +2653,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// What a plugin the app gives is told when it starts (`escouade_plugin_kit`): the language the backend writes in,
-    /// and the network of Réglages › Réseau (its proxy, the hosts it skips, the certificates not checked).
+    /// and the network of Réglages › Avancé › Réseau (its proxy, the hosts it skips, the certificates not checked).
     pub(crate) fn builtin_env(&self) -> Vec<(String, String)> {
         let s = self.settings.read();
         vec![
@@ -3155,7 +3319,8 @@ impl<R: Runtime> Core<R> {
     /// it brings the window back and sends it `focus`.
     ///
     /// A kind the user switched off ("Me prévenir pour") neither chimes nor shows a system
-    /// notification; the taskbar flashes all the same, like the agent's tab and card.
+    /// notification; the taskbar flashes all the same, like the agent's tab and card. The news of a
+    /// code host has no agent behind it: switched off, it says nothing at all.
     pub(crate) fn alert(
         self: &Arc<Self>,
         kind: NotifyKind,
@@ -3165,6 +3330,9 @@ impl<R: Runtime> Core<R> {
     ) {
         let settings = self.settings.read().clone();
         let wanted = settings.notify_for.allows(kind);
+        if !wanted && kind.of_host() {
+            return;
+        }
         #[cfg(test)]
         if wanted {
             self.alerts.lock().push(format!("{title} | {body}"));
@@ -4310,13 +4478,19 @@ impl<R: Runtime> Core<R> {
             let mut rt = h.lock();
             (self.remote_name(&rt.meta), rt.end_remote())
         };
+        self.after_cut(h, &name, link).await;
+    }
+
+    /// What follows the end of the agent's Remote Control (`AgentRt::end_remote`, which gave
+    /// `link`), under the name it had (`name`).
+    async fn after_cut(self: &Arc<Self>, h: &AgentHandle, name: &str, link: Option<RemoteLink>) {
         self.request_save();
         self.emit_agent(h);
         // An interface started for it, and that no window showed, has no reason to run.
         self.stop_unseen_interface(h);
         if let Some(link) = link {
             // Unless Remote Control came back meanwhile: the link that follows takes the session.
-            self.close_link(h, link, &name, Duration::from_secs(15), true)
+            self.close_link(h, link, name, Duration::from_secs(15), true)
                 .await;
         }
     }
@@ -4448,10 +4622,22 @@ impl<R: Runtime> Core<R> {
             Nothing,
             Changed,
             On,
-            Off,
+            Off(String, Option<RemoteLink>),
         }
         let Ok(h) = self.agent(id) else { return };
+        // Saved settings are applied by a task of their own, which may come after that of newer
+        // ones (a new agent's, while the setting changes): one at a time, each reads them as they
+        // are when it decides.
+        let decision = self.remote_decisions.lock().await;
         let (global, project) = self.remote_settings(&h);
+        #[cfg(test)]
+        {
+            let pause = self.remote_read_pause.lock().take();
+            if let Some((reached, go)) = pause {
+                reached.notify_one();
+                go.notified().await;
+            }
+        }
         let step = {
             let mut rt = h.lock();
             match (
@@ -4467,17 +4653,18 @@ impl<R: Runtime> Core<R> {
                     rt.meta.remote_source = Some(source);
                     Step::Changed
                 }
-                (None, true) => Step::Off,
+                (None, true) => Step::Off(self.remote_name(&rt.meta), rt.end_remote()),
                 _ => Step::Nothing,
             }
         };
+        drop(decision);
         match step {
             Step::Nothing => {}
             Step::Changed => {
                 self.request_save();
                 self.emit_agent(&h);
             }
-            Step::Off => self.cut_remote(&h).await,
+            Step::Off(name, link) => self.after_cut(&h, &name, link).await,
             Step::On => {
                 self.request_save();
                 self.emit_agent(&h);
@@ -7137,6 +7324,29 @@ impl<R: Runtime> Core<R> {
         .await
     }
 
+    /// The answer of the strong model to `prompt`, which holds all it needs and comes from a third
+    /// party: no tool at all, in `cwd`, within `limit` (ESC-66). A harness that cannot cut its tools
+    /// is refused (`Engine::answers_without_tools`).
+    pub(crate) async fn ask_given(
+        &self,
+        project_id: &str,
+        cwd: &Path,
+        system: &str,
+        prompt: &str,
+        limit: Duration,
+    ) -> Result<String> {
+        self.ask_harness(Ask {
+            weight: Weight::Given,
+            cwd,
+            system,
+            prompt,
+            limit,
+            agent: None,
+            project: Some(project_id),
+        })
+        .await
+    }
+
     /// The agent `id` named after `prompt` by the writer model. The name is the agent's that asked
     /// for it: one closed meanwhile (its project closed, the agent deleted) takes none, nor does
     /// the agent its project's history gives back, though it has the same id (ESC-300).
@@ -7196,7 +7406,7 @@ impl<R: Runtime> Core<R> {
     /// account a new agent of the project would go to (a private project's reserved one).
     pub(crate) async fn one_shot_who(&self, project: &str) -> Result<OneShotWho> {
         let settings = self.settings.read().clone();
-        let id = engine::oneshot::writer(settings.writer_engine, &self.engines_found())
+        let id = engine::oneshot::writer(settings.writer_engine, &self.engines_usable())
             .unwrap_or(EngineId::CLAUDE);
         let engine = engine::by_id(id);
         let account = self.account_for(id, None, Some(project))?;
@@ -7277,7 +7487,7 @@ impl<R: Runtime> Core<R> {
         } = ask;
         let settings = self.settings.read().clone();
         // None found: Claude Code's, which says what is missing, as before there was a choice.
-        let id = engine::oneshot::writer(settings.writer_engine, &self.engines_found())
+        let id = engine::oneshot::writer(settings.writer_engine, &self.engines_usable())
             .unwrap_or(EngineId::CLAUDE);
         let engine = engine::by_id(id);
         let account = self.account_for(id, agent, project)?;
@@ -8312,6 +8522,7 @@ impl<R: Runtime> Core<R> {
         let _ = self.refresh_repos(&project.id, true).await;
         let project = self.project(&project.id).unwrap_or(project);
         self.watch_project(&project);
+        self.need_project_plugins(&project);
         if reopened {
             // Its tickets may start, its agents are counted, its Remote Control ones are
             // reachable again as they are when the app starts.
@@ -8347,13 +8558,25 @@ impl<R: Runtime> Core<R> {
         let agent_prefix = p.agent_branch_prefix.trim().to_string();
         let ticket_prefix = p.ticket_branch_prefix.trim().to_string();
         let docs_branch = p.docs_branch.trim().to_string();
-        let path = self.project(&p.id)?.path;
+        let before = self.project(&p.id)?;
+        let path = before.path.clone();
         if let Some(why) = paths::worktrees_root_problem(&path, &worktree_dir)
             .or_else(|| crate::docsbranch::branch_problem(&docs_branch))
             .or_else(|| git::branch_prefix_problem(&agent_prefix))
             .or_else(|| git::branch_prefix_problem(&ticket_prefix))
         {
             bail!(why);
+        }
+        // A source of tickets chosen, a harness by default: their plugin from the seed if it is not installed (ESC-373).
+        for l in &p.integrations.links {
+            if before.integrations.link(l.service).is_none() {
+                if let Some(id) = crate::plugins::sort::of_service(l.service.as_str()) {
+                    self.need_plugin(id);
+                }
+            }
+        }
+        if let Some(e) = p.engine.filter(|e| before.engine != Some(*e)) {
+            self.need_engine_plugin(e);
         }
         // Its preferred account is one there is (the window's copy may be older than the
         // accounts' tab); an account switched off is kept, and ignored while it is.

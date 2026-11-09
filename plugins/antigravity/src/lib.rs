@@ -4,8 +4,8 @@
 //! mode at its launch alone, and has no way to stop a turn); what it writes comes here (`agent/frames`) and goes back as the
 //! items of the conversation and the messages to write to it.
 //!
-//! `translate` and `words` are also read by the core, as a library, for what stays in it: its « Vue Antigravity » writes the
-//! same rules and reads its calls in the same form.
+//! Its « Vue Antigravity » is read here too (`view`): the core hands on the lines of the session's transcript
+//! (`view/translate`).
 //!
 //! It is a module (`run.wasm`): it reads the agent's home by `fs/read` (`host`), and a transcript written late on the host's
 //! timer (`client`, docs/PLUGINS.md §8.4.6).
@@ -13,12 +13,13 @@
 pub mod client;
 mod host;
 pub mod translate;
+pub mod view;
 pub mod words;
 
 use client::Client;
 use escouade_plugin_protocol::engine::{
     method, AgentRef, AnswerPermission, AnswerQuestion, Attach, Frames, Gone, Interrupt, Item,
-    Items, LaunchParams, SendMessage, SetValue,
+    Items, LaunchParams, SendMessage, SetValue, ViewParams,
 };
 use escouade_plugin_protocol::{turn, Refusal};
 use serde_json::{json, Value};
@@ -30,6 +31,7 @@ pub const MANIFEST: &str = include_str!("../escouade-plugin.json");
 #[derive(Default)]
 struct Plugin {
     agents: HashMap<String, Client>,
+    views: HashMap<String, view::View>,
     /// The host's timer is set: one is enough for all the agents.
     armed: bool,
 }
@@ -107,9 +109,15 @@ impl Plugin {
             }
             method::ATTACH => {
                 let a: Attach = read(params)?;
-                self.agents
-                    .entry(a.agent.clone())
-                    .or_insert_with(|| Client::new(&a));
+                if !self.agents.contains_key(&a.agent) {
+                    let client = Client::new(&a);
+                    // Its rules as they stand, written before anything else is asked of it.
+                    let rules = client.attached();
+                    if a.home.is_some() && !rules.is_empty() {
+                        host::push(&a.agent, rules);
+                    }
+                    self.agents.insert(a.agent.clone(), client);
+                }
                 Ok(json!({}))
             }
             method::DETACH => {
@@ -170,10 +178,27 @@ impl Plugin {
             }
             // `agy -p` tells no quota (its `/usage` is its interface's alone).
             method::READ_USAGE => Ok(json!({})),
+            method::VIEW_TRANSLATE => {
+                let p: ViewParams = read(params)?;
+                if let Some(gone) = &p.gone {
+                    self.views.remove(gone);
+                }
+                let view = self
+                    .views
+                    .entry(p.agent.clone())
+                    .or_insert_with(|| view::View::new(&p));
+                let mut items = Vec::new();
+                for line in &p.lines {
+                    view.line(line, &p, &mut items);
+                }
+                give(Items { items })
+            }
             other => Err(Refusal::not_found(other)),
         }
     }
 }
 
+#[cfg(test)]
+mod rules_tests;
 #[cfg(test)]
 mod tests;

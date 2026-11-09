@@ -5,6 +5,7 @@
 //! of Escouade and when the window comes back, and on « Rafraîchir ». An error of the host is said
 //! on the card and never moves a ticket.
 
+use crate::agent::NotifyKind;
 use crate::board;
 use crate::core::Core;
 use crate::forge::{
@@ -14,6 +15,8 @@ use crate::forge::{
 use crate::git;
 use crate::i18n::{self, Lang};
 use crate::model::{now_ms, BoardSettings, Column, FailedCheck, PrFix, Service, Ticket, TicketPr};
+use crate::prnews;
+use crate::telemetry::Event;
 use anyhow::{anyhow, bail, Result};
 use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
@@ -961,17 +964,30 @@ impl<R: tauri::Runtime> Core<R> {
     ) {
         let claude = self.lang().claude;
         let read = self.edit_ticket(id, |t| {
+            let before = (t.column == Column::Pr)
+                .then_some(t.pr.as_ref().map(prnews::Facts::of_ticket))
+                .flatten();
             let news = settle(t, pr, checks, now_ms(), claude);
             let in_review = t.column == Column::Pr;
             let grew = match t.pr.as_mut() {
                 Some(tp) if in_review => feedback_read(tp, pr, feedback, me),
                 _ => false,
             };
-            Ok((news, grew))
+            let told = match (before, &t.pr) {
+                (Some(before), Some(tp)) => prnews::news(&before, &prnews::Facts::of_ticket(tp)),
+                _ => Vec::new(),
+            };
+            Ok((news, grew, told))
         });
-        let news = read.as_ref().map(|(n, _)| *n).ok();
-        if read.is_ok_and(|(_, grew)| grew) {
-            self.notify_feedback(id);
+        let news = read.as_ref().map(|(n, _, _)| *n).ok();
+        if let Ok((_, grew, mut told)) = read {
+            // Its merge is told once its ticket has moved on (`ticket_pr_merged`).
+            told.retain(|k| *k != NotifyKind::PrMerged);
+            self.tell_ticket_pr(id, &told);
+            // Changes asked say it already: the comments that come with them are the same news.
+            if grew && !told.contains(&NotifyKind::PrChanges) {
+                self.notify_feedback(id);
+            }
         }
         match news.ok_or(()) {
             Ok(News::Merged) => self.ticket_pr_merged(id).await,
@@ -1186,6 +1202,9 @@ impl<R: tauri::Runtime> Core<R> {
     async fn ticket_pr_merged(self: &Arc<Self>, id: &str) {
         let Ok(t) = self.ticket(id) else { return };
         let Some(tp) = t.pr.clone() else { return };
+        self.telemetry.track(Event::PrMerged {
+            forge: crate::telemetry::forge(&tp.kind),
+        });
         self.facts.emit(
             crate::facts::Body::TicketMerged {
                 target: tp.target.clone(),
@@ -1220,7 +1239,7 @@ impl<R: tauri::Runtime> Core<R> {
                 }
             }
         }
-        self.notify_ticket(id, false);
+        self.tell_ticket_pr(id, &[NotifyKind::PrMerged]);
         self.schedule();
     }
 
@@ -1277,6 +1296,15 @@ impl<R: tauri::Runtime> Core<R> {
     /// its worktree made again from its branch when it went at the validation. Refused when there
     /// is nothing to fix or a fix is under way; what fails once it began is said on the card too.
     pub async fn ticket_pr_fix_ci(self: &Arc<Self>, id: &str) -> Result<()> {
+        self.ticket_pr_fix_ci_by(id, false).await
+    }
+
+    /// The same, by the user or by the autopilot (`to_fix`).
+    pub(crate) async fn ticket_pr_fix_ci_by(
+        self: &Arc<Self>,
+        id: &str,
+        autopilot: bool,
+    ) -> Result<()> {
         let t = self.ticket(id)?;
         let Some(tp) = t.pr.clone().filter(|_| t.column == Column::Pr) else {
             bail!(tr!(
@@ -1324,7 +1352,13 @@ impl<R: tauri::Runtime> Core<R> {
             Ok(())
         })?;
         match self.fix_ci_run(id, &t, &tp, &agent_id).await {
-            Ok(()) => Ok(()),
+            Ok(()) => {
+                self.telemetry.track(Event::CiFixStarted {
+                    from: "ticket",
+                    autopilot,
+                });
+                Ok(())
+            }
             Err(e) => {
                 let why = board::first_line(&format!("{e:#}"));
                 let _ = self.edit_ticket(id, |x| {

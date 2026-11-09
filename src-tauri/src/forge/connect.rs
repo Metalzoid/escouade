@@ -7,12 +7,25 @@ use crate::core::Core;
 use crate::integrations::{jira, Account};
 use crate::model::Service;
 use crate::model::UiEvent;
+use crate::plugins::runtime::Trial;
 use anyhow::bail;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::process::Stdio;
 use std::time::Duration;
 use tauri::Runtime;
+
+/// A project's code host, as the sidebar and the board need it (ESC-390).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeHost {
+    pub kind: String,
+    pub name: String,
+    /// Its word for a pull request (« PR », « MR » on GitLab).
+    pub word: String,
+    pub pull_requests: bool,
+    pub deployments: bool,
+}
 
 /// How an account stands, as its last check found it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
@@ -209,7 +222,7 @@ pub struct UnknownHost {
     pub projects: Vec<String>,
 }
 
-/// Réglages › Intégrations › Hébergeurs de code.
+/// Réglages › Services connectés › Hébergeurs de code.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ForgesView {
@@ -341,24 +354,30 @@ impl<R: Runtime> Core<R> {
             ));
         }
         let creds = self.credentials(&a).await?;
-        let client = self.client_of(&a.kind, &a.plugin, &creds)?;
+        let client = self.client_of(&a.kind, &a.plugin, &creds, None)?;
         Ok((client, a))
     }
 
     /// The client of an account of the code host `kind`: its plugin's (`ProcessForge`) when
     /// another than Escouade's own hand serves it (`plugin`), else the core's.
     /// A host whose client left the core (`Provider::plugin`: GitHub's) is its plugin's too, the
-    /// account's token lent to it as the core holds it (the user's, or its CLI's).
-    fn client_of(&self, kind: &str, plugin: &str, creds: &Credentials) -> Result<Box<dyn Forge>> {
+    /// account's token lent to it as the core holds it (the user's, or its CLI's): for as long as the account lasts,
+    /// or for the `trial` of an account not saved yet, with its host.
+    fn client_of(
+        &self,
+        kind: &str,
+        plugin: &str,
+        creds: &Credentials,
+        trial: Option<&Trial>,
+    ) -> Result<Box<dyn Forge>> {
         let provider = self.provider(kind)?;
         let first_hand = provider.plugin().filter(|_| plugin.is_empty());
         if let Some(own) = first_hand {
-            self.plugin_runtime.lend(
-                own,
-                &format!("account:{}", host_of(&creds.url)),
-                &creds.token,
-            );
-            self.plugin_runtime.lend_host(own, &host_of(&creds.url));
+            let host = host_of(&creds.url);
+            match trial {
+                Some(t) => t.lend(own, &format!("account:{host}"), &creds.token, &host),
+                None => self.lend_account(own, &host, &creds.token),
+            }
             #[cfg(any(debug_assertions, test))]
             self.plugin_runtime.set_routes(self.bases.read().faked());
         }
@@ -371,6 +390,16 @@ impl<R: Runtime> Core<R> {
             )));
         }
         Ok(provider.client(self.http()?, creds))
+    }
+
+    /// Lends `own` the token of the account of `host`, unless it went while its token was read: under the lock its
+    /// removal takes, so that no loan comes after `take_back`.
+    pub(crate) fn lend_account(&self, own: &str, host: &str, token: &str) {
+        let all = self.accounts.read();
+        if accounts::all(&all).iter().any(|a| a.host() == host) {
+            self.plugin_runtime
+                .lend(own, &format!("account:{host}"), token);
+        }
     }
 
     /// The plugin the app gives `id`, as the code hosts' view shows it.
@@ -394,6 +423,30 @@ impl<R: Runtime> Core<R> {
         }
     }
 
+    /// The code host of a project (ESC-390): its remote recognised by a code host whose plugin is
+    /// on. None without a remote, on a host Escouade does not know, or whose plugin is off: the
+    /// sidebar has no « PR » tab then, and the board no « Environnements ».
+    pub async fn project_code_host(&self, project_id: &str) -> Option<CodeHost> {
+        let remote = self.project_forge(project_id).await?;
+        let provider = remote
+            .kind
+            .as_deref()
+            .and_then(|k| self.forges.read().get(k))?;
+        if let Some(id) = provider.plugin() {
+            if !self.served_by(id).on {
+                return None;
+            }
+        }
+        let can = provider.capabilities();
+        Some(CodeHost {
+            kind: provider.kind(),
+            name: provider.name().to_string(),
+            word: provider.request_word().to_string(),
+            pull_requests: can.pull_requests,
+            deployments: can.deployments,
+        })
+    }
+
     /// What a project's remote names (the remote of its target branch, else origin, else the
     /// only one): its code host and repository.
     pub async fn project_forge(&self, project_id: &str) -> Option<Remote> {
@@ -408,7 +461,7 @@ impl<R: Runtime> Core<R> {
         registry.analyze(&url, |host| accounts::kind_for(&list, host))
     }
 
-    /// Réglages › Intégrations › Hébergeurs de code, with the state each account was last found in.
+    /// Réglages › Services connectés › Hébergeurs de code, with the state each account was last found in.
     pub async fn forges_view(&self) -> ForgesView {
         let registry = self.forges.read().clone();
         let kinds = crate::plugins::accounts::kinds_of(&self.plugins);
@@ -510,7 +563,7 @@ impl<R: Runtime> Core<R> {
         let asked = async {
             let p = self.provider(&a.kind)?;
             let creds = self.credentials(a).await?;
-            let client = self.client_of(&a.kind, &a.plugin, &creds)?;
+            let client = self.client_of(&a.kind, &a.plugin, &creds, None)?;
             Ok::<_, anyhow::Error>(check_client(&*client, &p.scopes()).await.0)
         };
         asked.await.unwrap_or_else(|e| Status {
@@ -545,6 +598,12 @@ impl<R: Runtime> Core<R> {
     /// account is saved, its token in the keychain. github.com's is Issues' account.
     pub async fn forge_connect(&self, form: ForgeForm) -> Result<ForgesView> {
         let provider = self.provider(form.kind.trim())?;
+        // Its plugin of the first hand, from the seed if it is not installed (ESC-373): the gesture asks for it.
+        if form.plugin.trim().is_empty() {
+            if let Some(p) = crate::plugins::sort::of_forge(&provider.kind()) {
+                self.need_plugin(p);
+            }
+        }
         let typed = if form.url.trim().is_empty() {
             provider.default_host().unwrap_or("")
         } else {
@@ -610,7 +669,8 @@ impl<R: Runtime> Core<R> {
         if !account.plugin.is_empty() {
             accounts::place(&*self.secrets, &mut account);
         }
-        let client = self.client_of(&account.kind, &account.plugin, &creds)?;
+        let trial = self.plugin_runtime.trial();
+        let client = self.client_of(&account.kind, &account.plugin, &creds, Some(&trial))?;
         let (status, id) = check_client(&*client, &provider.scopes()).await;
         let Some(id) = id else {
             if !account.plugin.is_empty() {
@@ -629,6 +689,8 @@ impl<R: Runtime> Core<R> {
             }
             all.forges.retain(|a| a.host() != host);
             all.forges.push(account);
+            self.plugin_runtime.take_back(&format!("account:{host}"));
+            trial.keep();
         }
         crate::integrations::secrets::save_accounts(&self.data, &self.accounts.read())?;
         self.forge_health.lock().insert(host, status);
@@ -682,6 +744,7 @@ impl<R: Runtime> Core<R> {
                 all.forget_forges.push(host.clone());
             }
             all.forges.retain(|a| a.host() != host);
+            self.plugin_runtime.take_back(&format!("account:{host}"));
         }
         crate::integrations::secrets::save_accounts(&self.data, &self.accounts.read())?;
         Ok(self.forges_view().await)

@@ -66,6 +66,25 @@ const open = (over = {}) =>
     ...over,
   });
 
+describe('« Faire relire par un agent » from the tab (ESC-66)', () => {
+  it('shows the draft a pull request already has rather than starting over, and starts one otherwise', async () => {
+    const started: number[] = [];
+    fakeBackend({
+      pr_reviews: () => [{ number: 7, projectId: 'p1', phase: 'ready', notes: [] }],
+      pr_review_start: (a: { number: number }) => {
+        started.push(a.number);
+        return {};
+      },
+    });
+    await app.askPrReview('p1', 7);
+    expect(started).toEqual([]);
+    expect(app.prReviewOpen.p1).toBe(7);
+    await app.askPrReview('p1', 8);
+    expect(started).toEqual([8]);
+    expect(app.prReviewOpen.p1).toBe(8);
+  });
+});
+
 describe('the checks of a pull request', () => {
   it('say their phase, their order and how long they ran', () => {
     expect(checkPhase(check({ state: 'pending' }))).toBe('queued');
@@ -204,8 +223,8 @@ describe('the « PR et CI » tab', () => {
     const { unmount } = render(PrPanel, { project: project(), agent: app.agents.a1 });
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Jeton refusé par l’hébergeur : reconnecte son compte.');
-    await userEvent.click(within(alert).getByRole('button', { name: 'Réglages › Intégrations' }));
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'integrations' });
+    await userEvent.click(within(alert).getByRole('button', { name: 'Réglages › Services connectés' }));
+    expect(app.modal).toEqual({ kind: 'settings', page: 'services' });
     unmount();
     failure = { kind: 'rateLimit', message: 'GitHub : limite atteinte (403)', reset: NOW + 3600 };
     render(PrPanel, { project: project(), agent: app.agents.a1 });
@@ -225,7 +244,7 @@ describe('the « PR et CI » tab', () => {
     app.agents.a1.prWord = null;
     render(PrPanel, { project: project(), agent: app.agents.a1 });
     expect(await screen.findByText('Aucun compte connecté pour github.com')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Réglages › Intégrations' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Réglages › Services connectés' })).toBeInTheDocument();
   });
 
   it('lists the project’s open pull requests without an agent, an agent’s opening it', async () => {

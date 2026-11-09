@@ -1,10 +1,10 @@
 # Settings: Notifications
 
-The “Notifications” tab sets Escouade’s alerts: which events it tells you about, whether it shows a system notification when the window is not in the foreground, and whether it plays a sound.
+The “Notifications” page sets Escouade’s alerts: which events it tells you about, whether it shows a system notification when the window is not in the foreground, and whether it plays a sound.
 
 ## How Escouade alerts you
 
-Three signals combine, and the tab controls the last two. The alerts themselves are described in [notifications](notifications).
+Three signals combine, and the page controls the last two. The alerts themselves are described in [notifications](notifications).
 
 - Window signals: the project’s tile, the agent’s card, and the taskbar (the Dock on macOS) always flag the agent, whatever the settings. The taskbar flashes when the window is not in the foreground.
 - The chime: played for a type of event that is on, when “Sound on” is on too, whether or not the window is in the foreground.
@@ -23,6 +23,10 @@ Four switches choose the types of events that chime and show a system notificati
 
 > [!NOTE]
 > An agent whose ticket is “In progress” only notifies for its questions and permissions. For the rest, the [Kanban](board) does the alerting, through the “Tickets” type, when the ticket is ready to review or blocked.
+
+### Pull requests and deployments
+
+Eight more switches, all on by default, for what a [code host](code-hosts#news-from-the-code-hosts) has that’s new: “CI failed”, “Changes requested”, “PR approved”, “PR merged”, “Conflict”, “Review requested”, “Deployment to production succeeded”, and “Deployment failed”. Escouade reports them when it reads what it follows again. A type turned off says nothing more.
 
 ## Channels
 

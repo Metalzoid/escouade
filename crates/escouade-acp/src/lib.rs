@@ -29,6 +29,7 @@ pub mod questions;
 mod texts;
 pub mod tools;
 pub mod vibe;
+pub mod view;
 
 pub use agent::Agent;
 pub use tools::{call_id, content_text, diff_of, line_hunks, tool_of};
@@ -141,16 +142,133 @@ pub fn fenced(params: &Value, fence: &[String]) -> bool {
     texts.iter().any(|t| fence.iter().any(|p| names(t, p)))
 }
 
-/// Whether `path` is in the folder `dir` (or is it), whatever its slashes and case.
+/// A path as `inside` reads it: whether it starts at a root, and its parts with its `.` and `..` resolved. None when it climbs
+/// over where it starts.
+fn parts_of(path: &str, windows: bool) -> Option<(bool, Vec<String>)> {
+    let path = path.replace('\\', "/");
+    let path = if windows { path.to_lowercase() } else { path };
+    let mut parts = Vec::new();
+    for part in path.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            part => parts.push(part.to_string()),
+        }
+    }
+    Some((path.starts_with('/'), parts))
+}
+
+/// Whether `path` is in the folder `dir` (or is it), whatever its slashes and, under Windows, its case. Read from its words
+/// alone, a module having no disk to ask: `dir/../other` is not in `dir`, and a link is not followed. What it says lets a
+/// write through without a card: a path it cannot place is in nothing.
 pub fn inside(path: &str, dir: &str) -> bool {
-    let norm = |p: &str| p.replace('\\', "/").trim_end_matches('/').to_lowercase();
-    let (p, d) = (norm(path), norm(dir));
-    !d.is_empty() && (p == d || p.starts_with(&format!("{d}/")))
+    let windows = windows_path(path) || windows_path(dir);
+    let (Some((rooted, p)), Some((root, d))) = (parts_of(path, windows), parts_of(dir, windows))
+    else {
+        return false;
+    };
+    !d.is_empty() && rooted == root && p.starts_with(&d)
+}
+
+/// Whether `path` is in the git folder of a folder under `dir`, the agent's: `.git` whatever its case, the file `.git` of a
+/// worktree too, and the names Windows takes for it (`.git.`, `.git::$INDEX_ALLOCATION`, `git~1`). A write there is no
+/// work of the agent's: it runs with what `git` runs next (`hooks`, `config`). What cannot be placed is in it.
+pub fn in_git_folder(path: &str, dir: &str) -> bool {
+    let (Some((_, p)), Some((_, d))) = (parts_of(path, true), parts_of(dir, true)) else {
+        return true;
+    };
+    let name = |part: &String| {
+        let part = part.split(':').next().unwrap_or(part);
+        let part = part.trim_end_matches(['.', ' ']);
+        part == ".git" || part == "git~1"
+    };
+    p.strip_prefix(d.as_slice()).unwrap_or(&p).iter().any(name)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_git_folder_is_told_whatever_it_is_called() {
+        for path in [
+            "/w/proj/.git",
+            "/w/proj/.git/hooks/pre-commit",
+            "/w/proj/.GIT/config",
+            "/w/proj/sous/.git/config",
+            "/w/proj/a/../.git/config",
+            r"C:\w\proj\.Git\config",
+            r"C:\w\proj\.git.\config",
+            r"C:\w\proj\.git \config",
+            r"C:\w\proj\.git::$INDEX_ALLOCATION\config",
+            r"C:\w\proj\GIT~1\config",
+            "/../../x",
+        ] {
+            assert!(in_git_folder(path, "/w/proj"), "{path}");
+        }
+        for path in [
+            "/w/proj/.gitignore",
+            "/w/proj/.github/ci.yml",
+            "/w/proj/.gitattributes",
+            "/w/proj/git/config",
+            "/w/proj/a.git/config",
+        ] {
+            assert!(!in_git_folder(path, "/w/proj"), "{path}");
+        }
+        // A folder of a worktree under a `.git` of its own is not the agent's git folder.
+        assert!(!in_git_folder("/p/.git/x/a.txt", "/p/.git/x"));
+    }
+
+    #[test]
+    fn a_path_that_climbs_out_of_the_folder_is_not_in_it() {
+        assert!(!inside("/w/proj/../other/a.txt", "/w/proj"));
+        assert!(!inside("/w/proj/sub/../../other", "/w/proj"));
+        assert!(!inside(r"C:\w\proj\..\other\a.txt", r"C:\w\proj"));
+        assert!(!inside(
+            &tools::absolute("../other/a.txt", "/w/proj"),
+            "/w/proj"
+        ));
+        assert!(!inside(
+            &tools::absolute(r"..\other\a.txt", r"C:\w\proj"),
+            r"C:\w\proj"
+        ));
+        assert!(!inside("/../../w/proj/a", "/w/proj"), "over its root");
+    }
+
+    #[test]
+    fn a_path_that_stays_in_the_folder_is_in_it() {
+        assert!(inside("/w/proj/a/../b.txt", "/w/proj"));
+        assert!(inside("/w/proj/./a.txt", "/w/proj"));
+        assert!(inside("/w//proj/a.txt", "/w/proj/"));
+        assert!(inside("/w/proj", "/w/proj/"));
+        assert!(inside(&tools::absolute("a/b.txt", "/w/proj"), "/w/proj"));
+    }
+
+    #[test]
+    fn under_windows_a_folder_is_the_same_whatever_its_slashes_and_case() {
+        assert!(inside("c:/W/Proj/a.txt", r"C:\w\proj"));
+        assert!(inside(r"\\Serveur\Partage\a", "//serveur/partage"));
+    }
+
+    #[test]
+    fn a_neighbour_is_not_the_folder() {
+        assert!(
+            !inside("/w/proj2/a.txt", "/w/proj"),
+            "its name starts alike"
+        );
+        assert!(
+            !inside("/w/Proj/a.txt", "/w/proj"),
+            "a disk that reads case"
+        );
+        assert!(!inside("w/proj/a.txt", "/w/proj"), "not at the root");
+        assert!(!inside("/w/proj/a.txt", ""), "no folder");
+        assert!(
+            !inside("/w/proj/a.txt", "/"),
+            "the root is no agent's folder"
+        );
+    }
 
     #[test]
     fn a_path_tells_whether_it_is_of_windows() {

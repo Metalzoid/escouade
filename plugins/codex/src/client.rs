@@ -10,7 +10,7 @@ use crate::translate::{Ctx, Seen, Translator};
 use crate::words::{self, id_key, is_plan_approval, mode_params, Settings};
 use escouade_acp::vibe::worded;
 use escouade_plugin_protocol::engine::{
-    AnswerPermission, Attach, EnvVar, Item, Launch, LaunchParams, StartAt,
+    AnswerPermission, Attach, EnvVar, Item, Launch, LaunchParams, StartAt, ViewKnown,
 };
 use escouade_plugin_protocol::turn;
 use serde_json::{json, Value};
@@ -45,7 +45,7 @@ struct Asked {
 /// What the conversation holds, as the translation asks it: the core keeps the conversation, this is the plugin's
 /// memory of it, no more than each call's name and whether it runs.
 #[derive(Default)]
-struct Own {
+pub(crate) struct Own {
     ids: HashSet<String>,
     calls: HashMap<String, (String, &'static str)>,
 }
@@ -61,7 +61,26 @@ impl Seen for Own {
 }
 
 impl Own {
-    fn note(&mut self, items: &[Item]) {
+    /// What the core's conversation holds, for a view that starts on it.
+    pub(crate) fn knows(&mut self, known: &[ViewKnown]) {
+        for k in known {
+            match (&k.name, k.status.as_deref()) {
+                (Some(name), status) => {
+                    let status = match status {
+                        Some("running") => "running",
+                        Some("ok") => "ok",
+                        _ => "interrupted",
+                    };
+                    self.calls.insert(k.id.clone(), (name.clone(), status));
+                }
+                _ => {
+                    self.ids.insert(k.id.clone());
+                }
+            }
+        }
+    }
+
+    pub(crate) fn note(&mut self, items: &[Item]) {
         for item in items {
             match item {
                 Item::Delta { id, .. }
@@ -147,7 +166,8 @@ impl Agent {
                 model: a.model.clone(),
                 effort: a.effort.clone(),
                 mode: a.mode.clone(),
-                ..Settings::default()
+                fence: a.fence.clone(),
+                read_only: a.read_only,
             },
             start: StartAt::New,
             instructions: None,
@@ -187,6 +207,9 @@ impl Agent {
         self.settings.model = a.model.clone();
         self.settings.effort = a.effort.clone();
         self.settings.mode = a.mode.clone();
+        // Each `turn/start` says them: what the core says wins over what a launch left.
+        self.settings.fence = a.fence.clone();
+        self.settings.read_only = a.read_only;
         self.home = agent_home(a);
     }
 
@@ -335,6 +358,7 @@ impl Agent {
                 model: &self.settings.model,
                 active: self.active,
                 interrupted: self.interrupted,
+                fenced: !self.settings.fence.is_empty(),
                 process: true,
                 lang: &self.lang,
                 session: self.session.as_deref(),

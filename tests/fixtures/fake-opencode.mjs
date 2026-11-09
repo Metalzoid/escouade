@@ -440,7 +440,7 @@ async function mcpCall(e, method, params, id) {
   const text = await r.text();
   if (!r.ok) throw new Error(`${r.status} ${text}`);
   if (id === undefined) return null;
-  const answers = text.includes('data:')
+  const answers = /^data:/m.test(text)
     ? text
         .split('\n')
         .filter((l) => l.startsWith('data:'))
@@ -832,6 +832,8 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && p === '/session/status') {
     return json(Object.fromEntries([...turns.keys()].map((sid) => [sid, { type: 'busy' }])));
   }
+  // What OpenCode judges an edit against: the folder itself here, as a repository's root.
+  if (req.method === 'GET' && p === '/path') return json({ worktree: dir, directory: dir });
   if (req.method === 'POST' && p === '/session') return json(sessionInfo(newSession(dir, body || {})));
   if ((m = p.match(/^\/session\/([^/]+)$/))) {
     const s = sessionOf(dir, m[1]);

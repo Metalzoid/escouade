@@ -57,6 +57,10 @@ pub struct Settings {
     /// itself once it is at rest (`updates::busy`). Off, the user restarts it, or the update
     /// installs when the app is closed.
     pub auto_update: bool,
+    /// « Recevoir les versions bêta » (ESC-374): off, a version with a pre-release suffix
+    /// (`2.2.0-beta.1`) is never offered, and the check reads latest.json alone; on, it reads the
+    /// beta channel (beta.json) first (`updates::endpoints_for`, `updates::accepts`).
+    pub beta_updates: bool,
     /// What the external ticket systems' links do (their accounts are kept apart, with their
     /// secrets: `integrations::Accounts`).
     pub integrations: IntegrationSettings,
@@ -139,12 +143,12 @@ pub struct Settings {
     /// « Remote control pour tous les agents »: every agent, those of tickets too, is reachable
     /// from claude.ai (`AgentMeta::remote_control`, `RemoteSource::Global`).
     pub remote_control_all: bool,
-    /// « Nouveaux projets privés » (Réglages › Projets): a project added is private
+    /// « Nouveaux projets privés » (Réglages › Tous les projets): a project added is private
     /// (`Project::private`) from the start. Off by default.
     pub private_projects: bool,
-    /// « Thème » (Réglages › Application › Affichage): the window's look, the system's by default.
+    /// « Thème » (Réglages › Général › Apparence): the window's look, the system's by default.
     pub theme: ThemeChoice,
-    /// « Couleurs » (Réglages › Application › Affichage, PLG-7): the theme of a plugin the window takes,
+    /// « Couleurs » (Réglages › Général › Apparence, PLG-7): the theme of a plugin the window takes,
     /// `<plugin id>/<theme id>`; empty, Escouade's. Its values are filtered by the window
     /// (src/lib/plugin-themes.ts); a plugin switched off or gone leaves Escouade's colours, the choice kept.
     pub plugin_theme: String,
@@ -172,7 +176,7 @@ pub struct Settings {
     pub quota_projection: QuotaProjection,
     /// « Voix »: the dictation (`voice`).
     pub voice: VoiceSettings,
-    /// « Ton nom » (Réglages › Application › Équipe, ESC-190): written in the tickets shared with
+    /// « Ton nom » (Réglages › Général › Toi, ESC-190): written in the tickets shared with
     /// the team and in those this machine moves on; a project may have its own
     /// (`Project::user_name`). Empty until given: the name git knows stands in (ESC-243).
     pub user_name: String,
@@ -437,6 +441,17 @@ pub struct NotifyFor {
     pub errors: bool,
     /// "Tickets (prêt à tester, bloqué)".
     pub tickets: bool,
+    /// The news of the code hosts (ESC-68), one by one: "CI en échec", "Changements demandés",
+    /// "PR approuvée", "PR mergée", "Conflit", "Relecture demandée", "Déploiement en production
+    /// réussi", "Déploiement en échec".
+    pub pr_ci_failed: bool,
+    pub pr_changes: bool,
+    pub pr_approved: bool,
+    pub pr_merged: bool,
+    pub pr_conflict: bool,
+    pub pr_review: bool,
+    pub deploy_ok: bool,
+    pub deploy_failed: bool,
 }
 
 impl Default for NotifyFor {
@@ -446,11 +461,40 @@ impl Default for NotifyFor {
             done: true,
             errors: true,
             tickets: true,
+            pr_ci_failed: true,
+            pr_changes: true,
+            pr_approved: true,
+            pr_merged: true,
+            pr_conflict: true,
+            pr_review: true,
+            deploy_ok: true,
+            deploy_failed: true,
         }
     }
 }
 
 impl NotifyFor {
+    /// All on but `kind`, for the tests of the choices.
+    #[cfg(test)]
+    pub fn all_but(kind: NotifyKind) -> Self {
+        let mut n = Self::default();
+        *match kind {
+            NotifyKind::Question => &mut n.questions,
+            NotifyKind::Done => &mut n.done,
+            NotifyKind::Error => &mut n.errors,
+            NotifyKind::Ticket => &mut n.tickets,
+            NotifyKind::PrCiFailed => &mut n.pr_ci_failed,
+            NotifyKind::PrChanges => &mut n.pr_changes,
+            NotifyKind::PrApproved => &mut n.pr_approved,
+            NotifyKind::PrMerged => &mut n.pr_merged,
+            NotifyKind::PrConflict => &mut n.pr_conflict,
+            NotifyKind::PrReview => &mut n.pr_review,
+            NotifyKind::DeployOk => &mut n.deploy_ok,
+            NotifyKind::DeployFailed => &mut n.deploy_failed,
+        } = false;
+        n
+    }
+
     /// The user wants to be told of this kind of event.
     pub fn allows(&self, kind: NotifyKind) -> bool {
         match kind {
@@ -458,6 +502,14 @@ impl NotifyFor {
             NotifyKind::Done => self.done,
             NotifyKind::Error => self.errors,
             NotifyKind::Ticket => self.tickets,
+            NotifyKind::PrCiFailed => self.pr_ci_failed,
+            NotifyKind::PrChanges => self.pr_changes,
+            NotifyKind::PrApproved => self.pr_approved,
+            NotifyKind::PrMerged => self.pr_merged,
+            NotifyKind::PrConflict => self.pr_conflict,
+            NotifyKind::PrReview => self.pr_review,
+            NotifyKind::DeployOk => self.deploy_ok,
+            NotifyKind::DeployFailed => self.deploy_failed,
         }
     }
 }
@@ -612,6 +664,7 @@ impl Default for Settings {
             quota_pause: 100,
             switch_at: 100,
             auto_update: true,
+            beta_updates: false,
             integrations: IntegrationSettings::default(),
             language: "system".into(),
             claude_language: "ui".into(),
@@ -2220,6 +2273,9 @@ pub struct UiState {
     pub selected_agent: HashMap<String, String>,
     /// "split" (conversation | files) or "" (classic).
     pub layout: String,
+    /// The split screen of each project (ESC-392), by project id: its tree of panes as the interface wrote it
+    /// (`lib/panes.ts`), kept whole and read back at the start. Absent: one content fills the work area.
+    pub panes: HashMap<String, Value>,
 }
 
 /// A choice of Claude Code's model picker (`initialize`): an alias or a full id, and the model
@@ -2310,6 +2366,8 @@ pub struct PersistedState {
     /// could not be removed: given back to their project, or erased. The next start tries again
     /// to remove them, and never reads them (`closed::scan`).
     pub leftover_histories: Vec<String>,
+    /// The reviews written by an agent, waiting for the user or published (ESC-66).
+    pub pr_reviews: Vec<crate::prreview::PrReview>,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -2999,8 +3057,27 @@ pub enum UiEvent {
     FocusBoard {
         project_id: String,
     },
+    /// The notification of a review asked of the user was clicked: the project's pull requests
+    /// are shown (ESC-68).
+    #[serde(rename_all = "camelCase")]
+    FocusPrs {
+        project_id: String,
+    },
     /// Why no ticket of the project's board starts (its target branch has no commit yet, or is
     /// gone), or None once they may start again.
+    /// A review of a pull request written by an agent, changed (ESC-66).
+    PrReview {
+        review: crate::prreview::PrReview,
+    },
+    /// That review, dropped.
+    #[serde(rename_all = "camelCase")]
+    PrReviewGone {
+        project_id: String,
+        number: u64,
+    },
+    /// The code hosts may have changed (a host's plugin switched on or off, installed, removed; an
+    /// account connected or gone): the window reads its projects' code host again (ESC-390).
+    CodeHosts,
     /// The environments of a project's host, as last read (ESC-67).
     Environments {
         environments: crate::deploys::ProjectEnvironments,
@@ -3032,6 +3109,12 @@ pub enum UiEvent {
     /// An address to open in the default browser (a pull request to finish on GitHub).
     OpenUrl {
         url: String,
+    },
+    /// A plugin of the seed installed for a gesture that needs it (ESC-373): the window says it in a line, and reads
+    /// the plugins again.
+    PluginSeeded {
+        id: String,
+        text: String,
     },
     /// Something done in the background the window says in passing (tickets imported by
     /// themselves).
@@ -3234,28 +3317,17 @@ mod tests {
         );
         assert_eq!(
             serde_json::to_value(&s).unwrap()["notifyFor"],
-            json!({ "questions": true, "done": false, "errors": true, "tickets": true })
+            json!({
+                "questions": true, "done": false, "errors": true, "tickets": true,
+                "prCiFailed": true, "prChanges": true, "prApproved": true, "prMerged": true,
+                "prConflict": true, "prReview": true, "deployOk": true, "deployFailed": true,
+            })
         );
     }
 
     #[test]
     fn a_notification_kind_is_let_through_by_its_own_choice_only() {
-        let all_but = |off: NotifyKind| {
-            let mut n = NotifyFor::default();
-            match off {
-                NotifyKind::Question => n.questions = false,
-                NotifyKind::Done => n.done = false,
-                NotifyKind::Error => n.errors = false,
-                NotifyKind::Ticket => n.tickets = false,
-            }
-            n
-        };
-        let kinds = [
-            NotifyKind::Question,
-            NotifyKind::Done,
-            NotifyKind::Error,
-            NotifyKind::Ticket,
-        ];
+        let (all_but, kinds) = (NotifyFor::all_but, NotifyKind::ALL);
         for off in kinds {
             let n = all_but(off);
             for kind in kinds {
@@ -3742,6 +3814,19 @@ mod tests {
         assert_eq!(serde_json::to_value(&s).unwrap()["autoUpdate"], json!(true));
         let off: Settings = serde_json::from_str(r#"{"autoUpdate":false}"#).unwrap();
         assert!(!off.auto_update);
+    }
+
+    #[test]
+    fn the_betas_are_off_until_the_user_asks_for_them() {
+        let s: Settings = serde_json::from_str(r#"{"autoUpdate":true}"#).unwrap();
+        assert!(!s.beta_updates);
+        assert!(!Settings::default().beta_updates);
+        assert_eq!(
+            serde_json::to_value(&s).unwrap()["betaUpdates"],
+            json!(false)
+        );
+        let on: Settings = serde_json::from_str(r#"{"betaUpdates":true}"#).unwrap();
+        assert!(on.beta_updates);
     }
 
     #[test]

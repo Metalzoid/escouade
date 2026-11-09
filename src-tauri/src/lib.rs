@@ -169,6 +169,8 @@ mod plugins_jira_tests;
 #[cfg(test)]
 mod plugins_linear_tests;
 #[cfg(test)]
+mod plugins_loans_tests;
+#[cfg(test)]
 mod plugins_net_tests;
 #[cfg(test)]
 mod plugins_protocol_tests;
@@ -183,11 +185,15 @@ mod plugins_rust_build_tests;
 #[cfg(test)]
 mod plugins_seed_tests;
 #[cfg(test)]
+mod plugins_sort_tests;
+#[cfg(test)]
 mod plugins_store_tests;
 #[cfg(test)]
 mod plugins_tests;
 #[cfg(test)]
 mod plugins_trello_tests;
+#[cfg(test)]
+mod plugins_view_parity_tests;
 #[cfg(test)]
 mod plugins_wasm_hosts_parity_tests;
 #[cfg(test)]
@@ -200,6 +206,7 @@ mod pragent_tests;
 mod pricing;
 #[cfg(test)]
 mod private_tests;
+mod prnews;
 mod proc;
 #[cfg(test)]
 mod process_tests;
@@ -207,6 +214,7 @@ mod projectfile;
 #[cfg(test)]
 mod projectfile_tests;
 mod projectlogo;
+mod prreview;
 mod prview;
 #[cfg(test)]
 mod prview_tests;
@@ -662,6 +670,8 @@ pub fn run() {
                 commands::plugin_inspect_store,
                 commands::plugin_inspect_seed,
                 commands::plugin_seed_offers,
+                commands::plugin_install_seed,
+                commands::plugin_need_engine,
                 commands::store_view,
                 commands::deep_links_take,
                 commands::store_refresh,
@@ -694,6 +704,7 @@ pub fn run() {
                 commands::account_status,
                 commands::account_models_refresh,
                 commands::engines_found_now,
+                commands::engines_off_now,
                 commands::engines_declared,
                 commands::account_key,
                 commands::account_login,
@@ -829,6 +840,14 @@ pub fn run() {
                 commands::agent_pr_rerun,
                 commands::agent_no_pr,
                 commands::project_prs,
+                commands::project_code_host,
+                commands::overview_prs,
+                commands::pr_reviews,
+                commands::pr_review_start,
+                commands::pr_review_note,
+                commands::pr_review_summary,
+                commands::pr_review_publish,
+                commands::pr_review_discard,
                 commands::project_environments,
                 commands::project_environments_read,
                 commands::create_agent_on_pr,

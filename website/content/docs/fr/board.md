@@ -17,7 +17,7 @@ Cliquer une notification de ticket (« prêt à tester » ou « bloqué ») 
 | « Kanban » et la ligne dessous | Le nom du projet, le nombre de tickets et combien sont « En cours » (« demo-api · 5 tickets · 2 en boucle »). |
 | Les places | « 1 place libre » ou « Toutes les places sont prises », ou bien pourquoi rien ne démarre : « Quota atteint — reprise à 14:30 », « Claude Code introuvable — aucun ticket ne démarre », une branche cible sans commit ou introuvable. |
 | « Importer » | Ouvre la fenêtre d’import des tickets de Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues ou Azure Boards (voir [Jira, Trello, GitHub, Linear, ClickUp, GitLab et Azure Boards](integrations)). |
-| « Après validation : … » | Résume ce que fait « Valider » (« merge squash → main », « PR → main », « push ticket/* », « laisser en l’état »). Un clic ouvre Réglages › Kanban (voir [Réglages du Kanban](settings-board)). |
+| « Après validation : … » | Résume ce que fait « Valider » (« merge squash → main », « PR → main », « push ticket/* », « laisser en l’état »). Un clic ouvre Réglages › Projets › Kanban (voir [Réglages du Kanban](settings-board)). |
 | « Pilote auto » | L’interrupteur du [pilote auto](autopilot) de ce projet. |
 
 Quand le pilote auto est en pause, une ligne sous l’en-tête dit pourquoi et propose « Reprendre maintenant ».
@@ -29,6 +29,7 @@ Quand le pilote auto est en pause, une ligne sous l’en-tête dit pourquoi et p
 | « À faire » | Les tickets qui attendent un agent. | Par priorité, de haut en bas, puis par ancienneté. |
 | « En cours » | Les tickets dont un agent s’occupe (« Boucle 2/5 »), et ceux qui sont bloqués. | Par heure de démarrage. |
 | « À tester » | Les tickets que l’agent te remet : critères atteints, ou nombre maximal de boucles atteint. À toi de les tester, puis de les valider ou de les renvoyer. | Par heure d’arrivée. |
+| « En revue » | Les tickets dont la pull request est ouverte chez l’hébergeur, jusqu’à son merge. Elle n’apparaît que si le Kanban ouvre des PR ou qu’un ticket y est. | Par heure d’arrivée « À tester ». |
 | « Terminé » | Les tickets validés. | Le plus récent en tête. |
 
 Chaque colonne affiche son nombre de tickets. Une colonne vide dit ce qu’elle attend (« Ajoute un ticket : un agent le prendra dès qu’une place se libère », « Rien à tester »). Seule la colonne « À faire » a un bouton `+` (« Nouveau ticket »).
@@ -48,7 +49,7 @@ Sous macOS, `Ctrl` devient `⌘`.
 | « Titre du ticket » | Ce que fait le ticket, en une ligne. « Ajouter » reste grisé tant que le titre est vide. |
 | « Description » | Le contexte, que l’agent lira avec le titre. Facultative. |
 | Images | Une capture du bug ou une maquette : colle-la (`Ctrl+V`) ou glisse-la n’importe où dans la fenêtre, ou clique sur « Joindre un fichier ». Elle apparaît en vignette sous la description, et sa croix la retire. PNG, JPEG, GIF et WebP, 5 Mo par image et 18 Mo en tout, comme les pièces jointes du [chat](chat), et 20 images au plus. L’agent du ticket les reçoit avec son premier message, et elles restent dans sa conversation pour les boucles suivantes. Le [serveur MCP](mcp) les joint, les retire, les liste et les lit aussi (`create_ticket`, `update_ticket`, `get_ticket`, `get_ticket_image`). |
-| Fichiers (« Joindre un fichier ») | N’importe quel autre fichier : un tableur, une archive, un journal, un export… Mêmes gestes que pour une image, et le bouton « Joindre un fichier » ouvre le choix de n’importe quel fichier. Tout ce qui n’est pas une image que le ticket peut montrer (un autre format, une image de plus de 5 Mo, un PDF, un texte…) apparaît en puce sous les images (icône, nom, taille), dont la croix le retire ; 20 fichiers au plus, en plus des 20 images. Il est copié aussitôt, jamais lu à son emplacement d’origine : l’agent du ticket le lit plus tard, quand l’original peut avoir bougé ou disparu. Tant que le ticket n’est pas enregistré, la copie attend dans un brouillon (vidé après 24 h) ; « Abandonner » efface les copies faites par la fenêtre, et « Ajouter » ou « Enregistrer » attendent la fin des copies. La taille maximale de [Réglages › Harness](settings-claude-code#pieces-jointes) s’applique, et au-delà de 200 Mo la puce porte un avertissement, comme dans le [chat](chat#pieces-jointes). L’agent du ticket lit le dossier de ses fichiers sans demander, et reçoit à la fin de son premier message une ligne « Fichier joint : nom, chemin » par fichier. Le [serveur MCP](mcp) les joint, les retire, les liste et les lit aussi (`create_ticket`, `update_ticket`, `get_ticket`, `get_ticket_file`). |
+| Fichiers (« Joindre un fichier ») | N’importe quel autre fichier : un tableur, une archive, un journal, un export… Mêmes gestes que pour une image, et le bouton « Joindre un fichier » ouvre le choix de n’importe quel fichier. Tout ce qui n’est pas une image que le ticket peut montrer (un autre format, une image de plus de 5 Mo, un PDF, un texte…) apparaît en puce sous les images (icône, nom, taille), dont la croix le retire ; 20 fichiers au plus, en plus des 20 images. Il est copié aussitôt, jamais lu à son emplacement d’origine : l’agent du ticket le lit plus tard, quand l’original peut avoir bougé ou disparu. Tant que le ticket n’est pas enregistré, la copie attend dans un brouillon (vidé après 24 h) ; « Abandonner » efface les copies faites par la fenêtre, et « Ajouter » ou « Enregistrer » attendent la fin des copies. La taille maximale de [Réglages › Avancé › Pièces jointes](settings-claude-code#pieces-jointes) s’applique, et au-delà de 200 Mo la puce porte un avertissement, comme dans le [chat](chat#pieces-jointes). L’agent du ticket lit le dossier de ses fichiers sans demander, et reçoit à la fin de son premier message une ligne « Fichier joint : nom, chemin » par fichier. Le [serveur MCP](mcp) les joint, les retire, les liste et les lit aussi (`create_ticket`, `update_ticket`, `get_ticket`, `get_ticket_file`). |
 | « Critères d’acceptation » | Un critère par ligne. L’agent vérifie chacun, et le ticket n’est fini que quand ils sont atteints. Sans critère, Escouade en met deux : « Implémentation conforme au ticket » et « Tests verts » (dans la langue de l’interface au moment de la création). |
 | « Boucles max » | Le nombre maximal de boucles de l’agent : 3, 5 (par défaut) ou 8. Voir [le pilote auto](autopilot#la-boucle). |
 | « Branche » | Par défaut « Nouvelle branche `ticket/<clé>` » : le ticket a sa propre branche, créée à son démarrage. Pour un ticket importé d’une source, la clé et le titre du ticket d’origine la nomment (`ticket/proj-123-corriger-la-connexion`, `ticket/45-corriger-la-connexion` pour `#45`), de même que son agent et le titre de sa PR. « Reprendre une branche existante… » ouvre le sélecteur de branches (locales ou distantes) : l’agent travaille alors sur cette branche, qu’Escouade ne supprime jamais, même une fois le ticket validé. La branche cible du Kanban et celle du dossier du projet ne peuvent pas être choisies. |
@@ -63,7 +64,7 @@ Dans la fenêtre :
 - `Échap`, la croix, un clic à côté ou « Annuler » ferment la fenêtre. Si tu as saisi quelque chose, Escouade demande « Abandonner les modifications ? » ; « Annuler » te ramène au formulaire avec ce que tu avais écrit.
 
 > [!NOTE]
-> Chaque ticket reçoit une clé, comme `DEM-5` : les trois premières lettres du nom du projet en majuscules (`TIC` s’il n’en a pas), puis un numéro qui n’est jamais réutilisé. Le premier ticket fixe aussi la branche cible du Kanban : la branche sur laquelle le projet se trouve alors. Si le projet est sur une HEAD détachée, le ticket est refusé tant que tu n’as pas choisi la branche cible dans [Réglages › Kanban](settings-board).
+> Chaque ticket reçoit une clé, comme `DEM-5` : les trois premières lettres du nom du projet en majuscules (`TIC` s’il n’en a pas), puis un numéro qui n’est jamais réutilisé. Le premier ticket fixe aussi la branche cible du Kanban : la branche sur laquelle le projet se trouve alors. Si le projet est sur une HEAD détachée, le ticket est refusé tant que tu n’as pas choisi la branche cible dans [Réglages › Projets › Kanban](settings-board).
 
 ## Modifier, prioriser et supprimer un ticket
 
@@ -85,7 +86,7 @@ Clic droit sur une carte › « Supprimer ».
 | « En cours » et « À tester » | Une confirmation, puis le ticket disparaît et son agent est archivé. |
 | « Terminé » | Le ticket disparaît tout de suite, sans confirmation. |
 
-Avec « Supprimer le worktree d’un ticket terminé ou supprimé » (onglet [« Kanban »](settings-board), activé par défaut), les worktrees des agents du ticket sont supprimés aussi, sauf ceux qui gardent des changements non commités ou des commits ni mergés ni poussés : la carte de leur agent archivé le dit. Un ticket « Terminé » laissé en l’état voit alors son agent archivé.
+Avec « Supprimer le worktree d’un ticket terminé ou supprimé » (page [« Kanban »](settings-board) du projet, activé par défaut), les worktrees des agents du ticket sont supprimés aussi, sauf ceux qui gardent des changements non commités ou des commits ni mergés ni poussés : la carte de leur agent archivé le dit. Un ticket « Terminé » laissé en l’état voit alors son agent archivé.
 
 Supprimer un ticket du Kanban ne le supprime pas chez Jira, Trello, GitHub, Linear, ClickUp, GitLab ou Azure Boards.
 
@@ -100,12 +101,30 @@ Toutes les cartes ont leur clé, leur titre et, pour un ticket importé, la past
 | « À faire » | Le nombre de critères et de boucles (« 3 critères · max 5 boucles »), et quand le ticket partira : « Pris dès qu’une place se libère », « En attente d’une place (2/2) », « ⏸ après DEM-3 », « Pilote auto désactivé », « En attente : pilote auto en pause »… Avec le pilote auto éteint, un bouton « Lancer » apparaît quand une place est libre. |
 | « En cours » | « Boucle 2/5 » ; les critères, cochés (✓) ou non (○), avec la note de l’agent au survol ; une barre des critères atteints ; les trois derniers éléments de l’avancement (« +2 » pour les autres) ; la ligne d’état que l’agent a publiée par le [serveur MCP](mcp) ; ce qu’il fait (« Lit src/billing/invoices.ts »), « Prépare le worktree · … » pendant la préparation, « Question en attente de ta réponse », ou « Reprise à 14:30 » s’il attend son quota. En bas : le nom de l’agent avec son état, et le coût du ticket (précédé de « ≈ » tant qu’il est estimé). |
 | « À tester » | « Ce qui a été fait » en entier, les critères, « Objectif partiel » si le nombre maximal de boucles a été atteint sans tous les critères, le coût et « 3/3 critères », puis les boutons de [validation et de test](testing). |
+| « En revue » | Le numéro de la PR, son état, sa CI et ses jobs, ses approbations, ses fils ouverts et un conflit avec la cible (voir [plus bas](#la-colonne-en-revue)). |
 | « Terminé » | Ce que le ticket est devenu (« ⤵ Mergé dans main · squash », « ⇡ PR #41 → main », « ⇡ Poussé sur ticket/dem-3 », « ◇ Laissé dans le worktree », « ∅ Aucune modification »), puis « 3 boucles · 1,12 $ ». Une PR se rouvre d’un clic. |
 
 Un ticket bloqué (« En cours » ou « À tester ») affiche son motif dans un encadré : « Interrompu », « Erreur : … », « Bilan des critères manquant », un conflit… Un ticket « En cours » bloqué a un bouton « Reprendre » et ne tient plus de place. La carte de l’agent qui attend ta réponse a un liseré ambre.
 
 > [!TIP]
 > « Me prévenir pour › Tickets (prêt à tester, bloqué) » dans les réglages décide si un ticket qui arrive dans « À tester » ou qui se bloque te prévient (voir [Notifications](notifications)).
+
+## La colonne « En revue »
+
+Avec « Ouvrir une pull request » comme action de validation (voir [Réglages du Kanban](settings-board)), un ticket validé attend son merge dans cette colonne. La PR s’ouvre par l’API de l’[hébergeur de code](code-hosts) du dépôt ; sa carte dit où elle en est, sans ouvrir le navigateur.
+
+![La colonne En revue : la carte d’un ticket avec sa PR, sa CI et ses approbations](/images/board-review.jpg)
+
+Un clic sur sa CI ouvre ses jobs dans Escouade. Selon ce qui arrive, la carte propose :
+
+- **« L’agent corrige »**, quand la CI échoue : son agent est restauré et reçoit les jobs en échec et la fin de leurs journaux, entre balises, donnés comme des informations et non des consignes. Le pilote auto le fait seul, dans la limite des boucles du ticket.
+- **« L’agent corrige les retours »**, quand un relecteur demande des changements ou commente : jamais seul, même avec le pilote auto.
+- **« L’agent met à jour la branche »**, quand la PR est en conflit avec sa cible : jamais seul non plus.
+- **« Merger (squash) »**, pour une PR approuvée, verte et sans conflit, et **« Merger quand c’est vert »** tant que sa CI tourne. Rien ne se merge sans ce geste.
+
+Mergée, ici ou chez l’hébergeur, le ticket passe « Terminé » et les tickets qui l’attendaient partent. Fermée sans merge, il se bloque, avec « Remettre à faire » et « Terminer quand même ». Une erreur de l’hébergeur ne déplace jamais un ticket : la carte la dit, avec ce qui a été lu en dernier.
+
+Les tickets sont relus toutes les minutes fenêtre devant et toutes les 5 minutes sinon ; « Rafraîchir », dans l’en-tête de la colonne, les relit tout de suite. Un ticket terminé et mergé dit ensuite dans quels [environnements](code-hosts#les-environnements-et-les-deploiements) il tourne.
 
 ## L’agent du ticket et sa conversation
 

@@ -235,7 +235,7 @@ impl Harness {
         let mut agents: Vec<AgentHandle> = self.core.agents.read().values().cloned().collect();
         agents.sort_by_key(|a| a.lock().meta.id.clone());
         for a in agents {
-            let rt = a.lock();
+            let mut rt = a.lock();
             if !rt.meta.terminal && rt.tui.is_none() && rt.tui_exit.is_none() {
                 continue;
             }
@@ -265,6 +265,16 @@ impl Harness {
                     "no interface running, last exit {:?}, {} quick exits\n",
                     rt.tui_exit, rt.tui_quick_exits
                 )),
+            }
+            // The end of its conversation: a turn lost reads there, as does what its plugin did not read.
+            let items = rt.conv.items();
+            out.push_str(&format!(
+                "its conversation ({} items), its end:\n",
+                items.len()
+            ));
+            for i in &items[items.len().saturating_sub(CONVERSATION_LINES)..] {
+                out.push_str(&clip(&i.to_string(), 300));
+                out.push('\n');
             }
         }
         for file in self.fake_logs() {
@@ -461,6 +471,21 @@ impl Harness {
             .filter(|e| e["type"] == "agentRemoved" && e["id"] == id)
             .count()
     }
+}
+
+/// The props of the usage statistics' events of that name that wait to leave.
+pub(crate) fn sent(h: &Harness, name: &str) -> Vec<Value> {
+    h.core
+        .telemetry
+        .pending()
+        .into_iter()
+        .filter(|e| e["eventName"] == name)
+        .map(|e| {
+            let mut props = e["props"].clone();
+            props.as_object_mut().unwrap().remove("installId");
+            props
+        })
+        .collect()
 }
 
 #[tokio::test]
@@ -4996,7 +5021,7 @@ async fn a_new_project_no_account_would_serve_is_made_without_its_first_agent_an
         .collect();
     assert_eq!(
         toasts,
-        ["Aucun compte Claude Code actif ne sert le projet « client » : coche-le sous « Réservé aux projets » d’un compte Claude Code actif, dans Réglages › Comptes."]
+        ["Aucun compte Claude Code actif ne sert le projet « client » : coche-le sous « Réservé aux projets » d’un compte Claude Code actif, dans Réglages › Comptes et harness."]
     );
 }
 
@@ -5994,6 +6019,40 @@ async fn a_copy_of_an_agent_set_apart_by_hand_is_set_apart_too() {
     h.settle_remote().await;
     let m = h.agent(&copy.id);
     assert!(!m.remote_control && m.remote_off);
+}
+
+/// ESC-363: the `apply_remote` of a new agent read the settings, then waited for its turn while
+/// the global setting went on and its own `apply_remote` gave the agent Remote Control. What it
+/// had read was out of date, and it cut what the setting had just given.
+#[tokio::test]
+async fn a_remote_control_setting_applied_late_does_not_undo_a_newer_one() {
+    let h = harness("remote-late");
+    let (p, _) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.settle_remote().await;
+    h.core.ensure_process(&a).await.unwrap();
+
+    let (reached, go) = (
+        Arc::new(tokio::sync::Notify::new()),
+        Arc::new(tokio::sync::Notify::new()),
+    );
+    *h.core.remote_read_pause.lock() = Some((reached.clone(), go.clone()));
+    let late = h.core.apply_remote_soon(&a);
+    reached.notified().await;
+
+    // The setting goes on: its application either goes through or waits for the late one.
+    h.remote_all(true);
+    for _ in 0..50 {
+        if h.agent(&a).remote_control {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    go.notify_one();
+    late.await.unwrap();
+
+    h.wait_remote(&a, Some(RemoteSource::Global)).await;
+    assert_eq!(h.last_remote_request(&a), Some(true));
 }
 
 #[tokio::test]
@@ -8202,24 +8261,10 @@ async fn an_answer_without_launch_commands_in_json_is_told_as_unreadable() {
 #[tokio::test]
 async fn a_kind_of_notification_switched_off_is_not_sent_but_the_others_are() {
     let h = harness("notify-kinds");
-    let kinds = [
-        NotifyKind::Question,
-        NotifyKind::Done,
-        NotifyKind::Error,
-        NotifyKind::Ticket,
-    ];
+    let kinds = NotifyKind::ALL;
     for off in kinds {
         h.core.alerts.lock().clear();
-        {
-            let mut s = h.core.settings.write();
-            s.notify_for = NotifyFor::default();
-            match off {
-                NotifyKind::Question => s.notify_for.questions = false,
-                NotifyKind::Done => s.notify_for.done = false,
-                NotifyKind::Error => s.notify_for.errors = false,
-                NotifyKind::Ticket => s.notify_for.tickets = false,
-            }
-        }
+        h.core.settings.write().notify_for = NotifyFor::all_but(off);
         for kind in kinds {
             h.core.alert(
                 kind,
@@ -9115,7 +9160,7 @@ async fn without_an_account_of_its_harness_nothing_starts_and_the_window_is_told
     assert_eq!(no.engine, EngineId::CLAUDE);
     assert_eq!(
         refused.to_string(),
-        "Aucun compte Claude Code : ajoute-en un dans Réglages › Comptes."
+        "Aucun compte Claude Code : ajoute-en un dans Réglages › Comptes et harness."
     );
     // Nor on another harness, never on Claude Code's in its place.
     let codex = h
@@ -10158,6 +10203,9 @@ async fn an_accounts_status_tells_whether_it_is_signed_in_and_with_which_email()
 
 /// How many lines of a fake interface's log, and of an interface's screen, `views_report` tells.
 const FAKE_LOG_LINES: usize = 12;
+
+/// The items of a conversation a wait that timed out tells.
+const CONVERSATION_LINES: usize = 14;
 const SCREEN_LINES: usize = 25;
 
 /// The last lines of what a terminal printed, as `plain_text` reads them, the empty ones left out.

@@ -1,3 +1,4 @@
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { judgeAttestations } from '../../server/utils/attest';
 import {
@@ -41,6 +42,47 @@ function snapshot(files: Record<string, unknown>, over: Partial<Snapshot> = {}, 
 const plugin = (o: Parameters<typeof pluginFiles>[1] = {}) => pluginFiles(REPO, o);
 const by = (results: CheckResult[], key: CheckKey) => results.find((r) => r.key === key)!;
 const failed = (results: CheckResult[]) => results.filter((r) => r.status === 'fail').map((r) => r.key);
+
+describe('the accounts of a plugin', () => {
+  const accounts = (secrets: string[], kinds: string[]) =>
+    runChecks(
+      snapshot(
+        plugin({
+          manifest: {
+            run: { wasm: true },
+            permissions: { secrets },
+            contributes: { accounts: kinds.map((id) => ({ id, name: id, hosts: ['api.example.com'] })) },
+          },
+        }),
+      ),
+    );
+
+  it('reads the secret of a kind it declares, or of all of them', () => {
+    expect(by(accounts(['account:trello'], ['trello']), 'permissions').problems).toEqual([]);
+    expect(by(accounts(['account:*'], ['github']), 'permissions').problems).toEqual([]);
+  });
+
+  it('reads no other', () => {
+    expect(by(accounts(['account:github'], ['trello']), 'permissions').status).toBe('fail');
+    expect(by(accounts(['account:*'], []), 'permissions').status).toBe('fail');
+    expect(by(accounts(['account:'], ['trello']), 'permissions').status).toBe('fail');
+  });
+});
+
+describe('the first hand’s manifests', () => {
+  const root = new URL('../../../plugins/', import.meta.url);
+  const folders = readdirSync(root, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
+    .filter((name) => readdirSync(new URL(`${name}/`, root)).includes('escouade-plugin.json'));
+
+  it.each(folders)('%s passes the check of its permissions', (name) => {
+    const manifest = JSON.parse(readFileSync(new URL(`${name}/escouade-plugin.json`, root), 'utf8'));
+    // What it does not declare is not the fixture's: a theme has no permission.
+    const results = runChecks(snapshot(plugin({ manifest: { permissions: {}, contributes: {}, ...manifest } })));
+    expect(by(results, 'permissions').problems).toEqual([]);
+  });
+});
 
 describe('a valid plugin', () => {
   it('passes the eleven checks, in their order, and may be published', () => {
@@ -309,6 +351,33 @@ describe('the names too close', () => {
   it('does not count the MIT text of the fixtures as a README', () => {
     const results = runChecks(snapshot({ ...plugin({ files: { 'README.md': null } }), 'docs/README.md': MIT }));
     expect(by(results, 'readme').status).toBe('fail');
+  });
+});
+
+describe('store.docs that names no page (ESC-366)', () => {
+  const withDocs = (docs: unknown, files: Record<string, string | null> = {}) =>
+    runChecks(snapshot(plugin({ manifest: { store: { docs } }, files })));
+
+  it('passes the README with a warning, never a refusal', () => {
+    const readme = by(withDocs('docs'), 'readme');
+    expect(readme.status).toBe('pass');
+    expect(readme.problems).toHaveLength(1);
+    expect(readme.problems[0]!.path).toBe('store.docs');
+    expect(readme.problems[0]!.why.fr).toContain('ne nomme aucune page lisible');
+    expect(readme.problems[0]!.fix.en).toContain('under fr/ and en/');
+    expect(by(withDocs('docs', { 'docs/image.png': 'x' }), 'readme').problems).toHaveLength(1);
+  });
+
+  it('says nothing of a folder with pages, with or without languages, nor of a manifest without store.docs', () => {
+    expect(by(withDocs('docs', { 'docs/setup.md': '# Setup\n' }), 'readme').problems).toEqual([]);
+    expect(by(withDocs('docs', { 'docs/en/01-install.md': '# Install\n' }), 'readme').problems).toEqual([]);
+    expect(by(runChecks(snapshot(plugin())), 'readme').problems).toEqual([]);
+  });
+
+  it('adds to a README that fails without doubling it', () => {
+    const readme = by(withDocs('docs', { 'README.md': null }), 'readme');
+    expect(readme.status).toBe('fail');
+    expect(readme.problems.map((p) => p.path)).toEqual(['README.md', 'store.docs']);
   });
 });
 

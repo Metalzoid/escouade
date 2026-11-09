@@ -1,7 +1,7 @@
 //! What Escouade knows of Copilot CLI beside its conversation: the arguments of its server, its modes, its models and
 //! their prices, the month's credits, the answers its requests take, and the lines said in the app's language. All
 //! pure, from what its real runs showed (Copilot CLI 1.0.98 on a Copilot Free account, docs/PROTOCOL.md, « Copilot
-//! SDK »). The core's engine `Copilot` reads the same ones for what stays in it: an account's quota and models.
+//! SDK »).
 
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
@@ -161,25 +161,49 @@ pub fn catalog(listed: Option<&Value>, of_session: Option<&Value>) -> Vec<Value>
     models
 }
 
+/// The paths the read or the write `r` (a `permissionRequest`) touches: as asked (`path`, `fileName`, those of `fileEdits`, a
+/// move's two ends) and as Copilot resolved it (`resolvedPath`, links followed).
+pub fn paths_of(r: &Value) -> Vec<&str> {
+    let mut paths: Vec<&str> = ["path", "fileName", "resolvedPath"]
+        .iter()
+        .filter_map(|k| r[*k].as_str())
+        .filter(|p| !p.is_empty())
+        .collect();
+    for edit in r["fileEdits"].as_array().into_iter().flatten() {
+        paths.extend(
+            ["before", "after"]
+                .iter()
+                .filter_map(|k| edit[*k]["path"].as_str()),
+        );
+    }
+    paths
+}
+
 /// « Projet privé » (ESC-140): whether the permission `r` Copilot asks (its `permissionRequest`) names a path of `fence`
-/// (as Copilot names them): the path read or written, those its command may touch, or its command's text. Copilot asks
+/// (as Copilot names them): the path read or written, those its command may touch (`possiblePaths`, a list, and
+/// `resolvedPaths`, what each resolves to by its spelling), where it runs, or its command's text. Copilot asks
 /// for any path out of the agent's folder but in « Tout accepter » (`allow-all`), where nothing is asked, and a command
 /// can reach a path it does not name: a guard of Escouade's, not a barrier.
 pub fn fenced(r: &Value, fence: &[String]) -> bool {
     if fence.is_empty() {
         return false;
     }
-    let mut texts: Vec<&str> = ["path", "resolvedPath", "fileName", "fullCommandText"]
-        .iter()
-        .filter_map(|k| r[*k].as_str())
-        .collect();
-    for k in ["possiblePaths", "resolvedPaths"] {
-        texts.extend(
-            r[k].as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(Value::as_str),
-        );
+    let mut texts = paths_of(r);
+    texts.extend(
+        ["fullCommandText", "resolvedWorkingDirectory"]
+            .iter()
+            .filter_map(|k| r[*k].as_str()),
+    );
+    texts.extend(
+        r["possiblePaths"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str),
+    );
+    for (spelled, resolved) in r["resolvedPaths"].as_object().into_iter().flatten() {
+        texts.push(spelled);
+        texts.extend(resolved.as_str());
     }
     texts
         .iter()
@@ -311,8 +335,8 @@ pub fn protocol_refused(lang: &str, version: &Value) -> String {
 pub fn not_signed_in(lang: &str) -> String {
     said(
         lang,
-        "Copilot CLI n’est connecté à aucun compte GitHub sur ce compte : connecte-le dans Réglages › Comptes (« Se connecter… », copilot login).".into(),
-        "Copilot CLI isn’t signed in to any GitHub account on this account: sign it in in Settings › Accounts (“Sign in…”, copilot login).".into(),
+        "Copilot CLI n’est connecté à aucun compte GitHub sur ce compte : connecte-le dans Réglages › Comptes et harness (« Se connecter… », copilot login).".into(),
+        "Copilot CLI isn’t signed in to any GitHub account on this account: sign it in in Settings › Accounts and harnesses (“Sign in…”, copilot login).".into(),
     )
 }
 

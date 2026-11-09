@@ -31,6 +31,13 @@ export const TRAPPED = [
   '- Voir [la doc](docs/setup.md).',
 ].join('\n');
 
+/** Three of Escouade's own: a brand's mark, a source's glyph, a harness's. */
+const OWN = [
+  { id: 'github', name: 'GitHub', categories: ['ticket-sources', 'forges'], host: 'api.github.com', signed: true },
+  { id: 'jira', name: 'Jira', categories: ['ticket-sources'], host: 'atlassian.net' },
+  { id: 'claude-code', name: 'Claude Code', categories: ['harness'], host: 'api.anthropic.com' },
+];
+
 async function keep(dir, bytes, ext) {
   const hash = sha256(bytes);
   const path = join(dir, 'sha256', hash.slice(0, 2), `${hash}${ext}`);
@@ -42,9 +49,14 @@ async function keep(dir, bytes, ext) {
 /**
  * Seeds an author and three plugins: Slack (a program, two versions, review asked, a trapped README with an image),
  * ntfy (declarative, a webhook), Nord (a theme, asks for nothing, with its icon: PLG-13). Gives their ids and the
- * author's login.
+ * author's login. With `own`, three of Escouade's own as they are on the store since ESC-353, published from the app's
+ * repository by an account of their own, their ids being the real ones: the last run's go first, and the first is signed.
  */
-export async function seedCatalog({ url = process.env.DATABASE_URL, archives = process.env.ARCHIVE_DIR ?? './.data/archives' } = {}) {
+export async function seedCatalog({
+  url = process.env.DATABASE_URL,
+  archives = process.env.ARCHIVE_DIR ?? './.data/archives',
+  own = false,
+} = {}) {
   const run = randomBytes(3).toString('hex');
   const pool = new pg.Pool({ connectionString: url, max: 2 });
   const q = (sql, params) => pool.query(sql, params);
@@ -98,7 +110,17 @@ export async function seedCatalog({ url = process.env.DATABASE_URL, archives = p
         permissions: { events: ['agent.waiting'], network: ['ntfy.sh'] },
         contributes: { webhooks: [{ event: 'agent.waiting', url: 'https://ntfy.sh/{topic}' }] },
       },
-      files: { 'README.fr.md': '# ntfy\n\nEn français.\n', 'README.en.md': '# ntfy\n\nIn English.\n' },
+      files: {
+        'README.fr.md': '# ntfy\n\nEn français.\n',
+        'README.en.md': '# ntfy\n\nIn English.\n',
+        // Its documentation in both languages (ESC-366): docs/fr and docs/en, an image the two share.
+        'docs/fr/01-installer.md':
+          '# Installer\n\nAbonne-toi au sujet.\n\n![Le sujet](../images/sujet.png)\n\nPuis [règle-le](02-regler.md).\n',
+        'docs/fr/02-regler.md': 'Le sujet par projet.\n',
+        'docs/en/01-install.md': '# Install\n\nSubscribe to the topic.\n\n![The topic](../images/sujet.png)\n',
+        'docs/images/sujet.png': png(80, 40),
+      },
+      store: { docs: 'docs' },
     },
     {
       id: ids.nord,
@@ -112,17 +134,47 @@ export async function seedCatalog({ url = process.env.DATABASE_URL, archives = p
         description: { fr: 'La palette Nord, en clair et en sombre.', en: 'The Nord palette, light and dark.' },
         contributes: { themes: [{ id: 'nord', name: 'Nord', path: 'nord.json' }] },
       },
-      files: { 'README.md': '# Nord\n', 'icon.png': png(512, 512) },
+      // A documentation in French alone (ESC-366): an English visitor reads it.
+      files: { 'README.md': '# Nord\n', 'icon.png': png(512, 512), 'guide/fr/01-palette.md': '# La palette\n\nSeize couleurs.\n' },
+      store: { docs: 'guide/' },
       icon: 'icon.png',
     },
   ];
+  if (own) {
+    const { rows: chief } = await q(
+      `insert into accounts (github_id, login, name) values ($1, $2, $3)
+       on conflict (github_id) do update set login = excluded.login returning id`,
+      [69_000_001, 'guillaume-gagnaire', 'Escouade'],
+    );
+    const ownIds = OWN.map((o) => `dev.escouade.${o.id}`);
+    await q('delete from signatures where plugin_id = any($1)', [ownIds]);
+    await q('delete from versions where plugin_id = any($1)', [ownIds]);
+    await q('delete from plugins where id = any($1)', [ownIds]);
+    for (const o of OWN)
+      plugins.push({
+        id: `dev.escouade.${o.id}`,
+        account: chief[0].id,
+        repo: 'guillaume-gagnaire/escouade',
+        categories: o.categories,
+        keywords: [],
+        versions: ['2.2.0'],
+        review: true,
+        signed: o.signed,
+        manifest: {
+          name: o.name,
+          description: { fr: `${o.name} dans Escouade.`, en: `${o.name} in Escouade.` },
+          permissions: { network: [o.host] },
+        },
+        files: { 'README.md': `# ${o.name}\n` },
+      });
+  }
   const repoBase = 80_000_000 + Number.parseInt(run, 16);
   let n = 0;
   for (const p of plugins) {
     const repoId = repoBase + n++;
     await q(`insert into plugins (id, account_id, repo_id, repo_full_name, categories, keywords) values ($1, $2, $3, $4, $5, $6)`, [
       p.id,
-      accountId,
+      p.account ?? accountId,
       repoId,
       p.repo,
       JSON.stringify(p.categories),
@@ -157,7 +209,7 @@ export async function seedCatalog({ url = process.env.DATABASE_URL, archives = p
          values ($1, $2, 1, $3, $4, $5, $6, $7, 'published', $8, $9, $10, $11, '{}', $12, '{}', $13, $14, $15, $15, $16)`,
         [
           p.id,
-          accountId,
+          p.account ?? accountId,
           repoId,
           p.repo,
           `v${version}`,
@@ -174,6 +226,11 @@ export async function seedCatalog({ url = process.env.DATABASE_URL, archives = p
           icon ? JSON.stringify(icon) : null,
         ],
       );
+      if (p.signed)
+        await q(
+          `insert into signatures (plugin_id, version, version_sha256, minisig, key_id, signed_at) values ($1, $2, $3, 'untrusted comment', 'E2E', now())`,
+          [p.id, version, sha256(`${p.id}${version}${run}`)],
+        );
     }
   }
   await pool.end();

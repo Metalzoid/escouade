@@ -1,6 +1,7 @@
 // Test utilities: a fake Tauri backend recording every command.
 
 import { mockIPC, mockWindows } from '@tauri-apps/api/mocks';
+import { envsView } from '../lib/envs-view.svelte';
 import { buffers } from '../lib/editor/buffers.svelte';
 import { navHistory } from '../lib/editor/history';
 import { recentFiles } from '../lib/editor/quick-open';
@@ -20,6 +21,7 @@ import type {
   BranchCi,
   BranchInfo,
   EngineDecl,
+  EngineId,
   GitInfo,
   Project,
   PullRequest,
@@ -41,7 +43,13 @@ export interface Call {
 }
 
 /** What a command answers when a test gives it no handler: nothing (null), except the lists the window reads on its own. */
-const ANSWERS: Record<string, unknown> = { closed_projects: [], memory_list: [], claude_memory_offer: [], target_cis: {} };
+const ANSWERS: Record<string, unknown> = {
+  closed_projects: [],
+  memory_list: [],
+  claude_memory_offer: [],
+  target_cis: {},
+  overview_prs: [],
+};
 
 /** What the backend answers by default from the arguments of a call. */
 const DEFAULTS: Record<string, (args: any) => unknown> = {
@@ -71,7 +79,20 @@ export const SETTINGS: Settings = {
   claudePath: '',
   sound: true,
   osNotifications: true,
-  notifyFor: { questions: true, done: true, errors: true, tickets: true },
+  notifyFor: {
+    questions: true,
+    done: true,
+    errors: true,
+    tickets: true,
+    prCiFailed: true,
+    prChanges: true,
+    prApproved: true,
+    prMerged: true,
+    prConflict: true,
+    prReview: true,
+    deployOk: true,
+    deployFailed: true,
+  },
   idleStopMinutes: 30,
   attachMaxMb: 0,
   attachWarnMb: 200,
@@ -94,6 +115,7 @@ export const SETTINGS: Settings = {
   quotaPause: 100,
   switchAt: 100,
   autoUpdate: true,
+  betaUpdates: false,
   telemetry: false,
   // The first start's question of the name for the shared tickets (ESC-190): asked already.
   nameAsked: true,
@@ -370,6 +392,19 @@ export function branchInfo(over: Partial<BranchInfo> = {}): BranchInfo {
   };
 }
 
+/**
+ * Harnesses found here, each with an account of its own beside Claude Code's Principal (ESC-391): the menus « Harness »
+ * offer only those that can be used, not every one found.
+ */
+export function usableEngines(...engines: EngineId[]) {
+  app.enginesFound = engines;
+  const have = new Set((app.settings.accounts ?? []).map((a) => a.engine ?? 'claude'));
+  const added = engines
+    .filter((e) => !have.has(e))
+    .map((e) => ({ id: `principal-${e}`, name: e, engine: e, configDir: '', claudePath: '', active: true }));
+  app.settings = { ...app.settings, accounts: [...(app.settings.accounts ?? []), ...added] };
+}
+
 /** Puts the app singleton back into a known state. */
 export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets?: Ticket[] } = {}) {
   const projects = over.projects ?? [project()];
@@ -378,12 +413,18 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.attention = {};
   app.tickets = Object.fromEntries((over.tickets ?? []).map((t) => [t.id, t]));
   app.board = {};
+  app.prReviews = {};
+  app.prReviewOpen = {};
   app.docs = {};
   app.docsSpace = {};
   app.docsPage = {};
   app.docsEdit = null;
   app.docsShare = {};
   app.boardIssues = {};
+  app.codeHosts = {};
+  envsView.forget();
+  app.envView = {};
+  app.environments = {};
   app.targetCi = {};
   app.setupOutput = {};
   app.relaunched = {};
@@ -391,6 +432,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.claudePathFound = true;
   app.engines = [CLAUDE_ENGINE];
   app.enginesFound = ['claude'];
+  app.enginesOff = [];
   app.accountModels = {};
   app.engineModels = {};
   app.projectPauses = {};

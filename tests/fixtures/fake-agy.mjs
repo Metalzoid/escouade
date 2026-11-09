@@ -53,6 +53,7 @@ log({
     gitConfig: process.env.GIT_CONFIG_GLOBAL ?? null,
     provider: settingsAtStart.modelProvider ?? null,
     deny: settingsAtStart.permissions?.deny ?? null,
+    allow: settingsAtStart.permissions?.allow ?? null,
   },
 });
 // Its interface (no `-p`) not signed in yet, as « Se connecter… » runs it (ESC-271): signed in, the file of
@@ -293,7 +294,7 @@ async function escouadeTool(name) {
     const text = await r.text();
     if (!r.ok) throw new Error(`${r.status}`);
     if (rid === undefined) return null;
-    const answers = text.includes('data:')
+    const answers = /^data:/m.test(text)
       ? text
           .split('\n')
           .filter((l) => l.startsWith('data:'))

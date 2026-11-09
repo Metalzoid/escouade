@@ -53,7 +53,6 @@ pub use copilot::COPILOT;
 #[cfg(test)]
 pub(crate) use cursor::fake_cursor;
 pub use cursor::CURSOR;
-pub(crate) use escouade_acp::git as codex_git;
 pub use gemini::GEMINI;
 pub use mcp::Escouade;
 #[cfg(test)]
@@ -310,6 +309,10 @@ pub enum Weight {
     Light,
     /// A text written after reading its folder: a stronger model, with tools that only read.
     Reading,
+    /// A text written from what the question gives, which comes from a third party: the model of
+    /// `Reading`, and no tool at all (ESC-66). A harness that cannot cut its tools refuses it
+    /// (`Engine::answers_without_tools`).
+    Given,
 }
 
 /// One question asked of a harness with no session, no settings of the user's and no MCP server.
@@ -512,6 +515,12 @@ pub trait Engine: Send + Sync {
     /// The model that answers its one-shot questions of `weight`, as the interface names it
     /// (« Modèle des textes rédigés »: `Claude Haiku`).
     fn writer(&self, weight: Weight) -> &'static str;
+
+    /// It can answer with no tool at all, reading included (`Weight::Given`): not by default, as a
+    /// harness has to say so; `oneshot::ask` refuses that question to the others.
+    fn answers_without_tools(&self) -> bool {
+        false
+    }
     /// Its one-shot questions go to the model Escouade chooses (`OneShot::model`: the setting
     /// « Modèle » of the texts, else its default one), rather than one of its own: OpenCode, whose
     /// models are those of the providers connected to it.
@@ -659,8 +668,8 @@ pub trait Engine: Send + Sync {
     fn key_missing(&self, name: &str) -> String {
         let harness = self.name();
         tr!(
-            "Le compte {harness} « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes, « Changer la clé… ».",
-            "The {harness} account “{name}” has no API key: give it in Settings › Accounts, “Change the key…”."
+            "Le compte {harness} « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes et harness, « Changer la clé… ».",
+            "The {harness} account “{name}” has no API key: give it in Settings › Accounts and harnesses, “Change the key…”."
         )
     }
     /// Refused: a key given that is no key of its.

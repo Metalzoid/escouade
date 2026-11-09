@@ -434,16 +434,66 @@ pub struct Runtime {
     /// What the tests change of `net/fetch`'s network.
     net: parking_lot::RwLock<super::wasm::Net>,
     /// The secrets the core lends a plugin the app gives, by plugin and key (`account:github.com`): the token of an
-    /// account of the first hand as the core holds it, the user's or its CLI's (`gh auth token`), read before the
-    /// keychain. Never another plugin's.
+    /// saved account of the first hand as the core holds it, the user's or its CLI's (`gh auth token`), read before
+    /// the keychain. Never another plugin's.
     lent: Mutex<HashMap<(String, String), String>>,
-    /// By plugin, the host of the account it was last asked about, saved or not yet.
-    lent_hosts: Mutex<HashMap<String, String>>,
-    /// What a plugin the app gives is told when it starts (`ESCOUADE_LANG`, the network of Réglages › Réseau).
+    /// What the tries of a connection under way lend, the latest last (`Trial`).
+    tried: Mutex<Vec<Tried>>,
+    /// The number of the next `Trial`.
+    trials: AtomicU64,
+    /// What a plugin the app gives is told when it starts (`ESCOUADE_LANG`, the network of Réglages › Avancé › Réseau).
     builtin_env: parking_lot::RwLock<Vec<(String, String)>>,
     /// What a program of a plugin gets as an agent does (`set_agent_env`).
     agent_env: parking_lot::RwLock<Vec<(String, String)>>,
     me: Weak<Self>,
+}
+
+/// What a try of a connection lends a plugin.
+struct Tried {
+    trial: u64,
+    plugin: String,
+    key: String,
+    secret: String,
+    host: String,
+}
+
+/// The try of a connection, whose account is not saved yet: the secret and the host it lends end with it, won, lost or
+/// dropped half way. Each try has its own, so two tries at once, or an account that runs on the same secret, keep theirs.
+pub struct Trial {
+    rt: Weak<Runtime>,
+    number: u64,
+}
+
+impl Trial {
+    /// Lends the plugin `plugin` the secret `key` and the host the user typed (`{account}` reaches it, empty for none).
+    pub fn lend(&self, plugin: &str, key: &str, secret: &str, host: &str) {
+        if let Some(rt) = self.rt.upgrade() {
+            rt.tried.lock().push(Tried {
+                trial: self.number,
+                plugin: plugin.to_string(),
+                key: key.to_string(),
+                secret: secret.trim().to_string(),
+                host: host.to_string(),
+            });
+        }
+    }
+
+    /// Won: its account is saved, and its secrets go on lent for it.
+    pub fn keep(self) {
+        if let Some(rt) = self.rt.upgrade() {
+            for t in rt.tried.lock().iter().filter(|t| t.trial == self.number) {
+                rt.lend(&t.plugin, &t.key, &t.secret);
+            }
+        }
+    }
+}
+
+impl Drop for Trial {
+    fn drop(&mut self) {
+        if let Some(rt) = self.rt.upgrade() {
+            rt.tried.lock().retain(|t| t.trial != self.number);
+        }
+    }
 }
 
 /// What listens to a plugin's notifications.
@@ -466,8 +516,8 @@ impl Runtime {
         self.budgets.lock().insert(key.to_string(), left);
     }
 
-    /// Lends the plugin of the app `id` its secret `key` (`account:<host>`): what `secrets/get` gives it first.
-    /// An empty one takes the loan back.
+    /// Lends the plugin of the app `id` its secret `key` (`account:<host>`) for a saved account: what `secrets/get`
+    /// gives it first, until the account goes (`take_back`). An empty one takes the loan back.
     pub fn lend(&self, id: &str, key: &str, secret: &str) {
         let at = (id.to_string(), key.to_string());
         if secret.trim().is_empty() {
@@ -477,17 +527,52 @@ impl Runtime {
         }
     }
 
-    /// Lends the plugin `id` the host the user typed for an account: `{account}` reaches it while the account is checked,
-    /// before it is saved.
-    pub fn lend_host(&self, id: &str, host: &str) {
-        self.lent_hosts
-            .lock()
-            .insert(id.to_string(), host.to_string());
+    /// The account of the secret `key` went: no plugin keeps it. What a try under way lends ends with that try.
+    pub fn take_back(&self, key: &str) {
+        self.lent.lock().retain(|(_, k), _| k != key);
     }
 
-    /// The host lent to the plugin `id`.
-    pub fn lent_host(&self, id: &str) -> Option<String> {
-        self.lent_hosts.lock().get(id).cloned()
+    /// The try of a connection: what it lends ends with it.
+    pub fn trial(&self) -> Trial {
+        Trial {
+            rt: self.me.clone(),
+            number: self.trials.fetch_add(1, Ordering::Relaxed),
+        }
+    }
+
+    /// The hosts the tries under way lend the plugin `id`: a saved account's needs no loan (`accounts::hosts_of`).
+    pub fn lent_hosts(&self, id: &str) -> Vec<String> {
+        let mut hosts: Vec<String> = self
+            .tried
+            .lock()
+            .iter()
+            .filter(|t| t.plugin == id && !t.host.is_empty())
+            .map(|t| t.host.clone())
+            .collect();
+        hosts.sort();
+        hosts.dedup();
+        hosts
+    }
+
+    /// The secret `key` lent to the plugin `id`: the latest try's while one lends it, else the saved account's.
+    pub fn lent_secret(&self, id: &str, key: &str) -> Option<String> {
+        let tried = self.tried.lock();
+        let trying = tried
+            .iter()
+            .rev()
+            .find(|t| t.plugin == id && t.key == key && !t.secret.is_empty());
+        if let Some(t) = trying {
+            return Some(t.secret.clone());
+        }
+        drop(tried);
+        let at = (id.to_string(), key.to_string());
+        self.lent.lock().get(&at).cloned()
+    }
+
+    /// The network its plugins get.
+    #[cfg(test)]
+    pub fn net(&self) -> super::wasm::Net {
+        self.net.read().clone()
     }
 
     /// What a plugin the app gives is told when it starts: the interface's language and the network's settings. A
@@ -567,7 +652,8 @@ impl Runtime {
             modules: Arc::new(super::wasm::Modules::new(data, app_version)),
             net: parking_lot::RwLock::new(super::wasm::Net::default()),
             lent: Mutex::new(HashMap::new()),
-            lent_hosts: Mutex::new(HashMap::new()),
+            tried: Mutex::new(Vec::new()),
+            trials: AtomicU64::new(0),
             builtin_env: parking_lot::RwLock::new(Vec::new()),
             agent_env: parking_lot::RwLock::new(Vec::new()),
             me: me.clone(),
@@ -589,7 +675,7 @@ impl Runtime {
         &self.modules
     }
 
-    /// Réglages › Réseau, for the plugins in WASM: their next call follows it.
+    /// Réglages › Avancé › Réseau, for the plugins in WASM: their next call follows it.
     pub fn set_network(&self, network: super::socket::Net) {
         *self.net.read().network.write() = network;
     }
@@ -760,6 +846,33 @@ impl Runtime {
             }
         }
         started
+    }
+
+    /// An instance of the module of the plugin `id`, for its views (`plugins/view.rs`): greeted, and asking nothing of the
+    /// machine.
+    pub fn view_instance(&self, id: &str) -> Result<super::wasm::Instance, String> {
+        let (folder, manifest) = self.runnable(id).map_err(|e| e.to_string())?;
+        let run = manifest.run.as_ref().ok_or("no program")?;
+        if run.in_wasm().is_none() {
+            return Err(format!("{id} is no module"));
+        }
+        let (module, _) = self.modules.of(&folder, run)?;
+        let limits = self.limits.wasm.asked(manifest.limits);
+        let files = super::wasm::files_of(&folder);
+        let mut instance = super::wasm::Instance::start_with(&module, &files, limits, None)
+            .map_err(|f| f.to_string())?;
+        let hello = json!({
+            "jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {
+                "protocolVersion": PROTOCOL,
+                "escouade": { "version": self.app_version },
+                "plugin": { "id": id, "version": manifest.version },
+                "lang": self.lang(),
+                "capabilities": {},
+            },
+        });
+        instance.push(format!("{hello}\n").as_bytes());
+        instance.turn(limits.turn).map_err(|f| f.to_string())?;
+        Ok(instance)
     }
 
     /// A crash of the instance of the plugin `id`, which has no process to kill: as a fault of its module.
@@ -1301,9 +1414,12 @@ impl Host {
             // In WASM (ESC-320, ESC-331): its module from the cache, or made now, off the runtime's threads.
             let js = run.js.as_deref().unwrap_or(super::wasm::MODULE_FILE);
             let (modules, folder, program) = (rt.modules.clone(), self.folder.clone(), run.clone());
+            let asked = Instant::now();
             let prepared = tokio::task::spawn_blocking(move || modules.of(&folder, &program))
                 .await
                 .unwrap_or_else(|e| Err(e.to_string()));
+            // How long its module took at this activation (ESC-354): the first one of a plugin of the seed precompiles it.
+            let took = asked.elapsed().as_millis();
             let (module, made) = match prepared {
                 Ok(m) => m,
                 Err(e) => {
@@ -1326,11 +1442,12 @@ impl Host {
             self.journal.push(
                 Kind::Start,
                 format!(
-                    "started {} in WASM, isolated: {}",
+                    "started {} in WASM, isolated: {} ({took} ms)",
                     self.folder.join(js).display(),
                     made.describe()
                 ),
             );
+            log::info!("plugin {}: {} in {took} ms", self.id, made.describe());
             conn
         } else {
             let program = rt.program_of(&self.folder, run);
@@ -1858,12 +1975,7 @@ impl Host {
         let Some(rt) = self.rt.upgrade() else {
             return Err((KEYCHAIN, "Escouade is closing".into()));
         };
-        let lent = rt
-            .lent
-            .lock()
-            .get(&(self.id.clone(), key.to_string()))
-            .cloned();
-        if let Some(s) = lent {
+        if let Some(s) = rt.lent_secret(&self.id, key) {
             self.journal.mask(&s);
             self.journal
                 .push(Kind::Message, format!("was given its secret {key:?}"));
@@ -2010,6 +2122,7 @@ impl Host {
 
     /// Stops its process for `stop`: what waits fails, and it does not start again by itself.
     fn stop_with(&self, stop: Stop) {
+        super::view::forget(&self.id);
         let conn = {
             let mut inner = self.inner.lock();
             if matches!(inner.phase, Phase::Stopped(_)) && inner.conn.is_none() {

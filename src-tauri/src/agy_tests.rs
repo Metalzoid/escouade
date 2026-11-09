@@ -174,7 +174,7 @@ async fn the_machines_antigravity_account_is_added_by_hand_and_its_defaults_hold
         env.contains(&("GEMINI_API_KEY".into(), String::new())),
         "{env:?}"
     );
-    // Its defaults, as Réglages › Comptes sets them.
+    // Its defaults, as Réglages › Comptes et harness sets them.
     let mut a = made.clone();
     a.claude_path = program;
     a.default_model = "gemini-3.8-flash".into();
@@ -198,7 +198,7 @@ async fn the_machines_antigravity_account_is_added_by_hand_and_its_defaults_hold
     assert!(
         texts(&h, &id)
             .iter()
-            .any(|t| t == "Modèle : gemini-3.8-flash, effort : high, mode : accept-edits"),
+            .any(|t| t == "Modèle : gemini-3.8-flash, effort : high, mode : default"),
         "{:?}",
         texts(&h, &id)
     );
@@ -500,4 +500,19 @@ async fn real_agy_writes_a_text() {
     .unwrap();
     println!("answer in {:?}: {answer}", started.elapsed());
     assert!(!answer.trim().is_empty() && answer.len() < 200, "{answer}");
+}
+
+/// A text given (ESC-66): the model of a reading; `one_shot` refuses every tool whatever the weight.
+#[test]
+fn a_text_given_has_the_model_of_a_reading() {
+    use crate::engine::{agy, Engine, Weight};
+    assert_eq!(
+        agy::text_model(Weight::Given),
+        agy::text_model(Weight::Reading)
+    );
+    assert_ne!(
+        agy::text_model(Weight::Given),
+        agy::text_model(Weight::Light)
+    );
+    assert!(crate::engine::AGY.answers_without_tools());
 }

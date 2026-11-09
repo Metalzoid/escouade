@@ -2,14 +2,14 @@
 title: "Pull requests"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","docs/TODO-1.8.md","src/components/PrPanel.svelte","src-tauri/src/prview.rs"]
-tickets: ["ESC-64","ESC-161","ESC-305","ESC-56","ESC-58","ESC-65"]
+tickets: ["ESC-64","ESC-161","ESC-305","ESC-56","ESC-58","ESC-65","ESC-66","ESC-68","ESC-383"]
 decisions: [15]
 compared: "2026-10-30T18:20:19+01:00"
 ---
 
 ## Ce que c'est
 
-Escouade ouvre la pull request d'un agent ordinaire et suit celles de tout agent : leur état, leur CI et leurs relectures, sur la carte de l'agent, dans l'en-tête de sa conversation, dans la barre d'état et dans l'onglet « PR et CI » du panneau latéral. Quand la CI échoue ou qu'une relecture demande des changements, un bouton envoie le tout à l'agent pour qu'il corrige. La PR d'un ticket est ouverte par sa validation (voir *Validation*) ; elle s'affiche et se lit comme les autres. Toutes les PR ouvertes du projet, les siennes ou d'autres, se listent à côté du Kanban, où l'on lance un agent sur l'une d'elles (voir *Vue « Pull requests » du projet*). Ce que chaque hébergeur permet est dans *Hébergeurs de code*.
+Escouade ouvre la pull request d'un agent ordinaire et suit celles de tout agent : leur état, leur CI et leurs relectures, sur la carte de l'agent, dans l'en-tête de sa conversation, dans la barre d'état et dans l'onglet « PR et CI » du panneau latéral. Quand la CI échoue ou qu'une relecture demande des changements, un bouton envoie le tout à l'agent pour qu'il corrige. La PR d'un ticket est ouverte par sa validation (voir *Validation*) ; elle s'affiche et se lit comme les autres. Toutes les PR ouvertes du projet, les siennes ou d'autres, se listent à côté du Kanban, où l'on lance un agent sur l'une d'elles (voir *Vue « Pull requests » du projet*) ou la fait relire par un agent (voir *Relecture d'une PR par un agent*). Ce que chaque hébergeur permet est dans *Hébergeurs de code*.
 
 ## Comportement
 
@@ -51,13 +51,13 @@ Quatrième onglet du panneau latéral (voir *Git & fichiers*), « PR et CI » (�
 
 Pour l'agent ouvert :
 
-- **Sa PR**, la première de la liste de ses PR : son signe, son numéro, son état (ouverte, brouillon, mergée, fermée), son titre, « <branche> → <cible> », « Conflit avec <cible> » quand l'hébergeur le dit, « créée il y a 2 h par <auteur> », et l'icône qui l'ouvre dans le navigateur. « L'agent corrige » et « L'agent corrige les retours » y sont offerts aux mêmes conditions que sous la carte, sur un clic seulement. Ses autres PR sont listées en bas (« Ses autres PR »), chacune avec son état, sa CI, son âge et son auteur.
+- **Sa PR**, la première de la liste de ses PR : son signe, son numéro, son état (ouverte, brouillon, mergée, fermée), son titre, « <branche> → <cible> », « Conflit avec <cible> » quand l'hébergeur le dit, « créée il y a 2 h par <auteur> », et l'icône qui l'ouvre dans le navigateur. « Faire relire par un agent » y est offert quand elle est ouverte et sur le dépôt de la cible (voir *Relecture d'une PR par un agent*). « L'agent corrige » et « L'agent corrige les retours » y sont offerts aux mêmes conditions que sous la carte, sur un clic seulement. Ses autres PR sont listées en bas (« Ses autres PR »), chacune avec son état, sa CI, son âge et son auteur.
 - **La CI** : un résumé (« 1 échec sur 11 », « 3 en cours sur 14 », « 10 vérifications réussies · 1 annulée »), puis chaque vérification du dernier commit (sur GitLab, chaque job du pipeline de tête), les échecs d'abord, puis en cours, en attente, annulées, réussies, ignorées. Chacune a son signe, son état (en attente, en cours, réussie, échouée, annulée, ignorée), sa durée (« 2m 30s », jusqu'à maintenant pendant qu'elle tourne, quand l'hébergeur dit son début) et l'icône vers sa page chez l'hébergeur. Le nom d'une vérification échouée dont l'hébergeur garde le journal s'ouvre sur « La fin du journal » : ses 20 derniers Ko coupés à une ligne, en monospace, dans un cadre qui défile. « Aucune vérification sur le dernier commit. » sinon.
 - **« Relancer les échecs »** (GitHub, GitLab, Azure DevOps, Gitea de la 1.26), sur une PR ouverte dont une vérification a échoué ou été annulée : relance chez l'hébergeur les jobs en échec du dernier commit (sur GitLab, le pipeline de tête en un appel), au clic seulement. Un toast dit « N exécutions relancées. », ou « Aucun job à relancer : l'hébergeur ne relance que ses propres jobs. », puis la CI est relue.
 - **La relecture** : la CI est relue toutes les 20 s tant qu'une vérification est en attente ou en cours, que l'onglet est affiché et que la fenêtre est visible ; jamais en arrière-plan. Les PR de l'agent sont relues à l'affichage de l'onglet (au plus toutes les 20 s) ; quand l'état de la CI d'une PR change, sa CI est relue aussitôt. Une lecture refaite qui échoue garde ce qui était affiché et dit pourquoi.
 - **Les revues et commentaires**, en lecture : chaque relecteur qui approuve (« a approuvé ») ou demande des changements, avec son texte ; une relecture qui ne fait que commenter n'apparaît que si elle dit quelque chose. Puis les commentaires, les fils ouverts d'abord : auteur, « fichier:ligne » pour un commentaire de ligne, « résolu », le texte (6 lignes au plus). « En lecture : Escouade ne publie rien en ton nom. » : aucun champ, aucune réponse, aucune résolution (décision du 2026-10-16).
 - **Les déploiements** de la branche, quand l'hébergeur les donne (GitHub, GitLab, Bitbucket Cloud ; pas pour la branche d'un fork ; ni Gitea ni Forgejo n'en ont) : l'environnement, son état (déployé, échoué, en erreur, en attente, en file, en cours, remplacé) et son adresse, ouverte dans le navigateur par un clic.
-- Sans PR sur sa branche : « Pas de PR sur cette branche », puis « Ouvrir une PR… » quand l'agent peut en ouvrir une, sinon la raison (pas de branche à lui, agent de ticket, pas de dépôt distant, hébergeur sans client, pas de compte), avec « Réglages › Intégrations » quand c'est là que ça se règle (hébergeur inconnu, pas de compte).
+- Sans PR sur sa branche : « Pas de PR sur cette branche », puis « Ouvrir une PR… » quand l'agent peut en ouvrir une, sinon la raison (pas de branche à lui, agent de ticket, pas de dépôt distant, hébergeur sans client, pas de compte), avec « Réglages › Services connectés » quand c'est là que ça se règle (hébergeur inconnu, pas de compte) : il ouvre cette page des réglages (voir *Réglages*).
 
 Sans agent ouvert (un projet sans agent : « PR et CI du projet » sous « Nouvel agent », ou `Ctrl+Maj+B`) : « PR ouvertes du projet » et leur nombre, les 30 plus récemment mises à jour du dépôt de la cible, chacune avec son signe, son numéro, son titre, son état, sa CI, un conflit, son âge et son auteur (sur GitLab, la liste ne dit ni la CI ni les approbations). Un clic sur celle d'un agent du projet (une PR qu'il a lue, ou de sa branche) ouvre cet agent ; sur une autre, la PR dans le navigateur. L'icône à droite ouvre toujours la PR dans le navigateur.
 
@@ -65,7 +65,7 @@ Les états :
 
 - Chargement : « Lecture de la PR… », « Lecture des PR ouvertes du projet… », « Lecture du journal… ».
 - Vide : « Aucune PR ouverte. », « Aucune revue ni commentaire. ».
-- Erreur, dans un cadre rouge avec « Réessayer » : « Jeton refusé par l'hébergeur : reconnecte son compte. » (401, avec « Réglages › Intégrations ») ; « Limite d'API de l'hébergeur atteinte, jusqu'à 15:48. » (403 ou 429 quand il ne reste aucun appel ou que l'hébergeur dit la limite) ; « Hébergeur injoignable. » (pas de réponse, ou une erreur 5xx) ; sinon les mots de l'hébergeur. Les trois premiers gardent aussi ses mots en dessous. Le projet sans dépôt distant, sans client ou sans compte dit sa raison, sans « Réessayer ».
+- Erreur, dans un cadre rouge avec « Réessayer » : « Jeton refusé par l'hébergeur : reconnecte son compte. » (401, avec « Réglages › Services connectés ») ; « Limite d'API de l'hébergeur atteinte, jusqu'à 15:48. » (403 ou 429 quand il ne reste aucun appel ou que l'hébergeur dit la limite) ; « Hébergeur injoignable. » (pas de réponse, ou une erreur 5xx) ; sinon les mots de l'hébergeur. Les trois premiers gardent aussi ses mots en dessous. Le projet sans dépôt distant, sans client ou sans compte dit sa raison, sans « Réessayer ».
 - Une lecture qui tombe sur une erreur 5xx ou une coupure est refaite une fois avant d'être dite (les check runs de GitHub répondent parfois 500).
 
 ### Faire corriger l'agent
@@ -81,6 +81,8 @@ Sous la carte et dans l'onglet « PR et CI », sur une PR ouverte, jamais d'elle
 
 - « Ouvrir une PR », la lecture des PR et l'onglet « PR et CI » : GitHub, GitLab, Bitbucket Cloud, Gitea / Forgejo et Azure DevOps (voir *Hébergeurs de code*).
 - Azure DevOps ne donne ni déploiements ni durée des évaluations de stratégie (seulement celle des builds). Gitea et Forgejo ne donnent pas de déploiements, et leurs journaux et leur relance dépendent de la version de l'instance.
-- La liste des PR du projet et « Lancer un agent sur cette PR » : voir *Vue « Pull requests » du projet* ; « Faire relire par un agent » n'est pas fait.
+- La liste des PR du projet et « Lancer un agent sur cette PR » : voir *Vue « Pull requests » du projet* ; « Faire relire par un agent » : voir *Relecture d'une PR par un agent*.
 - Un agent qui travaille dans un worktree qui n'est pas d'Escouade n'est suivi que sur Claude Code.
 - Le cycle des PR hors tickets et ce qui en reste à faire : `docs/TODO-1.8.md`, chapitre 2 (« Les PR hors tickets »).
+
+- Ce qu'une PR devient se notifie (voir *Notifications*), celles qui attendent l'utilisateur sont dans la vue d'ensemble (voir *Vue d'ensemble*), et les agents les lisent par `list_pull_requests` et `get_pull_request` (voir *Serveur MCP*).
